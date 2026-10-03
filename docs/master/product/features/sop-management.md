@@ -64,3 +64,7 @@ SOP execution is bounded by guardrail policies so delegation stays predictable a
 - SOP delegation produces clear policy-stop outcomes for governance, distinguishing policy enforcement stops from functional failures
 - Direct and indirect cyclic delegation paths are blocked with clear user-visible outcomes
 - If an agent instruction references one or more SOP names, only those named SOPs are used; otherwise the Default SOP is applied as fallback, across all supported agent input types
+
+## Multi-Tenancy Note
+
+When multi-tenancy is enabled (see [Multi-Tenancy](multi-tenancy.md)), SOPs are tenant-owned; permissions are grantable only within the owning tenant and agent-to-agent delegation cannot leave the tenant. With multi-tenancy disabled (the default), behavior is unchanged — the deployment operates as the root tenant's workspace.

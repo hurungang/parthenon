@@ -30,6 +30,10 @@ Parthenon now offers a bundled Keycloak identity provider with a guided setup wi
 - The backend application can be run in CLI mode to set up or switch identity providers without using the UI
 - Start/stop scripts manage the lifecycle of the Keycloak container when it is in use
 
+## Multi-Tenancy Notes
+
+The bundled Keycloak flow and single-tenant setup are unchanged when multi-tenancy is disabled (the default): the deployment simply operates as the root tenant's workspace. When multi-tenancy is enabled (see [Multi-Tenancy](multi-tenancy.md)), each tenant registers its own sign-in independently in its identity provider, and a single provider configuration may be shared across the root workspace and multiple tenants — the workspace address entered at sign-in decides which tenant the session is bound to. Sign-in uses one unified flow for everyone (workspace address, then provider or platform-issued email + password); the previous discreet "platform admin sign-in" expansion on the tenant sign-in page is removed, with the super-admin break-glass remaining at the root workspace sign-in.
+
 ## Out of Scope
 - One-click single-provider setup for non-Keycloak/non-Azure providers (external OIDC providers are configured via System Config UI)
 - Advanced Keycloak customization beyond automated Parthenon realm and client setup

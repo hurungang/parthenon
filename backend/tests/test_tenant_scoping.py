@@ -351,18 +351,28 @@ class TestPermissionEngineTenantBinding:
         assert role_a in effective_a and role_b not in effective_a
         assert role_b in effective_b and role_a not in effective_b
 
-    async def test_global_roles_effective_in_every_tenant(self, seeded_engine, unscoped_db):
+    async def test_global_roles_no_longer_collected_root_scoped_instead(self, seeded_engine, unscoped_db):
+        """CHANGED ASSERTION (Phase 11 containment): global tenant-less
+        roles no longer exist — the engine's global-role collection was
+        removed.  Legacy globals are re-homed into the ROOT tenant, whose
+        roles are effective ONLY in the root session tenant."""
         engine = PermissionEngine()
         user = uuid.uuid4()
+        # The migrated legacy global: now a ROOT-tenant role.
         global_role = Role(name="platform-bridge", tenant_id=None)
         unscoped_db.add(global_role)
         await unscoped_db.flush()
         unscoped_db.add(UserRole(user_id=user, role_id=global_role.id))
         await unscoped_db.commit()
 
+        # Customer tenants can no longer see it (containment).
         for tenant in (TENANT_A, TENANT_B):
             effective = await engine._get_effective_role_ids(unscoped_db, user, tenant)
-            assert global_role.id in effective
+            assert global_role.id not in effective
+        # ...while a NULL-tenant role still rides the legacy (context-less)
+        # branch, which only unscoped/internal traffic reaches.
+        effective_unscoped = await engine._get_effective_role_ids(unscoped_db, user, None)
+        assert global_role.id in effective_unscoped
 
     async def test_foreign_tenant_roles_never_collected(self, seeded_engine, unscoped_db):
         """CS-21: identical role names across tenants never collide — the

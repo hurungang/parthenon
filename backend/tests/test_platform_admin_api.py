@@ -373,36 +373,48 @@ class TestPlatformSettingsAPI:
         body = response.json()
         assert body["multi_tenancy_enabled"] is True
         assert body["adoption"]["action"] == "enabled"
-        assert body["adoption"]["slug"] == "system"
+        assert body["adoption"]["slug"] == "root"
         assert body["adoption"]["created"] is True
 
-        # The switch is reflected in a fresh read.
-        readback = await client.get("/api/v1/platform/settings")
+        # The switch is reflected in a fresh read.  (Switch ON → platform
+        # requests require the root-tenant binding, as the real client sends.)
+        readback = await client.get(
+            "/api/v1/platform/settings", headers={"X-Tenant": "root"}
+        )
         assert readback.json()["multi_tenancy_enabled"] is True
 
         # A system tenant now exists.
-        listing = await client.get("/api/v1/platform/tenants")
+        listing = await client.get(
+            "/api/v1/platform/tenants", headers={"X-Tenant": "root"}
+        )
         slugs = [t["slug"] for t in listing.json()["items"]]
-        assert "system" in slugs
+        assert "root" in slugs
 
     async def test_disable_preserves_data(self, client, test_engine):
         """CS-03: disable returns to single-tenant behaviour, no data loss."""
         await client.put("/api/v1/platform/settings/multi_tenancy_enabled", json={"value": True})
+        root_headers = {"X-Tenant": "root"}
         disabled = await client.put(
-            "/api/v1/platform/settings/multi_tenancy_enabled", json={"value": False}
+            "/api/v1/platform/settings/multi_tenancy_enabled",
+            json={"value": False},
+            headers=root_headers,
         )
         assert disabled.status_code == 200
         assert disabled.json()["multi_tenancy_enabled"] is False
         assert disabled.json()["adoption"]["data_loss"] is False
         # Tenants survive the switch-off.
-        listing = await client.get("/api/v1/platform/tenants")
+        listing = await client.get(
+            "/api/v1/platform/tenants", headers=root_headers
+        )
         slugs = [t["slug"] for t in listing.json()["items"]]
-        assert "system" in slugs
+        assert "root" in slugs
 
     async def test_enable_is_idempotent(self, client):
         await client.put("/api/v1/platform/settings/multi_tenancy_enabled", json={"value": True})
         again = await client.put(
-            "/api/v1/platform/settings/multi_tenancy_enabled", json={"value": True}
+            "/api/v1/platform/settings/multi_tenancy_enabled",
+            json={"value": True},
+            headers={"X-Tenant": "root"},
         )
         assert again.status_code == 200
         assert again.json()["adoption"]["created"] is False  # already adopted

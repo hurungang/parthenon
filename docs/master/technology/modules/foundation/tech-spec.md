@@ -162,3 +162,15 @@ The foundation module does not expose its own HTTP endpoints. It provides the sh
 | Symbol | Type | Description | File |
 |--------|------|-------------|------|
 | `test_auth_middleware` | test module | Unit tests for `JWTAuthMiddleware`; 2 passthrough-related tests: `raw_token` stored on `request.state` after valid JWT extraction; `raw_token` absent on public paths that bypass auth | `backend/tests/unit/test_auth_middleware.py` |
+
+---
+
+## Multi-Tenancy Integration
+
+Foundation gains tenancy primitives since the multi-tenant support change (full details: [multi-tenancy module](../multi-tenancy/tech-spec.md)).
+
+| Symbol | Type | Description | File |
+|--------|------|-------------|------|
+| `TenantContext` + accessors | class (new) | Immutable per-request tenant context, `TENANT_UNSET` sentinel, `get/set/require_tenant_context`, `is_tenancy_enabled` | `backend/app/core/tenant_context.py` |
+| `tenant_address_base_domain` / `tenant_context_signing_key` | settings (new) | Tenancy resolution base domain and HMAC signing key on `Settings` | `backend/app/core/config.py` |
+| `set_tenant_span_attributes` | function (new usage) | OTEL span tenant attribution called by CC/AR/CH middlewares; `telemetry.py` itself unchanged | `backend/app/core/telemetry.py` |

@@ -57,3 +57,7 @@ The security model also covers API key authentication for external agents. API k
 - Depends on centralized identity governance in Control Center and enterprise identity policy alignment
 - Requires auditable evidence standards for permitted and blocked internal access paths
 - Remediation sequencing is constrained by platform delivery capacity and risk-prioritization commitments
+
+## Multi-Tenancy Note
+
+When multi-tenancy is enabled (see [Multi-Tenancy](multi-tenancy.md)), tenant context propagates across internal services and can never be widened by agents or internal services; cross-tenant attempts are audited. The top-priority architecture rules are reaffirmed: services stay segregated, agents run only in Agent Runtime, and Control Center remains the sole database accessor. With multi-tenancy disabled (the default), behavior is unchanged — the deployment operates as the root tenant's workspace.

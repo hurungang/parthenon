@@ -110,3 +110,17 @@ The hub also serves as the **mTLS gateway** for agent-to-tool calls. Every inbou
 | Symbol | Type | Description | File |
 |--------|------|-------------|------|
 | `service-segregation-security-audit` | e2e test | Verifies internal service-certificate enforcement and revocation endpoint contract against real backend routes | `e2e/tests/service-segregation-security-audit.spec.ts` |
+
+---
+
+## Multi-Tenancy Integration
+
+Communication Hub is tenant-bound via signed headers since the multi-tenant support change (full details: [multi-tenancy module](../multi-tenancy/tech-spec.md)).
+
+| Symbol | Type | Description | File |
+|--------|------|-------------|------|
+| `ControlPlaneMiddleware` | middleware (modified) | Verifies CC-signed tenant headers (verify-if-present) and binds the request tenant; CH can verify but never sign | `backend/app/communication_hub/middleware/control_plane.py` |
+| `ApiKeyAuthMiddleware` | middleware (modified) | Binds MCP sessions to the tenant returned by `validate_api_key_internal` | `backend/app/communication_hub/middleware/api_key_auth.py` |
+| `ControlCenterDataClient` (CH) | class (modified) | Forwards signed tenant headers to CC (`_get`/`_post`) | `backend/app/communication_hub/data_client.py` |
+| internal execute/resume/terminate forwarders | routers (modified) | Re-emit CC's original signed headers to AR (`forward_tenant_headers`) so executions bind to the tenant | `backend/app/communication_hub/api/internal/agent_execute.py` (+ `agent_resume.py`, `agent_terminate.py`) |
+| session dispatch / A2A / MCP server & tool registry | modules (reference) | Unchanged — scoped by the middleware-bound session tenant and CC's tenant-scoped resolves | `backend/app/communication_hub/` |

@@ -303,3 +303,21 @@ No rollback is needed for this operation. The Group Membership mapper is additiv
 - Works with all existing Parthenon group configurations — no changes to `idp_claim_value` or group-to-role mappings are needed
 - Does not affect users who are not members of any Keycloak groups — their tokens will include an empty `groups` claim
 - Applies only to the bundled Keycloak provider (`IDENTITY_PROVIDER_TYPE=keycloak_bundled`). External providers must be configured separately
+
+---
+
+## 10. Multi-Tenancy Enable / Disable and Cross-Tenant Audit Triage
+
+Use this runbook when enabling or disabling the tenancy platform switch (`multi_tenancy_enabled`), or when triaging cross-tenant audit signals. Full procedures live in [first-time-deployment.md](first-time-deployment.md) Step 13 (enable) and [rollback.md](rollback.md) Change-Specific Rollback: Multi-Tenant Support (revert); runtime triage details are owned by the operations documentation — see [../operations/runbooks/tenant-adoption-and-scope-denials.md](../operations/runbooks/tenant-adoption-and-scope-denials.md) and [../operations/runbooks/tenant-signin-failure.md](../operations/runbooks/tenant-signin-failure.md).
+
+### Enable/disable procedure (summary)
+
+1. Verify prerequisites (wildcard DNS/TLS, signing key on all three services) before enabling.
+2. Enable via Platform Settings; confirm the root-tenant (workspace `root`) adoption completes with no `tenant.adoption` ERROR entries in `backend/logs/control-center.log`.
+3. To disable, turn the switch off first — it is data-preserving and audited; never roll back images while the switch is on.
+
+### Cross-tenant audit triage (summary)
+
+1. On any sustained non-zero `tenant.cross_tenant_attempts_total`, treat as a possible isolation probe; triage by `surface` and `tenant_id`.
+2. Search `control-center.log` for `tenant.scope` and `tenant.claim`, then filter platform audit events by `tenant_id` (cross-tenant attempts and quota-exhaustion events are written as tenant audit events).
+3. Decide containment (suspend the source tenant) per the operations runbook; preserve audit events for forensic review.

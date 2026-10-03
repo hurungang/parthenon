@@ -52,6 +52,10 @@ flowchart TB
 | Config → SchedulingEngine | read | Application settings | scheduler_enabled, scheduler check interval |
 | SchedulingEngine → AgentSessionService | internal call | Python async | Enqueue agent session via launch path |
 
+## Quota Consultation at Dispatch
+
+Schedule-triggered executions are tenant-owned: a cron job adopts its owning tenant's context end to end, and the dispatch path consults the tenant's monthly execution quota **at dispatch time in Control Center** — before any Communication Hub or Agent Runtime involvement. An exhausted quota skips dispatch and records a quota-exhaustion audit event (OTEL-attributed, visible to the platform admin). Usage counting happens centrally in CC; no quota logic exists in the scheduler beyond the consultation.
+
 ## Key Design Decisions
 
 - **Only Control Center connects to DB** — scheduling follows the architecture rule that database access is restricted to the Control Center service.

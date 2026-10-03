@@ -4,6 +4,8 @@
 
 API keys provide an alternative authentication credential for external third-party AI agents (Claude Code, Cursor, custom agents) connecting to the Communication Hub. Keys now authenticate the standard MCP protocol handshake (SSE + Streamable HTTP) in addition to the existing REST skills-loading endpoint. Keys are provisioned by platform administrators in Control Center and validated over existing mTLS service certificates — no new trust model is introduced. The permission model and identity-token isolation are unchanged.
 
+**Tenant binding**: under multi-tenancy, API keys are issued and validated per tenant — key validation resolves the owning tenant from the request's tenant context, and the resulting MCP session is bound to that tenant. A key cannot authenticate to, or reach resources of, any other tenant; key lifecycle and authentication events carry tenant attribution in audit logs. See [Multi-Tenancy Architecture](../multi-tenancy.md).
+
 ## Key Lifecycle
 
 ```mermaid

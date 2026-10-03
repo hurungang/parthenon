@@ -101,6 +101,13 @@ interface AuthContextValue extends AuthState {
    * up X-Tenant from the per-tab resolved slug).
    */
   refreshProviders: () => Promise<void>
+  /**
+   * FIX-20261001-235247: drop the host-derived tenant (store state AND the
+   * per-tab sessionStorage binding) so the login page's workspace finder
+   * becomes reachable after "Use a different workspace" on a host-bound
+   * workspace.  Inert when no tenant is resolved.
+   */
+  clearResolvedTenant: () => void
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null)
@@ -310,6 +317,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     window.location.href = `${oidcAuthority}/protocol/openid-connect/auth?${params}`
   }, [oidcAuthority, oidcClientId])
 
+  // FIX-20261001-235247 (Defect 1): drop the host-derived tenant (store
+  // state AND the per-tab sessionStorage binding) so the login page's
+  // workspace finder becomes reachable from a host-bound workspace.
+  const clearResolvedTenant = useCallback(() => {
+    setResolvedTenant(null)
+    setResolvedTenantSlug(null)
+  }, [])
+
   const logout = useCallback(() => {
     // Clear local tokens
     const idToken = localStorage.getItem('id_token')
@@ -410,8 +425,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       refreshAvailableTenants,
       activeTenant,
       refreshProviders: discoverProviders,
+      // FIX-20261001-235247 (Defect 1): "Use a different workspace" must
+      // also unbind a host-derived tenant so the finder can render.
+      clearResolvedTenant,
     }),
-    [isAuthenticated, isLoading, token, claims, login, logout, setToken, availableProviders, superAdminEnabled, isSuperAdmin, multiTenancyEnabled, resolvedTenant, availableTenants, refreshAvailableTenants, activeTenant, discoverProviders],
+    [isAuthenticated, isLoading, token, claims, login, logout, setToken, availableProviders, superAdminEnabled, isSuperAdmin, multiTenancyEnabled, resolvedTenant, availableTenants, refreshAvailableTenants, activeTenant, discoverProviders, clearResolvedTenant],
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

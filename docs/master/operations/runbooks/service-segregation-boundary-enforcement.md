@@ -82,3 +82,7 @@
 - Certificate serial and issuance record for any mismatch incident
 - Deployment revision and rollback actions (if any)
 - Post-recovery metrics screenshot for deny rate and internal 403 rate
+
+## Multi-Tenancy Boundary Note
+
+When the tenancy platform switch (`multi_tenancy_enabled`) is on, signed tenant-header verification is an **additional** internal-boundary check layered on mTLS and the allowlist. `tenant.signature.*` denials in Agent Runtime / Communication Hub logs are triaged alongside certificate denials using this runbook's decision tree; for key-alignment and restart-order remediation, see [tenant-context-missing.md](tenant-context-missing.md).

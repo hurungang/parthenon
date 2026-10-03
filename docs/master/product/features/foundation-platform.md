@@ -9,6 +9,8 @@ Parthenon supports two deployment modes for identity and infrastructure: **bundl
 
 Authentication is built on a provider-agnostic OIDC foundation that supports any OIDC-compliant identity provider — not only Keycloak and Azure EntraID. User identity and agent identity are decoupled, allowing enterprises to source each from separate, independent identity providers. A built-in super admin account provides guaranteed administrative access for production bootstrap and disaster recovery, functioning independently of any OIDC provider. All OIDC configuration is managed through a web UI and persisted to the database, eliminating the need for operators to hand-edit configuration files.
 
+Parthenon runs in one of two **tenancy modes** (see [Multi-Tenancy](multi-tenancy.md)). The platform itself operates as the **root tenant** (workspace address `root`): platform staff are members of the root tenant holding platform roles, and the super-admin break-glass account signs in at the root workspace. When multi-tenancy is disabled (the default), the deployment behaves exactly like the root tenant's workspace with no visible tenant concept. When enabled, roles, permission sets, and the resource-type manifest become tenant-owned: every grant — including wildcards such as `*::*` — applies strictly within the session's tenant, and no cross-tenant roles exist. Platform-level tenant-management and license-management resource types are registered in both the backend and frontend manifests and are granted only by platform roles in the root tenant; platform modules are visible only in root-tenant platform-role sessions. In addition to OIDC sign-in, the platform issues owner accounts with email + password (used for self-serve tenant registration), independent of any identity provider.
+
 ## Who Uses It
 
 - Enterprise Admins: Configure roles, permissions, user tags, user groups, and identity provider integration
@@ -42,7 +44,7 @@ Authentication is built on a provider-agnostic OIDC foundation that supports any
 
 ## Key Concepts
 - **OIDC Integration**: Connecting to an external identity provider for authentication. The platform supports any OIDC-compliant provider (not just Keycloak or Azure EntraID). User and agent identity providers are configured independently through the UI.
-- **Super Admin**: A platform-internal administrative account that authenticates independently of any OIDC provider. Credentials are sourced from the config system with environment variable override. The super admin can be enabled or disabled, and provides guaranteed administrative access for bootstrap and disaster recovery.
+- **Super Admin**: A platform-internal administrative account that authenticates independently of any OIDC provider. Credentials are sourced from the config system with environment variable override. The super admin can be enabled or disabled, and provides guaranteed administrative access for bootstrap and disaster recovery. When multi-tenancy is enabled, the super-admin break-glass sign-in is available at the root workspace; day-to-day platform operations are performed by root-tenant members holding platform roles.
 - **User Identity Provider**: The OIDC identity provider that authenticates human users. Configured independently from the agent identity provider.
 - **Agent Identity Provider**: The OIDC identity provider that authenticates agent principals. Can be the same as or different from the user identity provider, enabling segregation of human and machine identity domains.
 - **Database-Backed OIDC Configuration**: All OIDC provider settings (issuer URL, client ID, client secret, scopes, claims mapping) are persisted in the database and managed through the system config UI, replacing static YAML files as the source of truth.
@@ -114,6 +116,8 @@ All permission resource types follow the `module::submodule` naming convention, 
 | `system::observability` | Observability | View platform telemetry and logs |
 | `system::permissions` | Permissions | Manage user roles, policies, groups, tags, and access requests |
 | `system::system_config` | System Config | Manage platform-wide configuration and identity providers |
+| `platform::tenants` | Tenant Management (platform modules) | Manage the tenant registry and lifecycle — granted only by platform roles in the root tenant |
+| `platform::licenses` | License Management (platform modules) | Assign tenant license tiers and monitor quota usage — granted only by platform roles in the root tenant |
 
 ### Consolidated Submodules
 
@@ -131,7 +135,7 @@ Administrators can use wildcards to grant permissions at module granularity with
 | `agent::*` | All 12 agent submodules | Grants access to the entire Agents group |
 | `integration::*` | All 2 integration submodules | Grants access to the entire Integrations group |
 | `system::*` | All 3 system submodules | Grants access to the entire System group |
-| `*::*` | Every resource type in the manifest | Equivalent to full platform access; used by the system administrator role |
+| `*::*` | Every resource type in the manifest | Equivalent to full access within the current tenant; used by the system administrator role. When multi-tenancy is enabled, this grant is strictly tenant-contained — it confers nothing outside the session's tenant |
 
 **Prefix wildcards** are supported through free-text entry in resource type selectors. An administrator can type `agent::mana*` to match any submodule whose name starts with "mana" (e.g., `agent::management`). Prefix wildcards are not visible in dropdowns and have no dedicated UI affordance — they are typed directly into the selector.
 

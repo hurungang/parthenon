@@ -76,3 +76,7 @@ This design centralizes routing, ensures consistent authorization, and allows ne
 - Identity token issuance or storage (tokens are resolved by Control Center and injected per tool call)
 - Agent execution logic (owned by Agent Runtime)
 - Low-level transport and protocol implementation details
+
+## Multi-Tenancy Note
+
+When multi-tenancy is enabled (see [Multi-Tenancy](multi-tenancy.md)), tenant context travels with every message and internal request; agent-to-agent routing can never cross tenant boundaries. With multi-tenancy disabled (the default), behavior is unchanged — the deployment operates as the root tenant's workspace.

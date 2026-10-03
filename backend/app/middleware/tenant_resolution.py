@@ -5,9 +5,14 @@ middleware executes first in Starlette) and establishes the immutable
 tenant context exactly once per request.
 
 Behaviour:
-- **Switch off (default)** — completely inert: the cached tenancy flag is
-  read, nothing else happens, and the request passes through untouched
-  (byte-for-byte single-tenant behaviour).
+- **Switch off (default)** — the deployment defaults to the ROOT tenant
+  (Phase 11 "platform as root tenant"): the ROOT tenant is bound as the
+  default context (when it exists) so authz/JIT run in the root-tenant
+  world, while every tenancy FEATURE stays inert (scoping, quotas and
+  registration branch on ``request.state.tenancy_enabled``).  Zero
+  user-visible multi-tenancy UX.  Public/bypassed endpoints bypass
+  entirely; if the root tenant does not exist yet (never adopted), the
+  request passes through context-less — byte-for-byte legacy.
 - **Switch on** — fail-closed: the tenant must resolve from the
   ``X-Tenant`` header or the Host subdomain; anything else (no address,
   unknown slug, suspended/deleted tenant) is rejected with 403 before any
@@ -58,14 +63,14 @@ BYPASS_PATHS: frozenset[str] = frozenset(
 #: - Swagger/OpenAPI assets
 #: - /api/v1/internal/* — service-to-service; carries its own signed
 #:   tenant context verified by the internal endpoints (Phase 8).
-#: - /api/v1/platform/* — platform admin console: metadata-only, hosted at
-#:   the base domain (no tenant address by design); guarded by
-#:   platform:: resource types instead.
+#: NOTE (Phase 11): /api/v1/platform/* is NO LONGER bypassed — the
+#: platform is the root tenant, so platform routes resolve the session's
+#: root-tenant context like every other workspace (guarded by
+#: platform:: resource types evaluated within root).
 BYPASS_PREFIXES: tuple[str, ...] = (
     "/docs/",
     "/redoc/",
     "/api/v1/internal/",
-    "/api/v1/platform/",
 )
 
 #: Login-page bootstrap probes — PUBLIC pre-auth READ endpoints
@@ -139,16 +144,46 @@ class TenantResolutionMiddleware(BaseHTTPMiddleware):
             )
             multi_tenancy_enabled = False
 
-        if not multi_tenancy_enabled:
-            # Inert: no tenant logic executes with the switch off (no
-            # tenant span attributes either).
-            return await call_next(request)
+        # Phase 11: expose the switch state to the request so feature code
+        # can branch on tenancy being ACTIVE (a resolved context alone no
+        # longer proves it — the OFF default context is the ROOT tenant).
+        request.state.tenancy_enabled = multi_tenancy_enabled
 
         from app.core.tenant_context import (
             set_current_tenant_context,
             set_tenant_context,
             set_tenant_span_attributes,
         )
+
+        if not multi_tenancy_enabled:
+            # Tenancy OFF — the deployment IS the root tenant's workspace
+            # (Phase 11 "platform as root tenant"): bind the ROOT tenant
+            # as the default context so authz/JIT/scoping-adjacent logic
+            # runs in the root-tenant world (legacy behaviour is driven
+            # by the root's migrated roles).  Zero user-visible
+            # multi-tenancy UX: no tenant pickers, no signup link, and
+            # public/bypassed endpoints still bypass entirely below.
+            # Feature code that must stay inert when the switch is off
+            # (scoping, quotas, registration) branches on
+            # ``request.state.tenancy_enabled``, not ``is_set``.
+            if not _is_bypassed(path, request.method):
+                try:
+                    from app.services.tenancy.root_tenant import (
+                        get_root_tenant_context,
+                    )
+
+                    async with AsyncSessionLocal() as db:
+                        root_context = await get_root_tenant_context(db)
+                except Exception:
+                    logger.exception(
+                        "Tenant resolution: root tenant lookup failed; "
+                        "falling back to context-less legacy behaviour"
+                    )
+                    root_context = None
+                if root_context is not None:
+                    set_tenant_context(request, root_context)
+                    set_current_tenant_context(root_context)
+            return await call_next(request)
 
         if _is_bypassed(path, request.method):
             # FIX-20261001-010107: a bypassed public GET carrying a VALID

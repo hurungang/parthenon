@@ -1,0 +1,814 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Parthenon — System One Decision Skills Prototype</title>
+<style>
+  :root {
+    --primary: #1976d2;
+    --primary-dark: #1565c0;
+    --primary-light: #e3f2fd;
+    --bg: #f5f6f8;
+    --surface: #ffffff;
+    --text: #1a2027;
+    --text2: #5f6b7a;
+    --border: #e0e4e8;
+    --success: #2e7d32;
+    --success-bg: #e8f5e9;
+    --warning: #ed6c02;
+    --warning-bg: #fff3e0;
+    --error: #d32f2f;
+    --error-bg: #ffebee;
+    --radius: 8px;
+    --shadow: 0 1px 3px rgba(0,0,0,.08), 0 1px 2px rgba(0,0,0,.06);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; background: var(--bg); color: var(--text); font-size: 14px; }
+
+  /* App bar */
+  .appbar { background: var(--primary); color: #fff; height: 56px; display: flex; align-items: center; padding: 0 24px; gap: 24px; position: sticky; top: 0; z-index: 50; box-shadow: var(--shadow); }
+  .appbar .logo { font-size: 18px; font-weight: 600; letter-spacing: .3px; display: flex; align-items: center; gap: 10px; }
+  .appbar .badge { background: rgba(255,255,255,.2); font-size: 11px; padding: 2px 8px; border-radius: 10px; font-weight: 500; }
+  .appbar .spacer { flex: 1; }
+  .avatar { width: 32px; height: 32px; border-radius: 50%; background: rgba(255,255,255,.3); display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 600; }
+
+  /* Layout */
+  .layout { display: flex; min-height: calc(100vh - 56px); }
+  .sidebar { width: 220px; background: var(--surface); border-right: 1px solid var(--border); padding: 12px 8px; flex-shrink: 0; }
+  .sidebar .section { font-size: 11px; text-transform: uppercase; color: var(--text2); padding: 12px 12px 4px; letter-spacing: .5px; }
+  .sidebar a { display: flex; align-items: center; gap: 10px; padding: 9px 12px; border-radius: 6px; color: var(--text); text-decoration: none; cursor: pointer; }
+  .sidebar a:hover { background: #f0f2f4; }
+  .sidebar a.active { background: var(--primary-light); color: var(--primary-dark); font-weight: 600; }
+  .sidebar .icon { width: 18px; text-align: center; opacity: .8; }
+  .main { flex: 1; padding: 24px 32px; max-width: 1200px; }
+
+  /* Typography & cards */
+  h1 { font-size: 22px; font-weight: 600; margin-bottom: 4px; }
+  .subtitle { color: var(--text2); margin-bottom: 20px; }
+  .card { background: var(--surface); border-radius: var(--radius); box-shadow: var(--shadow); padding: 20px 24px; margin-bottom: 20px; }
+  .card h2 { font-size: 16px; font-weight: 600; margin-bottom: 4px; }
+  .card .card-sub { color: var(--text2); font-size: 13px; margin-bottom: 16px; }
+  .row { display: flex; gap: 16px; flex-wrap: wrap; }
+  .row > * { flex: 1; min-width: 220px; }
+
+  /* Form controls */
+  label.field { display: block; font-size: 12px; font-weight: 600; color: var(--text2); margin-bottom: 6px; text-transform: uppercase; letter-spacing: .4px; }
+  input[type=text], input[type=password], select, textarea {
+    width: 100%; padding: 9px 12px; border: 1px solid var(--border); border-radius: 6px; font-size: 14px; font-family: inherit; background: #fff; color: var(--text);
+  }
+  input:focus, select:focus, textarea:focus { outline: 2px solid var(--primary-light); border-color: var(--primary); }
+  textarea { resize: vertical; min-height: 60px; }
+  .hint { font-size: 12px; color: var(--text2); margin-top: 4px; }
+
+  /* Buttons */
+  .btn { display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; border-radius: 6px; border: none; font-size: 14px; font-weight: 500; cursor: pointer; font-family: inherit; }
+  .btn-primary { background: var(--primary); color: #fff; }
+  .btn-primary:hover { background: var(--primary-dark); }
+  .btn-outline { background: transparent; color: var(--primary); border: 1px solid var(--primary); }
+  .btn-outline:hover { background: var(--primary-light); }
+  .btn-text { background: transparent; color: var(--primary); padding: 6px 10px; }
+  .btn-text:hover { background: var(--primary-light); }
+  .btn-danger-text { background: transparent; color: var(--error); padding: 6px 10px; }
+  .btn-danger-text:hover { background: var(--error-bg); }
+  .btn:disabled { opacity: .45; cursor: not-allowed; }
+  .btn-small { padding: 4px 10px; font-size: 12px; }
+
+  /* Chips / status */
+  .chip { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 12px; font-size: 12px; font-weight: 600; }
+  .chip .dot { width: 8px; height: 8px; border-radius: 50%; }
+  .chip.success { background: var(--success-bg); color: var(--success); } .chip.success .dot { background: var(--success); }
+  .chip.warning { background: var(--warning-bg); color: var(--warning); } .chip.warning .dot { background: var(--warning); }
+  .chip.error { background: var(--error-bg); color: var(--error); } .chip.error .dot { background: var(--error); }
+  .chip.info { background: var(--primary-light); color: var(--primary-dark); } .chip.info .dot { background: var(--primary); }
+  .chip.neutral { background: #eceff1; color: #455a64; } .chip.neutral .dot { background: #78909c; }
+
+  /* Toggle switch */
+  .switch { position: relative; display: inline-block; width: 40px; height: 22px; flex-shrink: 0; }
+  .switch input { opacity: 0; width: 0; height: 0; }
+  .slider { position: absolute; cursor: pointer; inset: 0; background: #b0bec5; border-radius: 22px; transition: .2s; }
+  .slider:before { content: ""; position: absolute; height: 16px; width: 16px; left: 3px; bottom: 3px; background: #fff; border-radius: 50%; transition: .2s; }
+  .switch input:checked + .slider { background: var(--primary); }
+  .switch input:checked + .slider:before { transform: translateX(18px); }
+
+  /* Alerts */
+  .alert { display: flex; gap: 10px; padding: 12px 16px; border-radius: 6px; font-size: 13px; margin-bottom: 16px; align-items: flex-start; line-height: 1.5; }
+  .alert.info { background: var(--primary-light); color: #0d47a1; }
+  .alert.warning { background: var(--warning-bg); color: #8a4b00; }
+  .alert.success { background: var(--success-bg); color: #1b5e20; }
+  .alert a { color: inherit; font-weight: 600; cursor: pointer; text-decoration: underline; }
+
+  /* Tabs */
+  .tabs { display: flex; border-bottom: 2px solid var(--border); margin-bottom: 20px; gap: 4px; }
+  .tab { padding: 10px 18px; cursor: pointer; color: var(--text2); font-weight: 500; border-bottom: 2px solid transparent; margin-bottom: -2px; }
+  .tab:hover { color: var(--primary); }
+  .tab.active { color: var(--primary); border-bottom-color: var(--primary); font-weight: 600; }
+
+  /* Question cards */
+  .qcard { border: 1px solid var(--border); border-radius: var(--radius); margin-bottom: 16px; background: #fafbfc; }
+  .qcard-header { display: flex; align-items: center; gap: 10px; padding: 10px 16px; background: #fff; border-bottom: 1px solid var(--border); border-radius: var(--radius) var(--radius) 0 0; }
+  .qcard-header .qid { font-weight: 600; color: var(--primary-dark); background: var(--primary-light); padding: 2px 8px; border-radius: 4px; font-family: monospace; font-size: 13px; }
+  .qcard-body { padding: 16px; }
+  .qcard-footer { padding: 4px 12px 10px; display: flex; justify-content: flex-end; gap: 4px; }
+  .criteria-row { display: flex; gap: 8px; margin-bottom: 8px; align-items: center; }
+  .criteria-row input { flex: 1; }
+  .criteria-row .idx { color: var(--text2); font-size: 12px; min-width: 18px; text-align: right; }
+
+  /* State preset */
+  .mapping-row { display: grid; grid-template-columns: 1fr 24px 1fr 36px; gap: 8px; align-items: center; margin-bottom: 8px; }
+  .mapping-row .arrow { color: var(--text2); text-align: center; }
+  code.inline { background: #eceff1; padding: 1px 6px; border-radius: 4px; font-family: 'JetBrains Mono', Consolas, monospace; font-size: 12.5px; color: #ad1457; }
+
+  /* Preview panel */
+  .preview-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  pre.json { background: #263238; color: #eceff1; padding: 16px; border-radius: var(--radius); font-family: 'JetBrains Mono', Consolas, monospace; font-size: 12.5px; line-height: 1.55; overflow-x: auto; white-space: pre-wrap; }
+  .json .k { color: #80cbc4; } .json .s { color: #c5e1a5; } .json .n { color: #ffcc80; }
+
+  /* Result view */
+  .answer-row { padding: 14px 0; border-bottom: 1px solid var(--border); }
+  .answer-row:last-child { border-bottom: none; }
+  .answer-row .qref { font-size: 12px; color: var(--text2); font-family: monospace; }
+  .answer-row .answer-main { display: flex; justify-content: space-between; align-items: center; margin: 4px 0 8px; }
+  .answer-row .answer-value { font-size: 16px; font-weight: 600; }
+  .prob-bar { height: 8px; border-radius: 4px; background: #eceff1; overflow: hidden; display: flex; margin: 3px 0; }
+  .prob-bar > div { height: 100%; border-radius: 4px; }
+  .prob-line { display: flex; align-items: center; gap: 8px; font-size: 12.5px; }
+  .prob-line .plabel { width: 160px; color: var(--text2); }
+  .prob-line .pval { width: 44px; text-align: right; font-family: monospace; }
+  .confidence-ring { width: 64px; height: 64px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 15px; color: #fff; flex-shrink: 0; }
+  .gate-banner { display: flex; gap: 12px; padding: 14px 18px; border-radius: var(--radius); align-items: center; margin-top: 16px; font-weight: 500; }
+  .gate-banner.auto { background: var(--success-bg); color: var(--success); border: 1px solid #a5d6a7; }
+  .gate-banner.confirm { background: var(--warning-bg); color: #8a4b00; border: 1px solid #ffcc80; }
+  .gate-banner.escalate { background: var(--error-bg); color: var(--error); border: 1px solid #ef9a9a; }
+  .gate-banner .actions { margin-left: auto; display: flex; gap: 8px; }
+
+  /* Dialog */
+  .overlay { position: fixed; inset: 0; background: rgba(0,0,0,.45); display: none; align-items: flex-start; justify-content: center; z-index: 100; padding: 48px 16px; overflow-y: auto; }
+  .overlay.open { display: flex; }
+  .dialog { background: var(--surface); border-radius: 12px; width: 100%; max-width: 560px; box-shadow: 0 8px 30px rgba(0,0,0,.25); }
+  .dialog-header { padding: 18px 24px 4px; font-size: 18px; font-weight: 600; display: flex; justify-content: space-between; }
+  .dialog-body { padding: 12px 24px; }
+  .dialog-actions { padding: 12px 24px 20px; display: flex; justify-content: flex-end; gap: 8px; }
+  .dialog .close-x { cursor: pointer; color: var(--text2); font-size: 20px; line-height: 1; background: none; border: none; }
+
+  /* misc */
+  .mono { font-family: 'JetBrains Mono', Consolas, monospace; }
+  .table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+  .table th { text-align: left; color: var(--text2); font-size: 12px; text-transform: uppercase; padding: 8px 10px; border-bottom: 2px solid var(--border); }
+  .table td { padding: 10px; border-bottom: 1px solid var(--border); }
+  .table tr:hover td { background: #fafbfc; }
+  .toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); background: #323232; color: #fff; padding: 12px 24px; border-radius: 6px; font-size: 14px; z-index: 200; display: none; box-shadow: 0 4px 12px rgba(0,0,0,.3); }
+  .toast.show { display: block; animation: fadein .2s; }
+  @keyframes fadein { from { opacity: 0; transform: translate(-50%, 8px);} to { opacity: 1; transform: translate(-50%, 0);} }
+  .divider { height: 1px; background: var(--border); margin: 16px 0; }
+  .runlog { max-height: 140px; overflow-y: auto; }
+</style>
+</head>
+<body>
+
+<!-- ===== App bar ===== -->
+<div class="appbar">
+  <div class="logo">🏛 Parthenon <span class="badge">prototype · system-one</span></div>
+  <div class="spacer"></div>
+  <div class="avatar">ML</div>
+</div>
+
+<div class="layout">
+  <!-- ===== Sidebar ===== -->
+  <nav class="sidebar">
+    <div class="section">Administration</div>
+    <a><span class="icon">📊</span> Dashboard</a>
+    <a><span class="icon">🤖</span> Agent Types</a>
+    <a><span class="icon">🔐</span> Agent Roles</a>
+    <a class="active" data-nav="skills"><span class="icon">⚡</span> Skills</a>
+    <a><span class="icon">📋</span> SOPs</a>
+    <a data-nav="systemone"><span class="icon">🧠</span> System One</a>
+    <a><span class="icon">🔌</span> MCP Hub</a>
+    <a><span class="icon">⚙️</span> System Config</a>
+  </nav>
+
+  <!-- ===== Main ===== -->
+  <main class="main">
+
+    <!-- ============ PAGE: SKILLS ============ -->
+    <section id="page-skills">
+      <h1>Skills</h1>
+      <p class="subtitle">Invocable units granted to agents through roles. Decision Skills appear alongside existing skill types.</p>
+
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+        <div class="chip neutral" style="gap:10px; padding:6px 14px;">
+          <span>Filter:</span>
+          <span class="chip info">All types ▾</span>
+        </div>
+        <button class="btn btn-primary" onclick="openSkillEditor()">＋ Create Skill</button>
+      </div>
+
+      <div class="card" style="padding:8px 16px;">
+        <table class="table">
+          <thead><tr><th>Name</th><th>Type</th><th>Associated</th><th>Status</th><th></th></tr></thead>
+          <tbody>
+            <tr>
+              <td><strong>summarize-ticket</strong></td>
+              <td><span class="chip neutral">LLM · Prompt</span></td>
+              <td>2 agents, 1 SOP</td>
+              <td><span class="chip success"><span class="dot"></span>Enabled</span></td>
+              <td><button class="btn btn-text btn-small">Edit</button></td>
+            </tr>
+            <tr>
+              <td><strong>search-knowledge-base</strong></td>
+              <td><span class="chip neutral">MCP Tool</span></td>
+              <td>4 agents</td>
+              <td><span class="chip success"><span class="dot"></span>Enabled</span></td>
+              <td><button class="btn btn-text btn-small">Edit</button></td>
+            </tr>
+            <tr>
+              <td><strong>triage-inbound-request</strong></td>
+              <td><span class="chip info">Decision Skill</span></td>
+              <td>1 agent type</td>
+              <td><span class="chip success"><span class="dot"></span>Enabled</span></td>
+              <td><button class="btn btn-text btn-small" onclick="openSkillEditor(true)">Edit</button> <button class="btn btn-text btn-small" onclick="showResult()">Run</button></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ============ PAGE: SYSTEM ONE CONFIG ============ -->
+    <section id="page-systemone" style="display:none;">
+      <h1>System One Configuration</h1>
+      <p class="subtitle">Configure fast, structured decision-making models (TypeSafe AI "Jev"). Credentials are encrypted at rest and never returned in plaintext.</p>
+
+      <div class="alert info">
+        <span>ℹ️</span>
+        <div><strong>System One models</strong> evaluate predefined typed questions against a state and return structured answers — typed values, probability distributions, and confidence — without generating text. All calls originate from Control Center-managed flows; agents never hold credentials.</div>
+      </div>
+
+      <div class="card">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+          <h2>Provider</h2>
+          <span id="so-status-chip" class="chip warning"><span class="dot"></span>Not configured</span>
+        </div>
+
+        <div class="row">
+          <div>
+            <label class="field">System One Provider</label>
+            <select id="so-provider" onchange="renderProviderInfo()">
+              <option value="typesafe" selected>TypeSafe AI (Jev)</option>
+              <option value="future" disabled>Other System One provider (coming later)</option>
+            </select>
+            <div class="hint">Only TypeSafe AI is available in this release.</div>
+          </div>
+          <div>
+            <label class="field">Model</label>
+            <select disabled>
+              <option>jev-latest (only model supported)</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="divider"></div>
+
+        <div class="row" style="align-items:flex-end;">
+          <div style="flex:2;">
+            <label class="field">TypeSafe AI API Key</label>
+            <div style="display:flex; gap:8px;">
+              <input type="password" id="so-apikey" placeholder="Paste API key (tsk-…)" style="flex:1;" oninput="onApiKeyInput()">
+              <button class="btn btn-outline" id="so-test-btn" onclick="testConnection()" disabled>Test connection</button>
+            </div>
+            <div class="hint">Stored encrypted (AES-256), same pattern as MCP server credentials. The saved key is never returned in plaintext.</div>
+          </div>
+          <div>
+            <label class="field">Enabled</label>
+            <div style="display:flex; align-items:center; gap:10px; height:38px;">
+              <label class="switch">
+                <input type="checkbox" id="so-enabled" checked>
+                <span class="slider"></span>
+              </label>
+              <span class="hint" style="margin:0;" id="so-enabled-label">System One decision-making enabled</span>
+            </div>
+          </div>
+        </div>
+
+        <div id="so-test-result" style="margin-top:12px;"></div>
+
+        <div class="divider"></div>
+
+        <div style="display:flex; justify-content:flex-end; gap:8px;">
+          <button class="btn btn-danger-text" id="so-remove-btn" onclick="removeKey()" style="display:none;">Remove key</button>
+          <button class="btn btn-primary" onclick="saveConfig()">Save configuration</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Recent decision executions</h2>
+        <p class="card-sub">Logged and auditable like all skill executions.</p>
+        <table class="table">
+          <thead><tr><th>Time</th><th>Skill</th><th>Trigger</th><th>Confidence</th><th>Outcome</th></tr></thead>
+          <tbody>
+            <tr><td>10:42:07</td><td class="mono">triage-inbound-request</td><td>SOP step 3</td><td><span class="chip success"><span class="dot"></span>0.94</span></td><td>Acted automatically</td></tr>
+            <tr><td>10:38:51</td><td class="mono">triage-inbound-request</td><td>Agent: support-triage</td><td><span class="chip warning"><span class="dot"></span>0.61</span></td><td>Confirmation required</td></tr>
+            <tr><td>10:31:12</td><td class="mono">priority-score-doc</td><td>Agent: docs-bot</td><td><span class="chip error"><span class="dot"></span>0.22</span></td><td>Escalated to human</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ============ PAGE: DECISION RESULT VIEW ============ -->
+    <section id="page-result" style="display:none;">
+      <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:4px;">
+        <div>
+          <h1>Decision Execution</h1>
+          <p class="subtitle mono">triage-inbound-request · exec-7f3a-21 · 2026-10-03 10:42:07 · triggered by SOP step 3</p>
+        </div>
+        <button class="btn btn-text" onclick="nav('skills')">← Back to skills</button>
+      </div>
+
+      <!-- Confidence + gate -->
+      <div class="card" style="display:flex; gap:20px; align-items:center;">
+        <div style="text-align:center;">
+          <div class="confidence-ring" id="rv-ring" style="background:var(--success);">94%</div>
+          <div class="hint" style="margin-top:6px;">Model confidence</div>
+        </div>
+        <div style="flex:1;">
+          <h2>Structured answers</h2>
+          <div class="card-sub">Single evaluation · jev-latest · latency 214 ms</div>
+        </div>
+        <span class="chip info">3 questions evaluated</span>
+      </div>
+
+      <div class="card">
+        <h2>Answers</h2>
+        <p class="card-sub">Typed values with probability distributions per question.</p>
+
+        <!-- Choice -->
+        <div class="answer-row">
+          <div class="qref">q_category · Choice</div>
+          <div class="answer-main">
+            <div class="answer-value">🔗 "billing" <span class="hint" style="display:inline">(selected)</span></div>
+            <span class="chip neutral">string</span>
+          </div>
+          <div id="rv-probs-category"></div>
+        </div>
+
+        <!-- Score -->
+        <div class="answer-row">
+          <div class="qref">q_urgency · Score</div>
+          <div class="answer-main">
+            <div class="answer-value">4 / 5 <span class="hint" style="display:inline">(score)</span></div>
+            <span class="chip neutral">integer</span>
+          </div>
+          <div id="rv-probs-urgency"></div>
+        </div>
+
+        <!-- Noul -->
+        <div class="answer-row">
+          <div class="qref">q_needs_refund · Noul</div>
+          <div class="answer-main">
+            <div class="answer-value">✅ Yes <span class="hint" style="display:inline">(p = 0.86)</span></div>
+            <span class="chip neutral">boolean</span>
+          </div>
+          <div class="prob-line">
+            <div class="prob-bar" style="flex:1;"><div style="width:86%; background:var(--success);"></div><div style="width:14%; background:#cfd8dc;"></div></div>
+          </div>
+          <div class="hint">Clarification: “No” would trigger the yes/no follow-up question defined in criteria.</div>
+        </div>
+      </div>
+
+      <!-- Confidence-gated outcome -->
+      <div class="card">
+        <h2>Outcome gating</h2>
+        <p class="card-sub">Thresholds: ≥ 0.80 act automatically · 0.50–0.79 confirm · &lt; 0.50 escalate.</p>
+        <div style="display:flex; gap:12px; align-items:center; margin-bottom:8px;">
+          <label class="field" style="margin:0;">Confidence threshold</label>
+          <input type="range" min="30" max="95" value="80" id="rv-threshold" style="width:260px;" oninput="renderGate()">
+          <span class="mono" id="rv-threshold-val" style="font-weight:600;">0.80</span>
+        </div>
+        <div id="rv-gate"></div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<!-- ===== DIALOG: SKILL EDITOR ===== -->
+<div class="overlay" id="dlg-editor">
+  <div class="dialog" style="max-width:980px;">
+    <div class="dialog-header">
+      <span id="ed-title">Create Skill</span>
+      <button class="close-x" onclick="closeDialog('dlg-editor')">✕</button>
+    </div>
+    <div class="dialog-body">
+
+      <!-- Step 1: type -->
+      <div id="ed-step-type">
+        <div class="row">
+          <div>
+            <label class="field">Skill name</label>
+            <input type="text" id="ed-name" placeholder="e.g. triage-inbound-request">
+          </div>
+          <div>
+            <label class="field">Skill type</label>
+            <select id="ed-type" onchange="onTypeChange()">
+              <option value="">Select a type…</option>
+              <option value="prompt">Prompt Skill (LLM)</option>
+              <option value="mcp">MCP Tool Skill</option>
+              <option value="decision">Decision Skill (System One)</option>
+            </select>
+          </div>
+        </div>
+        <div id="ed-gate" style="margin-top:14px;"></div>
+      </div>
+
+      <!-- Step 2: decision form -->
+      <div id="ed-step-form" style="display:none;">
+        <div class="alert success" id="ed-ok-banner">
+          <span>✓</span>
+          <div>System One model is configured: <strong>TypeSafe AI · jev-latest</strong>. Form driven by the provider's API definition.</div>
+        </div>
+
+        <div class="tabs" style="margin-top:8px;">
+          <div class="tab active" data-edtab="questions" onclick="switchEdTab('questions')">Question set</div>
+          <div class="tab" data-edtab="state" onclick="switchEdTab('state')">State preset</div>
+          <div class="tab" data-edtab="preview" onclick="switchEdTab('preview')">Preview</div>
+        </div>
+
+        <!-- Questions tab -->
+        <div id="ed-tab-questions">
+          <div class="alert info" style="padding:8px 12px;">
+            <span>💡</span>
+            <div>Each question is an <strong>atomic snap judgment</strong>. Compose complex judgments as multiple questions; composition happens at the consumer level.</div>
+          </div>
+          <div id="ed-questions"></div>
+          <button class="btn btn-outline" onclick="addQuestion()">＋ Add question</button>
+        </div>
+
+        <!-- State preset tab -->
+        <div id="ed-tab-state" style="display:none;">
+          <p class="card-sub" style="margin-bottom:12px;">Map input data and agent context into the <code class="inline">state</code> JSON sent to the model. Use placeholders like <code class="inline">{{input.text}}</code> or references to agent data.</p>
+          <div id="ed-mappings"></div>
+          <button class="btn btn-outline" onclick="addMapping()">＋ Add mapping</button>
+          <div class="divider"></div>
+          <label class="field">Additional static state (JSON)</label>
+          <textarea id="ed-static-state" rows="3" class="mono">{ "locale": "en-US", "channel": "email" }</textarea>
+        </div>
+
+        <!-- Preview tab -->
+        <div id="ed-tab-preview" style="display:none;">
+          <div class="preview-grid">
+            <div>
+              <label class="field">Request → jev-latest</label>
+              <pre class="json" id="ed-preview-request"></pre>
+            </div>
+            <div>
+              <label class="field">Simulated response</label>
+              <pre class="json" id="ed-preview-response"></pre>
+            </div>
+          </div>
+          <div style="margin-top:12px; display:flex; justify-content:flex-end;">
+            <button class="btn btn-outline" onclick="regeneratePreview()">↻ Re-simulate</button>
+          </div>
+        </div>
+      </div>
+
+    </div>
+    <div class="dialog-actions">
+      <button class="btn btn-text" onclick="closeDialog('dlg-editor')">Cancel</button>
+      <button class="btn btn-primary" id="ed-save" onclick="saveSkill()" disabled>Save skill</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+/* ===================== state ===================== */
+let soConfigured = false;   // System One configured?
+let questions = [];
+let mappings = [];
+let qSeq = 0;
+
+/* ===================== helpers ===================== */
+function $(id){ return document.getElementById(id); }
+function nav(page){
+  ['skills','systemone','result'].forEach(p => $('page-'+p).style.display = (p===page)?'':'none');
+  document.querySelectorAll('.sidebar a').forEach(a => a.classList.toggle('active', a.dataset.nav===page));
+  window.scrollTo(0,0);
+}
+document.querySelectorAll('.sidebar a').forEach(a => { if(a.dataset.nav) a.onclick = () => nav(a.dataset.nav); });
+function toast(msg){ const t=$('toast'); t.textContent=msg; t.classList.add('show'); clearTimeout(t._h); t._h=setTimeout(()=>t.classList.remove('show'),2600); }
+function openDialog(id){ $(id).classList.add('open'); }
+function closeDialog(id){ $(id).classList.remove('open'); }
+function esc(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;'); }
+function escJson(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;'); }
+
+/* ===================== System One config ===================== */
+function onApiKeyInput(){
+  const has = $('so-apikey').value.trim().length > 0;
+  $('so-test-btn').disabled = !has;
+  $('so-test-result').innerHTML = '';
+}
+function testConnection(){
+  const btn = $('so-test-btn');
+  btn.disabled = true; btn.textContent = 'Testing…';
+  setTimeout(() => {
+    btn.disabled = false; btn.textContent = 'Test connection';
+    const ok = $('so-apikey').value.trim().length >= 8;
+    $('so-test-result').innerHTML = ok
+      ? '<div class="alert success" style="margin:0;"><span>✓</span><div>Connection successful — <strong>jev-latest</strong> reachable (latency 187 ms). Key will be stored encrypted at rest.</div></div>'
+      : '<div class="alert warning" style="margin:0;"><span>⚠</span><div>Key looks invalid. TypeSafe AI keys look like <code class="inline">tsk-…</code>.</div></div>';
+  }, 700);
+}
+function saveConfig(){
+  const key = $('so-apikey').value.trim();
+  if(!key){ toast('Enter an API key first'); return; }
+  soConfigured = true;
+  $('so-status-chip').className = 'chip success';
+  $('so-status-chip').innerHTML = '<span class="dot"></span>Active · jev-latest';
+  $('so-apikey').value = '••••••••••••••••' + key.slice(-4);
+  $('so-apikey').readOnly = true;
+  $('so-remove-btn').style.display = '';
+  toast('Configuration saved — key stored encrypted');
+}
+function removeKey(){
+  soConfigured = false;
+  $('so-status-chip').className = 'chip warning';
+  $('so-status-chip').innerHTML = '<span class="dot"></span>Not configured';
+  $('so-apikey').value = ''; $('so-apikey').readOnly = false;
+  $('so-remove-btn').style.display = 'none';
+  toast('Key removed');
+}
+
+/* ===================== Skill editor ===================== */
+const TYPE_INFO = {
+  prompt: { label: 'Prompt Skill (LLM)', desc: 'Prompts an LLM and returns generated text. Uses a centrally-managed model configuration.' },
+  mcp:    { label: 'MCP Tool Skill', desc: 'Wraps one or more MCP tool calls from a registered MCP server.' },
+  decision:{ label: 'Decision Skill (System One)', desc: 'Sends a predefined question set plus state to a System One model (TypeSafe AI Jev) and returns structured typed answers with probabilities and confidence.' }
+};
+
+function openSkillEditor(existing){
+  $('ed-title').textContent = existing ? 'Edit Skill — triage-inbound-request' : 'Create Skill';
+  if(!existing){ $('ed-name').value=''; $('ed-type').value=''; }
+  $('ed-step-form').style.display='none';
+  $('ed-step-type').style.display='';
+  $('ed-save').disabled = true;
+  if(existing){
+    $('ed-name').value = 'triage-inbound-request';
+    $('ed-type').value = 'decision';
+    onTypeChange();
+    if(!questions.length) seedQuestions();
+    renderQuestions();
+  }
+  openDialog('dlg-editor');
+}
+
+function onTypeChange(){
+  const type = $('ed-type').value;
+  const gate = $('ed-gate');
+  if(!type){ gate.innerHTML=''; $('ed-save').disabled = true; return; }
+  const info = TYPE_INFO[type];
+  if(type === 'decision' && !soConfigured){
+    gate.innerHTML = '<div class="alert warning"><span>🔒</span><div><strong>System One model is not configured.</strong> Decision Skills require a configured System One provider, and this deployment has none yet.<br><a onclick="closeDialog(\'dlg-editor\'); nav(\'systemone\')">Configure the TypeSafe AI provider →</a><br><span class="hint" style="display:block; margin-top:6px;">Decision-skill authoring is blocked until a provider is configured and enabled.</span></div></div>';
+    $('ed-step-form').style.display='none';
+    $('ed-save').disabled = true;
+  } else if(type === 'decision'){
+    gate.innerHTML = '';
+    $('ed-step-type').style.display='none';
+    $('ed-step-form').style.display='';
+    $('ed-save').disabled = false;
+    if(!questions.length) seedQuestions();
+    renderQuestions(); renderMappings(); updatePreview();
+  } else {
+    gate.innerHTML = '<div class="alert info" style="margin:0;"><span>' + (type==='prompt'?'📝':'🔌') + '</span><div>' + info.desc + ' <span class="hint">(existing type — form not shown in this prototype)</span></div></div>';
+    $('ed-step-form').style.display='none';
+    $('ed-save').disabled = false;
+  }
+}
+
+function switchEdTab(tab){
+  ['questions','state','preview'].forEach(t => {
+    $('ed-tab-'+t).style.display = (t===tab)?'':'none';
+    document.querySelector('[data-edtab="'+t+'"]').classList.toggle('active', t===tab);
+  });
+  if(tab==='preview') updatePreview();
+}
+
+/* ---- Question set ---- */
+function seedQuestions(){
+  qSeq = 0;
+  questions = [
+    { id:'q_category', type:'choice', instructions:'Classify the support request into exactly one category.', criteria:[
+      {key:'billing', value:'Charges, invoices, refunds'},{key:'technical', value:'Errors, bugs, outages'},{key:'account', value:'Login, access, profile'} ]},
+    { id:'q_urgency', type:'score', instructions:'Rate urgency 1 (low) – 5 (critical) against the SLA rubric.', criteria:[
+      {level:1, label:'Routine'}, {level:2, label:'Minor inconvenience'}, {level:3, label:'Degraded workflow'}, {level:4, label:'Blocking, workaround exists'}, {level:5, label:'Critical / outage'} ]},
+    { id:'q_needs_refund', type:'noul', instructions:'Does the request plausibly qualify for a refund?', criteria:{ clarification:'If unsure, should we ask the customer for order details? (yes/no)' } }
+  ];
+}
+function typeChip(t){
+  return {choice:'<span class="chip info">Choice</span>', score:'<span class="chip warning">Score</span>', noul:'<span class="chip neutral">Noul</span>'}[t];
+}
+function renderQuestions(){
+  const wrap = $('ed-questions');
+  wrap.innerHTML = questions.map((q,i) => {
+    let crit = '';
+    if(q.type==='choice'){
+      crit = '<label class="field" style="margin-top:10px;">Options (key → meaning)</label>' +
+        q.criteria.map((c,ci) =>
+          '<div class="criteria-row"><span class="idx">'+(ci+1)+'.</span>' +
+          '<input type="text" value="'+esc(c.key)+'" placeholder="key" oninput="setCrit('+i+','+ci+',\'key\',this.value)">' +
+          '<input type="text" value="'+esc(c.value)+'" placeholder="meaning shown to reviewers" oninput="setCrit('+i+','+ci+',\'value\',this.value)">' +
+          '<button class="btn btn-danger-text btn-small" onclick="removeCrit('+i+','+ci+')">✕</button></div>').join('') +
+        '<button class="btn btn-text btn-small" onclick="addCrit('+i+')">＋ Add option</button>';
+    } else if(q.type==='score'){
+      crit = '<label class="field" style="margin-top:10px;">Ordered levels (low → high)</label>' +
+        q.criteria.map((c,ci) =>
+          '<div class="criteria-row"><span class="idx">'+c.level+'</span>' +
+          '<input type="text" value="'+esc(c.label)+'" placeholder="level label" oninput="setCrit('+i+','+ci+',\'label\',this.value)">' +
+          '<button class="btn btn-danger-text btn-small" onclick="removeCrit('+i+','+ci+')">✕</button></div>').join('') +
+        '<button class="btn btn-text btn-small" onclick="addCrit('+i+')">＋ Add level</button>';
+    } else { // noul
+      crit = '<label class="field" style="margin-top:10px;">Clarification (optional yes/no follow-up when unsure)</label>' +
+        '<input type="text" value="'+esc(q.criteria.clarification||'')+'" placeholder="Clarification prompt…" oninput="setNoulClar('+i+',this.value)">';
+    }
+    return '<div class="qcard">' +
+      '<div class="qcard-header">' +
+        '<span class="qid">'+esc(q.id)+'</span>' + typeChip(q.type) +
+        '<span style="flex:1;"></span>' +
+        '<button class="btn btn-text btn-small" onclick="moveQ('+i+',-1)">↑</button>' +
+        '<button class="btn btn-text btn-small" onclick="moveQ('+i+',1)">↓</button>' +
+        '<button class="btn btn-danger-text btn-small" onclick="removeQuestion('+i+')">Remove</button>' +
+      '</div>' +
+      '<div class="qcard-body">' +
+        '<div class="row">' +
+          '<div style="max-width:240px;"><label class="field">Question ID</label>' +
+          '<input type="text" value="'+esc(q.id)+'" oninput="setQ('+i+',\'id\',this.value)"></div>' +
+          '<div style="max-width:180px;"><label class="field">Type</label>' +
+          '<select onchange="setQ('+i+',\'type\',this.value)">' +
+            ['choice','score','noul'].map(t=>'<option value="'+t+'"'+(q.type===t?' selected':'')+'>'+{choice:'Choice',score:'Score',noul:'Noul'}[t]+'</option>').join('') +
+          '</select></div>' +
+          '<div><label class="field">Instructions</label>' +
+          '<textarea rows="2" oninput="setQ('+i+',\'instructions\',this.value)">'+esc(q.instructions)+'</textarea></div>' +
+        '</div>' + crit +
+      '</div></div>';
+  }).join('') || '<p class="card-sub" style="margin-bottom:12px;">No questions yet — add at least one.</p>';
+}
+function setQ(i,f,v){
+  if(f==='type'){
+    const old = questions[i];
+    questions[i].type = v;
+    if(v==='choice' && (!Array.isArray(old.criteria))) questions[i].criteria=[{key:'option_1',value:''},{key:'option_2',value:''}];
+    if(v==='score' && (!Array.isArray(old.criteria))) questions[i].criteria=[{level:1,label:'Low'},{level:2,label:'Medium'},{level:3,label:'High'}];
+    if(v==='noul') questions[i].criteria={clarification:''};
+  } else questions[i][f]=v;
+  if(f==='id'||f==='type') renderQuestions(); else updatePreview();
+}
+function addQuestion(){
+  qSeq++;
+  questions.push({ id:'q_new_'+qSeq, type:'choice', instructions:'', criteria:[{key:'option_1',value:''},{key:'option_2',value:''}] });
+  renderQuestions();
+}
+function removeQuestion(i){ questions.splice(i,1); renderQuestions(); }
+function moveQ(i,d){ const j=i+d; if(j<0||j>=questions.length) return; [questions[i],questions[j]]=[questions[j],questions[i]]; renderQuestions(); }
+function setCrit(i,ci,f,v){ questions[i].criteria[ci][f]=v; updatePreview(); }
+function addCrit(i){
+  const q=questions[i];
+  if(q.type==='choice') q.criteria.push({key:'option_'+(q.criteria.length+1),value:''});
+  else if(q.type==='score') q.criteria.push({level:q.criteria.length+1,label:''});
+  renderQuestions();
+}
+function removeCrit(i,ci){ questions[i].criteria.splice(ci,1); renderQuestions(); }
+function setNoulClar(i,v){ questions[i].criteria.clarification=v; updatePreview(); }
+
+/* ---- State preset ---- */
+const SAMPLE_MAPPINGS = [
+  { state:'customer.tier',        source:'{{agent.customer_data.plan}}' },
+  { state:'request.text',         source:'{{input.text}}' },
+  { state:'request.open_invoices',source:'{{data.invoices.count}}' }
+];
+function renderMappings(){
+  if(!mappings.length) mappings = SAMPLE_MAPPINGS.map(m=>({...m}));
+  $('ed-mappings').innerHTML = mappings.map((m,i) =>
+    '<div class="mapping-row">' +
+    '<input type="text" value="'+esc(m.state)+'" placeholder="state path (e.g. request.text)" oninput="setMap('+i+',\'state\',this.value)">' +
+    '<span class="arrow">←</span>' +
+    '<input type="text" value="'+esc(m.source)+'" placeholder="{{input.text}} | {{agent.…}} | {{data.…}}" oninput="setMap('+i+',\'source\',this.value)">' +
+    '<button class="btn btn-danger-text btn-small" onclick="removeMap('+i+')">✕</button>' +
+    '</div>').join('');
+}
+function addMapping(){ mappings.push({state:'',source:''}); renderMappings(); }
+function removeMap(i){ mappings.splice(i,1); renderMappings(); }
+function setMap(i,f,v){ mappings[i][f]=v; updatePreview(); }
+
+/* ---- Preview / simulation ---- */
+function resolvePlaceholder(p){
+  const samples = {
+    '{{input.text}}': '"My card was charged twice this month, please refund the duplicate — this is blocking me."',
+    '{{agent.customer_data.plan}}': '"enterprise"',
+    '{{data.invoices.count}}': '2'
+  };
+  return samples[p] !== undefined ? samples[p] : '"' + p.replace(/[{}]/g,'') + '"';
+}
+function buildState(){
+  const st = {};
+  mappings.forEach(m => { if(m.state) st[m.state] = resolvePlaceholder(m.source.trim()); });
+  try { Object.assign(st, JSON.parse($('ed-static-state').value||'{}')); } catch(e){}
+  return st;
+}
+function updatePreview(){
+  if(!$('ed-tab-preview')) return;
+  const state = buildState();
+  const req = {
+    model: 'jev-latest',
+    provider: 'typesafe',
+    state: state,
+    questions: questions.map(q => {
+      const base = { id:q.id, type:q.type, instructions:q.instructions };
+      if(q.type==='choice') base.options = q.criteria.map(c=>c.key).filter(Boolean);
+      if(q.type==='score') base.levels = q.criteria.map(c=>c.label).filter(Boolean);
+      if(q.type==='noul' && q.criteria.clarification) base.clarification = q.criteria.clarification;
+      return base;
+    })
+  };
+  $('ed-preview-request').innerHTML = syntaxJson(JSON.stringify(req, null, 2));
+
+  const rnd = (n)=>Array.from({length:n},()=>Math.random()).map(x=>0.01+x*0.99);
+  const norm = a => { const s=a.reduce((x,y)=>x+y,0); return a.map(x=>x/s); };
+  const resp = { execution_id:'sim-'+Math.random().toString(16).slice(2,8), confidence: +(0.5+Math.random()*0.49).toFixed(2), answers: questions.map(q => {
+    if(q.type==='choice'){
+      const ps = norm(rnd(Math.max(q.criteria.length,1)));
+      const keys = q.criteria.map(c=>c.key).filter(Boolean);
+      const bi = ps.indexOf(Math.max(...ps));
+      return { id:q.id, value: keys[bi] ?? null, probabilities: Object.fromEntries(keys.map((k,i)=>[k, +ps[i].toFixed(2)])) };
+    }
+    if(q.type==='score'){
+      const n = Math.max(q.criteria.length,1);
+      const ps = norm(rnd(n));
+      const v = ps.indexOf(Math.max(...ps)) + 1;
+      return { id:q.id, value:v, probabilities:Object.fromEntries(q.criteria.map((c,i)=>[c.level, +ps[i].toFixed(2)])) };
+    }
+    const p = +(0.3+Math.random()*0.69).toFixed(2);
+    return { id:q.id, value: p>=0.5, probabilities:{ yes:p, no:+(1-p).toFixed(2) } };
+  })};
+  $('ed-preview-response').innerHTML = syntaxJson(JSON.stringify(resp, null, 2));
+}
+function regeneratePreview(){ updatePreview(); toast('Simulated a new run'); }
+function syntaxJson(s){
+  return escJson(s)
+    .replace(/&quot;([^&]+)&quot;:/g,'<span class="k">"$1":</span>')
+    .replace(/: &quot;([^&]*)&quot;/g,': <span class="s">"$1"</span>')
+    .replace(/: (-?\d+\.?\d*)/g,': <span class="n">$1</span>')
+    .replace(/: (true|false|null)/g,': <span class="n">$1</span>');
+}
+
+function saveSkill(){
+  closeDialog('dlg-editor');
+  if($('ed-type').value==='decision'){ toast('Decision skill saved'); showResult(); }
+  else toast('Skill saved');
+}
+
+/* ===================== Result view ===================== */
+function showResult(){
+  nav('result');
+  renderResult();
+}
+function probLines(probs, colors){
+  return Object.entries(probs).map(([k,v]) => {
+    const pct = Math.round(v*100);
+    const c = colors && colors[k] ? colors[k] : (pct>=50 ? 'var(--primary)' : '#90a4ae');
+    return '<div class="prob-line"><span class="plabel mono">'+esc(k)+'</span>' +
+      '<div class="prob-bar" style="flex:1;"><div style="width:'+pct+'%; background:'+c+';"></div></div>' +
+      '<span class="pval">'+v.toFixed(2)+'</span></div>';
+  }).join('');
+}
+function renderResult(){
+  $('rv-probs-category').innerHTML = probLines({
+    billing:0.81, technical:0.11, account:0.08
+  }, { billing:'var(--primary)', technical:'#90a4ae', account:'#b0bec5' });
+  $('rv-probs-urgency').innerHTML = probLines({
+    '4 (blocking)':0.64, '3 (degraded)':0.22, '5 (critical)':0.10, '2 (minor)':0.04
+  }, { '4 (blocking)':'var(--primary)', '3 (degraded)':'#90a4ae', '5 (critical)':'#90a4ae', '2 (minor)':'#b0bec5' });
+  renderGate();
+}
+function renderGate(){
+  const conf = 0.94;
+  const t = $('rv-threshold').value/100;
+  $('rv-threshold-val').textContent = t.toFixed(2);
+  const gate = $('rv-gate');
+  const ring = $('rv-ring');
+  if(conf >= t){
+    ring.style.background = 'var(--success)';
+    gate.innerHTML = '<div class="gate-banner auto"><span style="font-size:20px;">✅</span><div><strong>Act automatically</strong> — confidence 0.94 ≥ threshold '+t.toFixed(2)+'. Result dispatched to the SOP without human review.</div></div>';
+  } else if(conf >= t-0.3){
+    ring.style.background = 'var(--warning)';
+    gate.innerHTML = '<div class="gate-banner confirm"><span style="font-size:20px;">🖐</span><div><strong>Confirm required</strong> — confidence 0.94 is below the act-automatically threshold '+t.toFixed(2)+' but within the confirm band. A human must approve before the outcome is applied.</div>' +
+      '<div class="actions"><button class="btn btn-outline btn-small" onclick="toast(\'Confirmed — outcome applied\')">Confirm</button><button class="btn btn-danger-text btn-small" onclick="toast(\'Rejected — escalated\')">Reject</button></div></div>';
+  } else {
+    ring.style.background = 'var(--error)';
+    gate.innerHTML = '<div class="gate-banner escalate"><span style="font-size:20px;">🚨</span><div><strong>Escalated to human</strong> — confidence 0.94 is far below threshold '+t.toFixed(2)+'. Routed to the review queue.</div>' +
+      '<div class="actions"><button class="btn btn-outline btn-small" onclick="toast(\'Reassigned to reviewer\')">Assign reviewer</button></div></div>';
+  }
+}
+
+/* ===================== init ===================== */
+renderQuestions(); renderMappings();
+</script>
+</body>
+</html>

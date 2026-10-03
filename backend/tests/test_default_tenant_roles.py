@@ -455,7 +455,8 @@ class TestCreationPathWiring:
         assert len(roles) == 4  # seeded lazily by the helper
 
     async def test_adoption_seeds_roles_without_forcing_assignment(self, db):
-        """System-tenant adoption seeds the 4 roles; nobody is force-assigned."""
+        """Root-tenant adoption seeds the 4 default roles + the root
+        ``Platform Admin`` role; nobody is force-assigned a default role."""
         suffix = uuid.uuid4().hex[:6]
         db.add(
             PlatformUser(
@@ -474,9 +475,11 @@ class TestCreationPathWiring:
             .scalars()
             .all()
         )
+        # Phase 11: the root Platform Admin role (platform::* grants) is
+        # seeded alongside the 4 default tenant presets.
         assert {r.name for r in roles} == {
             p.role_name for p in DEFAULT_TENANT_ROLE_PRESETS.values()
-        }
+        } | {"Platform Admin"}
         # NO default-role assignment was forced onto existing users.
         assignments = (
             (

@@ -6,7 +6,7 @@ The identity module covers five interconnected concerns: the platform's internal
 
 **RBAC layer**: REST endpoints for creating, reading, updating, and deleting Roles, Permissions, and Identity records, plus a public setup endpoint for seeding the first administrator on initial deployment. Roles carry permission sets that control what actions a human user, AI agent, or service account may perform.
 
-**Identity provider bootstrap**: First-run detection and provisioning of the OIDC identity provider (bundled Keycloak, external Keycloak, or Azure EntraID). A setup wizard guides an admin through credential entry on first access; the backend service orchestrates Keycloak realm/client creation and persists resolved OIDC settings to the database and `config/identity.yaml`. Once provisioning completes, the OIDC client reloads live and normal auth flow resumes with no process restart.
+**Identity provider bootstrap**: Detection and provisioning of the OIDC identity provider (bundled Keycloak, external Keycloak, or Azure EntraID). The backend service orchestrates Keycloak realm/client creation and persists resolved OIDC settings to the database and `config/identity.yaml`. Once provisioning completes, the OIDC client reloads live and normal auth flow resumes with no process restart. Pre-auth provider configuration via the frontend setup wizard has been REMOVED (obsolete with multi-tenancy — OIDC is configured post-sign-in via System Config / Tenant Settings; the backend `/setup/*` endpoints and the `setup/` CLI tool remain).
 
 **OIDC integration refinement**: Moves OIDC identity provider configuration from a static YAML file into a database-backed system with a web UI (System Config). The Control Center gains a three-tier authentication pipeline (super admin credentials, OIDC per-provider JWT validation, public fallback), an OIDC Provider Registry that hot-reloads configs and caches JWKS per provider, and a multi-provider OIDC client that validates tokens against independent user and agent identity providers. A built-in super admin account bootstrapped from environment variables provides guaranteed access for disaster recovery. The frontend adds Identity Provider Config forms, super admin management, and OIDC connectivity/login test modals. The login page dynamically adapts to show/hide the super admin credential form based on discovered provider state. A one-time migration service reads existing `config/identity.yaml` into the database on upgrade.
 
@@ -56,19 +56,6 @@ The identity module covers five interconnected concerns: the platform's internal
 | `AccessRequestService` | Manages the full lifecycle of group join requests; handles `submit_batch_request`, approval (creates `UserGroup` record), and rejection; enforces one-pending-per-user/group constraint; delegates notification triggers to `NotificationHook` |
 | `NotificationHook` | Sends permission-domain alerts via the existing notification service: owner notification on new join request, requester notification on approve/reject |
 | Auth middleware (modified) | Extended to call `UserCacheService.upsert_user()` and `GroupClaimMapper.map_claims()` after every successful JWT validation; failures are logged without failing the request |
-
-### Frontend — Setup Wizard
-
-| Component | Description |
-|-----------|-------------|
-| `SetupWizard` | Wizard container in `frontend/src/pages/setup/`; orchestrates step progression via a local step-index state machine and fires `POST /setup/identity` on final submission |
-| `ProviderSelectionStep` | Wizard step 1 — radio selection of provider type |
-| `KeycloakConfigStep` | Wizard step — Keycloak connection and credential form (bundled or external) |
-| `ExternalOidcConfigStep` | Wizard step — generic external OIDC configuration form (Azure EntraID and others) |
-| `VerificationStep` | Wizard step — in-progress provisioning indicator and error display |
-| `CompletionStep` | Wizard step — success confirmation and redirect-to-login action |
-| `setupApi` | Typed API client functions for `GET /setup/identity-status` and `POST /setup/identity` |
-| `AppRouter` | First-run redirect guard: calls `GET /setup/identity-status` on mount; redirects all navigation to `/setup` until `setup_state === "CONFIGURED"` |
 
 ### Frontend — User Permission Management
 
@@ -130,7 +117,7 @@ The identity module covers five interconnected concerns: the platform's internal
 | `SuperAdminConfigSection` | Enable/disable toggle with confirmation modal and guard rail; password change form; status display |
 | `OIDCTestConfigModal` | Step-by-step connectivity test modal: discovery fetch, issuer validation, JWKS verification, credential check |
 | `OIDCTestLoginModal` | Full OIDC authorization code flow test: redirect, callback, token validation, claims display |
-| `LoginPage` (updated) | Three-state rendering based on provider discovery: Super Admin Only, OIDC Only, Both, or Setup Wizard Redirect |
+| `LoginPage` (updated) | Provider-discovery-driven rendering: password sign-in card, OIDC button, and discreet super-admin entry — the removed setup-wizard redirect state is gone (see the multi-tenancy module for the current tenancy-aware sign-in flow) |
 | `AuthContext` / `authStore` (updated) | Provider discovery on app load (`availableProviders`, `superAdminEnabled`); super admin state tracking (`isSuperAdmin`); separate token storage for super admin and OIDC sessions |
 | `DashboardPage` (updated) | Identity provider status cards and quick action buttons |
 | `systemConfigApi` | Typed API client module for all system config endpoints (identity providers CRUD, super admin management, OIDC testing) and auth endpoints (super admin login/refresh) |
@@ -341,15 +328,7 @@ Non-sensitive OIDC settings written by `IdentityBootstrapService` after provisio
 
 | Symbol | Type | Description | File |
 |--------|------|-------------|------|
-| `getIdentityStatus` | function | Calls `GET /api/v1/setup/identity-status`; returns `IdentityStatusResponse` | `frontend/src/api/setupApi.ts` |
-| `postSetupIdentity` | function | Calls `POST /api/v1/setup/identity` with `ProviderSetupRequest`; returns `ProviderSetupResult` | `frontend/src/api/setupApi.ts` |
-| `SetupWizard` | component | Wizard container; step-index state machine; fires `postSetupIdentity` on final submission | `frontend/src/pages/setup/SetupWizard.tsx` |
-| `ProviderSelectionStep` | component | Wizard step 1 — provider type radio selection | `frontend/src/features/setup/ProviderSelectionStep.tsx` |
-| `KeycloakConfigStep` | component | Wizard step — Keycloak connection and credential form | `frontend/src/features/setup/KeycloakConfigStep.tsx` |
-| `ExternalOidcConfigStep` | component | Wizard step — external OIDC / Azure EntraID configuration form | `frontend/src/features/setup/ExternalOidcConfigStep.tsx` |
-| `VerificationStep` | component | Wizard step — provisioning in-progress indicator and error display | `frontend/src/features/setup/VerificationStep.tsx` |
-| `CompletionStep` | component | Wizard step — success confirmation and login redirect action | `frontend/src/features/setup/CompletionStep.tsx` |
-| `AppRouter` (first-run guard) | component | Calls `getIdentityStatus` on mount; redirects all navigation to `/setup` until configured | `frontend/src/app/AppRouter.tsx` |
+| `AppRouter` | component | The removed pre-auth setup wizard route and first-run `/setup` redirect guard; OIDC is configured post-sign-in via System Config / Tenant Settings | `frontend/src/app/AppRouter.tsx` |
 
 ### Infrastructure
 
@@ -366,20 +345,13 @@ Non-sensitive OIDC settings written by `IdentityBootstrapService` after provisio
 | `test_bootstrap_service` | unit test | `IdentityBootstrapService` provisioning paths and idempotency | `backend/tests/services/identity/test_bootstrap_service.py` |
 | `test_keycloak_admin_client` | unit test | `KeycloakAdminClient` auth, retry, and error-mapping behaviour | `backend/tests/services/identity/test_keycloak_admin_client.py` |
 | `test_setup_identity` | unit test | Setup API endpoint success, 409, 502, and 422 response paths | `backend/tests/api/v1/test_setup_identity.py` |
-| `setupApi.test` | unit test | `getIdentityStatus` and `provisionIdentity` function tests | `frontend/src/__tests__/api/setupApi.test.ts` |
-| `ProviderSelectionStep.test` | unit test | Provider selection step component | `frontend/src/__tests__/features/setup/ProviderSelectionStep.test.tsx` |
-| `KeycloakConfigStep.test` | unit test | Keycloak config step component | `frontend/src/__tests__/features/setup/KeycloakConfigStep.test.tsx` |
-| `ExternalOidcConfigStep.test` | unit test | External OIDC config step component | `frontend/src/__tests__/features/setup/ExternalOidcConfigStep.test.tsx` |
-| `VerificationStep.test` | unit test | Verification step component | `frontend/src/__tests__/features/setup/VerificationStep.test.tsx` |
-| `CompletionStep.test` | unit test | Completion step component | `frontend/src/__tests__/features/setup/CompletionStep.test.tsx` |
-| `SetupWizard.test` | unit test | Wizard container step orchestration and API call | `frontend/src/__tests__/features/setup/SetupWizard.test.tsx` |
-| `setup-wizard` E2E | e2e test | Full browser setup wizard flow | `e2e/tests/setup-wizard.spec.ts` |
 
 ### User Permission System — Services
 
 | Symbol | Type | Description | File |
 |--------|------|-------------|------|
 | `BootstrapService` | class | Seeds system admin role on first startup; idempotent; runs as FastAPI startup event | `backend/app/services/permissions/bootstrap_service.py` |
+| `BootstrapService._ensure_system_admin_role` (modified) | method | The bootstrap `system_admin` role is created ROOT-scoped (pre-Phase-11 NULL rows re-homed by migration `b8e4f2a6c9d1`) — no global tenant-less roles on fresh deployments | `backend/app/services/permissions/bootstrap_service.py` |
 | `BootstrapService.initialize` | method | Ensures `system_admin` role + full-access policy + assigns initial admin by `BOOTSTRAP_ADMIN_EMAIL` env var | `backend/app/services/permissions/bootstrap_service.py` |
 | `PermissionEngine` | class | Evaluates user permission policies; deny-by-default; returns allow/deny with audit reason; emits structured audit log and OTEL span attributes per call | `backend/app/services/permissions/permission_engine.py` |
 | `PermissionEngine.authorize` | method | Evaluates allow/deny for user + module + action + resource_id; validates against `ResourceTypeManifest`; loads effective role IDs (direct `UserRole` + group-inherited `GroupRole`); emits one structured log record and sets `permission.*` OTEL span attributes per call; returns `AuthorizationResult` | `backend/app/services/permissions/permission_engine.py` |
@@ -587,7 +559,7 @@ Non-sensitive OIDC settings written by `IdentityBootstrapService` after provisio
 | `IdentityProviderConfig` | model | OIDC provider configuration entity (restructured for multi-provider support) | `backend/app/db/models/identity_provider_config.py` |
 | `IdentityProviderSetupState` | model | Platform bootstrap state sentinel (modified for DB-backed checks) | `backend/app/db/models/identity_provider_setup_state.py` |
 | `IdentityProviderConfigAudit` | model | Immutable audit log for provider config changes | `backend/app/db/models/identity_provider_config_audit.py` |
-| `SuperAdminCredentials` | model | Built-in super admin credential store | `backend/app/db/models/super_admin_credentials.py` |
+| `SuperAdminCredentials` | configuration | Built-in super admin credential store — resolved from environment variables (`SUPER_ADMIN_USERNAME`, `SUPER_ADMIN_PASSWORD`/`SUPER_ADMIN_PASSWORD_HASH`, `PARTHENON_SUPER_ADMIN_ENABLED`) in `super_admin_auth_service.py`, not a DB model | `backend/app/services/super_admin_auth_service.py` |
 
 ### OIDC Configuration & Auth Pipeline — Core
 
@@ -640,11 +612,11 @@ Non-sensitive OIDC settings written by `IdentityBootstrapService` after provisio
 | `SuperAdminConfigSection` | component | Super admin enable/disable toggle and password form | `frontend/src/components/system/SuperAdminConfigSection.tsx` |
 | `OIDCTestConfigModal` | component | Step-by-step OIDC connectivity test modal | `frontend/src/components/system/OIDCTestConfigModal.tsx` |
 | `OIDCTestLoginModal` | component | Full OIDC authorization code flow test modal | `frontend/src/components/system/OIDCTestLoginModal.tsx` |
-| `IdentityProvidersConfigPage` | page | System Config page hosting both provider forms (not yet wired into `AppRouter`) | `frontend/src/pages/system/IdentityProvidersConfigPage.tsx` |
-| `LoginPage` | page | Login page with three-state rendering based on provider discovery | `frontend/src/pages/auth/LoginPage.tsx` |
+| `IdentityProvidersConfigPage` | page | System Config page hosting both provider forms; with multi-tenancy it manages the ROOT tenant's provider when signed into the root workspace | `frontend/src/pages/system/IdentityProvidersConfigPage.tsx` |
+| `IdentityProviderConfigForm` (default role) | component (modified) | Gains the `default_tenant_role` select — the JIT default tenant role applied on first sign-in via this provider | `frontend/src/components/system/IdentityProviderConfigForm.tsx` |
+| `LoginPage` | page | Login page with provider-discovery-driven rendering (password sign-in card, OIDC button, discreet super-admin entry); tenancy-aware workspace flows live in the multi-tenancy module | `frontend/src/pages/auth/LoginPage.tsx` |
 | `DashboardPage` | page | Dashboard with identity provider status cards | `frontend/src/pages/DashboardPage.tsx` |
-| `SetupWizard` | page | Dev/demo setup wizard (modified: saves to DB) | `frontend/src/pages/setup/SetupWizard.tsx` |
-| `OidcCallback` | page | OIDC callback handler | `frontend/src/pages/auth/OidcCallback.tsx` |
+| `OidcCallback` | page | OIDC callback handler; with multi-tenancy it performs verify-then-bind tenant binding and a tenant-resolved token exchange (see multi-tenancy module) | `frontend/src/pages/auth/OidcCallback.tsx` |
 | `AuthContext` | context | Auth state provider (modified: provider discovery, super admin tracking) | `frontend/src/stores/AuthContext.tsx` |
 | `authStore` | store | Auth state management (modified: separate token storage for super admin and OIDC) | `frontend/src/stores/authStore.ts` |
 | `useDialogErrorHandler` | hook | Dialog API error handling (used by new dialogs) | `frontend/src/hooks/useDialogErrorHandler.ts` |

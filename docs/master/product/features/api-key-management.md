@@ -74,3 +74,7 @@ API Key Management enables Platform Administrators to create, view, and revoke A
 - API key validation requires Communication Hub to call Control Center's internal API over mTLS-secured channels
 - Rate limiting is applied to authentication attempts to prevent brute-force attacks
 - External agents must support the MCP protocol with Bearer token or query parameter authentication
+
+## Multi-Tenancy Note
+
+When multi-tenancy is enabled (see [Multi-Tenancy](multi-tenancy.md)), API keys are additionally bound to one tenant and are valid only for that tenant's resources — a tenant's key cannot access another tenant. With multi-tenancy disabled (the default), behavior is unchanged — the deployment operates as the root tenant's workspace.

@@ -91,3 +91,7 @@ Control Center is the governance center for policy-driven operation of Parthenon
 - Requires a vendor and model catalogue that the new hierarchy can be built on top of, so that vendor enable/disable and model selection have a stable source of truth
 - Requires reliable runtime state and delegation relationship signals to render an accurate running-agent map on the Agent Runtime Monitor
 - Terminate operations must be routed through the Communication Hub to Agent Runtime to preserve service segregation and certificate-based authentication boundaries
+
+## Multi-Tenancy Note
+
+When multi-tenancy is enabled (see [Multi-Tenancy](multi-tenancy.md)), Control Center is the single tenant-enforcement and quota-counting point; governance policies are tenant-owned and cross-tenant attempts and root-protection violations are audited here. With multi-tenancy disabled (the default), behavior is unchanged — the deployment operates as the root tenant's workspace.

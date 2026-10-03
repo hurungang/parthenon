@@ -342,6 +342,8 @@ async def execute_unscoped_rows(db, predicate):
 class _FakeRequest:
     def __init__(self, context, path="/api/v1/dashboard/summary"):
         self.state = SimpleNamespace()
+        # Phase 11: a resolved context is tenancy-ON in these tests.
+        self.state.tenancy_enabled = context is not None
         if context is not None:
             self.state.tenant_context = context
         self.url = SimpleNamespace(path=path)
@@ -523,6 +525,9 @@ def _make_auth_patch(sub: str, ctx: TenantContext):
 class TestNoMembershipForbiddenShape:
     @pytest_asyncio.fixture
     async def client_factory(self, seeded_engine):
+        # Phase 11 note: the membership gate is keyed on the resolved
+        # tenant being a CUSTOMER tenant (≠ root) in any switch state, so
+        # these tests need no switch manipulation.
         SessionLocal = async_sessionmaker(
             bind=seeded_engine, class_=AsyncSession, expire_on_commit=False
         )
@@ -595,7 +600,21 @@ class TestNoMembershipForbiddenShape:
         self, scoped_db_x
     ):
         """Dashboard-level authorize: the ROOT membership grants every
-        non-platform module inside its tenant."""
+        non-platform module inside its tenant.
+
+        Phase 11: the root blanket grant (and the whole membership gate)
+        applies when the tenancy switch is ON — enable it for this test
+        (the OFF default context is the root tenant with role-driven
+        authz, no membership requirement)."""
+        from app.services.tenancy.platform_settings_service import (
+            get_platform_settings_service,
+        )
+
+        await get_platform_settings_service().set_setting(
+            scoped_db_x, "multi_tenancy_enabled", True
+        )
+        await scoped_db_x.commit()
+
         from app.api.deps import authorize_identity
 
         claims = {"sub": SUB_X_ROOT, "tenant": CTX_X.slug}

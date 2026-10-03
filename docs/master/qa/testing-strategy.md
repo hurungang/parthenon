@@ -98,6 +98,18 @@ Changes that introduce a server-sent event (SSE) stream — a live push channel 
 
 Refer to `agent-runtime-monitor-test-plan.md` for module-specific coverage and test file references.
 
+## Multi-Tenancy Testing Practices
+
+Practices introduced by the `multi-tenant-support` change, applicable to any future change touching tenant scoping or platform-wide data:
+
+- **Systematic entity-isolation sweep with registry-completeness guard**: instead of hand-picking entities to test, enumerate EVERY SQLAlchemy model via `Base.registry` and classify each as tenant-scoped or tenant-agnostic. Every tenant-scoped model gets a parametrized row-level cross-tenant probe (scoped `select` sees only own row; `get` of a foreign id returns None/404 semantics). Every tenant-agnostic model MUST appear in an explicit `TENANT_AGNOSTIC_REGISTRY` with a documented strategy (e.g. membership-join for `PlatformUser`, parent-inherited scope for join/child tables). A newly added model without `tenant_id` fails the suite until consciously registered — an unclassified entity can never ship silently. Reference: `backend/tests/test_tenant_isolation_sweep.py`.
+- **Negative-first isolation assertions**: every cross-tenant access attempt must (a) fail closed with 404/403 exposing no foreign data and (b) write a security-relevant audit event visible via the platform audit API. Assert both, never just the status code.
+- **Real-backend gated E2E convention**: each security-critical domain gets at least one `test.describe('Real Backend Integration - ...')` spec with no `page.route()` mocking that hits the live stack and **skips honestly** when the backend or `E2E_REAL_BACKEND_TOKEN` is unavailable; it must fail loudly on signs of unapplied migrations (e.g. a 500 from a tenant endpoint). Naming follows `*.real-backend.spec.ts`. Reference: `e2e/tests/multi-tenant-isolation.real-backend.spec.ts`, `e2e/tests/self-serve-signup.real-backend.spec.ts`.
+- **Environmental-failure classification**: when a suite run reports failures, distinguish real defects from environmental contamination — e.g. stale dev services reachable during the run convert service-dependent skips into live calls against outdated binaries. Re-run with the dependent service URLs unreachable to restore skip semantics before declaring pass/fail (documented in the multi-tenancy Phase 10 verification).
+- **Default-off canary ordering**: for changes behind a platform-mode switch, run the switch-off regression suite FIRST (canary), then the feature suites, then the gated real-backend variants last.
+
+Refer to `test-plans/multi-tenancy-test-plan.md` for the full coverage map and test file references.
+
 ## Critical Quality Gates
 - 100% pass rate required for all test layers before release
 - All PRD acceptance criteria must be mapped to at least one test scenario

@@ -344,6 +344,34 @@ async def _seed_platform_settings() -> None:
         logger.exception("Platform settings seeding failed; application will continue.")
 
 
+async def _sweep_root_tenant() -> None:
+    """Root-tenant sweep (Phase 11, idempotent).
+
+    Ensures the root tenant exists under its canonical identity
+    (``Root`` / ``root``), re-homes any legacy global (tenant-less)
+    business roles into its role space, and seeds the root
+    ``Platform Admin`` role for platform_admin membership holders.
+    Failures are logged and never block startup.
+    """
+    try:
+        from app.db.session import AsyncSessionLocal
+        from app.services.tenancy.root_tenant import (
+            ensure_root_tenant,
+            rehome_global_roles,
+            seed_root_platform_admin_role,
+        )
+        async with AsyncSessionLocal() as db:
+            await ensure_root_tenant(db)
+            rehomed = await rehome_global_roles(db)
+            await seed_root_platform_admin_role(db)
+            await db.commit()
+        logger.info(
+            "Root tenant sweep complete (re-homed roles: %d)", rehomed
+        )
+    except Exception:
+        logger.exception("Root tenant sweep failed; application will continue.")
+
+
 async def _sweep_default_tenant_roles() -> None:
     """Self-healing sweep for default tenant roles (idempotent).
 
@@ -393,6 +421,7 @@ async def startup_event() -> None:
     await _cleanup_stale_sessions_on_startup()
     await _run_bootstrap()
     await _seed_platform_settings()
+    await _sweep_root_tenant()
     await _sweep_default_tenant_roles()
     await _seed_system_tools()
     await _cleanup_super_admin_db_records()

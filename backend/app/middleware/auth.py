@@ -208,37 +208,42 @@ async def _try_oidc_token(
     tenant_id = getattr(tenant_context, "tenant_id", None)
     is_system_tenant = bool(getattr(tenant_context, "is_system_tenant", False))
 
-    # Try user provider first, then agent provider
+    # Try user provider first, then agent provider.  Within a scope,
+    # iterate ALL candidate providers (own → shared → root slot —
+    # FIX-20261002-110000): the first provider whose JWKS validates the
+    # token wins; a root-slot (adopted platform realm) token must not be
+    # shadowed by a different provider in the shared slot.
     for scope in ("user", "agent"):
-        provider = registry.get_provider(scope, tenant_id, is_system_tenant)
-        if provider is None:
-            continue
-
-        try:
-            client = OIDCClient(
-                issuer_url=provider.issuer_url,
-                client_id=provider.client_id,
-                claim_mappings=provider.claim_mappings or {},
-                decrypted_client_secret=registry.get_decrypted_secret(
-                    scope, tenant_id, is_system_tenant
-                ),
-            )
-            claims = await client.validate_token(token)
-            claims["_provider_scope"] = scope
-            # FIX-20260929-043443: provision the tenant claim the claim
-            # check requires (see _inject_tenant_claim for the security
-            # semantics — binding derives from the provider slot, never
-            # from the request's X-Tenant header).
-            _inject_tenant_claim(claims, registry, scope, tenant_id, getattr(tenant_context, "slug", None))
-            logger.debug(
-                "Auth: OIDC token valid for scope=%s tenant=%s",
-                scope, tenant_id,
-            )
-            return claims
-        except OIDCError as exc:
-            logger.debug("Auth: OIDC validation failed for scope=%s: %s", scope, exc)
-        except Exception as exc:
-            logger.warning("Auth: Unexpected OIDC error for scope=%s: %s", scope, exc)
+        for provider in registry.get_provider_candidates(scope, tenant_id, is_system_tenant):
+            try:
+                client = OIDCClient(
+                    issuer_url=provider.issuer_url,
+                    client_id=provider.client_id,
+                    claim_mappings=provider.claim_mappings or {},
+                    decrypted_client_secret=registry.get_decrypted_secret_for(provider),
+                )
+                claims = await client.validate_token(token)
+                claims["_provider_scope"] = scope
+                # FIX-20260929-043443: provision the tenant claim the claim
+                # check requires (see _inject_tenant_claim for the security
+                # semantics — binding derives from the provider slot, never
+                # from the request's X-Tenant header).
+                _inject_tenant_claim(claims, registry, scope, tenant_id, getattr(tenant_context, "slug", None))
+                logger.debug(
+                    "Auth: OIDC token valid for scope=%s tenant=%s issuer=%s",
+                    scope, tenant_id, provider.issuer_url,
+                )
+                return claims
+            except OIDCError as exc:
+                logger.debug(
+                    "Auth: OIDC validation failed for scope=%s issuer=%s: %s",
+                    scope, provider.issuer_url, exc,
+                )
+            except Exception as exc:
+                logger.warning(
+                    "Auth: Unexpected OIDC error for scope=%s issuer=%s: %s",
+                    scope, provider.issuer_url, exc,
+                )
 
     # Fallback: try legacy singleton if no providers in registry — only
     # when no tenant context is active (single-tenant mode unchanged).
@@ -353,10 +358,19 @@ class JWTAuthMiddleware(BaseHTTPMiddleware):
             return self._unauthorized(request, "No token provided")
 
         # ── Tier 1 + 2: Super admin, then OIDC ─────────────────────────────
-        from app.core.tenant_context import get_tenant_context
+        from app.core.tenant_context import get_tenant_context, is_tenancy_enabled
 
+        # Phase 11: when the tenancy switch is OFF the bound context is
+        # the ROOT default — validation must behave exactly as the legacy
+        # context-less path (no per-tenant provider selection, no claim
+        # injection), so the context is discarded for this request.
+        token_tenant_context = (
+            get_tenant_context(request)
+            if is_tenancy_enabled(request)
+            else None
+        )
         claims, is_super_admin = await validate_raw_token(
-            token, get_tenant_context(request)
+            token, token_tenant_context
         )
         if claims is not None:
             # ── Tenant claim binding (multi-tenant mode only) ─────────────
@@ -407,11 +421,13 @@ class JWTAuthMiddleware(BaseHTTPMiddleware):
           tenant UUID) that equals the resolved tenant; anything else is a
           security-relevant cross-tenant rejection.
         """
-        from app.core.tenant_context import get_tenant_context
+        from app.core.tenant_context import get_tenant_context, is_tenancy_enabled
 
         context = get_tenant_context(request)
         if not context.is_set:
-            return None  # multi-tenancy off (or bypassed path) — inert
+            return None  # no resolved context — inert
+        if not is_tenancy_enabled(request):
+            return None  # tenancy OFF: root-default context, no claim checks
         if is_super_admin:
             # Platform-only principal: no tenant workspace access.
             logger.warning(
@@ -601,7 +617,10 @@ class JWTAuthMiddleware(BaseHTTPMiddleware):
         the rest of the sync).
         """
         try:
-            from app.core.tenant_context import get_tenant_context
+            from app.core.tenant_context import (
+                get_tenant_context,
+                is_tenancy_enabled,
+            )
             from app.db.models.tenant_audit_event import (
                 TenantAuditActorType,
                 TenantAuditEventType,
@@ -616,7 +635,11 @@ class JWTAuthMiddleware(BaseHTTPMiddleware):
                 return  # platform-password / legacy tokens — NO JIT
 
             context = get_tenant_context(request)
-            if not context.is_set or getattr(context, "tenant_id", None) is None:
+            if (
+                not context.is_set
+                or getattr(context, "tenant_id", None) is None
+                or not is_tenancy_enabled(request)
+            ):
                 return  # gated: multi-tenancy ON + resolved tenant context
 
             from app.main import _get_registry

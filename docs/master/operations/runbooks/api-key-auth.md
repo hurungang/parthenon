@@ -77,6 +77,7 @@
 
 ## Notes
 
+- **Multi-tenancy:** when the tenancy switch (`multi_tenancy_enabled`) is on, API keys are **tenant-bound** — `tenant.api_key.mismatch` in `communication-hub.log` is an additional failure reason (key validated against a different tenant than the session context). `load_skills` and tool calls are filtered per tenant. See [tenant-adoption-and-scope-denials.md](tenant-adoption-and-scope-denials.md) for cross-tenant denial triage.
 - Never log or expose the full API key value, key hash, or resolved identity tokens. Only the 8-character `key_prefix` should appear in logs and diagnostics.
 - When investigating auth failures, correlate `trace_id` across Communication Hub and Control Center logs to reconstruct the full request path.
 - Use `ApiKeyUsageLog` table queries for per-key audit trails and compliance reporting. Retention is 90 days in the active database.

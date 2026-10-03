@@ -37,3 +37,7 @@ A configurable telemetry system will empower Parthenon operators to flexibly man
 - Must not break existing observability or logging functionality
 - Configuration must be compatible with Docker Compose and Kubernetes deployments
 - Changes must not introduce security or compliance risks
+
+## Multi-Tenancy Note
+
+When multi-tenancy is enabled (see [Multi-Tenancy](multi-tenancy.md)), telemetry records carry tenant attribution when multi-tenancy is enabled, supporting per-tenant usage reporting and audit. With multi-tenancy disabled (the default), behavior is unchanged — the deployment operates as the root tenant's workspace.

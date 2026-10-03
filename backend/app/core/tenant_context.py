@@ -32,6 +32,7 @@ __all__ = [
     "TenantContextUnset",
     "TENANT_UNSET",
     "get_tenant_context",
+    "is_tenancy_enabled",
     "require_tenant_context",
     "set_tenant_context",
 ]
@@ -129,6 +130,22 @@ def get_tenant_context(request: Request) -> TenantContext | TenantContextUnset:
     if isinstance(context, TenantContext):
         return context
     return TENANT_UNSET
+
+
+def is_tenancy_enabled(request: Request) -> bool:
+    """Whether the tenancy switch was ON when this request was resolved.
+
+    Set by :class:`~app.middleware.tenant_resolution.TenantResolutionMiddleware`
+    (``request.state.tenancy_enabled``).  Defaults to False when the
+    middleware did not run (unit tests, internal service traffic) — the
+    safe legacy default, so tenancy-gated features stay inert.
+
+    Phase 11: a resolved context is no longer proof that multi-tenancy
+    is active — the default context when the switch is OFF is the ROOT
+    tenant.  Feature code must branch on THIS flag (not ``is_set``) to
+    decide whether tenancy features apply.
+    """
+    return bool(getattr(request.state, "tenancy_enabled", False))
 
 
 def require_tenant_context(request: Request) -> TenantContext:

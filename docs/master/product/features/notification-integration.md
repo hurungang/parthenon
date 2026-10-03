@@ -86,3 +86,7 @@ These triggers follow the same dispatch pattern as existing notification types a
 - End-user self-service notification preferences
 - Custom message templates or branding
 - Bulk marketing or promotional messaging
+
+## Multi-Tenancy Note
+
+When multi-tenancy is enabled (see [Multi-Tenancy](multi-tenancy.md)), notification channels, recipient groups, and delivery logs are tenant-owned and visible only within the owning tenant. With multi-tenancy disabled (the default), behavior is unchanged — the deployment operates as the root tenant's workspace.

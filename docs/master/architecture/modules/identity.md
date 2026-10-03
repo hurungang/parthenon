@@ -9,7 +9,7 @@ Identity is a foundational concern that controls authentication for all users an
 
 The platform ships with a bundled Keycloak instance that is provisioned automatically on first run. Operators may configure any external OIDC-compliant provider (Keycloak, Azure Entra ID, or any standards-compliant IdP) via the System Config UI or Setup Wizard. All OIDC configuration is stored in the database as the source of truth; a one-time migration from the legacy `config/identity.yaml` file runs on startup when upgrading from an earlier version.
 
-Multiple OIDC providers can be configured concurrently — one for human users and one for agent identities — each with its own issuer URL, client credentials, and claims mapping. Runtime token validation uses per-provider JWKS keys cached in memory by the OIDC Provider Registry for hot-reload without service restart.
+Multiple OIDC providers can be configured concurrently — one for human users and one for agent identities — each with its own issuer URL, client credentials, and claims mapping. Provider configuration is stored **per tenant**: the registry is keyed by tenant, and a credential issued by tenant A's provider cannot authenticate to tenant B. Provider sharing follows **own → shared → root slot** (the root slot, formerly "system slot", belongs to the root tenant and serves platform sign-in and tenancy-off deployments). Runtime token validation uses per-provider JWKS keys cached in memory by the Per-Tenant OIDC Provider Registry for hot-reload without service restart, and binds the JWT tenant claim to the resolved tenant. A separate, OIDC-independent credential path exists for self-serve: the **owner platform account** (email + password issued by the platform itself), valid only in its own tenant. Sign-in uses a single unified topology — the workspace address routes to the tenant's OIDC provider or the platform-issued password path; super-admin break-glass remains at the root workspace sign-in.
 
 Regardless of which authentication path is used (mTLS cert, API key, or OIDC JWT), the **identity → role → permission resolution chain is unchanged**. Each path adds a new entry point but does not alter the underlying permission model.
 
@@ -17,7 +17,8 @@ Regardless of which authentication path is used (mTLS cert, API key, or OIDC JWT
 
 ```mermaid
 flowchart TD
-    REQ[Inbound Request] --> AM[Auth Middleware]
+    REQ[Inbound Request] --> TRM[Tenant Resolution Middleware<br/>resolve once · fail-closed]
+    TRM --> AM[Auth Middleware]
 
     AM --> SA{Super Admin<br/>enabled & token?}
     SA -->|yes| SAR[Super Admin Auth Service]
@@ -25,7 +26,7 @@ flowchart TD
     SAR -->|short-lived JWT| ID[Resolved Identity]
 
     SA -->|no| OIDC{OIDC Bearer<br/>token?}
-    OIDC -->|yes| OPR[OIDC Provider Registry]
+    OIDC -->|yes| OPR[Per-Tenant OIDC Provider Registry<br/>own → shared → root slot]
     OPR --> IPC[(identity_provider_configs)]
     OPR -->|JWKS validation| ID
 
@@ -106,7 +107,9 @@ flowchart TB
 | **Bootstrap Service** | Startup initialisation: one-time migration from `identity.yaml` to database, super admin credential seeding from environment variables, OIDC Provider Registry initialisation |
 | **Auth Middleware** | Three-tier pipeline: super admin local auth → OIDC JWT validation → public fallback; per-request provider resolution |
 | **Super Admin Auth Service** | Local credential validation against stored hashes; short-lived JWT issuance; enable/disable toggle |
-| **OIDC Provider Registry** | In-memory cache of provider configs from database; per-provider JWKS key cache with TTL refresh; hot-reload without restart; multi-provider resolution for Auth Middleware |
+| **OIDC Provider Registry** | Registry keyed by tenant; in-memory cache of provider configs from database; per-provider JWKS key cache with TTL refresh; hot-reload without restart; multi-provider resolution for Auth Middleware; JWT tenant claim bound to the resolved tenant; sharing model own → shared → root slot |
+| **Tenant Resolution Middleware** | Establishes the tenant context once per request from a verified source (address subdomain or tenant header); fail-closed in multi-tenant mode; bypassed (root tenant) when the tenancy switch is off |
+| **Owner Platform Account** | Platform-issued email + password credential for self-serve tenants; independent of the per-tenant OIDC registry; valid only in its own tenant |
 
 ## Provider Modes
 

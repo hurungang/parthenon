@@ -58,3 +58,7 @@ The MCP Hub enables Parthenon to connect with external tool servers, synchronize
 - Requires MCP servers to support agent identity propagation via JWT (e.g., mcp-demo-app)
 - Relies on existing OIDC/OAuth2 infrastructure and agent identity management
 - UI/UX changes must maintain clarity for both passthrough and traditional session types
+
+## Multi-Tenancy Note
+
+When multi-tenancy is enabled (see [Multi-Tenancy](multi-tenancy.md)), hubs, slugs, sessions, and credential bindings are tenant-owned; slug uniqueness is enforced per tenant and tool permissions are evaluated within the tenant. With multi-tenancy disabled (the default), behavior is unchanged — the deployment operates as the root tenant's workspace.

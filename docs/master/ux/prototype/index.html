@@ -1164,6 +1164,39 @@ tr.revoked-row td{color:#9CA3AF}
         <p class="text-secondary">Discovering identity providers...</p>
       </div>
     </div>
+    <!-- Find your workspace (multi-tenant-support): unified workspace-address entry for EVERYONE —
+         customers and the platform itself (workspace root). Break-glass super-admin entry lives ONLY here
+         and at the root workspace card — never on customer workspace cards. -->
+    <div id="login-state-findws" class="login-state">
+      <div class="login-body">
+        <div class="form-group">
+          <label>Workspace address</label>
+          <div style="display:flex;align-items:stretch">
+            <span style="padding:8px 10px;background:#F1F5F9;border:1px solid var(--border);border-right:none;border-radius:var(--radius-sm) 0 0 var(--radius-sm);font-family:monospace;font-size:13px;color:var(--text-secondary);white-space:nowrap">https://</span>
+            <input class="form-control" id="mt-find-slug" placeholder="acme" style="border-radius:0;font-family:monospace" oninput="mtFindClear()" onkeydown="if(event.key==='Enter')mtFindSubmit()">
+            <span style="padding:8px 10px;background:#F1F5F9;border:1px solid var(--border);border-left:none;border-radius:0 var(--radius-sm) var(--radius-sm) 0;font-family:monospace;font-size:13px;color:var(--text-secondary);white-space:nowrap">.parthenon.app</span>
+          </div>
+          <div id="mt-find-err" class="form-error" style="display:none">No workspace found at this address.</div>
+        </div>
+        <label style="display:flex;align-items:center;gap:8px;font-size:13px;margin:2px 0 12px;cursor:pointer">
+          <input type="checkbox" id="mt-find-remember" checked style="accent-color:var(--primary)"> Remember this workspace
+        </label>
+        <button class="btn btn-primary btn-block" onclick="mtFindSubmit()">Continue</button>
+        <div class="login-divider"><span>demo shortcuts</span></div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px">
+          <button class="btn btn-sm btn-secondary" onclick="mtQuick('acme')">acme (customer)</button>
+          <button class="btn btn-sm btn-secondary" onclick="mtQuick('globex')">globex (no own IdP)</button>
+          <button class="btn btn-sm btn-secondary" onclick="mtQuick('root')">root (platform)</button>
+        </div>
+        <!-- Break-glass: rendered only when no workspace is bound (tenancy-off root) or at the root workspace -->
+        <button class="btn btn-ghost btn-block" id="mt-breakglass-link" onclick="mtToggleBreakglass()" style="font-size:12.5px;color:var(--text-secondary);padding:8px">Super-admin sign-in (break-glass) ▾</button>
+        <div id="mt-breakglass-form" style="display:none;margin-top:10px">
+          <div class="form-group"><label>Username</label><input type="text" class="form-control" id="mt-sa-user" value="admin"></div>
+          <div class="form-group"><label>Password</label><input type="password" class="form-control" id="mt-sa-pass" value="admin123"></div>
+          <button class="btn btn-primary btn-block" onclick="oidcLoginAsSuperAdmin()">Sign in to the root workspace</button>
+        </div>
+      </div>
+    </div>
     <!-- Setup Wizard -->
     <div id="login-state-setup" class="login-state">
       <div class="login-body">
@@ -1188,9 +1221,10 @@ tr.revoked-row td{color:#9CA3AF}
     <!-- Both -->
     <div id="login-state-both" class="login-state">
       <div class="login-body">
+        <p id="mt-ws-line" style="font-size:12px;color:var(--text-secondary);margin-bottom:10px"></p>
         <button class="oidc-login-btn" onclick="oidcSimulateLogin()"><span class="oidc-icon">🔐</span>Login with Identity Provider</button>
         <div class="login-divider"><span>or</span></div>
-        <button class="btn btn-ghost btn-block" onclick="oidcShowSAForm()" style="font-size:13px;color:var(--text-secondary);padding:8px">Login as Super Admin</button>
+        <button class="btn btn-ghost btn-block" id="oidc-sa-btn-both" onclick="oidcShowSAForm()" style="font-size:13px;color:var(--text-secondary);padding:8px">Super-admin sign-in (break-glass)</button>
         <div id="oidc-sa-inline-form" style="display:none;margin-top:12px">
           <div class="form-group"><label>Username</label><input type="text" class="form-control" id="oidc-sa-user-both" placeholder="Username" value="admin"></div>
           <div class="form-group"><label>Password</label><input type="password" class="form-control" id="oidc-sa-pass-both" placeholder="Password" value="admin123"></div>
@@ -1211,6 +1245,7 @@ tr.revoked-row td{color:#9CA3AF}
   <div class="login-state-demo" id="oidc-demo-switcher">
     <div class="lsd-title">Demo: Login State</div>
     <button style="background:#F1F5F9;color:#475569" onclick="oidcSetState('loading')">Loading</button>
+    <button style="background:#EDE9FE;color:#6D28D9" onclick="oidcSetState('findws')">Find Workspace</button>
     <button style="background:#FEF3C7;color:#92400E" onclick="oidcSetState('setup')">Setup</button>
     <button style="background:#DBEAFE;color:#1D4ED8" onclick="oidcSetState('saonly')">SA Only</button>
     <button style="background:#DCFCE7;color:#15803D" onclick="oidcSetState('both')">Both</button>
@@ -1297,6 +1332,32 @@ tr.revoked-row td{color:#9CA3AF}
       <div class="nav-item sub-item" data-view="system-config" data-group="system" onclick="nav(this,'system-config')">  <span class="nav-icon">⚙️</span>System Config</div>
     </div>
   </div>
+
+  <!-- GROUP: Tenant Admin (multi-tenant-support — visible for ALL tenant-bound sessions) -->
+  <div class="nav-parent-group" id="nav-tenant-admin" data-group="tenant-admin">
+    <div class="nav-parent-group-label" onclick="toggleNavGroup(this)" role="button" aria-expanded="true" tabindex="0">
+      <span>🏢 Tenant Admin</span>
+      <span class="toggle-icon" aria-hidden="true">▼</span>
+    </div>
+    <div class="nav-children">
+      <div class="nav-item sub-item" data-view="tenant-settings" data-group="tenant-admin" onclick="nav(this,'tenant-settings')"><span class="nav-icon">⚙️</span>Tenant Settings</div>
+      <div class="nav-item sub-item" data-view="tenant-members" data-group="tenant-admin" onclick="nav(this,'tenant-members')"><span class="nav-icon">👥</span>Members</div>
+      <div class="nav-item sub-item" data-view="tenant-identity-providers" data-group="tenant-admin" onclick="nav(this,'tenant-identity-providers')"><span class="nav-icon">🔑</span>Identity Providers</div>
+    </div>
+  </div>
+
+  <!-- GROUP: Platform (multi-tenant-support — ROOT workspace only, platform-role members only) -->
+  <div class="nav-parent-group" id="nav-platform" data-group="platform" style="display:none">
+    <div class="nav-parent-group-label" onclick="toggleNavGroup(this)" role="button" aria-expanded="true" tabindex="0">
+      <span>🛡️ Platform</span>
+      <span class="toggle-icon" aria-hidden="true">▼</span>
+    </div>
+    <div class="nav-children">
+      <div class="nav-item sub-item" data-view="platform-settings" data-group="platform" onclick="nav(this,'platform-settings')"><span class="nav-icon">⚙️</span>Platform Settings</div>
+      <div class="nav-item sub-item" data-view="platform-tenants" data-group="platform" onclick="nav(this,'platform-tenants')"><span class="nav-icon">🏢</span>Tenants</div>
+      <div class="nav-item sub-item" data-view="platform-audit" data-group="platform" onclick="nav(this,'platform-audit')"><span class="nav-icon">🛡️</span>Security Audit</div>
+    </div>
+  </div>
 </nav>
 
 <!-- ═══════════════════════════════ MAIN WRAPPER ═══════════════════════════════ -->
@@ -1306,6 +1367,7 @@ tr.revoked-row td{color:#9CA3AF}
     <div class="topbar-title" id="topbar-title">Communication Hub</div>
     <div class="topbar-actions">
       <span class="chip chip-yellow" id="oidc-sa-indicator" style="display:inline-flex">🔑 Super Admin</span>
+      <span class="chip chip-blue" id="tenant-ctx-chip" style="display:none">🏢 <span id="tenant-ctx-name"></span></span>
       <button class="btn-icon" title="Notifications">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg>
         <span class="badge">3</span>
@@ -5420,6 +5482,149 @@ Returns: { request_id, status }</div>
   </div>
 </div>
 
+<!-- ═══════════════════════════════ VIEWS: MULTI-TENANT SUPPORT (merged from docs/changes/multi-tenant-support) ═══════════════════════════════ -->
+
+<!-- VIEW: Tenant Settings -->
+<div id="view-tenant-settings" class="view">
+  <div class="view-header">
+    <div><h2>Tenant Settings</h2><div class="view-desc">Workspace profile, fixed address, and JIT default role for this tenant.</div></div>
+  </div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;align-items:start">
+    <div class="card">
+      <div class="card-header"><h3>Tenant profile</h3><span class="chip chip-gray">Alias editing</span></div>
+      <div class="card-body">
+        <div class="form-group"><label>Tenant alias (display name)</label>
+          <div style="display:flex;gap:8px"><input class="form-control" id="mt-alias-input" value="Acme Corp" style="flex:1"><button class="btn btn-primary btn-sm" onclick="mtSaveAlias()">Save alias</button></div>
+          <div class="text-secondary" style="font-size:11px;margin-top:4px">Only the <strong>tenant root</strong> can rename the workspace. The address never changes.</div>
+        </div>
+        <div class="form-group" style="margin-bottom:0"><label>Tenant address (fixed)</label>
+          <div style="display:flex;align-items:stretch">
+            <span style="padding:8px 10px;background:#F1F5F9;border:1px solid var(--border);border-right:none;border-radius:var(--radius-sm) 0 0 var(--radius-sm);font-family:monospace;font-size:13px;color:var(--text-secondary)">https://</span>
+            <input class="form-control" id="mt-addr-fixed" value="acme" disabled style="border-radius:0;font-family:monospace">
+            <span style="padding:8px 10px;background:#F1F5F9;border:1px solid var(--border);border-left:none;border-radius:0 var(--radius-sm) var(--radius-sm) 0;font-family:monospace;font-size:13px;color:var(--text-secondary)">.parthenon.app</span>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-header"><h3>Just-in-time provisioning</h3><span class="chip chip-green">OIDC</span></div>
+      <div class="card-body">
+        <div class="form-group" style="margin-bottom:0"><label>Default role for new OIDC users (JIT)</label>
+          <select class="form-control" id="mt-jit-role" style="max-width:240px"><option selected>Member</option><option>Tenant Admin</option></select>
+          <div class="text-secondary" style="font-size:11px;margin-top:4px">First-time OIDC sign-ins are provisioned into this workspace automatically with this role. With no default configured, JIT sign-ins are denied.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- VIEW: Tenant Members -->
+<div id="view-tenant-members" class="view">
+  <div class="view-header">
+    <div><h2>Members</h2><div class="view-desc">Members of your organization. Roles apply within this tenant only.</div></div>
+    <div style="display:flex;gap:8px;align-items:center">
+      <span class="chip chip-red" id="mt-quota-chip">10/10 users · Free tier</span>
+      <button class="btn btn-primary" onclick="mtInvite()">+ Invite user</button>
+    </div>
+  </div>
+  <div class="alert alert-danger" id="mt-quota-blocked" style="display:none"><div><strong style="display:block;margin-bottom:2px">⛔ User limit reached</strong>Invitation blocked by your tenant's quota (Free tier — 10 users). Contact your platform admin to change the license tier.</div></div>
+  <div class="card" style="margin-bottom:16px">
+    <div class="card-header"><h3>Members</h3><span class="chip chip-gray" id="mt-members-ws">Acme Corp</span></div>
+    <div class="card-body" style="padding:0">
+      <div class="table-wrap" style="border:none;border-radius:0;box-shadow:none">
+        <table>
+          <thead><tr><th>User</th><th>Email</th><th>Role</th><th>Status</th><th style="text-align:right">Actions</th></tr></thead>
+          <tbody id="mt-member-rows"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+  <div class="alert alert-info"><div><strong style="display:block;margin-bottom:2px">🌱 Tenant root is permanent</strong>The tenant root cannot be demoted or removed — not by tenant admins, not by the platform operator. Role names may repeat across tenants without collision.</div></div>
+</div>
+
+<!-- VIEW: Tenant Identity Providers -->
+<div id="view-tenant-identity-providers" class="view">
+  <div class="view-header">
+    <div><h2>Identity Providers</h2><div class="view-desc">Per-workspace OIDC binding. The sign-in SSO button renders only while a provider is configured here.</div></div>
+    <button class="btn btn-primary" onclick="toast('Add provider form (demo)','info')">+ Add provider</button>
+  </div>
+  <div class="card">
+    <div class="card-header"><h3>Configured providers</h3><span class="chip chip-gray" id="mt-idp-ws">Acme Corp</span></div>
+    <div class="card-body" style="padding:0">
+      <div class="table-wrap" style="border:none;border-radius:0;box-shadow:none">
+        <table>
+          <thead><tr><th>Provider</th><th>Issuer URL</th><th>Scope</th><th>Status</th><th style="text-align:right">Actions</th></tr></thead>
+          <tbody>
+            <tr><td><strong>Keycloak</strong></td><td class="font-mono" style="font-size:12px">https://id.acme.example/realms/acme</td><td><span class="chip chip-blue">user</span></td><td><span class="chip chip-green">Enabled</span></td>
+              <td><div style="display:flex;gap:4px;justify-content:flex-end"><button class="btn btn-sm btn-secondary" onclick="toast('Edit provider (demo)','info')">Edit</button><button class="btn btn-sm btn-secondary" style="color:var(--error)" onclick="toast('Provider removed — the workspace SSO button disappears from the sign-in page (demo)','info')">Remove</button></div></td></tr>
+            <tr><td colspan="5" class="text-secondary" style="font-size:12px">No provider configured → the SSO button is simply absent from the workspace sign-in card; no setup-wizard entry appears on any pre-auth surface.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- VIEW: Platform Settings (root workspace only) -->
+<div id="view-platform-settings" class="view">
+  <div class="view-header">
+    <div><h2>Platform Settings</h2><div class="view-desc">Deployment-wide configuration — managed from the <strong>root</strong> workspace by platform-role members.</div></div>
+  </div>
+  <div class="card" style="max-width:680px">
+    <div class="card-header"><h3>Multi-Tenancy</h3><span class="chip chip-green" id="mt-tenancy-chip">Enabled · Multi-Tenant</span></div>
+    <div class="card-body">
+      <div class="alert alert-warning"><div><strong style="display:block;margin-bottom:2px">⚠️ Tenant adoption is irreversible</strong>Enabling adopts the existing organization as a tenant. Disabling hides tenant features and restores single-tenant behavior without data loss — but the adoption itself cannot be undone.</div></div>
+      <ul style="margin:0 0 12px 18px;font-size:13px;line-height:1.9">
+        <li>The platform itself lives in the <strong>root</strong> workspace — platform modules are visible there only to members holding a platform role.</li>
+        <li>Tenant features: tenant registry, self-serve organization creation, per-workspace sign-in addresses.</li>
+        <li>Wildcard DNS (<span class="font-mono">*.parthenon.app</span>) and certificates back the per-workspace addresses.</li>
+      </ul>
+      <div class="alert alert-info" style="margin-bottom:0"><div><strong style="display:block;margin-bottom:2px">Adoption</strong>"Parthenon Demo Org" was adopted as a customer tenant — its configuration and data remain intact, with no reconfiguration of its identity provider.</div></div>
+    </div>
+  </div>
+</div>
+
+<!-- VIEW: Platform Tenants (root workspace only) -->
+<div id="view-platform-tenants" class="view">
+  <div class="view-header">
+    <div><h2>Tenants</h2><div class="view-desc">Registry of all organizations on this deployment — metadata, license tier, and usage only. Business data is never browsable from here.</div></div>
+    <button class="btn btn-primary" onclick="toast('Create Tenant dialog (demo)','info')">+ Create Tenant</button>
+  </div>
+  <div class="card">
+    <div class="card-header"><h3>Tenant registry</h3></div>
+    <div class="card-body" style="padding:0">
+      <div class="table-wrap" style="border:none;border-radius:0;box-shadow:none">
+        <table>
+          <thead><tr><th>Tenant</th><th>Address</th><th>Tier</th><th>Status</th><th>Users</th><th>Execs / Month</th><th style="text-align:right">Actions</th></tr></thead>
+          <tbody id="mt-tenant-rows"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+  <div class="alert alert-info" style="margin-top:16px"><div><strong style="display:block;margin-bottom:2px">📜 Licenses</strong>Assign a license (free / team / enterprise) per tenant — tenants without one run on Free tier defaults. Usage columns update immediately after every license change.</div></div>
+</div>
+
+<!-- VIEW: Platform Security Audit (root workspace only) -->
+<div id="view-platform-audit" class="view">
+  <div class="view-header">
+    <div><h2>Tenant Security Audit</h2><div class="view-desc">Cross-tenant access attempts. Directly addressed requests for another tenant's identifiers return no data — and are recorded here.</div></div>
+  </div>
+  <div class="card">
+    <div class="card-header"><h3>Security-relevant events</h3></div>
+    <div class="card-body" style="padding:0">
+      <div class="table-wrap" style="border:none;border-radius:0;box-shadow:none">
+        <table>
+          <thead><tr><th>Time</th><th>Actor</th><th>Source Tenant</th><th>Attempted Target</th><th>Resource</th><th>Result</th></tr></thead>
+          <tbody>
+            <tr><td class="text-secondary" style="font-size:12px">Sep 20 · 14:02</td><td class="font-mono" style="font-size:12px">user sam@example.com</td><td><span class="chip chip-blue">acme</span></td><td><span class="chip chip-purple">globex</span></td><td class="font-mono" style="font-size:12px">agent agt-7731</td><td><span class="chip chip-red">Blocked · 404</span></td></tr>
+            <tr><td class="text-secondary" style="font-size:12px">Sep 20 · 11:47</td><td class="font-mono" style="font-size:12px">api-key ak_9f2c…</td><td><span class="chip chip-blue">globex</span></td><td><span class="chip chip-purple">acme</span></td><td class="font-mono" style="font-size:12px">GET /api/v1/conversations</td><td><span class="chip chip-red">Blocked · 403</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- ═══════════════════════════════ DRAWERS ═══════════════════════════════ -->
 
 <!-- Sessions Drawer -->
@@ -5668,14 +5873,16 @@ function oidcGoToSetup() {
 function oidcLoginAsSuperAdmin() {
   oidcLoggedInSA = true;
   localStorage.setItem('super_admin_token','simulated');
+  mtBindWorkspace('root', true); // break-glass super admin signs into the ROOT workspace with platform access
   document.getElementById('login-page').style.display='none';
   document.getElementById('oidc-sa-indicator').style.display='inline-flex';
   document.querySelector('.avatar').textContent='SA';
-  mcFlashToast('Authenticated as Super Admin');
+  mcFlashToast('Authenticated as Super Admin — root workspace (platform access)');
   document.getElementById('oidc-demo-switcher').style.display='none';
 }
 
 function oidcSimulateLogin() {
+  mtBindWorkspace(mtCurrentSlug || 'acme', false); // workspace-bound OIDC sign-in (root without platform role shows no Platform group)
   document.getElementById('login-page').style.display='none';
   document.getElementById('oidc-sa-indicator').style.display='none';
   document.querySelector('.avatar').textContent='JD';
@@ -5840,7 +6047,7 @@ function oidcRunTestLogin() {
       return;
     }
     document.getElementById('login-page').style.display='flex';
-    oidcSetState('loading');
+    oidcSetState('findws');
   }
   if (document.readyState==='loading') document.addEventListener('DOMContentLoaded', oidcInit);
   else oidcInit();
@@ -5884,7 +6091,13 @@ const viewTitles = {
   'data-types': 'Agent Data Types',
   'agent-outputs': 'Agent Outputs',
   'project-showcase': 'Project Showcase',
-  'api-keys': 'API Key Management'
+  'api-keys': 'API Key Management',
+  'tenant-settings': 'Tenant Settings',
+  'tenant-members': 'Members',
+  'tenant-identity-providers': 'Identity Providers',
+  'platform-settings': 'Platform Settings',
+  'platform-tenants': 'Tenants',
+  'platform-audit': 'Tenant Security Audit'
 };
 
 
@@ -12620,6 +12833,164 @@ renderAll();
 /* expose the inline-handler surface (namespaced — never collides with the master prototype) */
 window.AMP={onSearch,openCreateAgent,selectAgentReq,confirmSwitch,closeModal,confirmDeleteAgent,doDeleteAgent,enterFs,exitFs,zoomIn,zoomOut,zoomFit,onPropName,onPropText,onGrNum,onGrSel,onGrBudget,discardChanges,saveChanges,openPicker,closePicker,pickerSearch,pickerRows,pickerPage,pickerToggle,pickerAssign,pickerCreateNew,openCreate,setPerm,addDtField,syncDtSlug,toggleDtFields,unassignSingle,unassignMulti,slugify,toast,validateAgentFormLive,runSave};
 })();
+</script>
+
+<script>
+// ═══════════════════════════════ MULTI-TENANT SUPPORT (merged from docs/changes/multi-tenant-support) ═══════════════════════════════
+/* Unified workspace-address login, root-tenant platform model, Tenant Admin group, quotas/licensing.
+   Root workspace = the platform tenant; platform modules visible only to platform-role members there. */
+var mtCurrentSlug = null;
+var MT_WORKSPACES = {
+  root:   {name:'Root'},
+  acme:   {name:'Acme Corp'},
+  globex: {name:'Globex Industries'}
+};
+var MT_TIERS = {
+  free:       {label:'Free',       users:10},
+  team:       {label:'Team',       users:50},
+  enterprise: {label:'Enterprise', users:500}
+};
+var MT_TENANTS = [
+  {slug:'root',    name:'Root',               tier:'enterprise', status:'Active',    users:3,  execs:0},
+  {slug:'demo',    name:'Parthenon Demo Org', tier:'enterprise', status:'Active',    users:12, execs:3200},
+  {slug:'acme',    name:'Acme Corp',          tier:'free',       status:'Active',    users:10, execs:42},
+  {slug:'globex',  name:'Globex Industries',  tier:'team',       status:'Active',    users:9,  execs:1240},
+  {slug:'northwind',name:'Northwind Ltd',     tier:'team',       status:'Suspended', users:15, execs:610}
+];
+var MT_MEMBERS = {
+  acme: [
+    {name:'Alex Rivera', email:'alex@acme.com',   role:'Tenant Admin', status:'Active',  root:true},
+    {name:'Sam Chen',    email:'sam@example.com', role:'Member',       status:'Active',  root:false},
+    {name:'Priya Patel', email:'priya@acme.com',  role:'Member',       status:'Invited', root:false}
+  ]
+};
+
+/* ── Find-workspace step ── */
+function mtFindClear() {
+  document.getElementById('mt-find-slug').classList.remove('error');
+  document.getElementById('mt-find-err').style.display = 'none';
+}
+function mtFindErr(msg) {
+  var e = document.getElementById('mt-find-err');
+  e.textContent = msg; e.style.display = 'block';
+  document.getElementById('mt-find-slug').classList.add('error');
+}
+function mtQuick(slug) {
+  document.getElementById('mt-find-slug').value = slug;
+  mtFindSubmit();
+}
+function mtFindSubmit() {
+  mtFindClear();
+  var slug = (document.getElementById('mt-find-slug').value || '').trim().toLowerCase();
+  if (!slug) { mtFindErr('Enter your workspace address.'); return; }
+  if (!MT_WORKSPACES[slug]) { mtFindErr('No workspace found at this address.'); return; }
+  mtPickWorkspace(slug);
+}
+function mtPickWorkspace(slug) {
+  mtCurrentSlug = slug;
+  var name = MT_WORKSPACES[slug].name;
+  document.getElementById('mt-ws-line').innerHTML = 'Signing in to <strong>' + name + '</strong> (<span class="font-mono">' + slug + '.parthenon.app</span>)';
+  /* Break-glass entry: only at the root workspace card (or with no workspace bound) */
+  document.getElementById('mt-breakglass-link').style.display = (slug === 'root') ? 'block' : 'none';
+  document.getElementById('mt-breakglass-form').style.display = 'none';
+  oidcSetState('both');
+}
+function mtToggleBreakglass() {
+  var f = document.getElementById('mt-breakglass-form');
+  f.style.display = f.style.display === 'none' ? 'block' : 'none';
+}
+
+/* ── Workspace binding after sign-in: topbar chip + nav gating ── */
+function mtBindWorkspace(slug, isPlatform) {
+  mtCurrentSlug = slug;
+  var t = MT_TENANTS.find(function(x){return x.slug===slug;});
+  var name = (t && t.name) || (MT_WORKSPACES[slug] && MT_WORKSPACES[slug].name) || slug;
+  var chip = document.getElementById('tenant-ctx-chip');
+  chip.style.display = 'inline-flex';
+  document.getElementById('tenant-ctx-name').textContent = name + (slug==='root' && isPlatform ? ' · Platform Admin' : '');
+  /* Platform = root tenant: Platform group only at root for platform-role members */
+  document.getElementById('nav-platform').style.display = (slug === 'root' && isPlatform) ? 'block' : 'none';
+  document.getElementById('nav-tenant-admin').style.display = 'block';
+  /* Break-glass button on the workspace sign-in card: root only */
+  var saBtn = document.getElementById('oidc-sa-btn-both');
+  if (saBtn) saBtn.style.display = (slug === 'root') ? 'block' : 'none';
+  mtRenderMembers(slug, name);
+  mtRenderTenants();
+  var alias = document.getElementById('mt-alias-input'); if (alias) alias.value = name;
+  var addr = document.getElementById('mt-addr-fixed'); if (addr) addr.value = slug;
+  var mw = document.getElementById('mt-members-ws'); if (mw) mw.textContent = name;
+  var mi = document.getElementById('mt-idp-ws'); if (mi) mi.textContent = name;
+}
+
+/* ── Tenant members + quota ── */
+function mtTenant(slug) { return MT_TENANTS.find(function(x){return x.slug===(slug||mtCurrentSlug);}); }
+function mtRenderMembers(slug, name) {
+  var rows = document.getElementById('mt-member-rows'); if (!rows) return;
+  slug = slug || mtCurrentSlug;
+  if (!MT_MEMBERS[slug]) MT_MEMBERS[slug] = [{name:'Workload Owner', email:'owner@' + slug + '.com', role:'Tenant Admin', status:'Active', root:true}];
+  var t = mtTenant(slug), tier = MT_TIERS[t ? t.tier : 'free'];
+  var full = t && t.users >= tier.users;
+  var chip = document.getElementById('mt-quota-chip');
+  chip.textContent = t.users + '/' + tier.users + ' users · ' + tier.label + ' tier';
+  chip.className = 'chip ' + (full ? 'chip-red' : 'chip-gray');
+  document.getElementById('mt-quota-blocked').style.display = 'none';
+  rows.innerHTML = MT_MEMBERS[slug].map(function(m) {
+    var role = '<span class="chip chip-blue">' + m.role + '</span>' + (m.root ? ' <span class="chip chip-gray">🌱 Root</span>' : '');
+    var actions = m.root
+      ? '<span class="text-secondary" style="font-size:11px">🔒 Locked</span>'
+      : '<button class="btn btn-sm btn-secondary" onclick="toast(\'Member actions (demo)\',\'info\')">Manage</button>';
+    var status = m.status === 'Active' ? '<span class="chip chip-green">Active</span>' : '<span class="chip chip-yellow">Invited</span>';
+    return '<tr><td style="font-weight:500">' + m.name + '</td><td class="font-mono" style="font-size:12px">' + m.email + '</td><td>' + role + '</td><td>' + status + '</td><td style="text-align:right">' + actions + '</td></tr>';
+  }).join('');
+}
+function mtInvite() {
+  var t = mtTenant(); if (!t) return;
+  var tier = MT_TIERS[t.tier];
+  if (t.users >= tier.users) {
+    document.getElementById('mt-quota-blocked').style.display = 'flex';
+    toast('Invitation blocked — user quota reached (' + tier.label + ' tier)', 'error');
+    return;
+  }
+  t.users++;
+  mtRenderMembers(); mtRenderTenants();
+  toast('Invitation sent (demo) — now ' + t.users + ' / ' + tier.users + ' users on ' + tier.label + ' tier', 'success');
+}
+
+/* ── Tenant settings ── */
+function mtSaveAlias() {
+  var v = (document.getElementById('mt-alias-input').value || '').trim();
+  if (!v) { toast('Alias cannot be empty', 'error'); return; }
+  var t = mtTenant(); if (t) t.name = v;
+  document.getElementById('tenant-ctx-name').textContent = v;
+  document.getElementById('mt-members-ws').textContent = v;
+  document.getElementById('mt-idp-ws').textContent = v;
+  mtRenderTenants();
+  toast('Alias updated — workspace renamed to "' + v + '" everywhere instantly (address unchanged)', 'success');
+}
+
+/* ── Platform tenants registry ── */
+function mtRenderTenants() {
+  var rows = document.getElementById('mt-tenant-rows'); if (!rows) return;
+  rows.innerHTML = MT_TENANTS.map(function(t) {
+    var tierCls = t.tier === 'team' ? 'chip-blue' : t.tier === 'enterprise' ? 'chip-purple' : 'chip-gray';
+    var nameHtml = '<strong>' + t.name + '</strong>' + (t.slug === 'root' ? ' <span class="chip chip-gray">Root tenant</span>' : '');
+    var status = t.status === 'Active' ? '<span class="chip chip-green">Active</span>' : '<span class="chip chip-red">Suspended</span>';
+    return '<tr><td>' + nameHtml + '</td>' +
+      '<td class="font-mono" style="font-size:12px">' + t.slug + '.parthenon.app</td>' +
+      '<td><span class="chip ' + tierCls + '">' + MT_TIERS[t.tier].label + '</span></td>' +
+      '<td>' + status + '</td><td>' + t.users + '</td><td>' + t.execs.toLocaleString() + '</td>' +
+      '<td><div style="display:flex;gap:4px;justify-content:flex-end">' +
+      '<button class="btn btn-sm btn-secondary" onclick="toast(\'Suspend / resume (demo)\',\'info\')">Suspend</button>' +
+      '<button class="btn btn-sm btn-secondary" onclick="mtAssignLicense(\'' + t.slug + '\')">License</button>' +
+      '</div></td></tr>';
+  }).join('');
+}
+function mtAssignLicense(slug) {
+  var t = MT_TENANTS.find(function(x){return x.slug===slug;}); if (!t) return;
+  t.tier = t.tier === 'free' ? 'team' : t.tier === 'team' ? 'enterprise' : 'free';
+  mtRenderTenants();
+  toast(MT_TIERS[t.tier].label + ' tier applied to "' + t.name + '" — usage meters update immediately (demo cycles tiers)', 'success');
+}
 </script>
 
 </body>

@@ -285,3 +285,18 @@ The Control Center is the authoritative security and identity hub for agent exec
 | `test_remote_revocation_check_allows_dev_opt_in_fallback` | integration test | Verifies revocation fallback is available only behind explicit development opt-in | `backend/tests/integration/test_internal_revocation_fail_closed.py` |
 | `test_check_revocation_status_calls_correct_url` | integration test | Verifies client uses Control Center `revoked/{serial}` endpoint contract | `backend/tests/integration/test_data_clients.py` |
 | `test_check_revocation_status_fail_closed_on_error` | integration test | Verifies data client treats revocation lookup errors as revoked by default | `backend/tests/integration/test_data_clients.py` |
+
+---
+
+## Multi-Tenancy Integration
+
+Control Center is the sole DB gateway and the tenant authority since the multi-tenant support change (full details: [multi-tenancy module](../multi-tenancy/tech-spec.md)).
+
+| Symbol | Type | Description | File |
+|--------|------|-------------|------|
+| `TenantResolutionMiddleware` | middleware (new) | Resolves the tenant once per request (host subdomain / `X-Tenant` header); fail-closed in multi-tenant mode with method-aware GET-only login-probe bypasses; binds the ROOT tenant as default context and stamps `tenancy_enabled` when the switch is off | `backend/app/middleware/tenant_resolution.py` |
+| `apply_tenant_scope` + `get_db` | scoping choke point (new/modified) | Automatic tenant scoping of every session query: SELECT/UPDATE/DELETE rewriting, INSERT stamping, cross-tenant miss auditing, signed-header verification on internal traffic; `execute_unscoped` exempts identity-plane statements | `backend/app/db/tenant_scoping.py`, `backend/app/db/session.py` |
+| platform tenants / settings / audit routers | routers (new) | Platform admin APIs under `/api/v1/platform/*` — tenant metadata/lifecycle, platform settings, cross-tenant audit; never tenant business data | `backend/app/api/v1/platform/tenants.py` (+ `settings.py`, `audit.py`) |
+| tenant self-service router | router (new) | `/api/v1/tenant/*` — settings, onboarding, members, invitations, usage | `backend/app/api/v1/tenant.py` |
+| `TenantRegistrationService` / `TenantLicensingService` / `TenantQuotaService` | services (new) | Atomic account-first registration; license supersede semantics with free-tier fallback; three enforcement points (invitation, agent type creation, execution submission) with structured quota blocks | `backend/app/services/tenancy/` |
+| `CommunicationHubClient` / `AgentRuntimeClient` | classes (modified) | Attach HMAC-signed tenant headers (`tenant_context` parameter) on all internal dispatches | `backend/app/services/control_center/comm_hub_client.py`, `backend/app/services/control_center/agent_runtime_client.py` |

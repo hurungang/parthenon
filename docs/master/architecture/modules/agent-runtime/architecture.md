@@ -1,5 +1,9 @@
 # Agent Runtime Architecture
 
+## Tenant-Bound Execution
+
+Agent Runtime receives a **signed, immutable tenant context** from Control Center over the existing mTLS channels; the context cannot be widened, and Agent Runtime holds no identity tokens or credentials. Every execution uses only the owning tenant's skills, tools, model configurations, identities, and permissions. Agent Runtime is database-free and runs **no quota logic** — quota decisions are made entirely in Control Center, which dispatches only quota-cleared executions over the existing signed-header contract. All execution logs and traces carry tenant attribution. See [Multi-Tenancy Architecture](multi-tenancy.md).
+
 ## System Tool Binding & Routing
 
 Agent Runtime binds LangChain `BaseTool` subclasses for all platform system tools, each holding a `CommHubToolClient` reference. Tool calls follow a mandatory routing path: Agent Runtime → Communication Hub → Control Center. Agent Runtime never accesses the database directly.

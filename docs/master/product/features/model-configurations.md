@@ -92,3 +92,7 @@ This late-binding architecture means swapping a provider or rotating a credentia
 - Dynamic/provider-initiated registration of new LLM providers at runtime
 - Model performance benchmarking or cost optimization
 - Prompt engineering or system instruction authoring — configured on Agent Types, not Model Configurations
+
+## Multi-Tenancy Note
+
+When multi-tenancy is enabled (see [Multi-Tenancy](multi-tenancy.md)), model configurations are tenant-owned; each tenant manages its own provider credentials and enabled model lists. With multi-tenancy disabled (the default), behavior is unchanged — the deployment operates as the root tenant's workspace.

@@ -350,7 +350,7 @@ tbody tr:last-child{border-bottom:none}
     <div class="flow-card">
       <span class="chip chip-green fc-persona">Tenant User</span>
       <h3>4 · Tenant-Branded Sign-In &amp; Org Choice</h3>
-      <p>Sign-in opens on an AWS-style <b>Find your workspace</b> step — enter your workspace address (optionally <b>remembered on this device</b>) — then the tenant-branded card takes over: <b>Sign in to your workspace</b> (email + password for platform-issued accounts, inline error states), an OIDC SSO button shown <b>only when a provider is configured</b> — no wizard prompt when absent — a <b>Not your workspace?</b> escape hatch, plus a <b>Create your organization</b> entry and an expandable <b>platform-admin</b> sign-in. Multi-org users pick their organization — <b>one session = one tenant</b>. Suspended-tenant blocking and tenant-bound credential errors still apply.</p>
+      <p>One unified flow for <b>everyone</b>: sign-in opens on an AWS-style <b>Find your workspace</b> step — enter your workspace address (optionally <b>remembered on this device</b>; the platform itself lives at the <b>root</b> workspace) — then the workspace-branded card takes over: <b>Sign in to your workspace</b> (email + password, inline error states), an OIDC SSO button shown <b>only when a provider is configured</b> — new OIDC users are JIT-provisioned with the tenant's <b>configured default role</b> — a <b>Not your workspace?</b> escape hatch, plus a <b>Create your organization</b> entry. The discreet platform-admin sign-in was removed; a <b>break-glass super-admin</b> entry exists <b>only at the root workspace card</b>. Multi-org users pick their organization — <b>one session = one tenant</b>. Suspended-tenant blocking and tenant-bound credential errors still apply.</p>
       <button class="btn btn-primary btn-sm" onclick="go('signin')">Try tenant sign-in →</button>
     </div>
     <div class="flow-card">
@@ -393,8 +393,8 @@ tbody tr:last-child{border-bottom:none}
         <div class="panel" id="ppanel-overview">
           <div id="pc-overview-multi" class="hidden">
             <div class="metrics-grid">
-              <div class="metric-card"><div class="metric-label">Tenants</div><div class="metric-value" id="m-tenants">4</div></div>
-              <div class="metric-card"><div class="metric-label">Active</div><div class="metric-value" id="m-active">3</div></div>
+              <div class="metric-card"><div class="metric-label">Tenants</div><div class="metric-value" id="m-tenants">5</div></div>
+              <div class="metric-card"><div class="metric-label">Active</div><div class="metric-value" id="m-active">4</div></div>
               <div class="metric-card"><div class="metric-label">Suspended</div><div class="metric-value" id="m-suspended">1</div></div>
               <div class="metric-card"><div class="metric-label">Cross-Tenant Attempts (7d)</div><div class="metric-value" style="color:var(--error)" id="m-attempts">3</div></div>
             </div>
@@ -425,7 +425,7 @@ tbody tr:last-child{border-bottom:none}
               </div>
               <div id="settings-on" class="hidden">
                 <span class="chip chip-green">Status: Enabled · Multi-Tenant</span>
-                <div class="alert alert-success mt-3 mb-3"><span>✓</span><span><b>Existing organization adopted.</b> "Parthenon Demo Org" became this deployment's first tenant — its configuration and data remain intact with no manual reconfiguration of its identity provider.</span></div>
+                <div class="alert alert-success mt-3 mb-3"><span>✓</span><span><b>Existing organization adopted.</b> "Parthenon Demo Org" became a customer tenant — its configuration and data remain intact with no manual reconfiguration of its identity provider. The platform itself lives in the <b>root</b> workspace: its members with a platform role see the platform modules; everyone signs in through the same workspace-address flow.</span></div>
                 <div class="text-sm" style="line-height:1.8">
                   • Tenant features are now available (tenant registry, self-serve creation, per-tenant sign-in)<br>
                   • Tenant adoption is <b>irreversible</b> — see the warning shown when enabling<br>
@@ -647,14 +647,20 @@ tbody tr:last-child{border-bottom:none}
     <b>Demo:</b> sign-in starts at the neutral <b>find-workspace</b> step — quick-fill an address and press Continue:
     <button class="demo-btn" onclick="siFindQuick('acme')">find “acme” → branded sign-in</button>
     <button class="demo-btn" onclick="siFindQuick('northwind')">find “northwind” → suspended</button>
+    <button class="demo-btn" onclick="siFindQuick('root')">find “root” → platform workspace</button>
     <button class="demo-btn" onclick="siFindQuick('zzz')">find “zzz” → not found</button>
     <span style="flex-basis:100%"></span>
-    <span>Or jump straight to a tenant address:</span>
+    <span>Or jump straight to a workspace address:</span>
     <button class="demo-btn active" id="si-btn-acme" onclick="siPick('acme')">acme.parthenon.app</button>
     <button class="demo-btn" id="si-btn-globex" onclick="siPick('globex')">globex.parthenon.app</button>
     <button class="demo-btn" id="si-btn-northwind" onclick="siPick('northwind')">northwind.parthenon.app (suspended)</button>
+    <button class="demo-btn" id="si-btn-root" onclick="siPick('root')">root.parthenon.app (platform)</button>
     <button class="demo-btn active" id="si-btn-oidc" onclick="siToggleOidc()">OIDC provider: configured</button>
     <span id="si-oidc-note"></span>
+    <span style="flex-basis:100%"></span>
+    <span>JIT provisioning:</span>
+    <button class="demo-btn" onclick="siJitDemo()">First-time OIDC sign-in → default role</button>
+    <span>new OIDC users are provisioned into the workspace with its <b>configured default role</b>.</span>
   </div>
   <div class="auth-wrap">
     <span class="addr-bar hidden" id="si-addrbar-find"><span class="lock">🔒</span>https://<b>parthenon.app</b>/sign-in</span>
@@ -736,15 +742,16 @@ tbody tr:last-child{border-bottom:none}
       <span class="si-create-link">New to Parthenon? <a href="#" onclick="go('org-create'); return false;"><b>Create your organization →</b></a></span>
     </div>
 
-    <!-- Muted, expandable platform-admin entry (super admin only) -->
-    <button class="si-admin-link" id="si-admin-link" onclick="siToggleAdmin()">Platform admin sign-in ▾</button>
+    <!-- Break-glass super-admin entry — rendered ONLY at the root workspace card (or with no bound workspace /
+         tenancy off). Removed from every customer workspace card. -->
+    <button class="si-admin-link" id="si-admin-link" onclick="siToggleAdmin()">Super-admin sign-in (break-glass) ▾</button>
 
-    <!-- SECONDARY CARD: platform admin sign-in — expands on click -->
+    <!-- SECONDARY CARD: break-glass super-admin sign-in — expands on click -->
     <div class="login-card si-admin-card hidden" id="si-admin-card">
       <div class="login-header">
         <div class="logo-icon">🛡️</div>
-        <h1>Platform admin sign-in</h1>
-        <p>Super-admin of this deployment — tenants, licenses &amp; platform settings.</p>
+        <h1>Super-admin sign-in</h1>
+        <p>Break-glass disaster-recovery entry — rendered only at the <b>root</b> workspace.</p>
       </div>
       <div class="login-body">
         <form onsubmit="siAdminSignIn(); return false">
@@ -806,7 +813,13 @@ tbody tr:last-child{border-bottom:none}
     <b>Demo:</b> license &amp; quota state of the current tenant
     <button class="demo-btn" onclick="wsSimLicense('team')">Assign Team license</button>
     <button class="demo-btn" onclick="wsSimLicense('none')">Remove license (→ Free)</button>
-    <span>Acme starts unlicensed on Free with the user quota reached — open <b>Users</b> and try <b>+ Invite user</b>.</span>
+    <span style="flex-basis:100%"></span>
+    <span>Root-tenant platform view:</span>
+    <button class="demo-btn" onclick="wsPersona('root-admin')">Root workspace · Platform Admin</button>
+    <button class="demo-btn" onclick="wsPersona('root-member')">Root workspace · regular member (no platform modules)</button>
+    <button class="demo-btn" onclick="wsPersona('acme')">Back to Acme tenant</button>
+    <span style="flex-basis:100%"></span>
+    <span>Acme starts unlicensed on Free with the member quota reached — open <b>Members</b> and try <b>+ Invite user</b>.</span>
   </div>
   <div class="shell">
     <div class="shell-sidebar">
@@ -821,9 +834,17 @@ tbody tr:last-child{border-bottom:none}
         <div class="snav-sep">Integrations</div>
         <div class="snav-item"><span>🔌</span>MCP Hub</div>
         <div class="snav-item"><span>🔑</span>API Keys</div>
-        <div class="snav-sep">Administration</div>
-        <div class="snav-item" id="ws-nav-users" onclick="wsTab('users',this)"><span>👥</span>Users</div>
+        <div class="snav-sep">Tenant Admin</div>
+        <div class="snav-item" id="ws-nav-users" onclick="wsTab('users',this)"><span>👥</span>Members</div>
         <div class="snav-item" id="ws-nav-settings" onclick="wsTab('settings',this)"><span>⚙️</span>Tenant Settings</div>
+        <div class="snav-item" onclick="toast('Identity provider configuration for this workspace (demo)','info')"><span>🔑</span>Identity Providers</div>
+        <!-- Platform modules — rendered at the ROOT workspace ONLY for members holding a platform role -->
+        <div id="ws-platform-group" class="hidden">
+          <div class="snav-sep">Platform</div>
+          <div class="snav-item" onclick="go('platform');pNav('settings')"><span>⚙️</span>Platform Settings</div>
+          <div class="snav-item" onclick="go('platform');pNav('tenants')"><span>🏢</span>Tenants</div>
+          <div class="snav-item" onclick="go('platform');pNav('audit')"><span>🛡️</span>Security Audit</div>
+        </div>
       </div>
       <div class="snav-foot">Everything you see belongs to <b id="ws-side-org2">Acme Corp</b> only. Other tenants' data is never reachable.</div>
     </div>
@@ -905,6 +926,11 @@ tbody tr:last-child{border-bottom:none}
                     <span class="addr-suffix">.parthenon.app</span>
                   </div>
                   <div class="form-hint">🔒 Unique and permanent — the address never changes, only the alias does.</div>
+                </div>
+                <div class="form-group mb-0">
+                  <label>Default role for new OIDC users (JIT)</label>
+                  <select class="form-control" id="ws-jit-role" style="max-width:220px"><option selected>Member</option><option>Tenant Admin</option></select>
+                  <div class="form-hint">First-time OIDC sign-ins are provisioned into this workspace automatically and receive this role. With no default configured, JIT sign-ins are denied.</div>
                 </div>
               </div>
             </div>
@@ -1149,6 +1175,8 @@ function effectiveLimits(t) { return t.license ? t.license.limits : TIERS.free.l
 
 function seedTenants() {
   return [
+    {id:'t-root',    name:'Root',               slug:'root',     status:'active',    admin:'super-admin@parthenon.app', created:'Jan 01, 2026', adopted:true, rootTenant:true,
+     license:{tier:'enterprise', limits:{users:500, agentTypes:100, executions:100000}}, usage:{users:3, agentTypes:0, executions:0}},
     {id:'t-demo',    name:'Parthenon Demo Org', slug:'demo',     status:'active',    admin:'admin@demo.parthenon.app', created:'Mar 12, 2026', adopted:true,
      license:{tier:'enterprise', limits:{users:500, agentTypes:100, executions:100000}}, usage:{users:12, agentTypes:4, executions:3200}},
     {id:'t-acme',    name:'Acme Corp',          slug:'acme',     status:'active',    admin:'alex@acme.com',            created:'Apr 03, 2026', adopted:false,
@@ -1305,7 +1333,7 @@ function renderTenants() {
     else actions += '<button class="btn btn-xs btn-secondary" style="color:var(--success)" onclick="doResume(\'' + t.id + '\')">Resume</button>';
     actions += '<button class="btn btn-xs btn-secondary" onclick="openTenantDetail(\'' + t.id + '\')">Details</button>';
     actions += '<button class="btn btn-xs btn-secondary" style="color:var(--error)" onclick="askDelete(\'' + t.id + '\')">Delete</button>';
-    var nameHtml = '<b>' + t.name + '</b>' + (t.adopted ? ' <span class="chip chip-purple">Adopted</span>' : '');
+    var nameHtml = '<b>' + t.name + '</b>' + (t.rootTenant ? ' <span class="chip chip-root">Root tenant</span>' : '') + (t.adopted && !t.rootTenant ? ' <span class="chip chip-purple">Adopted</span>' : '');
     return '<tr><td>' + nameHtml + '</td>' +
       '<td class="mono text-sm">' + t.slug + '.parthenon.app</td>' +
       '<td>' + tierChipHtml(t) + '</td>' +
@@ -1668,7 +1696,8 @@ function enterWorkspaceFromOnboarding() {
 var brands = {
   acme:     {name:'Acme Corp',         letter:'A', suspended:false},
   globex:   {name:'Globex Industries', letter:'G', suspended:false},
-  northwind:{name:'Northwind Ltd',     letter:'N', suspended:true}
+  northwind:{name:'Northwind Ltd',     letter:'N', suspended:true},
+  root:     {name:'Root',              letter:'R', suspended:false}
 };
 /* Platform-issued workspace accounts (created via self-serve sign-up / tenant invitations) */
 var SI_ACCOUNTS = {
@@ -1759,7 +1788,8 @@ function siShowFind() {
   ['si-form','si-extras','si-admin-card','si-orgchoice','si-blocked'].forEach(function(id){
     document.getElementById(id).classList.add('hidden');
   });
-  document.getElementById('si-admin-link').classList.add('hidden');
+  /* Break-glass entry: no bound workspace here = the tenancy-off root deployment, so it stays visible */
+  document.getElementById('si-admin-link').classList.remove('hidden');
   siFindClear();
   if (siRemembered) document.getElementById('si-find-slug').value = siRemembered;
 }
@@ -1793,13 +1823,13 @@ function siPick(slug) {
   document.getElementById('si-find').classList.add('hidden');
   document.getElementById('si-form').classList.toggle('hidden', suspended);
   document.getElementById('si-extras').classList.toggle('hidden', suspended);
-  document.getElementById('si-admin-link').classList.toggle('hidden', suspended);
+  document.getElementById('si-admin-link').classList.toggle('hidden', suspended || slug !== 'root');
   document.getElementById('si-admin-card').classList.add('hidden');
   document.getElementById('si-orgchoice').classList.add('hidden');
   document.getElementById('si-blocked').classList.toggle('hidden', !suspended);
   siApplyRemember();
   siApplyOidc();
-  ['acme','globex','northwind'].forEach(function(s){
+  ['acme','globex','northwind','root'].forEach(function(s){
     var el = document.getElementById('si-btn-' + s);
     if (el) el.classList.toggle('active', s === slug);
   });
@@ -1863,7 +1893,7 @@ function siToggleAdmin() {
   siAdminOpen = !siAdminOpen;
   document.getElementById('si-admin-card').classList.toggle('hidden', !siAdminOpen);
   document.getElementById('si-extras').classList.toggle('hidden', siAdminOpen);
-  document.getElementById('si-admin-link').innerHTML = siAdminOpen ? '← Back to workspace sign-in' : 'Platform admin sign-in ▾';
+  document.getElementById('si-admin-link').innerHTML = siAdminOpen ? '← Back to workspace sign-in' : 'Super-admin sign-in (break-glass) ▾';
   if (!siAdminOpen) siResetAdmin();
 }
 function siResetAdmin() {
@@ -1881,12 +1911,35 @@ function siAdminSignIn() {
   if (!u) { siFieldErr('si-admin-user','si-admin-user-err'); ok = false; }
   if (!p || p.length < 4) { siFieldErr('si-admin-pass','si-admin-pass-err'); ok = false; }
   if (!ok) return;
-  go('platform'); pNav('overview');
-  toast('Signed in to the Platform Console as the super admin (demo — placeholder credentials)', 'success');
+  /* Break-glass super admin signs into the ROOT workspace (the platform tenant) */
+  setWorkspaceOrg('Root', 'root', {name:'Super Admin', email:'super-admin@parthenon.app', isRoot:false, isPlatform:true});
+  go('workspace'); wsTab('overview', document.getElementById('ws-nav-overview'));
+  toast('Signed in to the root workspace as the break-glass super admin (demo — placeholder credentials)', 'success');
+}
+/* ── JIT default role: a first-time OIDC user is provisioned into the workspace with its configured default role ── */
+function siJitDemo() {
+  var slug = signinSlug;
+  var b = siBrandFor(slug);
+  if (!b || b.suspended) { toast('Resolve a workspace address first (try “acme”)', 'error'); return; }
+  var email = 'jordan@initech.com';
+  if (!SI_ACCOUNTS[email]) SI_ACCOUNTS[email] = {name:'Jordan Lee', root:false, orgs:[slug]};
+  else if (SI_ACCOUNTS[email].orgs.indexOf(slug) < 0) SI_ACCOUNTS[email].orgs.push(slug);
+  var role = (document.getElementById('ws-jit-role') || {}).value || 'Member';
+  var t = state.tenants.find(function(x){return x.slug===slug;});
+  if (t) {
+    state.members[slug] = state.members[slug] || [];
+    if (!state.members[slug].some(function(m){return m.email===email;})) {
+      state.members[slug].push({name:'Jordan Lee', email:email, role:role, status:'Active', root:false});
+      t.usage.users++;
+    }
+  }
+  setWorkspaceOrg(b.name, slug, {name:'Jordan Lee', email:email, isRoot:false});
+  go('workspace'); wsTab('users', document.getElementById('ws-nav-users'));
+  toast('First OIDC sign-in — Jordan Lee was JIT-provisioned into ' + b.name + ' with the default role "' + role + '"', 'success');
 }
 
 /* ═══════════ TENANT WORKSPACE ═══════════ */
-var WS_TITLES = {overview:'Dashboard', users:'Users', settings:'Tenant Settings'};
+var WS_TITLES = {overview:'Dashboard', users:'Members', settings:'Tenant Settings'};
 function setWorkspaceOrg(name, slug, persona) {
   state.workspaceOrg = {name:name, slug:slug, persona:persona || {name:'Alex Rivera', email:'alex@acme.com', isRoot:true}};
   applyWorkspaceIdentity();
@@ -1910,7 +1963,21 @@ function applyWorkspaceIdentity() {
   document.getElementById('ws-addr-fixed').value = slug;
   document.getElementById('ws-root-note').classList.toggle('hidden', !p.isRoot);
   document.getElementById('ws-member-note').classList.toggle('hidden', p.isRoot);
+  /* Platform = root tenant: platform modules only for platform-role members of the root workspace */
+  document.getElementById('ws-platform-group').classList.toggle('hidden', !(slug === 'root' && p.isPlatform));
   wsRenderUsers(); wsRenderLicense();
+}
+/* Demo persona switcher — root workspace shows platform modules only to platform-role members */
+function wsPersona(kind) {
+  if (kind === 'root-admin') {
+    setWorkspaceOrg('Root','root',{name:'Pat Platform', email:'pat@parthenon.app', isRoot:false, isPlatform:true});
+    toast('Root workspace signed in with a Platform Admin role — the Platform group is visible', 'info');
+  } else if (kind === 'root-member') {
+    setWorkspaceOrg('Root','root',{name:'Riley Reyes', email:'riley@parthenon.app', isRoot:false});
+    toast('Root workspace signed in WITHOUT a platform role — the Platform group stays hidden', 'info');
+  } else {
+    setWorkspaceOrg('Acme Corp','acme',{name:'Alex Rivera', email:'alex@acme.com', isRoot:true});
+  }
 }
 function wsTenant() { return state.tenants.find(function(t){return t.slug===state.workspaceOrg.slug;}); }
 function wsMembers() {
@@ -2049,6 +2116,7 @@ function resetDemo() {
   ['sg-name','sg-slug','sg-admin-name','sg-admin-email','sg-admin-pass'].forEach(function(id){ var el=document.getElementById(id); if(el) el.value=''; });
   ['ob-issuer','ob-clientid','ob-clientsecret','ob-invite-email'].forEach(function(id){ var el=document.getElementById(id); if(el) el.value=''; });
    ['sg-slug'].forEach(function(id){ document.getElementById(id).dataset.touched = ''; });
+   var jitSel = document.getElementById('ws-jit-role'); if (jitSel) jitSel.value = 'Member';
   siOidcConfigured = {acme:true, globex:false, northwind:true};
   siAdminOpen = false;
   siRemembered = null;

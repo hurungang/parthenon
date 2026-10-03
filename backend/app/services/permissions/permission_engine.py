@@ -52,11 +52,14 @@ class PermissionEngine:
         4. For each allow statement, check action, resource, and tag conditions
         5. Return allow if any statement matches; deny otherwise
 
-        When *tenant_id* is provided (multi-tenancy on), role collection is
-        bound to the tenant: only roles assigned within that tenant (plus
-        global/tenant-less roles such as the platform-admin role) are
-        considered, so identical role names in different tenants never
-        collide.  Single-tenant mode (tenant_id=None) is unchanged.
+        When *tenant_id* is provided, role collection is bound to the
+        tenant: ONLY roles assigned within that tenant are considered, so
+        identical role names in different tenants never collide.
+        **Containment invariant (Phase 11)**: global tenant-less roles no
+        longer exist — every business role belongs to exactly one tenant
+        (legacy globals were re-homed into the root tenant), and no role
+        in tenant A can ever be collected for a tenant B session,
+        including wildcard grants.
         """
         # Manifest validation — fail fast for unknown module names
         # Wildcards '*', '*::*', and 'module::*' bypass this check
@@ -173,11 +176,12 @@ class PermissionEngine:
     ) -> List[uuid.UUID]:
         """Collect all role IDs for a user: direct + group-inherited.
 
-        With *tenant_id* set (multi-tenancy on), roles are collected only
-        from the request's tenant — direct and group roles whose Role row
-        belongs to the tenant — plus global tenant-less roles (e.g. the
-        system/platform-admin role), which stay effective in every tenant.
-        Roles of other tenants are never collected.
+        **Containment invariant (Phase 11)**: with *tenant_id* set, roles
+        are collected ONLY from the session's resolved tenant — the
+        former global tenant-less collection is REMOVED (every business
+        role belongs to exactly one tenant; legacy globals were re-homed
+        into the root tenant by migration ``b8e4f2a6c9d1``).  Roles of
+        other tenants are never collected.
         """
         from app.db.models.group import Group
         from app.db.models.group_role import GroupRole
@@ -186,14 +190,14 @@ class PermissionEngine:
         from app.db.models.user_role import UserRole
 
         if tenant_id is not None:
-            # Direct roles, tenant-bound: join Role and keep this tenant's
-            # roles plus global (tenant-less) ones.
+            # Direct roles, tenant-bound: join Role and keep ONLY this
+            # tenant's roles (containment — no global tenant-less roles).
             direct_result = await db.execute(
                 select(UserRole.role_id)
                 .join(Role, Role.id == UserRole.role_id)
                 .where(
                     UserRole.user_id == user_id,
-                    or_(Role.tenant_id == tenant_id, Role.tenant_id.is_(None)),
+                    Role.tenant_id == tenant_id,
                 )
             )
             role_ids = list(direct_result.scalars().all())
@@ -214,7 +218,7 @@ class PermissionEngine:
                     .join(Group, Group.id == GroupRole.group_id)
                     .where(
                         GroupRole.group_id.in_(group_ids),
-                        or_(Role.tenant_id == tenant_id, Role.tenant_id.is_(None)),
+                        Role.tenant_id == tenant_id,
                     )
                 )
                 group_role_ids = list(group_role_result.scalars().all())

@@ -86,7 +86,15 @@ type WorkspacePhase =
  */
 export function LoginPage() {
   const { t } = useTranslation()
-  const { login, isAuthenticated, setToken, multiTenancyEnabled, resolvedTenant, refreshProviders } = useAuthStore()
+  const {
+    login,
+    isAuthenticated,
+    setToken,
+    multiTenancyEnabled,
+    resolvedTenant,
+    refreshProviders,
+    clearResolvedTenant,
+  } = useAuthStore()
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
 
@@ -140,6 +148,13 @@ export function LoginPage() {
   // X-Tenant from sessionStorage at request time).
   const contextSlug =
     resolvedTenant?.slug ?? (effectivePhase === 'card' ? addressTenant?.slug ?? null : null)
+  // Phase 11 (task 11.6): the super-admin break-glass entry is available
+  // ONLY at the root workspace — the entered/resolved workspace slug is
+  // `root`, or no workspace is bound at all (the tenancy-off deployment
+  // IS the root workspace; legacy host-flow rendering keeps the entry so
+  // first-run bootstrap keeps working).
+  const isRootWorkspace =
+    !multiTenancyEnabled || contextSlug === null || contextSlug === 'root'
   const { data: providersData, isLoading: providersLoading } = useQuery({
     queryKey: ['system', 'identity-providers', contextSlug],
     queryFn: async () => {
@@ -278,6 +293,11 @@ export function LoginPage() {
   const handleSwitchWorkspace = () => {
     setRememberedTenantSlug(null)
     setResolvedTenantSlug(null)
+    // FIX-20261001-235247: also drop the HOST-derived store tenant —
+    // without this the phase stays `idle` (addressFlowActive false) and
+    // the finder never renders after switching away from a host-bound
+    // workspace.
+    clearResolvedTenant?.()
     setAddressTenant(null)
     setWorkspaceInput('')
     setFindError(null)
@@ -305,6 +325,18 @@ export function LoginPage() {
     signInFlowsAvailable && (effectivePhase === 'idle' || effectivePhase === 'card')
   const noSignInAvailable =
     showSignInFlows && !passwordSignInAvailable && !hasOidcProvider && !superAdminEnabled
+
+  // FIX-20261001-235247 (Defect 1): the "Use a different workspace" escape
+  // hatch must be reachable in EVERY tenant-bound sign-in state — the
+  // address-resolved card (root workspace included) AND the host-derived
+  // legacy page (resolvedTenant set by AuthProvider — the phase stays
+  // `idle` there, which previously hid the link entirely).  The finder
+  // phase already IS the switch affordance; `resolving` is transient.
+  // Tenancy OFF is excluded: that deployment IS the root workspace and no
+  // other workspace exists (the finder itself requires tenancy on).
+  const canSwitchWorkspace =
+    multiTenancyEnabled === true &&
+    (effectivePhase === 'card' || resolvedTenant !== null)
 
   const handlePasswordSignIn = async () => {
     try {
@@ -437,9 +469,12 @@ export function LoginPage() {
           </>
         )}
 
-        {/* Address-resolved card: escape hatch back to the finder
-            (clears both the remembered workspace and the tab binding) */}
-        {effectivePhase === 'card' && (
+        {/* Switch-workspace escape hatch (FIX-20261001-235247): shown on
+            every bound-workspace sign-in state — address-resolved card
+            (root included) and host-derived tenants alike.  Clears the
+            remembered workspace, the tab binding AND the host-derived
+            store tenant, then lands on the finder. */}
+        {canSwitchWorkspace && (
           <Box mt={3}>
             <Link
               component="button"
@@ -471,9 +506,14 @@ export function LoginPage() {
           </Box>
         )}
 
-        {/* Super admin discreet entry — available whenever super admin is
-            enabled, independent of OIDC state; never prominent */}
-        {superAdminEnabled && (
+        {/* Super admin break-glass entry (Phase 11 task 11.6) — the
+            discreet platform-admin expansion was REMOVED from tenant and
+            legacy workspaces: the break-glass account is available ONLY
+            at the ROOT workspace (the entered/resolved workspace is
+            `root`, or the tenancy-off deployment which IS the root
+            workspace).  First-run bootstrap and disaster recovery path
+            only; the workspace-address flow is otherwise identical. */}
+        {superAdminEnabled && isRootWorkspace && (
           <Box mt={3}>
             {!showSuperAdminForm ? (
               <Link

@@ -51,3 +51,7 @@ The Agent Data module gives platform operators a dedicated UI for browsing inter
 - Follows the same UI and API pattern as the Agent Outputs module to maintain consistency
 - No database schema changes required — the existing data storage table supports all needed queries
 - The Agent Data page must be integrated into the sidebar under the Agents group, after Agent Data Types and before Agent Outputs
+
+## Multi-Tenancy Note
+
+When multi-tenancy is enabled (see [Multi-Tenancy](multi-tenancy.md)), saved agent data is tenant-owned and only the owning tenant's members can browse it. With multi-tenancy disabled (the default), behavior is unchanged — the deployment operates as the root tenant's workspace.

@@ -277,3 +277,31 @@ If all six checks pass, the deployment is complete.
 > **Optional: API key MCP verification.** If API key authentication is enabled (`CH_API_KEY_AUTH_ENABLED=true`), create an API key for an agent identity and verify external MCP connectivity: call `load_skills` via the Communication Hub MCP endpoint using the API key as a Bearer token, confirm skills are returned with `updated_at` timestamps, and verify tool calls execute correctly through the proxy.
 
 > **Permission Engine latency baseline:** Before switching the Permission Engine from audit mode to enforce mode, record the median and P95 backend response times for authenticated endpoints. The auth middleware adds two async database calls per request (user cache upsert and group claim mapping). If median response time increases by more than 20% after enabling enforce mode, scale `control-center` replicas before proceeding. See [operational-runbooks.md](operational-runbooks.md) §4 for full monitoring guidance.
+
+---
+
+## Step 13 — Enable Multi-Tenancy (SaaS mode, optional)
+
+Skip this step for single-tenant deployments — the tenancy switch (`multi_tenancy_enabled`) is seeded `false` and every tenant code path is inert until deliberately enabled. Enabling is a **one-time adoption**; the platform runs identically in single-tenant mode until then.
+
+### Prerequisites (before enabling subdomain resolution)
+
+1. Confirm wildcard DNS: a wildcard record for the tenant address base domain (e.g. `*.parthenon.example.com`) points at the platform entry point (nginx host / Kubernetes ingress); the platform's own hostname also resolves.
+2. Confirm wildcard TLS: a certificate covering the wildcard domain is installed (nginx TLS config in Docker Compose; TLS secret on the ingress in Kubernetes). This is separate from the internal mTLS CA certificates.
+3. Confirm nginx routes **any** tenant subdomain to the same frontend and API upstreams with the `Host` header preserved end-to-end (no rewriting).
+4. Verify a test subdomain resolves, serves the valid certificate, and reaches the platform.
+5. Confirm `TENANT_CONTEXT_SIGNING_KEY` (identical value) is set on CC, AR, and CH, and `TENANT_ADDRESS_BASE_DOMAIN` on CC (see [environment-variables.md](environment-variables.md) §Multi-Tenancy).
+
+### Enable and adopt
+
+6. Announce/plan the enablement: enabling triggers the **irreversible root-tenant adoption** — all existing rows are backfilled to the root tenant (workspace `root`), the existing administrator is granted platform-admin membership in it, and the existing identity provider becomes the root tenant's provider (no manual reconfiguration). The enable action itself is audited.
+7. As platform admin, enable `multi_tenancy_enabled` via the Platform Settings page (or the platform settings API with explicit confirmation); verify the settings cache invalidates across workers.
+8. Verify adoption: existing data remains fully accessible under the root tenant; the platform admin console lists the root tenant; sign-in works; a second tenant can be created, onboarded, and isolated from root-tenant data.
+
+### Post-enable verification
+
+9. Configure per-tenant OIDC providers as tenants are created — shared/platform-wide provider config via the `/platform/identity-providers` surface, per-tenant config via `/system/identity-providers` with workspace binding (JIT default role can be set on each identity provider config).
+10. Verify tenant-A credentials are rejected for tenant-B, and that unbound platform requests and unresolvable tenants fail closed (HTTP 403).
+11. Sign in through the root workspace and one new tenant; confirm `backend/logs/control-center.log` shows `tenant.resolution` outcomes `resolved` and no `tenant.adoption` ERROR entries.
+
+> For runtime operations (metrics, alerts, log search patterns, sign-in/adoption runbooks), see [operations README](../operations/README.md) and [monitoring.md](../operations/monitoring.md) §Multi-Tenancy.

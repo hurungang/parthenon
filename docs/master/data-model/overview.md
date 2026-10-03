@@ -5,6 +5,137 @@ Parthenon's data model is organised into the following domains. Each section bel
 For entity descriptions, see the module docs in `docs/master/data-model/modules/`.
 Schema source files live in `backend/app/db/models/`.
 
+> **Multi-tenancy (default off):** the `multi_tenancy_enabled` switch lives in `PlatformSetting`. When enabled, nearly every business entity carries a tenant reference (direct on primary business entities; join tables and child records inherit scope via their parent). The former system tenant is the **root tenant** (workspace name/address `root`, `is_root_tenant = true`): it adopts all pre-existing data at migration, hosts platform staff as ordinary members holding platform roles, and is the exclusive home of `platform::` grants — **legacy global (tenant-less) roles are migrated into it**, retiring the global role variant. The **permission containment invariant** holds everywhere: role/policy grants apply only within their owning tenant; wildcard grants never cross tenant boundaries. See the Tenancy and Licensing & Quota sections below.
+
+---
+
+## Tenancy (Multi-Tenant Core)
+
+Multi-tenancy is **disabled by default** (the `multi_tenancy_enabled` switch lives in `PlatformSetting`); when off, tenant references are unused (empty or pointed at the implicit **root tenant**) and behavior is identical to the single-tenant product. Exactly one tenant carries `is_root_tenant = true` — the **root tenant** (workspace name/address `root`), which adopts all pre-existing data when multi-tenancy is enabled and hosts platform staff as **ordinary members holding platform roles** (`platform_admin` surfaced through root-tenant membership). Legacy global (tenant-less) roles — e.g. the wildcard-grant `system_admin` role — are **migrated into the root tenant** at adoption, retiring the global role variant: every business role belongs to a tenant.
+
+`Tenant.name` is the **editable unique alias** (root-editable display name); `Tenant.slug` is the **immutable unique tenant address**. `admin_contact_role` is the JIT (just-in-time) default tenant role granted to the first admin on tenant creation/registration. **Self-serve registration** creates `PlatformUser` (platform-issued email + password credential) + `Tenant` + the creator's immutable root `TenantUserMembership` (`is_root = true`) in one all-or-nothing action; a user may own at most one tenant.
+
+```mermaid
+erDiagram
+    Tenant {
+        uuid id
+        string name "editable unique alias (root-editable)"
+        string slug "immutable unique tenant address"
+        enum status "active | suspended | deleted"
+        enum admin_contact_role "JIT default tenant role for first admin"
+        boolean is_root_tenant "exactly one: root tenant (workspace 'root')"
+        boolean is_onboarded "guided onboarding completed"
+        string admin_contact_name
+        string admin_contact_email
+        datetime created_at
+        datetime updated_at
+    }
+    PlatformUser {
+        uuid id
+        string sub "OIDC subject or platform-issued identifier"
+        string display_name
+        string email "unique login identifier"
+        string password_credential "platform-issued for self-serve accounts"
+    }
+    TenantUserMembership {
+        uuid id
+        uuid tenant_id
+        uuid user_id
+        enum tenant_role "platform_admin | tenant_admin | member"
+        enum status "active | suspended | removed"
+        boolean is_root "immutable owner; exactly one per tenant, at most one per user"
+        boolean is_default "pre-selected tenant at sign-in"
+        datetime created_at
+        datetime updated_at
+    }
+    TenantInvitation {
+        uuid id
+        uuid tenant_id
+        uuid invited_by_id
+        string email
+        enum tenant_role "tenant_admin | member"
+        enum status "pending | accepted | expired | revoked"
+        boolean is_single_use
+        datetime expires_at
+        datetime created_at
+        datetime updated_at
+    }
+    TenantAuditEvent {
+        uuid id
+        uuid tenant_id "platform-level events attribute to the root tenant"
+        enum event_type "lifecycle | registration | root_protection_rejected | license | quota_exhausted | cross_tenant_access_denied"
+        enum actor_type "platform_admin | tenant_admin | tenant_user | tenant_agent | api_key | system"
+        uuid actor_id
+        string target_resource
+        json detail
+        boolean is_security_relevant
+        datetime created_at
+    }
+    PlatformSetting {
+        uuid id
+        string key "e.g. multi_tenancy_enabled (default false)"
+        json value
+        string description
+        enum category "tenancy | platform"
+        boolean is_tenant_agnostic
+        datetime created_at
+        datetime updated_at
+    }
+
+    Tenant ||--o{ TenantUserMembership : "grants membership in"
+    PlatformUser ||--o{ TenantUserMembership : "joins tenants via"
+    Tenant ||--o{ TenantInvitation : "receives invitations for"
+    TenantUserMembership ||--o{ TenantInvitation : "sends invitations"
+    Tenant ||--o{ TenantAuditEvent : "records audit events for"
+    PlatformSetting ||..o{ Tenant : "governs tenancy mode for"
+```
+
+**Permission containment invariant**: role and policy grants apply **only within their owning tenant**; wildcard grants (`agent::*`, `system::*`, `*::*`) are shorthand *within* one tenant's role space and never cross tenant boundaries. `platform::` grants exist **only in the root tenant's role space**, held by root-tenant members with platform roles. No customer-tenant role carries `platform::` grants; no root-tenant role addresses another tenant's business data. Root memberships (`is_root`) cannot be changed, demoted, or removed by anyone — rejected attempts are recorded as `root_protection_rejected` audit events.
+
+**Sources**: `backend/app/db/models/tenant.py`, `backend/app/db/models/tenant_membership.py`, `backend/app/db/models/tenant_invitation.py`, `backend/app/db/models/tenant_audit_event.py`, `backend/app/db/models/platform_setting.py`, `backend/app/db/models/platform_user.py`
+
+---
+
+## Licensing & Quota
+
+```mermaid
+erDiagram
+    TenantLicense {
+        uuid id
+        uuid tenant_id
+        enum tier "free | team | enterprise"
+        int max_users
+        int max_agent_types
+        int monthly_agent_executions
+        datetime assigned_at
+        datetime unassigned_at "null while active"
+        boolean is_active "latest active license per tenant wins"
+        datetime created_at
+        datetime updated_at
+    }
+    TenantQuotaUsage {
+        uuid id
+        uuid tenant_id
+        enum quota_type "users | agent_types | monthly_executions"
+        datetime period_start "calendar-month bucket start"
+        int used_count "incremented at enforcement time"
+        datetime created_at
+        datetime updated_at
+    }
+    Tenant {
+        uuid id
+        string name
+        boolean is_root_tenant
+    }
+
+    Tenant ||--o{ TenantLicense : "is entitled by"
+    Tenant ||--o{ TenantQuotaUsage : "accumulates quota usage for"
+```
+
+**Licensing semantics:** at most one active license per tenant (superseded licenses are kept as history with `is_active = false`); a tenant with **no active license runs on free-tier default limits**. Counting representation per quota type: `users` and `agent_types` are **derived live** from active memberships and `AgentType` record counts; `monthly_executions` is the only **maintained counter** (`TenantQuotaUsage` row per tenant + calendar-month bucket, incremented once per accepted execution — new months start a fresh bucket, so counters reset implicitly).
+
+**Sources**: `backend/app/db/models/tenant_license.py`, `backend/app/db/models/tenant_quota_usage.py`
+
 ---
 
 ## Identity & Access
@@ -13,6 +144,7 @@ Schema source files live in `backend/app/db/models/`.
 erDiagram
     Identity {
         uuid id
+        uuid tenant_id "tenant-scoped"
         string subject
         string idp_subject
         string email
@@ -23,6 +155,7 @@ erDiagram
     }
     Role {
         uuid id
+        uuid tenant_id "tenant-owned; legacy global roles migrated into root tenant"
         string name
         enum role_type
         boolean is_active
@@ -40,6 +173,7 @@ erDiagram
     }
     IdentityProviderConfig {
         uuid id
+        uuid tenant_id "per-tenant OIDC binding"
         enum provider_scope
         enum provider_type
         string display_name
@@ -81,6 +215,8 @@ erDiagram
     IdentityProviderConfig ||--o{ IdentityProviderConfigAudit : "audits"
     IdentityProviderSetupState ||--o| Identity : "completed_by"
 ```
+
+> **Tenancy notes:** `Permission` remains a **global catalogue** (not tenant-scoped) — grants are tenant-local via roles. `IdentityProviderConfig` gains a tenant reference for **per-tenant OIDC**: sign-in credentials are tenant-bound, and a credential issued by tenant A's provider is rejected outside tenant A. All roles (including migrated legacy global roles) are **tenant-owned**, with grants contained within their owning tenant.
 
 **Sources**: `backend/app/db/models/identity.py`, `backend/app/db/models/identity_provider_config.py`, `backend/app/db/models/identity_provider_config_audit.py`, `backend/app/db/models/identity_provider_setup_state.py`, `backend/app/db/models/super_admin_credentials.py`
 
@@ -205,6 +341,8 @@ erDiagram
 > **Module::submodule naming convention**: `PolicyStatement.module` and `PolicyResource.resource_type` use a two-layer namespaced format (`module::submodule`, e.g. `agent::management`). There are three modules: `agent` (12 submodules — roles, identities, management, runtime_control, skills, sops, model_configs, schedules, trails, human_intervention, data_types, outputs), `integration` (mcp_hub, notifications), and `system` (observability, permissions, system_config). Wildcards are supported: `*::*` matches all resource types across all modules, and `module::*` matches all submodules within a given module. Legacy flat values (e.g. `agent`, `role`, `skill`, `mcp_server`) are no longer accepted — they have been migrated to their namespaced equivalents. Validation is enforced at the application layer via `ResourceTypeManifest`.
 
 **Sources**: `backend/app/db/models/tag_definition.py`, `backend/app/db/models/tag_value.py`, `backend/app/db/models/role.py`, `backend/app/db/models/policy_statement.py`, `backend/app/db/models/policy_action.py`, `backend/app/db/models/policy_resource.py`, `backend/app/db/models/policy_tag_condition.py`, `backend/app/db/models/platform_user.py`, `backend/app/db/models/user_role.py`, `backend/app/db/models/group.py`, `backend/app/db/models/group_role.py`, `backend/app/db/models/user_group.py`, `backend/app/db/models/access_request_batch.py`, `backend/app/db/models/access_request.py`
+
+> **Tenant scoping:** `Role`, `PolicyStatement`, `PolicyAction`, `PolicyResource`, `Group`, `AccessRequest`, `AccessRequestBatch`, and `TagDefinition` carry a direct tenant reference; `UserRole`, `GroupRole`, `UserGroup`, and `PolicyTagCondition` inherit scope via their parents. **Legacy global roles are migrated to the root tenant**: pre-tenancy tenant-less `Role` rows (e.g. the wildcard-grant `system_admin` global role) are re-homed in the root tenant's role space at adoption, so no global (tenant-less) roles remain and the role tenant reference is effectively mandatory for all business roles. The containment invariant applies: no grant crosses tenant boundaries; `platform::` grants exist only in the root tenant's role space.
 
 ---
 
@@ -1034,4 +1172,8 @@ erDiagram
     PlatformUser }o--o{ Role : "assigned via"
     PlatformUser }o--o{ Group : "member of"
     Group }o--o{ Role : "assigned via"
+    Tenant ||--o{ TenantUserMembership : "grants membership in"
+    PlatformUser ||--o{ TenantUserMembership : "joins tenants via"
+    Tenant ||--o{ TenantLicense : "is entitled by"
+    Tenant ||--o{ TenantQuotaUsage : "accumulates quota usage for"
 ```

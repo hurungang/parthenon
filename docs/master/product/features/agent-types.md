@@ -77,3 +77,7 @@ Agent Types define how organizations standardize agent behavior, governance, and
 - Binding UI must be keyboard-accessible and internationalised
 - The output data type selector depends on the [Agent Data Type Registry](./agent-data-types.md); data types must exist before they can be assigned to agent types
 - Only non-conversational agent types support output data type assignment; conversational types are excluded by design
+
+## Multi-Tenancy Note
+
+When multi-tenancy is enabled (see [Multi-Tenancy](multi-tenancy.md)), agent types and their guardrail profiles are tenant-owned, and creating agent types is gated by the tenant's tier quota (maximum agent types). With multi-tenancy disabled (the default), behavior is unchanged — the deployment operates as the root tenant's workspace.

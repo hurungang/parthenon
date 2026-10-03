@@ -136,3 +136,15 @@ The Agent Runtime does **not** automatically call `save_result` at agent complet
 |--------|------|-------------|------|
 | `test_agent_runtime_has_no_ast_db_or_sqlalchemy_imports` | integration test | Guardrail test that fails if Agent Runtime introduces direct database/session imports | `backend/tests/integration/test_database_isolation.py` |
 | `test_make_client_without_cert_fails_closed_outside_dev_opt_in` | unit test | Ensures internal runtime/hub calls fail closed when certificate identity is unavailable in non-development profiles | `backend/tests/unit/test_control_center_comm_hub_client.py` |
+
+---
+
+## Multi-Tenancy Integration
+
+Agent Runtime is tenant-bound via signed headers since the multi-tenant support change (full details: [multi-tenancy module](../multi-tenancy/tech-spec.md)).
+
+| Symbol | Type | Description | File |
+|--------|------|-------------|------|
+| `ControlCenterCertificateMiddleware` | middleware (modified) | Additionally verifies CC-signed tenant headers (verify-if-present) and binds the verified context to requests | `backend/app/agent_runtime/middleware.py` |
+| `ControlCenterDataClient` (AR) | class (modified) | Forwards signed tenant headers to CC (`_get`/`_post`/`_patch`) | `backend/app/agent_runtime/data_client.py` |
+| execute / terminate endpoints | routers (reference) | Unchanged — the runtime loader resolves configuration only within the middleware-bound tenant context; no widening path exists and agents still hold no tokens or credentials | `backend/app/agent_runtime/api/execute.py`, `backend/app/agent_runtime/api/terminate.py` |

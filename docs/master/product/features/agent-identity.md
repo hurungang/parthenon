@@ -50,3 +50,7 @@ Agent identity management in Parthenon is centralized in the Control Center as a
 - Requires clear service-boundary governance between runtime and control surfaces
 - API keys require existing agent identities and roles to be provisioned before binding
 - All changes must comply with Parthenon’s security and audit conventions
+
+## Multi-Tenancy Note
+
+When multi-tenancy is enabled (see [Multi-Tenancy](multi-tenancy.md)), agent identities and their credentials are tenant-owned: an identity authenticates and acts only within its owning tenant, and cross-tenant agent messaging is prohibited. With multi-tenancy disabled (the default), behavior is unchanged — the deployment operates as the root tenant's workspace.

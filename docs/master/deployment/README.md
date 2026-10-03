@@ -18,11 +18,11 @@ This section contains all deployment documentation for the Parthenon platform. G
 
 | Document | Description |
 |----------|-------------|
-| [first-time-deployment.md](first-time-deployment.md) | Ordered step-by-step runbook for the initial deployment of a fresh Parthenon instance |
+| [first-time-deployment.md](first-time-deployment.md) | Ordered step-by-step runbook for the initial deployment of a fresh Parthenon instance; Step 13 covers optional multi-tenancy (SaaS mode) enablement |
 | [environment-variables.md](environment-variables.md) | Master reference table of all environment variables for every service; update whenever new services are added or variables change |
 | [services.md](services.md) | Master inventory of all containers and pods with their roles; update whenever services are added, removed, or renamed |
 | [operational-runbooks.md](operational-runbooks.md) | Targeted runbooks for specific operational tasks including permission rollout, service-segregation allowlist cutover, deny-event triage, and certificate failure response |
-| [rollback.md](rollback.md) | Runbook for rolling back a failed deployment to the last known-good state, including service-segregation policy rollback sequence |
+| [rollback.md](rollback.md) | Runbook for rolling back a failed deployment to the last known-good state, including service-segregation policy rollback sequence and the multi-tenancy disable-first rollback |
 | [configuration-files.md](configuration-files.md) | Reference for platform-managed configuration files (e.g., `config/telemetry.yaml`); covers resolution order, Docker Compose bind-mounts, and Kubernetes ConfigMap mounting |
 | [database-migrations.md](database-migrations.md) | Chronological log of all Alembic migration revisions applied to production; update whenever a migration is promoted |
 | [github-pages-showcase.md](github-pages-showcase.md) | Deployment guide for the GitHub Pages static showcase site — trigger, setup, rollback, and custom domain configuration |
@@ -60,6 +60,19 @@ Use this sequence for `add-agent-execution-guardrails` and subsequent guardrail 
 - Guardrail outcomes are classified clearly (cycle detection, cumulative iteration, timeout, delegation depth/steps, token budget/fallback).
 - Conversational token usage is continuously visible and continuation behavior is preserved.
 - Guardrail metadata is preserved and persisted across direct and delegated execution paths.
+
+## Multi-Tenancy Rollout Order
+
+Use this sequence for the `multi-tenant-support` change (mirrors [first-time-deployment.md](first-time-deployment.md) Step 13 and the change deployment notes):
+
+1. Prerequisites — wildcard DNS and wildcard TLS for the tenant base domain (only needed for subdomain resolution); `TENANT_CONTEXT_SIGNING_KEY` identical on CC/AR/CH; `TENANT_ADDRESS_BASE_DOMAIN` on CC
+2. Migrate — apply the additive tenancy migration chain to head (`31c0e0bc9990` → `b8e4f2a6c9d1`); see [database-migrations.md](database-migrations.md)
+3. Deploy — roll all three backend services + frontend together; restart via `parthenon.ps1` in the standard order
+4. Single-tenant verification — confirm behavior unchanged with the switch off (`multi_tenancy_enabled` seeded `false`; no env override exists)
+5. Wildcard DNS/TLS verification — test subdomain resolves, serves a valid certificate, and reaches the platform
+6. Enable switch — enable `multi_tenancy_enabled` via Platform Settings; the one-time root-tenant (workspace `root`) adoption runs automatically and is audited
+7. Adopt/verify — root tenant accessible, second tenant isolated, per-tenant OIDC config via `/system/identity-providers` (shared config via `/platform/identity-providers`)
+8. If issues occur, execute the rollback sequence in [rollback.md](rollback.md) Change-Specific Rollback: Multi-Tenant Support
 
 ---
 

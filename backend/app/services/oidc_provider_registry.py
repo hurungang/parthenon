@@ -57,18 +57,18 @@ class OIDCProviderRegistry:
 
     SHARED providers (FIX-20260929-221449): a tenant-less (NULL
     ``tenant_id``) config is the SHARED provider — usable by the platform
-    AND by any tenant whose login context resolves to it.  SYSTEM-slot
+    AND by any tenant whose login context resolves to it.  ROOT-slot
     fallback (FIX-20260930-075014): when neither the own nor the shared
-    slot holds a config, the SYSTEM tenant's (``system_id``, scope) slot —
+    slot holds a config, the ROOT tenant's (``root_id``, scope) slot —
     the ADOPTED PLATFORM provider — resolves, for BOTH tenant-scoped and
     tenant-less lookups ("one provider serves the platform and all
-    tenants").  The system tenant id is resolved with the same helper the
+    tenants").  The root tenant id is resolved with the same helper the
     adoption flow uses (``Tenant.is_system_tenant``) and cached with the
     same invalidation hooks as the provider map (initialize/reload).
 
     Full resolution order (multi-tenancy ON):
 
-        own (tenant, scope) → shared (None, scope) → system (system_id, scope)
+        own (tenant, scope) → shared (None, scope) → system (root_id, scope)
 
     A tenant with none of the three resolves ``None`` — fail-closed
     (sign-in not configured).
@@ -86,11 +86,11 @@ class OIDCProviderRegistry:
         # Mirrors the platform tenancy switch; refreshed on
         # initialize/reload (the settings toggle triggers a reload).
         self._multi_tenancy_enabled: bool = False
-        # The SYSTEM tenant's id (the implicit tenant that adopts
+        # The ROOT tenant's id (the implicit tenant that adopts
         # pre-existing data — ``Tenant.is_system_tenant``), cached with
         # the same invalidation hooks as the provider map
         # (FIX-20260930-075014).
-        self._system_tenant_id: Optional[str] = None
+        self._root_tenant_id: Optional[str] = None
 
     # ── Tenancy mode ──────────────────────────────────────────────────────
 
@@ -116,14 +116,14 @@ class OIDCProviderRegistry:
         is_system_tenant: bool = False,
     ) -> Optional[_CachedProvider]:
         """Resolve the cached provider for (scope, tenant) — shared- and
-        system-slot aware.
+        root-slot aware.
 
         Resolution order (multi-tenancy ON; FIX-20260930-075014):
 
         1. the tenant's OWN ``(tenant, scope)`` slot (per-tenant
            precedence — a tenant's own config always wins);
         2. the SHARED tenant-less ``(None, scope)`` slot;
-        3. the SYSTEM tenant's ``(system_id, scope)`` slot — the adopted
+        3. the ROOT tenant's ``(root_id, scope)`` slot — the adopted
            platform provider serving the platform and every tenant
            without own/shared config.
 
@@ -143,24 +143,24 @@ class OIDCProviderRegistry:
             cached = self._providers.get((None, scope))
             if cached is not None:
                 return cached
-        # 3. system-tenant slot (own slot already tried when tenant IS
-        # the system tenant — skip the redundant lookup then)
+        # 3. root-tenant slot (own slot already tried when tenant IS
+        # the root tenant — skip the redundant lookup then)
         if (
-            self._system_tenant_id
-            and self._system_tenant_id != tenant_key
+            self._root_tenant_id
+            and self._root_tenant_id != tenant_key
         ):
-            cached = self._providers.get((self._system_tenant_id, scope))
+            cached = self._providers.get((self._root_tenant_id, scope))
         return cached
 
-    async def _load_system_tenant_id(self, db: AsyncSession) -> None:
-        """Cache the SYSTEM tenant's id (the adoption anchor tenant)."""
+    async def _load_root_tenant_id(self, db: AsyncSession) -> None:
+        """Cache the ROOT tenant's id (the adoption anchor tenant)."""
         from app.db.models.tenant import Tenant
 
         result = await db.execute(
             select(Tenant.id).where(Tenant.is_system_tenant.is_(True))
         )
-        system_id = result.scalar_one_or_none()
-        self._system_tenant_id = str(system_id) if system_id is not None else None
+        root_id = result.scalar_one_or_none()
+        self._root_tenant_id = str(root_id) if root_id is not None else None
 
     # ── Initialization / hot-reload ───────────────────────────────────────
 
@@ -178,7 +178,7 @@ class OIDCProviderRegistry:
         self._multi_tenancy_enabled = (
             await get_platform_settings_service().is_multi_tenancy_enabled(db)
         )
-        await self._load_system_tenant_id(db)
+        await self._load_root_tenant_id(db)
         result = await db.execute(
             select(IdentityProviderConfig).where(
                 IdentityProviderConfig.is_enabled.is_(True)
@@ -223,9 +223,9 @@ class OIDCProviderRegistry:
         logger.info("OIDCProviderRegistry: hot-reload triggered for scope=%s", scope)
         for key in [k for k in self._providers if k[1] == scope]:
             del self._providers[key]
-        # The system tenant id participates in resolution (FIX-20260930-
+        # The root tenant id participates in resolution (FIX-20260930-
         # 075014) — refresh it with the same invalidation hooks.
-        await self._load_system_tenant_id(db)
+        await self._load_root_tenant_id(db)
         result = await db.execute(
             select(IdentityProviderConfig).where(
                 IdentityProviderConfig.provider_scope == scope,
@@ -286,6 +286,61 @@ class OIDCProviderRegistry:
         """
         cached = self._resolve_cached(scope, tenant_id, is_system_tenant)
         return cached.config if cached else None
+
+    def get_provider_candidates(
+        self,
+        scope: str,
+        tenant_id: Any = None,
+        is_system_tenant: bool = False,
+    ) -> list[IdentityProviderConfig]:
+        """Return the ordered, deduped candidate providers for (scope,
+        tenant) — the full resolution chain, not just the first match
+        (FIX-20261002-110000).
+
+        Multi-tenancy ON — own (tenant, scope) slot (when a tenant
+        context is resolved) → shared (None, scope) slot → root
+        tenant's (root_id, scope) slot.  Tenant-less lookups: shared →
+        root.  Multi-tenancy OFF: the single tenant-less (legacy
+        global) slot only.  Missing slots are excluded; the chain may
+        be empty (fail-closed).
+
+        Token validation (``auth._try_oidc_token``) iterates these
+        candidates and accepts the first that validates — a root-slot
+        (adopted platform realm) token must validate on tenant-less
+        paths even when the shared slot holds a DIFFERENT provider
+        whose JWKS shadowed the root slot under first-match resolution.
+        """
+        candidates: list[IdentityProviderConfig] = []
+        seen: set[tuple] = set()
+
+        def _add(key: tuple) -> None:
+            if key in seen:
+                return
+            cached = self._providers.get(key)
+            if cached is not None:
+                seen.add(key)
+                candidates.append(cached.config)
+
+        if not self._multi_tenancy_enabled:
+            _add((None, scope))  # tenancy OFF: legacy global slot only
+            return candidates
+        if tenant_id is not None:
+            _add((str(tenant_id), scope))  # 1. own slot
+        _add((None, scope))  # 2. shared slot (tenant-less: first candidate)
+        if self._root_tenant_id:  # 3. root-tenant slot
+            _add((str(self._root_tenant_id), scope))
+        return candidates
+
+    def get_decrypted_secret_for(
+        self, config: IdentityProviderConfig
+    ) -> Optional[str]:
+        """Return the decrypted client secret for a SPECIFIC cached provider
+        config (candidate iteration — the first-match secret resolver would
+        pair a candidate with the wrong slot's credential)."""
+        for cached in self._providers.values():
+            if cached.config is config:
+                return cached.decrypted_secret
+        return None
 
     def get_decrypted_secret(
         self,

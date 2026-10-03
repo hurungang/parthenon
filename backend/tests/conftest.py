@@ -145,3 +145,18 @@ async def async_client(test_engine) -> AsyncGenerator[AsyncClient, None]:
         transport=ASGITransport(app=app), base_url="http://test"
     ) as client:
         yield client
+
+
+@pytest.fixture(autouse=True)
+def _fresh_root_tenant_cache():
+    """Phase 11: isolate the process-wide root-tenant TTL cache per test.
+
+    Tests seed different root tenants (fixtures use their own sqlite
+    engines); the production 30s cache would otherwise leak an id across
+    tests.  Cheap (a global reset) and production behaviour is untouched.
+    """
+    from app.services.tenancy.root_tenant import invalidate_root_tenant_cache
+
+    invalidate_root_tenant_cache()
+    yield
+    invalidate_root_tenant_cache()

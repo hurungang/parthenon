@@ -31,8 +31,10 @@ os.environ.setdefault("SECRET_KEY", "test-secret-key")
 os.environ.setdefault("ENVIRONMENT", "test")
 
 from app.db.session import Base  # noqa: E402
+from app.services.tenancy.root_tenant import (  # noqa: E402
+    ROOT_TENANT_SLUG,
+)
 from app.services.tenancy.tenant_adoption_service import (  # noqa: E402
-    SYSTEM_TENANT_SLUG,
     TenantAdoptionService,
 )
 
@@ -165,11 +167,11 @@ class TestSystemTenantAdoption:
         await clean_db.commit()
 
         assert summary["created"] is True
-        assert summary["slug"] == SYSTEM_TENANT_SLUG
+        assert summary["slug"] == ROOT_TENANT_SLUG
         system = await service.find_system_tenant(clean_db)
         assert system is not None
         assert system.is_system_tenant is True
-        assert system.slug == "system"
+        assert system.slug == "root"
 
     async def test_backfill_claims_every_null_row(self, clean_db):
         """CS-05: every existing business row is claimed by the system
@@ -341,8 +343,8 @@ class TestSystemTenantAdoption:
 
         report = await service.validate_disable(clean_db)
         assert report["data_loss"] is False
-        assert report["system_tenant_present"] is True
-        assert report["system_tenant_slug"] == "system"
+        assert report["root_tenant_present"] is True
+        assert report["root_tenant_slug"] == "root"
         assert report["tenants_remaining"] >= 1
 
     async def test_enable_disable_enable_cycle_repeatable(self, clean_db):
@@ -358,12 +360,12 @@ class TestSystemTenantAdoption:
         assert again["tenant_id"] == first["tenant_id"]
 
     async def test_reserved_system_slug_guarded(self, clean_db):
-        """A regular tenant occupying 'system' blocks adoption loudly."""
+        """A regular tenant occupying 'root' blocks adoption loudly."""
         from app.db.models.tenant import Tenant
 
         service = TenantAdoptionService()
         clean_db.add(
-            Tenant(name="Squatter", slug="system", is_system_tenant=False)
+            Tenant(name="Squatter", slug="root", is_system_tenant=False)
         )
         await clean_db.commit()
 

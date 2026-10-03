@@ -68,11 +68,19 @@ async def _maybe_apply_request_tenant_scope(
     """
     if request is None:
         return
-    from app.core.tenant_context import get_tenant_context
+    from app.core.tenant_context import (
+        get_tenant_context,
+        is_tenancy_enabled,
+    )
     from app.db.tenant_scoping import apply_tenant_scope, register_tenant_scope_listener
 
     context = get_tenant_context(request)
-    if context.is_set:
+    if context.is_set and is_tenancy_enabled(request):
+        # Phase 11: a resolved context alone no longer implies scoping —
+        # when the switch is OFF the context is the ROOT default and the
+        # data plane stays unscoped (legacy rows pre-adoption carry no
+        # tenant references).  Quotas stay switch-gated for the same
+        # reason (tiers are a SaaS concept — recorded decision).
         register_tenant_scope_listener()
         apply_tenant_scope(session, context.tenant_id, request)
         return

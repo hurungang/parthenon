@@ -159,3 +159,7 @@ The Agent Management Panel is a unified management module in the **Agents group*
 - System must securely store and refresh agent OAuth tokens for runtime use
 - Bootstrap process must initialize both user and agent realms in the identity provider
 - All changes must comply with Parthenon’s security, audit, and observability conventions
+
+## Multi-Tenancy Note
+
+When multi-tenancy is enabled (see [Multi-Tenancy](multi-tenancy.md)), agents, their roles, identities, and model access are tenant-owned; agents execute strictly within their tenant's skills, tools, and permissions. With multi-tenancy disabled (the default), behavior is unchanged — the deployment operates as the root tenant's workspace.

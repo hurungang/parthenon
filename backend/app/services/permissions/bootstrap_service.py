@@ -51,15 +51,29 @@ class BootstrapService:
         )
         role = result.scalar_one_or_none()
         if role is None:
+            # Phase 11: the legacy global (tenant-less) role variant is
+            # retired — the bootstrap system_admin role is re-homed into
+            # the ROOT tenant's role space (workspace 'root').
+            from app.services.tenancy.root_tenant import ensure_root_tenant
+
+            root = await ensure_root_tenant(db)
             role = Role(
                 name=SYSTEM_ADMIN_ROLE_NAME,
                 description="System administrator — full platform access. Immutable.",
                 is_system=True,
                 is_active=True,
+                tenant_id=root.id,
             )
             db.add(role)
             await db.flush()
-            logger.info("Created system_admin role id=%s", role.id)
+            logger.info("Created system_admin role id=%s (root-tenant scoped)", role.id)
+        elif role.tenant_id is None:
+            # Pre-Phase-11 row: re-home in place.
+            from app.services.tenancy.root_tenant import ensure_root_tenant
+
+            root = await ensure_root_tenant(db)
+            role.tenant_id = root.id
+            await db.flush()
         return role
 
     async def _ensure_full_access_policy(self, db: AsyncSession, role: Role) -> None:

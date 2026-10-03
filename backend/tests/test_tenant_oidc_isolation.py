@@ -48,9 +48,11 @@ from app.services.oidc_provider_registry import OIDCProviderRegistry  # noqa: E4
 
 TENANT_A = uuid.UUID("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")
 TENANT_B = uuid.UUID("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb")
+TENANT_ROOT = uuid.UUID("cccccccc-cccc-cccc-cccc-cccccccccccc")
 
 CTX_A = TenantContext(tenant_id=TENANT_A, slug="acme", name="Acme")
 CTX_B = TenantContext(tenant_id=TENANT_B, slug="globex", name="Globex")
+CTX_ROOT = TenantContext(tenant_id=TENANT_ROOT, slug="root", name="Root")
 CTX_SYSTEM = TenantContext(
     tenant_id=TENANT_A, slug="system", name="System", is_system_tenant=True
 )
@@ -215,6 +217,7 @@ class _FakeRegistry:
         self._providers = providers  # (tenant_key, scope) -> (issuer, client_id)
         self.initialized = initialized
         self._multi_tenancy_enabled = True
+        self._root_tenant_id = None
 
     def get_provider(self, scope, tenant_id=None, is_system_tenant=False):
         key = (str(tenant_id) if tenant_id else None, scope)
@@ -227,7 +230,35 @@ class _FakeRegistry:
             issuer_url=entry[0], client_id=entry[1], claim_mappings={}
         )
 
+    def get_provider_candidates(self, scope, tenant_id=None, is_system_tenant=False):
+        """Ordered chain: own (tenant, scope) → shared (None, scope) → root slot."""
+        candidates: list = []
+        seen: set = set()
+
+        def _add(key):
+            if key in seen:
+                return
+            entry = self._providers.get(key)
+            if entry is not None:
+                seen.add(key)
+                candidates.append(
+                    SimpleNamespace(
+                        issuer_url=entry[0], client_id=entry[1], claim_mappings={}
+                    )
+                )
+
+        tenant_key = str(tenant_id) if tenant_id else None
+        if tenant_key is not None:
+            _add((tenant_key, scope))
+        _add((None, scope))
+        if self._root_tenant_id and self._root_tenant_id != tenant_key:
+            _add((self._root_tenant_id, scope))
+        return candidates
+
     def get_decrypted_secret(self, scope, tenant_id=None, is_system_tenant=False):
+        return None
+
+    def get_decrypted_secret_for(self, provider):
         return None
 
     def has_any_provider(self):
@@ -241,8 +272,9 @@ class TestTryOidcTokenTenantBinding:
         # _try_oidc_token imports _get_registry from app.main at call time.
         return patch.object(main_module, "_get_registry", lambda: registry)
 
-    async def test_validates_only_against_resolved_tenant_provider(self):
-        """A token is validated via the resolved tenant's provider ONLY."""
+    async def test_prefers_resolved_tenant_provider(self):
+        """The resolved tenant's own provider is tried FIRST in the
+        candidate chain (own → shared → root)."""
         import app.middleware.auth as auth_module
 
         registry = _FakeRegistry(
@@ -270,7 +302,7 @@ class TestTryOidcTokenTenantBinding:
         assert captured == {"issuer": "https://idp-a", "client_id": "client-a"}
 
     async def test_no_provider_for_tenant_is_rejected_fail_closed(self):
-        """No provider for the resolved tenant → None (no legacy fallback)."""
+        """No provider anywhere in the resolution chain → None (fail-closed)."""
         import app.middleware.auth as auth_module
 
         registry = _FakeRegistry(
@@ -280,12 +312,14 @@ class TestTryOidcTokenTenantBinding:
             claims = await auth_module._try_oidc_token("token", CTX_A)
         assert claims is None
 
-    async def test_switch_off_falls_back_to_global_registry(self):
-        """Without a tenant context the legacy singleton fallback works —
-        single-tenant validation unchanged."""
+    async def test_tenancy_off_resolves_root_tenant_chain(self):
+        """Tenancy OFF binds the ROOT tenant — validation uses the root
+        tenant's own provider chain (Phase 11 root-tenant model)."""
         import app.middleware.auth as auth_module
 
-        registry = _FakeRegistry({(None, "user"): ("https://legacy", "client")})
+        registry = _FakeRegistry(
+            {(str(TENANT_ROOT), "user"): ("https://parthenon-realm", "client")}
+        )
         registry.initialized = True
 
         class FakeOIDCClient:
@@ -298,16 +332,21 @@ class TestTryOidcTokenTenantBinding:
         with self._patch_registry(registry), patch.object(
             auth_module, "OIDCClient", FakeOIDCClient
         ), patch.object(auth_module, "get_oidc_client", lambda: FakeOIDCClient()):
-            claims = await auth_module._try_oidc_token("token", None)
+            claims = await auth_module._try_oidc_token("token", CTX_ROOT)
         assert claims is not None
+        assert claims["_provider_scope"] == "user"
 
 
 # ── Tenant claim check (CS-14/CS-15) ─────────────────────────────────────────
 
 
 class _FakeRequest:
+    # Phase 11: these tests simulate a tenancy-ON resolved context.
     def __init__(self, context=None, path="/api/v1/roles"):
         self.state = SimpleNamespace()
+        # Phase 11: a resolved context is tenancy-ON in these tests —
+        # claim checks / JIT branch on the explicit switch flag.
+        self.state.tenancy_enabled = context is not None
         if context is not None:
             self.state.tenant_context = context
         self.url = SimpleNamespace(path=path)

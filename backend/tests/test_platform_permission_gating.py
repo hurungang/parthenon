@@ -1,19 +1,33 @@
-"""FIX-20260930-235927 — platform::* gating when multi-tenancy is ON.
+"""Phase 11 containment — platform::* permission semantics.
 
-Desired semantics (multi-tenancy ON):
+SUPERSEDES the FIX-20260930-235927 membership-gate semantics.  Desired
+semantics (permission containment, Phase 11):
 
-- ``platform::*`` permission checks are satisfied ONLY by
-  (a) the super-admin bypass, or
-  (b) an ACTIVE ``platform_admin`` membership in the SYSTEM tenant.
-- Legacy GLOBAL tenant-less roles (pre-tenancy ``system_admin`` with a
-  ``*::*`` wildcard policy) must NEVER satisfy ``platform::*`` — the
-  PermissionEngine collects global roles for every module, which is why
-  adopted Keycloak admins saw the whole platform console.
-- Everything else (agent::*, integration::*, system::*, tenant::*)
-  keeps current behavior: global roles remain effective in tenant
-  contexts (the legacy user keeps working in their workspace).
-- Multi-tenancy OFF: byte-for-byte unchanged (system_admin wildcard
-  still grants everything; there is no platform concept).
+- NO global (tenant-less) roles exist: every business role belongs to
+  exactly one tenant (legacy globals were re-homed into the ROOT tenant
+  by migration ``b8e4f2a6c9d1``).
+- ``PermissionEngine._get_effective_role_ids`` collects roles ONLY from
+  the session's resolved tenant — the global-role collection is removed.
+- ``platform::*`` checks simply evaluate the session tenant's roles:
+  the ROOT tenant's role space contains the ``platform::`` grants (the
+  seeded root ``Platform Admin`` role); customer tenants structurally
+  cannot hold them.  The former platform-membership gate
+  (``_system_tenant_platform_admin``) is REMOVED.
+- The super-admin bypass is unchanged.
+
+CHANGED ASSERTIONS vs FIX-235927 (each called out inline):
+
+- T1: denial reason changed — a legacy wildcard admin in a customer
+  tenant session is denied by ROLE CONTAINMENT (their role lives in the
+  root tenant, not the session tenant), not by the membership gate.
+- T2: RETIRED — "global roles remain effective in tenant contexts" no
+  longer holds by design; the legacy wildcard is effective in the ROOT
+  workspace only.
+- T3: platform admin access now requires the ROOT ``Platform Admin``
+  ROLE (``platform::*`` policy); the ``platform_admin`` membership alone
+  grants nothing (memberships never granted ``platform::*`` — 10.21).
+- T4: tenancy-OFF pin retained under root-world semantics (the legacy
+  wildcard is evaluated in the root tenant).
 """
 from __future__ import annotations
 
@@ -38,14 +52,15 @@ from app.db.models.tenant import Tenant, TenantRole  # noqa: E402
 from app.db.models.tenant_membership import TenantUserMembership  # noqa: E402
 from app.db.models.user_role import UserRole  # noqa: E402
 from app.db.session import Base  # noqa: E402
+from app.services.tenancy.root_tenant import PLATFORM_ADMIN_ROLE_NAME  # noqa: E402
 
 TAG = uuid.uuid4().hex[:8]
 
-TENANT_SYSTEM_ID = uuid.UUID("cccccccc-0000-0000-0000-000000000001")
+TENANT_ROOT_ID = uuid.UUID("cccccccc-0000-0000-0000-000000000001")
 TENANT_X_ID = uuid.UUID("cccccccc-0000-0000-0000-000000000002")
 
-SUB_LEGACY = f"legacy-admin-{TAG}"       # global system_admin wildcard, member of X
-SUB_PLAT_ADMIN = f"plat-admin-{TAG}"     # platform_admin membership in the SYSTEM tenant
+SUB_LEGACY = f"legacy-admin-{TAG}"       # root-scoped system_admin wildcard, member of X
+SUB_PLAT_ADMIN = f"plat-admin-{TAG}"     # platform_admin membership + Platform Admin role in ROOT
 
 PLATFORM_MODULE = "platform::tenants"
 
@@ -71,21 +86,21 @@ async def _set_tenancy(db: AsyncSession, enabled: bool) -> None:
     await db.commit()
 
 
-async def _global_wildcard_role(db: AsyncSession) -> Role:
-    """The pre-tenancy global system_admin role: tenant-less, system,
-    with the ``*::*`` allow-everything policy."""
+async def _wildcard_role(db: AsyncSession, tenant_id, name: str, module: str = "*::*") -> Role:
+    """A system wildcard role in *tenant_id*'s role space."""
     role = Role(
-        name="system_admin",
+        name=name,
         role_type=RoleType.user,
         is_system=True,
-        tenant_id=None,  # GLOBAL — collected in every tenant context
+        tenant_id=tenant_id,
     )
     db.add(role)
     await db.flush()
     stmt = PolicyStatement(
         role_id=role.id,
+        tenant_id=tenant_id,
         effect=PolicyEffect.allow,
-        module="*::*",
+        module=module,
     )
     db.add(stmt)
     await db.flush()
@@ -114,21 +129,23 @@ async def engine():
 
 @pytest_asyncio.fixture
 async def db(engine):
-    """Unscoped session seeded with the fix's world:
+    """Unscoped session seeded with the containment world:
 
-    - system tenant + regular tenant X
-    - LEGACY admin: global system_admin ``*::*`` wildcard role, active
-      (non-root) membership in tenant X, NO platform_admin membership
-    - PLATFORM admin: active ``platform_admin`` membership in the
-      SYSTEM tenant, no RBAC roles at all
+    - ROOT tenant (is_system_tenant) + regular tenant X
+    - LEGACY admin: ROOT-scoped ``system_admin`` ``*::*`` wildcard role
+      (the migrated pre-tenancy global), active (non-root) membership in
+      tenant X only
+    - PLATFORM admin: active ``platform_admin`` membership in the ROOT
+      tenant PLUS the seeded root ``Platform Admin`` role (the
+      ``platform::*`` policy holder)
     """
     SessionLocal = async_sessionmaker(bind=engine, class_=AsyncSession, expire_on_commit=False)
     async with SessionLocal() as db:
-        system = Tenant(name="System", slug=f"system-{TAG}", is_system_tenant=True)
-        system.id = TENANT_SYSTEM_ID
+        root = Tenant(name="Root", slug=f"root-{TAG}", is_system_tenant=True)
+        root.id = TENANT_ROOT_ID
         tenant_x = Tenant(name="Tenant X", slug=f"tenant-x-{TAG}")
         tenant_x.id = TENANT_X_ID
-        db.add_all([system, tenant_x])
+        db.add_all([root, tenant_x])
         await db.flush()
 
         legacy = PlatformUser(
@@ -144,20 +161,36 @@ async def db(engine):
         db.add_all([legacy, plat_admin])
         await db.flush()
 
-        role = await _global_wildcard_role(db)
+        # CHANGED (Phase 11): the legacy global wildcard was RE-HOMED into
+        # the root tenant — tenant-less roles no longer exist.
+        role = await _wildcard_role(db, TENANT_ROOT_ID, "system_admin")
         db.add(UserRole(user_id=legacy.id, role_id=role.id))
+
+        plat_role = await _wildcard_role(
+            db, TENANT_ROOT_ID, PLATFORM_ADMIN_ROLE_NAME, module="platform::*"
+        )
+        db.add(UserRole(user_id=plat_admin.id, role_id=plat_role.id))
+
         db.add_all(
             [
                 # legacy admin: regular member of tenant X (their workspace)
+                # AND of the root tenant (adopted users hold a root
+                # membership; their wildcard role lives in root's space)
                 TenantUserMembership(
                     tenant_id=TENANT_X_ID,
                     user_id=legacy.id,
                     tenant_role="member",
                     status="active",
                 ),
-                # platform admin: platform_admin membership in the SYSTEM tenant
                 TenantUserMembership(
-                    tenant_id=TENANT_SYSTEM_ID,
+                    tenant_id=TENANT_ROOT_ID,
+                    user_id=legacy.id,
+                    tenant_role="member",
+                    status="active",
+                ),
+                # platform admin: platform_admin membership in the ROOT tenant
+                TenantUserMembership(
+                    tenant_id=TENANT_ROOT_ID,
                     user_id=plat_admin.id,
                     tenant_role=TenantRole.platform_admin,
                     status="active",
@@ -183,57 +216,6 @@ async def _authorize(db, sub, module, action, *, tenant_id=None, is_super_admin=
     )
 
 
-class TestPlatformGatingTenancyOn:
-    async def test_t1_legacy_global_wildcard_denied_on_platform_module(self, db):
-        """T1 — a pre-tenancy IdP admin holding ONLY the global
-        system_admin ``*::*`` wildcard must NOT pass a ``platform::*``
-        check when multi-tenancy is ON (today: allowed — the defect)."""
-        await _set_tenancy(db, True)
-        with pytest.raises(HTTPException) as excinfo:
-            await _authorize(db, SUB_LEGACY, PLATFORM_MODULE, "read")
-        assert excinfo.value.status_code == 403, (
-            "PLATFORM GATING (FIX-20260930-235927 / T1): the legacy global "
-            "system_admin wildcard must NEVER satisfy platform::* when "
-            "multi-tenancy is ON"
-        )
-
-    async def test_t2_legacy_global_wildcard_still_works_in_tenant_module(self, db):
-        """T2 — the SAME legacy user keeps full access to tenant-scoped
-        modules: the global wildcard remains effective for agent::* in
-        their tenant (existing pinned behavior)."""
-        await _set_tenancy(db, True)
-        claims = await _authorize(
-            db, SUB_LEGACY, "agent::management", "read", tenant_id=TENANT_X_ID
-        )
-        assert claims["sub"] == SUB_LEGACY
-
-    async def test_t3_system_tenant_platform_admin_membership_allowed(self, db):
-        """T3 — an ACTIVE platform_admin membership in the SYSTEM tenant
-        satisfies platform::* (the only membership-based path)."""
-        await _set_tenancy(db, True)
-        claims = await _authorize(db, SUB_PLAT_ADMIN, PLATFORM_MODULE, "read")
-        assert claims["sub"] == SUB_PLAT_ADMIN
-
-    async def test_t3b_non_platform_admin_membership_not_sufficient(self, db):
-        """T3b — a regular (member) membership in the SYSTEM tenant does
-        not unlock platform::*."""
-        await _set_tenancy(db, True)
-        # reuse the legacy user's X membership as a member role elsewhere —
-        # here: grant the legacy user a plain membership in the SYSTEM tenant
-        db.add(
-            TenantUserMembership(
-                tenant_id=TENANT_SYSTEM_ID,
-                user_id=(await _user_id(db, SUB_LEGACY)),
-                tenant_role="member",
-                status="active",
-            )
-        )
-        await db.commit()
-        with pytest.raises(HTTPException) as excinfo:
-            await _authorize(db, SUB_LEGACY, PLATFORM_MODULE, "read")
-        assert excinfo.value.status_code == 403
-
-
 async def _user_id(db: AsyncSession, sub: str) -> uuid.UUID:
     from sqlalchemy import select
 
@@ -241,13 +223,118 @@ async def _user_id(db: AsyncSession, sub: str) -> uuid.UUID:
     return result.scalar_one().id
 
 
-class TestPlatformGatingRegressionPins:
-    async def test_t4_tenancy_off_system_admin_wildcard_allowed(self, db):
-        """T4 (regression pin) — multi-tenancy OFF: the legacy
-        system_admin wildcard keeps granting everything (no platform
-        concept; byte-for-byte legacy behaviour)."""
+class TestPlatformContainmentTenancyOn:
+    async def test_t1_legacy_wildcard_denied_on_platform_module_in_customer_tenant(self, db):
+        """T1 — a legacy wildcard admin (root-scoped ``system_admin``)
+        holding ONLY a membership in customer tenant X must NOT pass a
+        ``platform::*`` check from an X session.
+
+        CHANGED ASSERTION vs FIX-235927: the denial now comes from ROLE
+        CONTAINMENT (the engine collects only tenant-X roles; the
+        wildcard lives in the root tenant) — the former
+        ``_system_tenant_platform_admin`` membership gate is REMOVED."""
+        await _set_tenancy(db, True)
+        with pytest.raises(HTTPException) as excinfo:
+            await _authorize(db, SUB_LEGACY, PLATFORM_MODULE, "read", tenant_id=TENANT_X_ID)
+        assert excinfo.value.status_code == 403, (
+            "CONTAINMENT (Phase 11): a customer-tenant session can never "
+            "evaluate the root tenant's platform:: grants"
+        )
+
+    async def test_t2_legacy_wildcard_effective_in_root_workspace(self, db):
+        """T2 — RETIRED + REPLACED: the FIX-235927 pin "global roles
+        remain effective in tenant contexts" no longer holds by design.
+        The legacy wildcard IS still effective in the ROOT workspace
+        (root role space) for non-platform modules."""
+        await _set_tenancy(db, True)
+        claims = await _authorize(
+            db, SUB_LEGACY, "agent::management", "read", tenant_id=TENANT_ROOT_ID
+        )
+        assert claims["sub"] == SUB_LEGACY
+
+    async def test_t2b_legacy_wildcard_not_effective_in_customer_tenant(self, db):
+        """T2b (new) — the same legacy user in a tenant-X session has NO
+        effective roles (their wildcard lives in root): denied."""
+        await _set_tenancy(db, True)
+        with pytest.raises(HTTPException):
+            await _authorize(
+                db, SUB_LEGACY, "agent::management", "read", tenant_id=TENANT_X_ID
+            )
+
+    async def test_t3_platform_admin_role_in_root_allowed(self, db):
+        """T3 — CHANGED: platform access comes from the seeded ROOT
+        ``Platform Admin`` ROLE (``platform::*`` policy in the root role
+        space), evaluated in the root context.  The membership alone
+        grants nothing (memberships never granted ``platform::*``)."""
+        await _set_tenancy(db, True)
+        claims = await _authorize(db, SUB_PLAT_ADMIN, PLATFORM_MODULE, "read")
+        assert claims["sub"] == SUB_PLAT_ADMIN
+
+    async def test_t3b_membership_without_role_not_sufficient(self, db):
+        """T3b — an ACTIVE platform_admin membership in the ROOT tenant
+        WITHOUT any root role carrying ``platform::`` grants does not
+        unlock platform::* (memberships never granted ``platform::*``)."""
+        await _set_tenancy(db, True)
+        roleless = PlatformUser(
+            sub=f"roleless-{TAG}",
+            email=f"roleless-{TAG}@example.test",
+            display_name="Roleless Admin",
+        )
+        db.add(roleless)
+        await db.flush()
+        db.add(
+            TenantUserMembership(
+                tenant_id=TENANT_ROOT_ID,
+                user_id=roleless.id,
+                tenant_role=TenantRole.platform_admin,
+                status="active",
+            )
+        )
+        await db.commit()
+        with pytest.raises(HTTPException) as excinfo:
+            await _authorize(db, f"roleless-{TAG}", PLATFORM_MODULE, "read", tenant_id=TENANT_ROOT_ID)
+        assert excinfo.value.status_code == 403
+
+    async def test_t3c_customer_tenant_platform_wildcard_cannot_cross(self, db):
+        """T3c (new, containment) — a customer tenant CANNOT carry
+        ``platform::`` grants: a tenant-X role with a ``platform::*``
+        wildcard policy is never collected outside X, and inside X it
+        still cannot satisfy a platform check evaluated for the root
+        console (the session tenant is X, whose role space is not the
+        root's)."""
+        await _set_tenancy(db, True)
+        rogue = await _wildcard_role(db, TENANT_X_ID, f"rogue-{TAG}", module="platform::*")
+        x_admin = PlatformUser(
+            sub=f"rogue-admin-{TAG}",
+            email=f"rogue-{TAG}@example.test",
+            display_name="Rogue Admin",
+        )
+        db.add(x_admin)
+        await db.flush()
+        db.add(UserRole(user_id=x_admin.id, role_id=rogue.id))
+        db.add(
+            TenantUserMembership(
+                tenant_id=TENANT_ROOT_ID,
+                user_id=x_admin.id,
+                tenant_role="member",
+                status="active",
+            )
+        )
+        await db.commit()
+        with pytest.raises(HTTPException):
+            await _authorize(db, f"rogue-admin-{TAG}", PLATFORM_MODULE, "read")
+
+
+class TestPlatformContainmentRegressionPins:
+    async def test_t4_tenancy_off_root_world_wildcard_allowed(self, db):
+        """T4 (regression pin) — multi-tenancy OFF: the deployment is the
+        ROOT tenant's workspace; the legacy wildcard (root role space)
+        keeps granting everything.  CHANGED vs FIX-235927: evaluated via
+        the root tenant id (the OFF default context), not a None tenant."""
         await _set_tenancy(db, False)
-        claims = await _authorize(db, SUB_LEGACY, PLATFORM_MODULE, "read")
+        claims = await _authorize(
+            db, SUB_LEGACY, PLATFORM_MODULE, "read", tenant_id=TENANT_ROOT_ID
+        )
         assert claims["sub"] == SUB_LEGACY
 
     async def test_t5_super_admin_allowed(self, db):

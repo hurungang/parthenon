@@ -67,6 +67,7 @@
 
 ## Notes
 
+- **Multi-tenancy:** when the tenancy switch (`multi_tenancy_enabled`) is on, JWT validation is **per-tenant** — search `control-center.log` for `tenant.oidc.*` (tenant-attributed mirrors of the events above) and include the tenant slug/id. One tenant's provider failure does not affect other tenants. A failing tenant provider blocks only that tenant's sign-in and token validation. For tenant-level triage, see [tenant-signin-failure.md](tenant-signin-failure.md).
 - Do not expose raw JWT payloads in logs or support tickets — they may contain identity claims
 - Log only the first 8 characters of JWT tokens as a `token_hint` for correlation; never log full token values
 - In Kubernetes, if a network policy was recently changed, verify the policy allows egress from the Control Center pod to the identity provider's hostname and port

@@ -1,6 +1,6 @@
 # Data Model: Multi-Tenant Support (SaaS)
 
-Technology-agnostic entity model for opt-in multi-tenancy with self-serve registration and license-based quotas. Multi-tenancy is **disabled by default**: when off, every tenant reference is unused (empty or pointed at the implicit system tenant) and the platform behaves exactly as the current single-tenant product. No schema code here — schema files under `backend/app/db/models/` are the source of truth.
+Technology-agnostic entity model for opt-in multi-tenancy with self-serve registration and license-based quotas. Multi-tenancy is **disabled by default**: when off, every tenant reference is unused (empty or pointed at the implicit **root tenant**) and the platform behaves exactly as the current single-tenant product. The root tenant (workspace name/address **`root`**) hosts platform staff as ordinary members holding platform roles, and is the adopter of pre-existing data when multi-tenancy is enabled. No schema code here — schema files under `backend/app/db/models/` are the source of truth.
 
 ---
 
@@ -16,7 +16,7 @@ erDiagram
         string slug "immutable unique tenant address (hosted web address)"
         enum status "active | suspended | deleted"
         enum admin_contact_role "default tenant role for first admin"
-        boolean is_system_tenant "implicit tenant adopting pre-existing data"
+        boolean is_root_tenant "exactly one: the root tenant (workspace 'root') adopting pre-existing data; hosts platform staff as ordinary members with platform roles"
         boolean is_onboarded "guided onboarding completed"
         string admin_contact_name "primary admin contact"
         string admin_contact_email "primary admin contact"
@@ -48,7 +48,7 @@ erDiagram
     }
     TenantAuditEvent {
         uuid id
-        uuid tenant_id "FK to Tenant; null for platform-level events"
+        uuid tenant_id "FK to Tenant; platform-level events attribute to the root tenant"
         enum event_type "tenant_created | tenant_updated | tenant_suspended | tenant_resumed | tenant_deleted | self_serve_registration | root_protection_rejected | license_assigned | license_changed | license_removed | quota_exhausted | cross_tenant_access_denied | tenant_boundary_violation | platform_setting_updated"
         enum actor_type "platform_admin | tenant_admin | tenant_user | tenant_agent | api_key | system"
         uuid actor_id "platform user or membership id of the actor"
@@ -117,12 +117,12 @@ erDiagram
 
 ### Entity Notes
 
-- **Tenant** — an organization workspace. `slug` is the immutable unique tenant address users visit (the isolation anchor at sign-in); it never changes after creation, even when the tenant is renamed. `name` is the **editable alias / display name** shown across the tenant workspace (unique among tenants); the tenant root edits it and changes appear immediately without affecting the address. `status` drives lifecycle (create / suspend / resume / delete). Exactly one tenant has `is_system_tenant = true`.
-- **TenantUserMembership** — a user's presence in a tenant with a tenant-scoped role. One session is bound to exactly one tenant; `is_default` pre-selects the tenant at sign-in for multi-tenant users. `platform_admin` is a platform-level role surfaced through membership so platform governance stays auditable.
+- **Tenant** — an organization workspace. `slug` is the immutable unique tenant address users visit (the isolation anchor at sign-in); it never changes after creation, even when the tenant is renamed. `name` is the **editable alias / display name** shown across the tenant workspace (unique among tenants); the tenant root edits it and changes appear immediately without affecting the address. `status` drives lifecycle (create / suspend / resume / delete). Exactly one tenant has `is_root_tenant = true` — the **root tenant**, with workspace name/address **`root`**: the implicit tenant that hosts platform staff as ordinary members with platform roles and adopts all pre-existing data when multi-tenancy is enabled.
+- **TenantUserMembership** — a user's presence in a tenant with a tenant-scoped role. One session is bound to exactly one tenant; `is_default` pre-selects the tenant at sign-in for multi-tenant users. `platform_admin` is a platform-level role surfaced through membership: platform staff hold it as **ordinary members of the root tenant** (workspace `root`), so platform governance stays auditable and every platform actor has a concrete tenant membership.
   - **Root rule**: `is_root` marks the tenant's permanent owner (the registrant or platform-created primary admin). Exactly **one root membership per tenant**; it cannot be changed, demoted, or removed by anyone — not by tenant admins, not by the platform admin. Root implies ALL tenant permissions (super-admin within the tenant) regardless of `tenant_role`. Rejected attempts to alter a root membership are recorded as `root_protection_rejected` audit events.
   - **One owned tenant per user**: a user may hold a root membership in **at most one tenant** (business cap fixed at 1 for now; raising it is future work). Duplicate self-serve registrations are blocked with a clear message and leave no partial data.
 - **TenantInvitation** — pending user onboarding into a tenant; carries target tenant role and expiry.
-- **TenantAuditEvent** — tenant lifecycle actions, licensing actions, quota exhaustion, and security-relevant cross-tenant access attempts (guessed/forged references), visible to the platform admin. Tenant-attributed so audit trails are traceable end to end. New event families: `self_serve_registration` (visitor signup created a tenant + root), `root_protection_rejected` (attempt to alter/remove a root membership), `license_assigned` / `license_changed` / `license_removed` (tier and limit changes), `quota_exhausted` (an action blocked at a limit).
+- **TenantAuditEvent** — tenant lifecycle actions, licensing actions, quota exhaustion, and security-relevant cross-tenant access attempts (guessed/forged references), visible to the platform admin. Tenant-attributed so audit trails are traceable end to end; platform-level events (tenancy switch, licensing on any tenant) attribute to the **root tenant** and record root-tenant members with platform roles as actors. New event families: `self_serve_registration` (visitor signup created a tenant + root), `root_protection_rejected` (attempt to alter/remove a root membership), `license_assigned` / `license_changed` / `license_removed` (tier and limit changes), `quota_exhausted` (an action blocked at a limit).
 - **PlatformSetting** — tenant-agnostic platform configuration store. It is the home of the **`multi_tenancy_enabled`** switch (there is no existing system-settings entity in `backend/app/db/models/`; the only platform sentinels today are `identity_provider_configs` and `identity_provider_setup_state`, both specific to identity providers). Default value: `false`.
 - **PlatformUser** — a real-world person, tenant-agnostic; tenant presence is expressed via memberships. For self-serve accounts the platform itself issues an **email + password credential** (independent of any per-tenant OIDC provider); the credential unlocks only the owner's own tenant. `sub` carries the OIDC subject for federated users or a platform-issued identifier for password accounts.
 - **TenantLicense** — a tenant's entitlement: tier (`free | team | enterprise`) with its limits (max users, max agent types, monthly agent executions). **Latest active license per tenant wins** (at most one `is_active = true` per tenant; superseded licenses are kept as history with `is_active = false` and `unassigned_at` set). A tenant with **no active license runs on free-tier default limits**, visible to both platform admin and tenant users. Removal of the active license falls the tenant back to free-tier defaults immediately. Only the platform admin assigns/changes/removes licenses; every change is audited.
@@ -142,7 +142,11 @@ Rationale: user and agent-type populations are small and already managed through
 
 **Self-serve registration** (one action, all-or-nothing): a visitor registers with a personal email + password → the platform creates the **`PlatformUser`** (platform-issued credential), the **`Tenant`** (slug/address chosen at registration; `name` alias), and the creator's **root `TenantUserMembership`** (`is_root = true`) atomically, then lands the root user in guided onboarding. A user who already owns a root membership is blocked with a "one tenant per user" message; no second tenant and no partial data are created. Duplicate emails and invalid fields are rejected with validation errors.
 
-When multi-tenancy is enabled on an existing deployment, all existing data is **adopted into a single implicit system tenant** (`is_system_tenant = true`): existing users, roles, agents, MCP servers, skills, SOPs, schedules, model configurations, identity provider configuration, and history continue to work unchanged, and the existing deployment administrator becomes its platform admin. Existing `PlatformUser` records receive a `TenantUserMembership` in the system tenant. Disabling the switch returns to single-tenant behavior with no data loss.
+When multi-tenancy is enabled on an existing deployment, all existing data is **adopted into the single implicit root tenant** (`is_root_tenant = true`, workspace `root`): existing users, roles, agents, MCP servers, skills, SOPs, schedules, model configurations, identity provider configuration, and history continue to work unchanged, and the existing deployment administrator becomes a member of the root tenant with a platform role. Existing `PlatformUser` records receive a `TenantUserMembership` in the root tenant. **Legacy global roles are migrated into the root tenant at adoption/migration**: any pre-tenancy tenant-less `Role` rows (e.g. the wildcard-grant `system_admin` global role) are re-homed in the root tenant's role space — the `Role` entity's tenant reference becomes effectively mandatory for all business roles, and no global (tenant-less) roles remain. Disabling the switch returns to single-tenant behavior with no data loss.
+
+### Permission Containment Invariant
+
+Role and policy grants apply **only within their owning tenant**. Wildcard grants (`agent::*`, `system::*`, `*::*`, etc.) never cross tenant boundaries — a wildcard is a shorthand *within* one tenant's role space, never an escape from it. Platform-level resource grants (`platform::`) exist **only in the root tenant's role space** (workspace `root`), held by root-tenant members with platform roles. No role in a customer tenant can carry `platform::` grants, and no root-tenant role can address another tenant's business data.
 
 ---
 
@@ -151,8 +155,8 @@ When multi-tenancy is enabled on an existing deployment, all existing data is **
 ### Tenancy Scoping Semantics
 
 - Nearly every business entity gains a **tenant reference** (FK to `Tenant`).
-- While multi-tenancy is **disabled** (default), references stay empty or point at the implicit system tenant; no enforcement is applied and behavior is identical to today.
-- During migration on existing deployments, references are **nullable** or defaulted to the system tenant, then resolved by the adoption process.
+- While multi-tenancy is **disabled** (default), references stay empty or point at the implicit root tenant; no enforcement is applied and behavior is identical to today.
+- During migration on existing deployments, references are **nullable** or defaulted to the root tenant, then resolved by the adoption process (including migration of legacy global roles into the root tenant).
 - **Direct tenant reference**: primary business entities (listed below).
 - **Scoped via parent**: pure join tables and child/detail records do not carry their own tenant reference — they inherit tenant scope from their parent entity, which is always within a single tenant.
 
@@ -162,16 +166,16 @@ These tenancy entities already exist in the schema files from the earlier phase 
 
 | Entity (file) | Change |
 |---|---|
-| `Tenant` (tenant.py) | `name` becomes the **editable alias / display name** (stays unique; root-editable) while `slug` is documented as the **immutable tenant address** — uniqueness on both remains enforced, only the alias may change |
+| `Tenant` (tenant.py) | `name` becomes the **editable alias / display name** (stays unique; root-editable) while `slug` is documented as the **immutable tenant address** — uniqueness on both remains enforced, only the alias may change; the existing `is_system_tenant` column is **renamed to `is_root_tenant`** (target state shown in Section 1; applied as a migration, not yet present in the schema files) |
 | `TenantUserMembership` (tenant_membership.py) | + `is_root` immutable flag — exactly one per tenant, at most one per user (one owned tenant), cannot be changed/demoted/removed by anyone; root implies all tenant permissions; rejections audited as `root_protection_rejected` |
 | `PlatformUser` (platform_user.py) | + platform-issued **email + password credential** for self-serve accounts (independent of per-tenant OIDC); `sub` accepts a platform-issued identifier for password accounts |
-| `TenantAuditEvent` (tenant_audit_event.py) | + event types: `self_serve_registration`, `root_protection_rejected`, `license_assigned`, `license_changed`, `license_removed`, `quota_exhausted` |
+| `TenantAuditEvent` (tenant_audit_event.py) | + event types: `self_serve_registration`, `root_protection_rejected`, `license_assigned`, `license_changed`, `license_removed`, `quota_exhausted`; platform-level events attribute to the **root tenant** with root-tenant members holding platform roles as actors |
 
 ### Identity & Access
 
 | Entity (file) | Change |
 |---|---|
-| `Role` (identity.py) | + tenant reference |
+| `Role` (identity.py) | + tenant reference — the legacy **global (tenant-less) role variant is retired**: pre-tenancy global roles (e.g. wildcard `system_admin`) are **migrated into the root tenant** at adoption; for business roles the tenant reference is effectively mandatory |
 | `Identity` (identity.py) | + tenant reference |
 | `PlatformUser` (platform_user.py) | Stays tenant-agnostic (a real-world person); tenant presence expressed via `TenantUserMembership`; gains platform-issued password credential (see table above) |
 | `UserRole` (user_role.py) | scoped via parents (`PlatformUser` + `Role`) |
@@ -190,7 +194,7 @@ These tenancy entities already exist in the schema files from the earlier phase 
 | `ApiKeyUsageLog` (agent_api_key.py) | scoped via parent (`AgentApiKey`) |
 | `IdentityProviderConfig` (identity_provider_config.py) | **+ tenant reference — per-tenant OIDC**: each tenant registers its own provider; sign-in credentials are tenant-bound and a credential issued by tenant A's provider is rejected outside tenant A. The existing `provider_scope` (user/agent) uniqueness becomes per-tenant when multi-tenancy is enabled |
 | `IdentityProviderConfigAudit` (identity_provider_config_audit.py) | + tenant reference (follows the config it audits) |
-| `Permission` (identity.py) | **Not tenant-scoped** — global catalogue of resource types/actions; grants are tenant-local via roles |
+| `Permission` (identity.py) | **Not tenant-scoped** — global catalogue of resource types/actions; grants are tenant-local via roles. Containment invariant: role/policy grants apply only within their owning tenant; wildcards never cross tenants; `platform::` grants exist only in the root tenant's role space |
 
 ### Agents
 
@@ -348,13 +352,15 @@ Update `docs/master/data-model/` after implementation:
 
 - **`docs/master/data-model/overview.md`**
   - Add `Tenant`, `TenantUserMembership`, `TenantInvitation`, `TenantAuditEvent`, `PlatformSetting`, `TenantLicense`, `TenantQuotaUsage` to the master ER diagram (Mermaid `erDiagram`), including their relationships to `PlatformUser` and the tenant references on business entities.
-  - Document the tenancy model semantics: default-off switch in `PlatformSetting`, nullable/system-tenant references, one-session-one-tenant, and the tenant adoption rule for upgraded deployments.
+  - Document the tenancy model semantics: default-off switch in `PlatformSetting`, nullable/root-tenant references, one-session-one-tenant, and the tenant adoption rule for upgraded deployments — adoption re-homes all pre-existing data in the **root tenant** (workspace `root`).
+  - Document the **root tenant**: exactly one tenant with `is_root_tenant = true`; hosts platform staff as ordinary members with platform roles; legacy global (tenant-less) roles are **migrated into it** at adoption, retiring the global role variant so every business role belongs to a tenant.
+  - Document the **permission containment invariant**: role/policy grants apply only within their owning tenant; wildcards never cross tenants; `platform::` grants exist only in the root tenant's role space.
   - Document the **root membership model**: exactly one immutable `is_root` membership per tenant; at most one owned tenant per user; root protection enforced against tenant admins and platform admin alike, with rejections audited.
   - Document the **alias/address split**: `Tenant.name` is the editable unique alias; `Tenant.slug` is the immutable unique tenant address.
   - Document the **self-serve registration flow**: `PlatformUser` (email + password, platform-issued) + `Tenant` + root `TenantUserMembership` created in one action.
   - Document the **licensing & quota model**: `TenantLicense` latest-active-wins per tenant, absent license → free-tier defaults; `TenantQuotaUsage` unique per tenant + quota_type + calendar-month bucket; and the counting representation — `users` and `agent_types` derived live from records, `monthly_executions` via the maintained `TenantQuotaUsage` counter incremented at enforcement time.
 - **`docs/master/data-model/modules/<module>/entities.md`** (identity, agents, mcp_hub, skills, scheduling, conversations/results, interventions, notifications, model governance)
   - Add a "Tenant scoping" line per module listing which entities carry a direct tenant reference vs. inherit scope via parents.
-  - Note per-tenant OIDC under the identity module (`IdentityProviderConfig` tenant binding) and that `Permission` remains a global catalogue.
+  - Note per-tenant OIDC under the identity module (`IdentityProviderConfig` tenant binding), that `Permission` remains a global catalogue, and that all roles (including migrated legacy global roles) are tenant-owned with grants contained within their owning tenant.
   - Under the agents module, note that `AgentType` per-tenant counts are the `agent_types` quota basis.
   - Add a `tenancy` module entity list for the **seven** new entities (`Tenant`, `TenantUserMembership`, `TenantInvitation`, `TenantAuditEvent`, `PlatformSetting`, `TenantLicense`, `TenantQuotaUsage`), with a short licensing/quota note: license history semantics (latest active wins, unlicensed → free tier) and per-quota-type counting representation (derived vs. counter).

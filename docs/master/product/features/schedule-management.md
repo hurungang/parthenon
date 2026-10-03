@@ -68,3 +68,7 @@ Schedule Management enables platform administrators to automate recurring Agent 
 - All schedule UI text uses i18n function calls with translations in locale files — no hardcoded strings
 - Active schedules are persisted in the database and recovered automatically on restart
 - Execution history references agent sessions to enable drill-down; agent session data is managed by the Agent Runtime service
+
+## Multi-Tenancy Note
+
+When multi-tenancy is enabled (see [Multi-Tenancy](multi-tenancy.md)), schedules and their execution history are tenant-owned, a schedule can only trigger tenant-owned agents and SOPs, and schedule-triggered executions count toward the tenant's monthly execution quota. With multi-tenancy disabled (the default), behavior is unchanged — the deployment operates as the root tenant's workspace.

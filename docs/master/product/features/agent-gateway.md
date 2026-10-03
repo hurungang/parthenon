@@ -52,3 +52,7 @@ The Agent Gateway provides a centralized, secure, and observable entry point for
 - Requires OIDC-compliant identity provider
 - Relies on asynchronous session system for agent execution and result tracking
 - All changes must comply with Parthenon’s security, audit, and observability conventions
+
+## Multi-Tenancy Note
+
+When multi-tenancy is enabled (see [Multi-Tenancy](multi-tenancy.md)), tenant context travels with every verified request, and an external agent's access is confined to its owning tenant's resources. With multi-tenancy disabled (the default), behavior is unchanged — the deployment operates as the root tenant's workspace.

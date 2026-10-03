@@ -111,6 +111,12 @@ This change is a platform-mode switch (default OFF) with hard security requireme
 
 ---
 
+### 2.14 Root-Tenant Platform Model & Permission Containment (Phase 11)
+- Every permission grant — including wildcard `*::*` — is evaluated ONLY within the session's resolved tenant; global tenant-less roles no longer exist (legacy roles migrated into the root tenant at adoption).
+- `platform::` grants exist only in the root tenant's role space: tenant users (even tenant root) structurally cannot hold them; platform console access = session tenant is `root` + platform role.
+- Tenancy OFF: the deployment resolves to the root tenant (single-tenant behavior driven by root's own migrated roles); zero user-visible multi-tenancy UX.
+- Frontend module visibility derives from backend permission evaluation (platform group renders only on a granted probe), never from tenancy state alone.
+
 ## 3. Critical Scenarios
 
 ### Default-Off Invariant

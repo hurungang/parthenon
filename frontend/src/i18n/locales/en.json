@@ -79,6 +79,10 @@
     "platformTenants": "Tenants",
     "platformSettings": "Platform Settings",
     "platformAudit": "Security Audit",
+    "groupTenantAdmin": "Tenant Admin",
+    "tenantSettings": "Workspace Settings",
+    "tenantMembers": "Members",
+    "tenantIdentityProviders": "Sign-In Providers",
     "tenantPrefix": "· {{name}}"
   },
   "auth": {

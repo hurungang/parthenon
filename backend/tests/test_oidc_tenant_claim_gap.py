@@ -97,6 +97,7 @@ class _FakeRegistry:
         self._providers = providers  # (tenant_key, scope) -> (issuer, client_id)
         self.initialized = initialized
         self._multi_tenancy_enabled = True
+        self._root_tenant_id = None
 
     def get_provider(self, scope, tenant_id=None, is_system_tenant=False):
         key = (str(tenant_id) if tenant_id else None, scope)
@@ -109,7 +110,35 @@ class _FakeRegistry:
             issuer_url=entry[0], client_id=entry[1], claim_mappings={}
         )
 
+    def get_provider_candidates(self, scope, tenant_id=None, is_system_tenant=False):
+        """Ordered chain: own (tenant, scope) → shared (None, scope) → root slot."""
+        candidates: list = []
+        seen: set = set()
+
+        def _add(key):
+            if key in seen:
+                return
+            entry = self._providers.get(key)
+            if entry is not None:
+                seen.add(key)
+                candidates.append(
+                    SimpleNamespace(
+                        issuer_url=entry[0], client_id=entry[1], claim_mappings={}
+                    )
+                )
+
+        tenant_key = str(tenant_id) if tenant_id else None
+        if tenant_key is not None:
+            _add((tenant_key, scope))
+        _add((None, scope))
+        if self._root_tenant_id and self._root_tenant_id != tenant_key:
+            _add((self._root_tenant_id, scope))
+        return candidates
+
     def get_decrypted_secret(self, scope, tenant_id=None, is_system_tenant=False):
+        return None
+
+    def get_decrypted_secret_for(self, provider):
         return None
 
     def has_any_provider(self):

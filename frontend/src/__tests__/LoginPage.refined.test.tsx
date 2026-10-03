@@ -27,6 +27,11 @@ const mockLogin = vi.fn()
 const mockSetToken = vi.fn()
 const mockRefreshProviders = vi.fn()
 let mockMultiTenancyEnabled: boolean | null = false
+// FIX-20261001-235247: mutable so tests can simulate a HOST-derived tenant
+// (AuthProvider resolved it from the host) and clear it like the real
+// clearResolvedTenant would.
+let mockResolvedTenant: { slug: string; name: string; status: string; sign_in_ready: boolean } | null = null
+const mockClearResolvedTenant = vi.fn(() => { mockResolvedTenant = null })
 vi.mock('../stores/authStore', () => ({
   useAuthStore: () => ({
     login: mockLogin,
@@ -36,8 +41,9 @@ vi.mock('../stores/authStore', () => ({
     logout: vi.fn(),
     setToken: mockSetToken,
     multiTenancyEnabled: mockMultiTenancyEnabled,
-    resolvedTenant: null,
+    resolvedTenant: mockResolvedTenant,
     refreshProviders: mockRefreshProviders,
+    clearResolvedTenant: mockClearResolvedTenant,
   }),
 }))
 
@@ -108,6 +114,7 @@ describe('LoginPage - state rendering', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mockMultiTenancyEnabled = false
+    mockResolvedTenant = null
     mockGetProviders.mockResolvedValue({ items: [], total: 0 })
     mockGetSuperAdminStatus.mockResolvedValue({ is_enabled: false, username: null, last_login_at: null })
     mockSuperAdminLogin.mockResolvedValue({ access_token: 'test-token', token_type: 'bearer', username: 'admin', is_super_admin: true })
@@ -441,14 +448,32 @@ describe('LoginPage - state rendering', () => {
       mockGetSuperAdminStatus.mockResolvedValue({ is_enabled: true, username: 'admin', last_login_at: null })
     })
 
-    it('stays available and discreet alongside the password form and OIDC button', async () => {
+    it('is NOT available on a customer workspace and shows only at root', async () => {
+      // CHANGED ASSERTION (Phase 11 task 11.6): the discreet platform-admin
+      // expansion was removed from tenant workspaces — the super-admin
+      // break-glass entry is available ONLY when the resolved workspace
+      // is `root`.  The remembered workspace here is `acme`.
       render(React.createElement(LoginPage), { wrapper: Wrapper })
       await waitFor(() => {
         expect(screen.getByTestId('password-signin-form')).toBeDefined()
         expect(screen.getByText('auth.loginWithProvider')).toBeDefined()
+      })
+      expect(screen.queryByTestId('super-admin-entry')).toBeNull()
+      // Never prominent even at root: hidden form fields until the entry is used
+      expect(screen.queryByLabelText('auth.username')).toBeNull()
+    })
+
+    it('stays available and discreet on the ROOT workspace', async () => {
+      mockGetRememberedTenantSlug.mockReturnValue('root')
+      mockDiscoverTenant.mockResolvedValue({
+        multi_tenancy_enabled: true,
+        tenant: { ...ACTIVE_TENANT, slug: 'root', name: 'Root' },
+      })
+      render(React.createElement(LoginPage), { wrapper: Wrapper })
+      await waitFor(() => {
+        expect(screen.getByTestId('password-signin-form')).toBeDefined()
         expect(screen.getByTestId('super-admin-entry')).toBeDefined()
       })
-      // Never prominent: hidden form fields until the entry is used
       expect(screen.queryByLabelText('auth.username')).toBeNull()
     })
   })
@@ -749,6 +774,67 @@ describe('LoginPage - state rendering', () => {
       })
       expect(screen.getByTestId('signup-entry-link')).toBeDefined()
       expect(screen.getByTestId('super-admin-entry')).toBeDefined()
+    })
+  })
+
+  // FIX-20261001-235247 (Defect 1): the "Use a different workspace" escape
+  // hatch must be reachable in EVERY tenant-bound sign-in state.
+  describe('switch workspace (FIX-20261001-235247)', () => {
+    beforeEach(() => {
+      mockMultiTenancyEnabled = true
+      mockGetProviders.mockResolvedValue({ items: [], total: 0 })
+      mockGetSuperAdminStatus.mockResolvedValue({ is_enabled: true, username: 'admin', last_login_at: null })
+    })
+
+    it('shows the switch link on the ROOT workspace card (break-glass preserved)', async () => {
+      mockGetRememberedTenantSlug.mockReturnValue('root')
+      mockDiscoverTenant.mockResolvedValue({
+        multi_tenancy_enabled: true,
+        tenant: { ...ACTIVE_TENANT, slug: 'root', name: 'Root' },
+      })
+      render(React.createElement(LoginPage), { wrapper: Wrapper })
+      await waitFor(() => {
+        expect(screen.getByTestId('password-signin-form')).toBeDefined()
+        // Root workspace: the super-admin break-glass entry must co-exist
+        expect(screen.getByTestId('super-admin-entry')).toBeDefined()
+      })
+      expect(screen.getByTestId('switch-workspace-link')).toBeDefined()
+    })
+
+    it('shows the switch link when a remembered workspace auto-resolves to a card', async () => {
+      mockGetRememberedTenantSlug.mockReturnValue('acme')
+      render(React.createElement(LoginPage), { wrapper: Wrapper })
+      await waitFor(() => {
+        expect(screen.getByTestId('password-signin-form')).toBeDefined()
+        expect(screen.getByTestId('switch-workspace-link')).toBeDefined()
+      })
+    })
+
+    it('shows the switch link on a HOST-derived tenant (idle phase — the regression)', async () => {
+      // AuthProvider resolved the tenant from the host before /login — the
+      // phase never leaves `idle`, which previously hid the link entirely.
+      mockResolvedTenant = { ...ACTIVE_TENANT, slug: 'acme', name: 'Acme Corp' }
+      render(React.createElement(LoginPage), { wrapper: Wrapper })
+      await waitFor(() => {
+        expect(screen.getByTestId('password-signin-form')).toBeDefined()
+      })
+      expect(screen.getByTestId('switch-workspace-link')).toBeDefined()
+    })
+
+    it('clicking the link on a host-derived tenant clears the tenant and lands on the finder', async () => {
+      mockResolvedTenant = { ...ACTIVE_TENANT, slug: 'acme', name: 'Acme Corp' }
+      render(React.createElement(LoginPage), { wrapper: Wrapper })
+      await waitFor(() => {
+        expect(screen.getByTestId('switch-workspace-link')).toBeDefined()
+      })
+      fireEvent.click(screen.getByTestId('switch-workspace-link'))
+      await waitFor(() => {
+        expect(screen.getByTestId('workspace-finder-form')).toBeDefined()
+      })
+      // Both the remembered hint and the host-derived store tenant are cleared
+      expect(mockSetRememberedTenantSlug).toHaveBeenCalledWith(null)
+      expect(mockClearResolvedTenant).toHaveBeenCalled()
+      expect(screen.queryByTestId('password-signin-form')).toBeNull()
     })
   })
 

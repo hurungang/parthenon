@@ -96,3 +96,7 @@ Agent Outputs introduces schema-validated, typed agent results as first-class pl
 - The `query_result` tool must respect the agent's access scope; an agent can only query results it is authorized to see.
 - Must comply with service segregation rules: Control Center owns the data type registry; Agent Runtime performs read-only validation.
 - The Agent Outputs admin page must follow the existing admin UI patterns (filter bar, paginated table, detail dialog).
+
+## Multi-Tenancy Note
+
+When multi-tenancy is enabled (see [Multi-Tenancy](multi-tenancy.md)), agent outputs are tenant-owned; only the owning tenant's members and agents can view, search, or export them. With multi-tenancy disabled (the default), behavior is unchanged — the deployment operates as the root tenant's workspace.

@@ -44,7 +44,10 @@ import TimelineIcon from '@mui/icons-material/Timeline'
 import NotificationsIcon from '@mui/icons-material/Notifications'
 import PanToolIcon from '@mui/icons-material/PanTool'
 import SaveAltIcon from '@mui/icons-material/SaveAlt'
+import BusinessIcon from '@mui/icons-material/Business'
+import GroupIcon from '@mui/icons-material/Group'
 import { useAuthStore } from '../stores/authStore'
+import { usePlatformAccess } from '../hooks/usePlatformAccess'
 import { PermissionErrorSnackbar } from '../components/permissions/PermissionErrorSnackbar'
 import { TenantSessionGate } from '../components/auth/TenantSessionGate'
 import apiClient from '../api/apiClient'
@@ -142,14 +145,36 @@ const NAV_GROUPS: NavGroup[] = [
       { labelKey: 'nav.observability', path: '/observability', icon: <MonitorIcon /> },
       { labelKey: 'nav.permissions', path: '/user-permissions', icon: <SecurityIcon /> },
       { labelKey: 'nav.systemConfig', path: '/system-config', icon: <SettingsIcon /> },
-      { labelKey: 'nav.identityProviders', path: '/system/identity-providers', icon: <SecurityIcon /> },
+      // FIX-20261001-235247 (Defect 2): the legacy `nav.identityProviders`
+      // entry was REMOVED — it duplicated the Tenant Admin group's
+      // `nav.tenantIdentityProviders` entry (same /system/identity-providers
+      // route), rendering two "sign-in providers" menu items.  The route
+      // itself stays (the Tenant Admin entry and platform flows use it).
     ],
   },
 ]
 
 /**
- * Platform console navigation — appended to the sidebar only when
- * multi-tenancy is on (multiTenancyEnabled from the auth store).
+ * Tenant Admin navigation (Phase 11 task 11.5) — the tenant
+ * self-management surfaces (alias/settings, members, identity-provider
+ * config) grouped for ALL tenants, root included.  Rendered whenever the
+ * session is tenant-bound (multi-tenancy on).
+ */
+const TENANT_ADMIN_NAV_GROUP: NavGroup = {
+  groupKey: 'tenantAdmin',
+  labelKey: 'nav.groupTenantAdmin',
+  icon: <BusinessIcon />,
+  children: [
+    { labelKey: 'nav.tenantSettings', path: '/tenant/settings', icon: <BusinessIcon /> },
+    { labelKey: 'nav.tenantMembers', path: '/tenant/members', icon: <GroupIcon /> },
+    { labelKey: 'nav.tenantIdentityProviders', path: '/system/identity-providers', icon: <SecurityIcon /> },
+  ],
+}
+
+/**
+ * Platform console navigation (Phase 11 task 11.5) — rendered ONLY when
+ * the backend permission evaluation grants `platform::settings` read
+ * (usePlatformAccess), NEVER merely because multi-tenancy is on.
  */
 const PLATFORM_NAV_GROUP: NavGroup = {
   groupKey: 'platform',
@@ -238,12 +263,21 @@ export function AppShell() {
   const navigate = useNavigate()
   const location = useLocation()
   const { claims, logout, multiTenancyEnabled, activeTenant } = useAuthStore()
+  const platformAccess = usePlatformAccess()
   const [mobileOpen, setMobileOpen] = useState(false)
   const [expandedGroups, setExpandedGroups] =
     useState<Record<string, boolean>>(DEFAULT_EXPANDED_GROUPS)
   const [interveneMetrics, setInterveneMetrics] = useState<InterveneMetrics | null>(null)
-  // Platform console entry appears only when multi-tenancy is enabled.
-  const navGroups = multiTenancyEnabled === true ? [...NAV_GROUPS, PLATFORM_NAV_GROUP] : NAV_GROUPS
+  // Phase 11 (task 11.5): the Tenant Admin group renders for ALL tenants
+  // (root included) whenever the session is tenant-bound; the Platform
+  // console group renders ONLY on a granted backend permission probe
+  // (platform::settings read) — never on the tenancy flag alone, so a
+  // customer-tenant admin can no longer see platform items.
+  const navGroups = [
+    ...NAV_GROUPS,
+    ...(multiTenancyEnabled === true ? [TENANT_ADMIN_NAV_GROUP] : []),
+    ...(platformAccess === 'allowed' ? [PLATFORM_NAV_GROUP] : []),
+  ]
   const metricsStoppedRef = useRef(false)
 
   useEffect(() => {

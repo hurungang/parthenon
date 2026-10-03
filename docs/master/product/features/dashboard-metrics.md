@@ -105,3 +105,7 @@ The Dashboard Metrics feature replaces the original placeholder dashboard — wh
 - Permission enforcement must use the existing policy engine — no new permission bypass patterns
 - The identity provider status section must be retained for first-run setup context
 - Follows existing UI component and internationalisation conventions
+
+## Multi-Tenancy Note
+
+When multi-tenancy is enabled (see [Multi-Tenancy](multi-tenancy.md)), metrics are tenant-filtered for tenant users and admins — including tier, limits, and current quota usage — while platform admins see a platform health view of tenant counts, tiers, and quota consumption. With multi-tenancy disabled (the default), behavior is unchanged — the deployment operates as the root tenant's workspace.

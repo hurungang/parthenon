@@ -1,5 +1,9 @@
 # Communication Hub Architecture
 
+## Tenant-Bound Routing
+
+The Communication Hub receives a **signed, immutable tenant context** from Control Center over the existing mTLS channels — it can never alter or widen tenant scope, and introduces no new trust path. Agent session dispatch, the A2A message broker, the MCP protocol server, and tool-call forwarding are all scoped to that tenant context; cross-tenant routing is impossible (A2A pairs must share the tenant context). MCP client API keys are **tenant-bound**: validation resolves the tenant, and keys cannot reach other tenants' resources. Per-tool-call identity token injection (performed by Control Center) is resolved within the tenant's scope only. The hub receives only quota-cleared dispatches — refusals happen in Control Center before anything is sent here. All routing, log, and trace events carry tenant attribution. See [Multi-Tenancy Architecture](multi-tenancy.md).
+
 ## Message Routing and UI Connections
 
 ```mermaid

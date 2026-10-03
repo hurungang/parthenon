@@ -4,7 +4,7 @@
 
 The IAM module governs user and agent identity, role assignment, and policy-based permission authorization. The permission enforcement model is **deny-by-default with policy-based allow**: a role is assigned policies, each policy declares allowed actions on resource types, and the Permission Engine resolves effective permissions at request time.
 
-> **Note**: The core enforcement model (deny-by-default, policy-based allow, role → policy → resource resolution) is **unchanged** from the legacy system. The only difference is that resource type identifiers now use the `module::submodule` naming convention instead of flat identifiers.
+> **Note**: The core enforcement model (deny-by-default, policy-based allow, role → policy → resource resolution) is **unchanged** from the legacy system. The only difference is that resource type identifiers now use the `module::submodule` naming convention instead of flat identifiers. Under multi-tenancy, all evaluation is **contained within the session's resolved tenant** — the permission engine's global tenant-less role collection has been removed, and legacy global roles migrated into the root tenant as ordinary tenant roles.
 
 ## Authorization Flow
 
@@ -37,7 +37,7 @@ At authorization check time, the Permission Engine resolves effective permission
 | Module wildcard | `agent::*` | Any submodule under the specified module |
 | Global wildcard | `*::*` | Every registered resource type |
 
-Wildcards are additive — a role holding both `agent::*` and `system::audit` can access all agent submodules plus system audit.
+Wildcards are additive — a role holding both `agent::*` and `system::audit` can access all agent submodules plus system audit. **Containment invariant**: every grant, including wildcards, is evaluated ONLY within the session's resolved tenant — a wildcard never crosses tenants, and `platform::` resource types exist only in the root tenant's role space, so a tenant user (even a tenant root) can never hold them. New tenant-management and license-management resource types are registered in both the backend and frontend manifests.
 
 ## Component Responsibilities
 
@@ -45,7 +45,7 @@ Wildcards are additive — a role holding both `agent::*` and `system::audit` ca
 |---|---|
 | **Permission Management UI** | Provides administrators with interfaces to manage user roles, policies, and resource permissions |
 | **require_permission** | FastAPI dependency factory that resolves the authenticated user and calls `PermissionEngine.authorize()` with a `(resource_type, action)` tuple; raises `HTTPException(403)` on denial |
-| **Permission Engine** | Central `authorize()` method that evaluates policy statements against the requested resource type and action; evaluates wildcard policies at three levels of specificity (exact match → module-level `agent::*` → global `*::*`) |
+| **Permission Engine** | Central `authorize()` method that evaluates policy statements against the requested resource type and action; evaluates wildcard policies at three levels of specificity (exact match → module-level `agent::*` → global `*::*`); all evaluation is contained within the session's resolved tenant |
 | **ResourceTypeManifest** | Central registry in `backend/app/core/resource_types.py` mapping all `module::submodule` resource types to their allowed actions; validated at startup; mirrored in the frontend as `RESOURCE_TYPE_MANIFEST` |
 | **Policy Statements** | Database-backed policy rules linking user roles to allowed resources, actions, and optional tag conditions |
 

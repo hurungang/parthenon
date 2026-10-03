@@ -53,6 +53,12 @@ No changes to the `GroupClaimMapper` or auth middleware were needed — they wer
 - Reprovisioning adds the mapper to existing clients without creating duplicates
 - External OIDC providers are unaffected — group claim mapping is configured in the external provider
 
+## Multi-Tenancy Notes
+
+When multi-tenancy is enabled (see [Multi-Tenancy](multi-tenancy.md)), identity-provider configuration becomes per-tenant: each tenant admin configures their own provider independently, and a single provider configuration may be shared — serving the root workspace and multiple tenants at once, with the workspace address deciding which tenant the resulting session is bound to. Signing in to a tenant succeeds only with an active membership and role in that tenant; anyone else receives a clean "no access to this workspace" message (never a redirect loop). Everyone signs in through one unified flow — enter a workspace address, then sign in via that tenant's provider or a platform-issued email + password; there is no separate platform login page (the super-admin break-glass remains at the root workspace sign-in).
+
+Each provider configuration also carries an optional **default tenant role** (seeded presets only: Tenant System Admin / Agent Manager / Agent Executor / Agent Viewer) for first-sign-in auto-onboarding: a first-time OIDC sign-in to a tenant with a default role configured creates the membership automatically with that role; if unset, the tenant stays invitation-only. Default-role changes affect only future first-time sign-ins — existing memberships are never altered. Group-claim mapping and SCIM provisioning remain out of scope for tenant onboarding.
+
 ## Out of Scope
 - Managing Keycloak groups from Parthenon (groups must be created in Keycloak Admin Console)
 - Automatic group-to-role mapping configuration (administrators must set `idp_claim_value` on groups)

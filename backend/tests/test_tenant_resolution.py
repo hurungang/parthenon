@@ -92,6 +92,7 @@ async def _seed_tenants(db) -> dict[str, Tenant]:
     """active / suspended / deleted tenants for fail-closed assertions."""
     rows: dict[str, Tenant] = {}
     for slug, status in (
+        ("root", TenantStatus.active),
         ("acme", TenantStatus.active),
         ("halted", TenantStatus.suspended),
         ("gone", TenantStatus.deleted),
@@ -301,9 +302,11 @@ class TestBypassEnumeration:
         ):
             assert _is_bypassed(path), path
 
-    def test_internal_and_platform_prefixes_bypassed(self):
+    def test_internal_prefix_bypassed_platform_resolves_root(self):
+        """Phase 11: /platform/* is NO LONGER bypassed — the platform is
+        the root tenant; only /internal/* skips resolution."""
         assert _is_bypassed("/api/v1/internal/anything")
-        assert _is_bypassed("/api/v1/platform/tenants")
+        assert not _is_bypassed("/api/v1/platform/tenants")
 
     def test_business_paths_not_bypassed(self):
         assert not _is_bypassed("/api/v1/agents")
@@ -312,11 +315,11 @@ class TestBypassEnumeration:
 
     def test_exempt_set_does_not_silently_widen(self):
         """E-10: the exemption set must stay exactly health/setup/public-auth
-        plus the internal/platform prefixes."""
+        plus the internal prefix (platform resolved like any workspace)."""
         assert "/api/v1/roles" not in BYPASS_PATHS
         assert "/api/v1/agents" not in BYPASS_PATHS
         for prefix in BYPASS_PREFIXES:
-            assert prefix in ("/docs/", "/redoc/", "/api/v1/internal/", "/api/v1/platform/")
+            assert prefix in ("/docs/", "/redoc/", "/api/v1/internal/")
 
 
 # ── Middleware: switch-off inertness + switch-on fail-closed ─────────────────
@@ -406,10 +409,19 @@ class TestMiddlewareSwitchOn:
         response = await mw_client.get("/health")
         assert response.status_code == 404
 
-    async def test_platform_prefix_bypasses_resolution(self, mw_client, switch, seeded):
+    async def test_platform_route_resolves_root_binding(self, mw_client, switch, seeded):
+        """Phase 11: /platform/* resolves the root-tenant binding (the
+        platform console client always sends X-Tenant: root)."""
+        switch.enabled = True
+        response = await mw_client.get(
+            "/api/v1/platform/tenants", headers={"X-Tenant": "root"}
+        )
+        assert response.status_code == 404  # passed middleware; route absent
+
+    async def test_platform_route_fail_closed_without_binding(self, mw_client, switch, seeded):
         switch.enabled = True
         response = await mw_client.get("/api/v1/platform/tenants")
-        assert response.status_code == 404  # passed middleware; route absent
+        assert response.status_code == 403  # fail-closed: no root binding
 
     async def test_internal_prefix_bypasses_resolution(self, mw_client, switch, seeded):
         switch.enabled = True

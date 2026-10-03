@@ -192,3 +192,7 @@ The `human_intervene` tool follows the same explicit-trigger pattern as `system_
 - Depends on reliable runtime state and delegation relationship signals to render the Agent Runtime Monitor map accurately
 - Depends on permission enforcement so only authorized users can configure guardrails, disable vendors or models, and terminate executions
 - Constrained by enterprise auditability requirements: guardrail alerts, model-usage posture changes, vendor/model disable changes, and termination actions must be visible in operational logs
+
+## Multi-Tenancy Note
+
+When multi-tenancy is enabled (see [Multi-Tenancy](multi-tenancy.md)), execution sessions and logs are tenant-owned, submission is gated by the tenant's monthly execution quota (per calendar month, reset monthly), and every execution is attributed to the tenant for quota counting. With multi-tenancy disabled (the default), behavior is unchanged — the deployment operates as the root tenant's workspace.

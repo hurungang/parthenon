@@ -110,3 +110,11 @@ The setup tool reads Keycloak admin credentials from environment variables (`KEY
 | Symbol | Type | Description | File |
 |--------|------|-------------|------|
 | `OIDCConfigService` | class | CRUD service for `IdentityProviderConfig` DB records — used by bootstrap service | `backend/app/services/oidc_config_service.py` |
+
+---
+
+## Multi-Tenancy Integration
+
+| Symbol | Type | Description | File |
+|--------|------|-------------|------|
+| `_seed_demo_tenant_realm` / `_run_tenant_demo_seed` | functions (new) | Opt-in demo tenant realm seeding (`identity --tenant-demo`): idempotent realm + public frontend client (main-realm redirect URIs mirrored) + demo users via the shared Keycloak admin client | `setup/identity.py` |

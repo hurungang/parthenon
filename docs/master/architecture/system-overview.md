@@ -119,21 +119,43 @@ flowchart LR
     ST --> CL
 ```
 
+## Multi-Tenancy
+
+One shared deployment serves many organizations (tenants) with hard logical isolation. A **tenancy platform switch** (default OFF) gates all tenant features; when off, the deployment resolves to the **root tenant** (workspace `root`) — a one-tenant world that preserves legacy behavior. The root tenant hosts platform staff and holds the migrated legacy global roles; it is a tenant like any other, not a separate plane. Tenant context is established once per request from a verified source (tenant address subdomain, or tenant header for API/MCP clients), enforced centrally in Control Center (the sole database gateway), and propagated read-only to Agent Runtime and Communication Hub over the existing mTLS channels as signed headers that cannot be widened. Self-serve registration creates a tenant, a platform-issued owner account, and an immutable tenant root membership atomically; license tiers (free / team / enterprise) govern quotas for users, agent types, and monthly executions — with Control Center as the single decision point. For the full module architecture, see [Multi-Tenancy Architecture](modules/multi-tenancy.md).
+
+```mermaid
+flowchart LR
+    REQ[Frontend / MCP Client Request]
+    TRM[Tenant Resolution Middleware<br/>resolve once, fail-closed]
+    AM[Auth Middleware<br/>JWT tenant-claim binding]
+    TC[Immutable Tenant Context]
+    PE[Permission Engine<br/>containment: session tenant only]
+    TSR[Tenant-Scoped Repositories<br/>row-level filtering]
+    CC[Control Center<br/>sole DB gateway]
+    CH[Communication Hub<br/>tenant-bound routing]
+    AR[Agent Runtime<br/>tenant-bound execution]
+    DB[(PostgreSQL)]
+
+    REQ --> TRM --> AM --> TC
+    TC --> PE --> TSR --> CC --> DB
+    CC -.->|signed tenant headers over mTLS| CH --> AR
+```
+
 ## Authentication Paths
 
 The Communication Hub serves as an MCP endpoint for both internal and external agents. Internal Agent Runtime instances authenticate via mTLS certificates; external third-party AI agents use API keys. For external clients, CH exposes a standard MCP protocol endpoint (SSE + Streamable HTTP) in addition to the existing REST skills-loading endpoint — both fronted by the same API-key authentication. In both cases, identity tokens are held exclusively by the Communication Hub — agents never receive them directly. For full dual-auth architecture, see [Communication Hub Architecture](modules/communication-hub/architecture.md).
 
 ## Permission Authorization
 
-Parthenon uses a **deny-by-default** authorization model with **policy-based allow**. The Permission Engine resolves effective permissions through a role → policy → resource type chain using the `module::submodule` naming convention. For the full authorization flow, wildcard evaluation rules, and policy management architecture, see [IAM Module Architecture](modules/iam.md).
+Parthenon uses a **deny-by-default** authorization model with **policy-based allow**. The Permission Engine resolves effective permissions through a role → policy → resource type chain using the `module::submodule` naming convention. Permissions are **contained within the session's resolved tenant**: every grant (including wildcards) is evaluated only inside the session's tenant — global tenant-less roles no longer exist (legacy global roles migrated into the root tenant), so a tenant user can never hold `platform::` grants that exist only in the root tenant's role space. For the full authorization flow, wildcard evaluation rules, and policy management architecture, see [IAM Module Architecture](modules/iam.md).
 
 ## Authentication Pipeline
 
-The Control Center uses a three-tier authentication pipeline — super admin local auth (top tier), per-provider OIDC JWT validation (middle tier), and public path fallback (bottom tier). For the full pipeline architecture, component responsibilities, and OIDC provider modes, see [Control Center Architecture](modules/control-center/architecture.md).
+The Control Center establishes the tenant context once per request (fail-closed in multi-tenant mode), then applies a three-tier authentication pipeline — super-admin break-glass auth at the root workspace (top tier), per-tenant OIDC JWT validation (middle tier, tenant claim bound to the resolved tenant), and public path fallback (bottom tier; the public registration endpoint group is the only switch-gated exemption). Platform-issued owner accounts (email + password) authenticate independently of the per-tenant OIDC registry. For the full pipeline architecture, component responsibilities, and OIDC provider modes, see [Control Center Architecture](modules/control-center/architecture.md) and [Identity](modules/identity.md).
 
 ## Key Responsibilities
 
-- **Control Center** — Central authority for configuration, authentication, OIDC provider registry, permission resolution, certificate authority, API key management, agent data type registry, agent outputs, and scheduling. Validates infrastructure dependencies at startup and fails fast.
-- **Agent Runtime** — Deep agent execution via LangChain with tool call orchestration through Communication Hub. Enforces delegation depth limits, performs typed output validation, and emits delegation status events. Agents never hold identity tokens.
-- **Communication Hub** — Message broker and agent gateway supporting dual authentication (mTLS cert + API key). Exposes a standard MCP protocol endpoint (SSE + Streamable HTTP) in addition to the REST skills-loading endpoint. Routes tool calls to Control Center, handles conversation intervention routing, A2A messaging, and WebSocket connections for real-time chat.
+- **Control Center** — Central authority for configuration, authentication, tenant resolution and enforcement (sole database gateway, including tenant-scoped queries and quota usage counting), per-tenant OIDC provider registry, permission resolution, certificate authority, API key management, agent data type registry, agent outputs, and scheduling. Validates infrastructure dependencies at startup and fails fast.
+- **Agent Runtime** — Deep agent execution via LangChain with tool call orchestration through Communication Hub. Enforces delegation depth limits, performs typed output validation, and emits delegation status events. Executes strictly within the signed tenant context received from Control Center — scope cannot be widened, and no quota logic runs here. Agents never hold identity tokens.
+- **Communication Hub** — Message broker and agent gateway supporting dual authentication (mTLS cert + tenant-bound API key). Exposes a standard MCP protocol endpoint (SSE + Streamable HTTP) in addition to the REST skills-loading endpoint. Routes tool calls, agent sessions, and A2A messages strictly within the tenant context received from Control Center; cross-tenant routing is impossible. Handles conversation intervention routing and WebSocket connections for real-time chat.
 - **Setup Tool** — Operator-invoked CLI (outside running system) for Keycloak provisioning, certificate authority bootstrap, and database seeding. All operations are idempotent.

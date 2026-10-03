@@ -2,9 +2,12 @@
 
 Welcome to the master product documentation for the Parthenon Enterprise AI Harness. This index provides an overview of all core platform features, each with a dedicated specification document.
 
+Parthenon is self-serve SaaS-capable: a visitor can sign up with an email and password and instantly receive their own tenant workspace, with license-based tiers (free / team / enterprise) governing growth. The platform itself operates as the **root tenant** (workspace `root`), where platform staff hold platform roles. The tenancy mode defaults to single-tenant — the deployment behaves as the root tenant's workspace — with multi-tenancy available as an opt-in switch.
+
 
 ## Feature Index
 
+- **Multi-Tenancy** — Opt-in (default-off) multi-tenancy with the root tenant as the platform: self-serve registration creating a tenant root user, unified workspace-address sign-in, strict tenant-contained permissions (wildcards included), tenant admin module, per-tenant/shared identity providers with JIT default role, license tiers with user/agent-type/monthly-execution quotas, and tenant lifecycle with isolation guarantees
 - **Foundation Platform** — Roles, permissions, provider-agnostic OIDC integration (any OIDC-compliant provider), independent user and agent identity providers, built-in super admin with enable/disable lifecycle, database-backed identity configuration, OIDC provider testing, setup wizard, Web UI shell, and operational dashboard
 - **Dashboard Metrics** — Real-time stat cards, time-sensitive metrics with date range picker, and permission-aware widgets for platform health overview
 - **MCP Hub** — Server registration, tool sync, session management, credential binding, and proxy

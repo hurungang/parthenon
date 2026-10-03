@@ -16,9 +16,9 @@ Parthenon today runs as a single-tenant platform: one deployment serves exactly 
 
 - **Prospective Owner (Visitor)** — wants to try or adopt Parthenon. Signs up with a personal email and password; expects an instant workspace without contacting sales or an operator.
 - **Tenant Root User** — the person who registered the tenant; its permanent super-admin with ALL permissions inside the tenant. Manages the tenant alias (display name). Root status cannot be changed, demoted, or removed by anyone. Limited to owning one tenant (like one cloud account per person; the limit may be raised later).
-- **Platform Admin** — operator of the hosted deployment (evolution of today's super admin). Creates (secondary path), suspends, resumes, and deletes tenants; controls the tenancy switch; **assigns licenses/tiers** and monitors tenant quota consumption. Does **not** browse tenant business data and cannot alter a tenant root.
+- **Platform Admin** — operator of the hosted deployment: simply a **member of the root tenant holding a platform role** (evolution of today's super admin, signed into the root workspace). Creates (secondary path), suspends, resumes, and deletes tenants; controls the tenancy switch; **assigns licenses/tiers** and monitors tenant quota consumption. Does **not** browse tenant business data and cannot alter a tenant root. Platform roles grant platform modules only — they confer nothing in any customer tenant.
 - **Tenant Admin (delegated)** — administrator appointed within a tenant. Fully self-sufficient inside their tenant (OIDC sign-in, roles, agents, MCP hubs, skills, SOPs, schedules, model configurations, API keys, users) — except they can never modify or remove the tenant root.
-- **Tenant User** — employee of a tenant organization. Signs in via their organization's sign-in page and works only with their organization's data.
+- **Tenant User** — employee of a tenant organization. Signs in via the workspace sign-in and works only with their organization's data, using only tenant modules.
 - **Tenant Agent** — AI agent principal executing strictly within one tenant's scope, using only that tenant's skills, tools, and permissions.
 - **Security Auditor** — needs demonstrable, testable evidence that cross-tenant access is impossible by design before approving a hosted deployment.
 
@@ -31,7 +31,8 @@ Parthenon today runs as a single-tenant platform: one deployment serves exactly 
 - As a tenant root user, I want to update my tenant's alias (display name), so that my workspace stays named correctly as my organization evolves.
 - As a visitor who already owns a tenant, I want a clear explanation when I try to register again, so that I understand I can own only one tenant today.
 
-**Platform Admin**
+**Platform Admin (root-tenant member)**
+- As a platform admin, I want to sign in at the root workspace address like any other tenant member, so that the platform is operated from one workspace without a separate administrative login path.
 - As a platform admin, I want to enable or disable multi-tenancy with a platform-level switch, so that local dev, demos, and existing single-tenant installations behave exactly as today.
 - As a platform admin, I want to create a tenant with a name, a unique tenant address, and a primary admin contact (who becomes its tenant root), so that I can onboard an organization manually when needed.
 - As a platform admin, I want to assign each tenant a license defining its tier (free / team / enterprise) with its limits, so that tenant entitlements match their agreement.
@@ -49,6 +50,9 @@ Parthenon today runs as a single-tenant platform: one deployment serves exactly 
 - As a tenant admin, I want to invite users and assign tenant roles, so that colleagues can start working quickly — within my tenant's user quota.
 - As a tenant admin, I want to see my tenant's tier, limits, and current usage at a glance, so that I can plan before hitting a limit.
 - As a tenant admin, when a quota is reached I want the blocked action to tell me which limit, my current usage, and how to get more, so that I know exactly what to do next.
+- As a tenant admin, I want a single tenant admin module inside my workspace — covering my tenant's display name/alias, its identity-provider configuration, and member management — so that all workspace administration lives in one place alongside the standard modules.
+- As a tenant admin, I want to see only tenant modules (standard workspace modules plus the tenant admin module), so that I am never confronted with platform operations that are not mine.
+- As a tenant user, I want one unified sign-in — enter the workspace address, then sign in — so that everyone (tenant users, tenant admins, and platform staff at the root workspace) follows the same flow.
 - As a tenant user, I want to see only my organization's agents, tools, history, and results, so that I never encounter another organization's data.
 
 **Tenant Agent & Security Auditor**
@@ -61,22 +65,26 @@ Parthenon today runs as a single-tenant platform: one deployment serves exactly 
 - **One session = one tenant**: each sign-in is bound to exactly one tenant for the whole session. Switching tenants requires a fresh sign-in for that tenant.
 - **Owner accounts are email + password**: the registering owner uses a personal email + password account bound to their tenant; tenant members typically sign in via the tenant's OIDC provider once configured. An owner credential unlocks only its own tenant.
 - **One account, one tenant**: a user can own at most one tenant today (the limit can be raised later); duplicate registrations are blocked with a clear message.
+- **The platform is itself a tenant — the root tenant**: the platform's own internal workspace (address/name: `root`) is the root tenant. Platform staff are simply members of the root tenant holding platform roles. Root-tenant members use the same common modules as every tenant (permissions, identity-provider configuration, member management) plus the platform modules their platform role grants.
 - **Everything is tenant-owned**: every record — roles, agents, agent identities, MCP hubs and sessions, skills, SOPs, schedules, model configurations, conversations, execution logs, outputs, saved data, notifications, API keys — belongs to exactly one tenant and is automatically filtered to the signed-in tenant in every list, search, and action.
 - **Centrally enforced isolation**: tenant boundaries apply automatically and consistently to every read and write, regardless of which feature performs it; no user, agent, or integration can bypass or widen its tenant scope.
-- **Identity model**: every person is represented by an identity that is either self-managed (platform-issued email + password, e.g. the registering owner) or linked to an external identity provider identity (corporate OIDC sign-in).
-- **Contextual sign-in**: a person signs in either at the platform level (requires a platform role) or at a tenant's workspace address (requires a role in that tenant); the sign-in context alone decides what the session can reach.
+- **Identity model**: every person is represented by an identity that is either self-managed (platform-issued email + password) or linked to an external identity provider identity (corporate OIDC sign-in).
+- **One session = one tenant**: each sign-in claims roles in exactly one tenant for the whole session — including the root tenant. A person with memberships in several tenants signs into each separately; switching requires a fresh sign-in.
 - **Provider sharing**: one identity-provider configuration can serve the platform and multiple tenants simultaneously; the sign-in context (platform vs a given workspace address) decides the tenant the session is bound to — no duplicate provider registrations per tenant are required.
 - **Tenant admission rule**: signing in to a tenant succeeds if and only if the person has an active membership with a role in that tenant — otherwise the sign-in is rejected cleanly with a clear "no access to this workspace" message; users are never trapped in a redirect loop.
 - **First-sign-in auto-onboarding (JIT default role)**: each identity-provider configuration has a configurable default tenant role (one of the seeded presets: Tenant System Admin / Agent Manager / Agent Executor / Agent Viewer). When a user signs in to a tenant via OIDC for the first time — no existing membership — the configured default role is automatically assigned (membership created on the spot). If no default role is configured, the user is rejected with "no access to this workspace" semantics. Existing memberships are never modified by sign-in.
 - **Shared platform, hard logical walls**: all tenants share one deployment (no dedicated infrastructure per tenant); isolation comes from strict tenant ownership plus centralized enforcement, not separate systems.
-- **Role split**: Platform Admin governs tenants, licenses, and platform settings; the Tenant Root and delegated admins govern everything inside one tenant; neither can act in the other's domain — and no one can alter the root.
+- **Permissions are strictly tenant-contained**: every permission grant — including wildcard grants such as "all resources, all actions" — applies only within the session's tenant. No global or cross-tenant roles exist: a root-tenant platform role unlocks platform modules and nothing in any other tenant; a tenant admin role unlocks its own workspace and no platform modules.
+- **Module visibility by tenancy**: normal tenant users — including the tenant root and delegated admins — see only tenant modules: the standard workspace modules plus a **tenant admin module** (tenant display name/alias, identity-provider configuration, member management). Platform modules are visible and accessible only to root-tenant members holding platform roles, after signing into the root workspace.
+- **Role split**: Platform Admin governs tenants, licenses, and platform settings from the root workspace; the Tenant Root and delegated admins govern everything inside one tenant; neither can act in the other's domain — and no one can alter the root.
 
 ## Acceptance Criteria
 
 **Tenancy Mode Switch**
 - With the switch off (default): UI, sign-in, and all features behave exactly as the current single-tenant product; no tenant concept is visible anywhere; all existing tests pass unchanged.
 - With the switch on: tenant features become available. Disabling the switch again returns the deployment to single-tenant behavior without data loss.
-- When enabling multi-tenancy on an existing deployment, the current organization's configuration and data remain intact and continue to work under the tenancy model (adopted as its first tenant), with no manual reconfiguration of its identity provider.
+- When enabling multi-tenancy on an existing deployment, the current organization's configuration and data remain intact and continue to work under the tenancy model (adopted as the deployment's **root tenant**), with no manual reconfiguration of its identity provider.
+- With multi-tenancy disabled, the deployment defaults entirely to the root tenant: it behaves exactly like the root tenant's workspace — same sign-in flow, same tenant modules — with no tenant address entry step and no visible tenant concept.
 
 **Self-Serve Registration & Tenant Root**
 - A visitor can register with a personal email and password; on success their tenant workspace is created and they land in guided onboarding as the tenant root user — no platform-admin action involved.
@@ -115,7 +123,10 @@ Parthenon today runs as a single-tenant platform: one deployment serves exactly 
 - Tenant admins cannot view or modify another tenant's sign-in configuration.
 
 **Sign-In Admission & First-Sign-Onboarding (JIT Default Role)**
-- Every identity is either self-managed (platform-issued email + password) or linked to an external IdP identity (OIDC); the platform sign-in page accepts only users holding a platform role, and a tenant workspace address only accepts users with a role in that tenant.
+- **One login flow for everyone**: every user signs in the same way — enter a workspace address (e.g. `test-com`, or `root`), then sign in via that tenant's OIDC provider or a platform-issued email + password. There is no separate platform login page; a platform staff member signs into the root workspace like any other member.
+- The previous discreet "platform admin sign-in" expansion on the tenant sign-in page is removed; the super-admin break-glass account remains available at the root workspace sign-in for first-run bootstrap and disaster recovery.
+- Signing into the root workspace with a platform role lands the user in the platform console (platform modules); signing into a customer tenant lands in that workspace's tenant modules only.
+- Every identity is either self-managed (platform-issued email + password) or linked to an external IdP identity (OIDC); a workspace address only accepts users with an active membership with a role in that tenant.
 - Signing in to a tenant succeeds exactly when the person has an active membership with a role there; anyone else receives a clear "no access to this workspace" message immediately — never a redirect loop or silent failure.
 - Each OIDC provider configuration offers a default tenant role selection limited to the seeded presets (Tenant System Admin / Agent Manager / Agent Executor / Agent Viewer); the tenant admin can set it or leave it unset.
 - First OIDC sign-in to a tenant with a default role configured: membership is created automatically with exactly that role, and the user lands in the workspace with that role's permissions — no invitation, no admin approval step.
@@ -125,11 +136,15 @@ Parthenon today runs as a single-tenant platform: one deployment serves exactly 
 - The provider configuration form enforces the default-role field validation (only seeded presets selectable) and reflects saved changes immediately without a page reload.
 
 **Isolation & Security (must be testable)**
+- **Permission containment guarantee (testable)**: for any role in any tenant — including wildcard grants covering "all resources, all actions" — no evaluation of that role can read or write, list, or search any resource outside the session's tenant. Automated tests must demonstrate this for a wildcard role in a customer tenant and for platform roles in the root tenant.
+- A root-tenant member holding a platform role, signed into a customer tenant (if they hold a membership there), sees only that tenant's modules and gains no platform capabilities; conversely, a customer tenant's root/admin sees no platform modules.
 - A tenant A user attempting to open, list, search, edit, or delete any tenant B record (agents, roles, MCP hubs, skills, SOPs, schedules, model configs, conversations, outputs, API keys) — including by guessing or forging references — receives "not found / permission denied" and sees no tenant B data.
 - Directly addressed requests for another tenant's identifiers return no data and are recorded as security-relevant audit events visible to the platform admin.
 - Agents executing for tenant A can only use tenant A's skills, tools, credentials, and identities; agent-to-agent messages cannot cross tenants.
 - API keys belong to a tenant; a tenant A API key cannot read or call any tenant B resource.
 - Platform admin can manage tenant metadata and licenses but cannot browse tenant business data or alter a tenant root; tenant admins cannot see platform configuration or other tenants.
+- **Tenant admin module scope**: a customer tenant's root/admin can fully operate the tenant admin module (tenant alias, identity-provider configuration, member management) but sees no platform modules; a tenant user without admin roles sees only the standard workspace modules.
+- **Platform module scope**: platform modules (tenancy switch, tenant registry, licenses, cross-tenant audit) are visible and accessible only to root-tenant members holding platform roles, after signing into the root workspace; any other session — including a root-tenant member without a platform role — cannot see or invoke them.
 - A security review confirms: through any interface (UI, API, agent execution, scheduling, notifications, MCP tools), no user, agent, or API key action can read or write another tenant's data.
 
 **Single-Tenant Compatibility**
@@ -146,6 +161,8 @@ Parthenon today runs as a single-tenant platform: one deployment serves exactly 
 - Cross-tenant sharing, collaboration, marketplaces, or template exchange.
 - White-label branding customization per tenant (beyond the tenant address and alias).
 - Automated export/import migration of tenants between deployments.
+- A separate platform login page, URL, or identity flow — everyone uses the unified workspace-address sign-in; platform operations happen from the root workspace.
+- Global or cross-tenant roles — all roles, including platform roles and wildcard grants, are strictly contained within their tenant.
 - Group-based role mapping from OIDC claims (e.g., mapping corporate groups to tenant roles) — sign-in onboarding uses only the per-provider default role in this epic.
 - SCIM or any other automated user-provisioning/de-provisioning protocol; membership changes outside first sign-in remain manual (invitations by tenant admins).
 
@@ -156,6 +173,6 @@ Parthenon today runs as a single-tenant platform: one deployment serves exactly 
 - **Usage metering accuracy**: monthly execution counts depend on complete tenant attribution of every execution record; quota reporting is only as accurate as that attribution.
 - **Hosted environment**: wildcard DNS and certificates are required to support per-tenant web addresses.
 - **Architecture rules (non-negotiable)**: three segregated backend services; agents run only in Agent Runtime; only Control Center accesses the database; agents never hold identity tokens or secrets. Tenant enforcement and quota counting must respect and reinforce these boundaries.
-- **Permission model**: the existing fine-grained resource-type manifest (with wildcards) continues to apply within each tenant; new tenant-management and license-management resource types must be registered consistently in both backend and frontend manifests to avoid access breakage.
+- **Permission model**: the existing fine-grained resource-type manifest (with wildcards) continues to apply within each tenant; wildcards such as `*::*` are tenant-contained — they grant nothing outside the session's tenant. New tenant-management and license-management resource types must be registered consistently in both backend and frontend manifests to avoid access breakage.
 - **Default-off constraint**: the tenancy switch defaults to disabled; single-tenant behavior must be preserved exactly for all existing deployments.
 - **Audit & observability**: audit trails and telemetry must gain tenant attribution so cross-tenant attempts, root-protection violations, and quota events are traceable end to end.

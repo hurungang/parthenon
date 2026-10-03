@@ -47,3 +47,7 @@ Skill Management allows administrators to define, organize, and govern Skills as
 - SOP composition and sequencing (covered by SOP Management)
 - MCP server registration and tool sync (covered by MCP Hub)
 - Low-level execution runtime implementation details
+
+## Multi-Tenancy Note
+
+When multi-tenancy is enabled (see [Multi-Tenancy](multi-tenancy.md)), skills are tenant-owned and skill permissions are grantable only within the owning tenant. With multi-tenancy disabled (the default), behavior is unchanged — the deployment operates as the root tenant's workspace.

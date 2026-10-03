@@ -574,3 +574,56 @@ If a full rollback to pre-refinement state is required:
 - Do NOT delete `config/identity.yaml` before confirming the database migration completed successfully and OIDC login works
 - Do NOT leave deprecated `OIDC_*` environment variables set after confirming the new system is stable — their presence may cause confusion about which config source is authoritative
 - Do NOT grant direct database access to Agent Runtime or Communication Hub during rollback — all database operations go through Control Center
+
+---
+
+## Change-Specific Rollback: Multi-Tenant Support
+
+Use this section when rolling back the **multi-tenant-support** deployment. Rollback is **data-preserving by design** — the tenancy switch can be turned off and back on repeatedly without data loss. Execute Steps 1–2 of the general procedure above first.
+
+### Trigger Conditions
+
+Initiate this rollback if any of the following occur after deploying this change:
+
+- Tenant resolution middleware rejects legitimate traffic at scale (`tenant.resolution` non-`resolved` outcomes in `backend/logs/control-center.log`)
+- Signed tenant-header verification failures block all internal calls (`tenant.signature` in AR/CH logs — typically a signing-key mismatch, fixable without rollback; align the key and restart CC first)
+- Root-tenant adoption was incomplete (`tenant.adoption` ERROR in `backend/logs/control-center.log`) and cannot be re-run safely
+- Sustained cross-tenant isolation-probe signals that require reverting to single-tenant posture while investigated
+
+### Step T1 — Disable the Tenancy Switch FIRST (if enabled)
+
+Disable `multi_tenancy_enabled` via the Platform Settings page/API. This restores exact single-tenant behavior (middleware inert, provider registry platform-wide), keeps all data, and is audited.
+
+**Do NOT roll back images while the switch is on** — pre-tenant code cannot operate against tenant-bound data paths.
+
+**Completion condition:** Tenant-free requests succeed; `platform.settings` log event records the toggle; no `tenant.resolution` rejections appear.
+
+### Step T2 — Roll Back All Service Images Together
+
+Roll back Control Center, Agent Runtime, Communication Hub, and Web UI **together** — the middleware and signed-header changes span all three services; mixed versions are unsupported. Restart via `parthenon.ps1` in the standard order (infra → control-center → agent-runtime → communication-hub → frontend).
+
+The applied migration chain (`31c0e0bc9990` … `b8e4f2a6c9d1`, see [database-migrations.md](database-migrations.md)) does **not** need to be rolled back — it is additive and backward compatible with the previous code. Only downgrade if the tenant tables must be removed (Step T3).
+
+**Completion condition:** All services healthy at previous image versions; single-tenant smoke checks pass; `alembic current` matches the expected revision.
+
+### Step T3 — Database Downgrade (only if tenant tables must be removed)
+
+> **Warning — data loss:** Downgrading the tenancy chain **drops** the tenant tables and the tenant reference columns on existing tables. Tenants, memberships, invitations, tenant audit events, per-tenant OIDC configurations, and any rows written while tenancy was on are unrecoverable except from backup. Export/backup this data before running the downgrade.
+
+Run `alembic downgrade` from `31c0e0bc9990` to its `down_revision`. Verify with `alembic current`.
+
+**Completion condition:** Tenant tables absent; `alembic current` reports the pre-tenancy revision.
+
+### What cannot be rolled back
+
+- **Tenant data created after enabling** — tenants, memberships, invitations, tenant audit events, per-tenant OIDC configurations, quota-exhaustion history, and rows written while tenancy was on. Disabling the switch keeps them; a migration downgrade drops them.
+- **Root-tenant adoption backfill** — existing rows keep their root-tenant references after switch-off (data-preserving; harmless in single-tenant mode, reused if tenancy is re-enabled).
+- **Tenant deletions performed while enabled** — tenant delete cascades are permanent; the slug becomes reusable and prior data is unrecoverable except from backup.
+- General safety net: restore the pre-deployment PostgreSQL backup only as a last resort — it reverts **all** data to the backup point, not just tenancy state.
+
+### Rollback Guardrails
+
+- Do NOT roll back images while `multi_tenancy_enabled` is still on — disable the switch first.
+- Do NOT remove `TENANT_CONTEXT_SIGNING_KEY` from only some services — the three services are version-rolled together or not at all.
+- Do NOT downgrade the tenancy migration chain while any tenant data still needs to be preserved.
+- Do NOT grant direct database access to Agent Runtime or Communication Hub during rollback.

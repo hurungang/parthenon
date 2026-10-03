@@ -29,6 +29,38 @@ Update this table whenever new components are added or new log events are instru
 | **Startup Validation** | `startup.validation.*` events — dependency reachability checks at service boot (PostgreSQL, Keycloak, Redis, Control Center); pass/fail with latency and error detail |
 | **Configuration Source** | `config.*.resolved` events — infrastructure connection source resolution (database, redis, OIDC, telemetry); emitted at INFO on every startup |
 | **Security Guardrails** | `config.keycloak_admin_detected_in_runtime` WARNING — Keycloak admin credentials detected in runtime service environment; ignored by service but represents security risk |
+| **Tenant Resolution Middleware (Control Center)** | Per-request resolution decisions and fail-closed rejections (`tenant.resolution.*`); JWT tenant-claim mismatches (`tenant.claim.mismatch`); platform switch toggles and adoption runs (`platform.settings.*`, `tenant.adoption.*`) |
+| **Tenant Scoping / DB Gateway (Control Center)** | Cross-tenant direct-addressing stops (`tenant.scope.violation`); tenant audit-event writes (cross-tenant attempts, lifecycle actions, quota exhaustion) |
+| **Per-Tenant OIDC Registry (Control Center)** | Per-tenant discovery, JWKS, and token validation failures (`tenant.oidc.*`), tenant-attributed mirrors of the `oidc.discovery.*` / `oidc.jwks.*` events |
+| **Tenant Lifecycle (Control Center)** | Create / suspend / resume / delete events (`tenant.lifecycle.*`) with `actor` and `tenant_slug` |
+| **Tenant Signed-Header Verification (Agent Runtime, Communication Hub)** | Signing failures on CC outbound clients and verification failures (missing / tampered / stale / unsigned) in the AR `ControlCenterCertificateMiddleware` and CH `ControlPlaneMiddleware` (`tenant.signature.*`) |
+| **Tenant Routing Denials (Communication Hub)** | Cross-tenant A2A refusals (`tenant.a2a.refused`); MCP session tenant-binding failures and API-key/tenant mismatches (`tenant.api_key.mismatch`); tenant-filtered tool listing/calls (`tenant.denied`) |
+
+### Multi-Tenancy Log Events
+
+Emitted only while the tenancy platform switch (`multi_tenancy_enabled`) is **on**. When off, no tenant events exist. Unless noted, events are in `backend/logs/control-center.log`.
+
+| Event | Level | Key Fields | When Logged |
+|-------|-------|-----------|-------------|
+| `tenant.resolution.*` | INFO/WARN | `outcome` (`resolved`/`unknown`/`suspended`/`deleted`), `tenant_slug` | Per-request resolution outcome; WARN entries are fail-closed rejections |
+| `tenant.claim.mismatch` | WARN | `tenant_id`, `subject` | Validated JWT tenant claim does not equal the resolved tenant; request rejected |
+| `tenant.scope.violation` | WARN | `tenant_id`, `resource`, `surface` | Cross-tenant direct addressing stopped at the DB gateway; returned as not-found plus a `TenantAuditEvent` |
+| `tenant.oidc.*` | ERROR/WARN | `tenant_id`, `provider_name`, `reason` | Per-tenant discovery, JWKS, or token validation failure (tenant-attributed `oidc.discovery.*` / `oidc.jwks.*` mirror) |
+| `tenant.lifecycle.*` | INFO | `action`, `actor`, `tenant_slug` | Tenant create / suspend / resume / delete |
+| `tenant.adoption.*` | INFO/ERROR | `rows_backfilled`, `tenant_slug` | Root-tenant (workspace `root`) adoption/backfill when the switch is first enabled; ERROR means incomplete adoption |
+| `platform.settings.*` | INFO | `setting`, `value`, `actor` | Tenancy switch toggled; cache invalidation recorded |
+| `tenant.signature.*` (CC, AR, CH) | WARN | `direction` (`sign`/`verify`), `reason` (`missing`/`tampered`/`stale`/`unsigned`) | Signing failure on CC outbound clients; verification failure in AR `ControlCenterCertificateMiddleware` and CH `ControlPlaneMiddleware` |
+| `tenant.a2a.refused` (communication-hub.log) | WARN | `source_tenant_id`, `target_tenant_id` | A2A pair does not share a tenant; message not routed |
+| `tenant.api_key.mismatch` (communication-hub.log) | WARN | `key_prefix`, `expected_tenant_id`, `actual_tenant_id` | MCP API key validated against a different tenant than the session context |
+| `no_access_to_workspace` | WARN | `subject`, `workspace` | Authenticated user has no membership in the resolved workspace; returns HTTP 403 — this is a final authorization denial, **not** a re-auth loop trigger |
+
+Troubleshooting quick patterns:
+
+- Requests rejected before feature logic: search `control-center.log` for `tenant.resolution` and `tenant.rejected`
+- Suspected isolation probing: search `control-center.log` for `tenant.scope` and `tenant.claim`, then filter platform audit events by `tenant_id`
+- Executions rejected downstream: search `agent-runtime.log` for `tenant context` and `rejected`
+- Routing/tool-call denials: search `communication-hub.log` for `tenant.denied` and `cross-tenant`
+- A single tenant locked out: search `control-center.log` for `tenant.oidc` plus the tenant slug/id
 
 ### OIDC Identity Log Events
 

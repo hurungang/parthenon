@@ -1,0 +1,16 @@
+name: system-one-decision-skills
+created_at: 2026-10-03
+status: in-progress
+scope:
+  has_ui_changes: true
+  has_architecture_changes: true
+  has_db_changes: true
+  has_deployment_changes: false
+  has_operations_changes: false
+agents_complete:
+  es-product-owner: true
+  es-ux-specialist: true
+  es-architect: true
+  es-database-designer: true
+  es-developer: true
+  es-tester: true

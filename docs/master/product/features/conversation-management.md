@@ -74,3 +74,7 @@ Conversation Management ensures that all interactions—across users, agents, an
 - Agent execution engine internals and model reasoning
 - Content generation quality and model selection
 - Storage schema and database implementation details
+
+## Multi-Tenancy Note
+
+When multi-tenancy is enabled (see [Multi-Tenancy](multi-tenancy.md)), conversations are tenant-owned; only the owning tenant's members and agents can browse, replay, or export them. With multi-tenancy disabled (the default), behavior is unchanged — the deployment operates as the root tenant's workspace.

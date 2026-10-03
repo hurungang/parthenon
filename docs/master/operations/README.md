@@ -9,6 +9,7 @@ This section contains all operational reference material for running and maintai
 - **Setup-time vs. runtime credentials**: `KEYCLOAK_ADMIN` and `KEYCLOAK_ADMIN_PASSWORD` must be set for the setup tool only — **never** on the Control Center service at runtime. If these variables are detected on the CC service, a `config.keycloak_admin_detected_in_runtime` WARNING is logged and the credentials are ignored.
 - All infrastructure bootstrap operations (realm creation, DB seeding, certificate issuance) are performed via the consolidated `setup` command, which is idempotent and safe to run repeatedly.
 - Startup validation runs on every service restart; if a service fails to start, check the startup validation log events to identify which dependency is unreachable.
+- **Multi-tenancy is opt-in**: `multi_tenancy_enabled` is a database platform setting (seeded `false`) — not an environment variable. The system tenant is the **root tenant** (workspace `root`); platform routes resolve the root-tenant binding and unbound platform requests fail closed with HTTP 403. A `no_access_to_workspace` 403 is a final authorization denial, not a re-auth loop.
 
 ---
 
@@ -29,6 +30,7 @@ This section contains all operational reference material for running and maintai
 | **OIDC Provider Health** | Per-provider reachability gauges, OIDC Discovery latency p99, JWKS cache hit rate, JWKS fetch failure rate, registry reload event count |
 | **Super Admin & Auth Pipeline** | Auth pipeline tier distribution (super_admin, oidc_user, oidc_agent, public), super admin login success/failure rate, OIDC JWT validation failures by reason, auth pipeline latency per tier |
 | **Service Segregation Boundary Enforcement** | Allowed vs denied internal calls by caller type, top deny reasons, unknown caller and certificate mismatch trends, revocation health, internal auth latency, and system-tools unauthenticated rejects |
+| **Tenancy** | Tenant resolution outcomes and fail-closed rejections, cross-tenant attempt trends by surface, per-tenant OIDC validation failures, tenant lifecycle activity, per-tenant resource usage / noisy-neighbor share (emitted only while `multi_tenancy_enabled` is on) |
 
 For metric definitions and alert thresholds, see [monitoring.md](monitoring.md).
 
@@ -52,6 +54,8 @@ For structured log fields and per-component event reference, see [logging.md](lo
 Agent execution guardrail event taxonomy, required fields, and sensitive-data exclusions are defined in [logging.md](logging.md) under Agent Execution Guardrail Events.
 
 Boundary event catalog and required fields for allowlist enforcement are defined in [logging.md](logging.md) under Internal API Boundary Log Events.
+
+Multi-tenancy event prefixes (`tenant.resolution.*`, `tenant.claim.*`, `tenant.scope.*`, `tenant.oidc.*`, `tenant.adoption.*`, `tenant.signature.*`, `no_access_to_workspace`) and per-log-file search keywords are defined in [logging.md](logging.md) under Multi-Tenancy Log Events.
 
 ---
 
@@ -112,5 +116,8 @@ Each operation logs structured events to stdout (see [logging.md](logging.md) fo
 | [super-admin-lockout.md](runbooks/super-admin-lockout.md) | Cannot log in with super admin; OIDC also unavailable; need emergency access |
 | [setup-tool.md](runbooks/setup-tool.md) | CC fails to start with Keycloak config not found; Keycloak admin credentials detected in runtime log; setup command fails with Keycloak admin API unreachable |
 | [startup-validation-failure.md](runbooks/startup-validation-failure.md) | Any service fails to start with a `startup.validation.*_failed` log event; service restart loop detected |
+| [tenant-signin-failure.md](runbooks/tenant-signin-failure.md) | One or all tenants cannot sign in while the tenancy switch is on; `tenant.resolution` outcome `suspended` or `tenant.oidc.*` failures in `control-center.log`; browser cannot reach `https://<slug>.<base-domain>` |
+| [tenant-adoption-and-scope-denials.md](runbooks/tenant-adoption-and-scope-denials.md) | 403/404 spikes after enabling the tenancy switch; `tenant.adoption.*` ERROR or `oidc.registry.*` events in `control-center.log`; suspected cross-tenant isolation probing |
+| [tenant-context-missing.md](runbooks/tenant-context-missing.md) | Agent Runtime / Communication Hub reject all internal calls with `tenant context` / `rejected` after enabling the tenancy switch |
 
 For boundary incidents that involve certificate class or identity problems, use [service-segregation-boundary-enforcement.md](runbooks/service-segregation-boundary-enforcement.md) for initial triage and [certificate-security.md](runbooks/certificate-security.md) for certificate lifecycle remediation.

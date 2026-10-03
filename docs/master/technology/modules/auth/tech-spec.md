@@ -78,3 +78,18 @@ flowchart TD
 |--------|------|-------------|------|
 | `GroupClaimMapper.map_claims` | method | Maps JWT `groups` claim values to `UserGroup` membership records (idempotent); returns newly assigned group IDs | `backend/app/services/permissions/group_claim_mapper.py` |
 | `JWTAuthMiddleware._sync_user_and_groups` | method | Extracts `groups` claim from JWT after validation; upserts `PlatformUser` via `UserCacheService`; delegates group claim mapping to `GroupClaimMapper`; fire-and-log on failure | `backend/app/middleware/auth.py` |
+
+---
+
+## Multi-Tenancy Integration
+
+The auth middleware is tenant-aware since the multi-tenant support change (full details: [multi-tenancy module](../multi-tenancy/tech-spec.md)).
+
+| Symbol | Type | Description | File |
+|--------|------|-------------|------|
+| `JWTAuthMiddleware._check_tenant_claim` / `_audit_claim_mismatch` | methods (new) | Reject tokens whose `tenant` claim does not match the request-resolved tenant; audited | `backend/app/middleware/auth.py` |
+| `_inject_tenant_claim` | function (new) | Validation-time injection of the `tenant` claim (slug) from the resolved login context's provider registry binding (own → shared → root slot) — never from the request's `X-Tenant` header | `backend/app/middleware/auth.py` |
+| `_try_oidc_token` | function (modified) | Validates against the provider resolvable for the resolved login context (per-tenant / shared / root provider slots) | `backend/app/middleware/auth.py` |
+| `_try_platform_account_token` | function (new) | Auth tier 1b: validates platform-account JWTs (self-serve registered accounts) outside the per-tenant OIDC registry | `backend/app/middleware/auth.py` |
+| `JWTAuthMiddleware._maybe_jit_default_role` | method (new) | Sign-in admission hook: JIT-creates an active non-root tenant membership with the provider's default tenant role on first sign-in (idempotent, audited) | `backend/app/middleware/auth.py` |
+| `validate_raw_token` | function (modified) | Token validation pipeline with per-tenant provider resolution | `backend/app/middleware/auth.py` |

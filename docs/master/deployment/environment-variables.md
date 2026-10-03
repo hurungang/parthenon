@@ -287,6 +287,22 @@ These variables control certificate bootstrapping, caller identity normalization
 
 ---
 
+## Multi-Tenancy
+
+Multi-tenancy is an **opt-in runtime mode**. The tenancy switch (`multi_tenancy_enabled`) is a database platform setting seeded `false` at Control Center startup — it is **not** an environment variable, and there is no env override. Do not attempt to enable tenancy via environment variables.
+
+| Variable | Service | Description | Secret |
+|----------|---------|-------------|--------|
+| `TENANT_CONTEXT_SIGNING_KEY` | CC, AR, CH | HMAC secret used to sign and verify tenant context headers propagated over the existing mTLS channels. Must be a high-entropy random string (min 32 chars) with the **identical value on all three services** (CC signs; AR/CH verify only). Follows the same operational pattern as `AGENT_RUNTIME_BOOTSTRAP_KEY` / `SERVICE_BOOTSTRAP_KEY`. Changing it invalidates in-flight signed headers — rotate only in a maintenance window. | ✓ |
+| `TENANT_ADDRESS_BASE_DOMAIN` | CC | Base domain for subdomain tenant resolution: the Host-header label immediately left of this base is the tenant slug (e.g. `acme.parthenon.example.com` → slug `acme`). Required only when tenant-address (subdomain) resolution is used; tenant-header resolution for API/MCP clients works without it. Must match the wildcard DNS/TLS domain. | |
+
+Additional review items when enabling subdomain addressing (no value change required unless wildcard domains are introduced):
+- `PLATFORM_API_BASE_URL` — must resolve through the wildcard tenant domain so OIDC redirect URIs stay valid per tenant subdomain.
+- `AGENT_GATEWAY_BASE_URL` — must be reachable through the same wildcard domain when tenant-address mode is enabled.
+- Frontend OIDC settings (`VITE_OIDC_AUTHORITY`, `VITE_API_BASE_URL`) — no new variables; verify the configured authority and API base are reachable from tenant subdomains (per-tenant OIDC providers are database-configured, not env-configured).
+
+---
+
 ## OpenTelemetry (OTEL)
 
 Set per container; `OTEL_SERVICE_NAME` should be unique per service to enable per-service filtering in telemetry backends.

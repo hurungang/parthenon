@@ -10,7 +10,7 @@ flowchart LR
     API[Control Center APIs]
     AM[Auth Middleware]
     SAR[Super Admin Auth Service]
-    OPR[OIDC Provider Registry]
+    OPR[Per-Tenant OIDC Provider Registry]
     SCAPI[System Config API]
     OCR[OIDC Config Service]
     DB[(Platform DB)]
@@ -114,26 +114,29 @@ flowchart TB
     AUTH -->|Scope mismatch| LOG
 ```
 
-## Auth Middleware & OIDC Provider Registry
+## Auth Middleware & Tenant Context
 
-Control Center authentication is a three-tier pipeline shared across all inbound API calls:
+Every inbound request first passes **tenant resolution middleware**: in multi-tenant mode the tenant is resolved exactly once from a verified source (tenant address subdomain, or tenant header for API/MCP clients) and bound to an immutable per-request tenant context — fail-closed, so an unresolvable tenant is rejected before any feature logic. The public registration endpoint group is the only switch-gated exemption; when the tenancy switch is off, resolution is bypassed and requests bind to the root tenant. Signed tenant context headers propagate to Agent Runtime and Communication Hub over the existing mTLS channels.
+
+Authentication is a three-tier pipeline shared across all inbound API calls; JWT validation is bound to the resolved tenant (a validated token's tenant claim must match, otherwise the request is rejected):
 
 ```mermaid
 flowchart TD
-    REQ[Inbound Request] --> AM[Auth Middleware]
+    REQ[Inbound Request] --> TRM[Tenant Resolution Middleware<br/>resolve once · fail-closed]
+    TRM --> AM[Auth Middleware]
 
-    AM --> SA{Super Admin<br/>enabled & token?}
-    SA -->|yes| SAR[Super Admin Auth Service]
+    AM --> SA{Super-Admin Break-Glass<br/>enabled & token?}
+    SA -->|yes| SAR[Super Admin Auth Service<br/>root workspace sign-in]
     SAR -->|bcrypt verify| SAC[(super_admin_credentials)]
-    SAR -->|short-lived JWT| ID[Identity + Permissions]
+    SAR -->|short-lived JWT| ID[Identity + Permissions<br/>tenant-bound]
 
     SA -->|no| OIDC{OIDC Bearer<br/>token?}
-    OIDC -->|yes| OPR[OIDC Provider Registry]
-    OPR -->|hot-reload| IPC[(identity_provider_configs)]
-    OPR -->|JWKS validate| ID
+    OIDC -->|yes| OPR[Per-Tenant OIDC Provider Registry<br/>own → shared → root slot]
+    OPR -->|hot-reload| IPC[(identity_provider_configs<br/>keyed by tenant)]
+    OPR -->|JWKS validate + tenant claim check| ID
 
     OIDC -->|no| PUB{Public Path?}
-    PUB -->|yes| ANON[Anonymous]
+    PUB -->|yes| ANON[Anonymous<br/>registration group: switch-gated]
     PUB -->|no| DENY[403]
 ```
 
@@ -143,15 +146,17 @@ flowchart TD
 - Issues short-lived internal JWTs (default 15-minute expiry, configurable)
 - Seeded on first launch from environment variables (`SUPER_ADMIN_ENABLED`, `SUPER_ADMIN_USERNAME`, `SUPER_ADMIN_PASSWORD_HASH`)
 - Enable/disable toggle: when disabled, all super admin login attempts are refused regardless of credentials
-- Bypasses OIDC entirely — no external IdP dependency for super admin access
+- Bypasses OIDC entirely — retained as the super-admin break-glass path at the root workspace sign-in
 
-### OIDC Provider Registry
+### Per-Tenant OIDC Provider Registry
 
-- In-memory cache of active provider configurations loaded from `identity_provider_configs` at startup
+- Registry keyed by tenant — the former global registry now resolves provider configurations per resolved tenant; each tenant's credentials are valid only inside that tenant
+- Provider sharing follows **own → shared → root slot**: a tenant's own configuration, a configuration shared across tenants, or the root slot (formerly "system slot") belonging to the root tenant — used when tenancy is off or for platform sign-in
 - Hot-reload: invalidated and refreshed when OIDC Config Service updates a provider, no restart required
 - Caches JWKS keys per provider with TTL-based refresh
 - Resolves provider type (`user` vs `agent`) from token claims or request context
 - Supports concurrent multi-provider operation — separate issuers for users and agents
+- JWT validation binds the token's tenant claim to the resolved tenant — mismatch is rejected; the owner's platform-issued account (email + password) authenticates outside this registry
 
 ## OIDC Config Service
 

@@ -84,6 +84,16 @@ Use this model for the `add-agent-execution-guardrails` deployment and future gu
 
 ---
 
+## Multi-Tenancy — Runtime Mode Note
+
+Multi-tenancy introduces **no new containers or pods**. It is a runtime mode of the existing three backend services, enabled via the `multi_tenancy_enabled` database platform setting (see [environment-variables.md](environment-variables.md) §Multi-Tenancy).
+
+- `TENANT_CONTEXT_SIGNING_KEY` must be set **identically** on Control Center, Agent Runtime, and Communication Hub — CC signs tenant context headers; AR/CH verify them over the existing mTLS channels.
+- `TENANT_ADDRESS_BASE_DOMAIN` is set on Control Center only, and only when subdomain tenant resolution is used.
+- No changes to data access boundaries: PostgreSQL remains owned solely by Control Center; tenant scoping is enforced there and propagated to AR/CH via signed headers.
+
+---
+
 ## Service Dependencies
 
 ```mermaid

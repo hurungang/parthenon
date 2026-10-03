@@ -96,3 +96,13 @@ The scheduling module provides cron-based trigger capabilities for the platform,
 | `ScheduledJob` | type | TypeScript interface for scheduled job data | `frontend/src/types/index.ts` |
 | `LinkedAgentSession` | type | TypeScript interface for linked agent session summary | `frontend/src/types/index.ts` |
 | `JobExecution` | type | TypeScript interface for job execution data; includes `agent_session` field | `frontend/src/types/index.ts` |
+
+---
+
+## Multi-Tenancy Integration
+
+| Symbol | Type | Description | File |
+|--------|------|-------------|------|
+| scheduler triggered-job adoption | behaviour (modified) | Triggered jobs adopt the owning tenant's context before dispatch | `backend/app/services/scheduling/scheduler.py` |
+| `SchedulingEngine._dispatch` | method (modified) | Dispatch-time quota consultation for schedule-triggered executions; skips and audits on quota exhaustion (job stays scheduled) | `backend/app/services/scheduling/scheduler.py` |
+| `ScheduledJob` | model (modified) | Gains a tenant reference | `backend/app/db/models/scheduling.py` |

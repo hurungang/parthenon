@@ -1,20 +1,24 @@
-"""Tenant Adoption Service — system-tenant adoption when tenancy is enabled.
+"""Tenant Adoption Service — root-tenant adoption when tenancy is enabled.
 
 When the platform switch is turned on against an existing single-tenant
-deployment, ALL pre-existing data is adopted into one implicit system
-tenant (``is_system_tenant = true``):
+deployment, ALL pre-existing data is adopted into one implicit ROOT
+tenant (``is_system_tenant = true``, workspace ``root`` — Phase 11 "the
+platform is itself a tenant"):
 
-1. The system tenant is created (slug ``system``).
+1. The root tenant is created/renamed to its canonical identity
+   (name ``Root``, slug ``root``).
 2. Every tenant-scoped row with a NULL tenant reference is backfilled to
-   the system tenant — existing users, roles, agents, MCP servers,
+   the root tenant — existing users, roles, agents, MCP servers,
    skills, SOPs, schedules, model configs, provider configs and history
-   keep working unchanged.
+   keep working unchanged.  This INCLUDES the legacy global (tenant-less)
+   business roles: they are re-homed into the root tenant's role space,
+   retiring the global role variant (Phase 11 containment).
 3. Existing administrators (holders of the ``system_admin`` role) are
-   granted a ``platform_admin`` membership in the system tenant; every
+   granted a ``platform_admin`` membership in the root tenant; every
    other existing user receives a regular membership.
 4. The pre-existing identity provider (a global, tenant-less row)
-   continues to serve as the system tenant's provider via the registry's
-   system-tenant fallback — no reconfiguration.
+   continues to serve as the root tenant's provider via the registry's
+   root-slot fallback — no reconfiguration.
 
 Idempotent: safe to re-run (it backfills only rows still NULL and only
 creates missing memberships).  Runs behind the settings toggle, with the
@@ -41,14 +45,21 @@ from app.db.models.tenant_membership import (
 )
 from app.db.models.user_role import UserRole
 from app.services.tenancy.default_tenant_roles import seed_default_tenant_roles
+from app.services.tenancy.root_tenant import (
+    ROOT_TENANT_NAME,
+    ROOT_TENANT_SLUG,
+    ensure_root_tenant,
+    invalidate_root_tenant_cache,
+    seed_root_platform_admin_role,
+)
 from app.services.tenancy.tenant_audit_service import TenantAuditService
 
 logger = logging.getLogger(__name__)
 
-#: Fixed identity of the implicit system tenant.
-SYSTEM_TENANT_SLUG = "system"
-SYSTEM_TENANT_NAME = "System"
-SYSTEM_ADMIN_ROLE_NAME = "system_admin"
+#: Fixed identity of the implicit ROOT tenant (Phase 11 rename from the
+#: legacy ``system`` identity — resolution is by slug lookup, so runtime
+#: references follow the row).
+ROOT_ADMIN_ROLE_NAME = "system_admin"
 
 
 class TenantAdoptionError(Exception):
@@ -56,16 +67,19 @@ class TenantAdoptionError(Exception):
 
 
 class TenantAdoptionService:
-    """Adopts an existing deployment into the implicit system tenant."""
+    """Adopts an existing deployment into the implicit ROOT tenant."""
 
     def __init__(self, audit_service: TenantAuditService | None = None) -> None:
         self._audit = audit_service or TenantAuditService()
 
-    async def find_system_tenant(self, db: AsyncSession) -> Tenant | None:
+    async def find_root_tenant(self, db: AsyncSession) -> Tenant | None:
         result = await db.execute(
             select(Tenant).where(Tenant.is_system_tenant.is_(True))
         )
         return result.scalar_one_or_none()
+
+    # Backwards-compatible alias (pre-Phase-11 name).
+    find_system_tenant = find_root_tenant
 
     async def adopt_system_tenant(
         self,
@@ -73,48 +87,32 @@ class TenantAdoptionService:
         *,
         actor_id: uuid.UUID | None = None,
     ) -> dict[str, Any]:
-        """Create/backfill the system tenant.  Idempotent.
+        """Create/backfill the root tenant.  Idempotent.
 
         Returns a summary dict (slug, backfilled table count, memberships
         granted) used by the settings API response and audit detail.
         """
-        system = await self.find_system_tenant(db)
+        system = await self.find_root_tenant(db)
         created = False
         if system is None:
-            # Guard against a regular tenant already occupying the slug.
-            clash = await db.execute(
-                select(Tenant).where(Tenant.slug == SYSTEM_TENANT_SLUG)
-            )
-            existing = clash.scalar_one_or_none()
-            if existing is not None:
-                if existing.status == TenantStatus.deleted:
-                    raise TenantAdoptionError(
-                        "Slug 'system' is reserved for the system tenant but is "
-                        "held by a deleted tenant; purge it first."
-                    )
-                raise TenantAdoptionError(
-                    "Slug 'system' is reserved for the system tenant but is "
-                    "held by a regular tenant; rename that tenant first."
-                )
-            system = Tenant(
-                name=SYSTEM_TENANT_NAME,
-                slug=SYSTEM_TENANT_SLUG,
-                status=TenantStatus.active,
-                is_system_tenant=True,
-                is_onboarded=True,
-                admin_contact_role="platform_admin",
-            )
-            db.add(system)
-            await db.flush()
+            system = await ensure_root_tenant(db)
             created = True
-            logger.info("System tenant created: id=%s", system.id)
+            logger.info("Root tenant created: id=%s", system.id)
+        else:
+            # Normalize the identity in place (legacy 'system' → 'root').
+            await ensure_root_tenant(db)
+            invalidate_root_tenant_cache()
 
         backfilled = await self._backfill_null_tenant_rows(db, system.id)
         memberships = await self._grant_memberships(db, system)
-        # Consistency: the system tenant gets the four default tenant
-        # roles too.  NOBODY is force-assigned here — existing users keep
-        # their global roles (their memberships date from adoption).
+        # Consistency: the root tenant gets the four default tenant roles
+        # too.  NOBODY is force-assigned here — existing users keep their
+        # (re-homed) root-tenant roles.
         await seed_default_tenant_roles(db, system.id)
+        # Phase 11 containment: seed the root Platform Admin role and
+        # assign it to root platform_admin membership holders.
+        await seed_root_platform_admin_role(db)
+        invalidate_root_tenant_cache()
 
         summary: dict[str, Any] = {
             "slug": system.slug,
@@ -142,16 +140,18 @@ class TenantAdoptionService:
         """Validate that disabling the switch is safe (data preserved).
 
         Disabling never deletes anything: tenant rows stay, references
-        stay, and the platform returns to byte-for-byte single-tenant
-        behaviour.  The validation reports the state for the audit trail.
+        stay, and the platform returns to the root-tenant world (the
+        Phase 11 OFF default context) with legacy behaviour driven by the
+        root's migrated roles.  The validation reports the state for the
+        audit trail.
         """
-        system = await self.find_system_tenant(db)
+        system = await self.find_root_tenant(db)
         tenant_count = (
             await db.execute(select(func.count()).select_from(Tenant))
         ).scalar() or 0
         return {
-            "system_tenant_present": system is not None,
-            "system_tenant_slug": system.slug if system else None,
+            "root_tenant_present": system is not None,
+            "root_tenant_slug": system.slug if system else None,
             "tenants_remaining": int(tenant_count),
             "data_loss": False,
         }
@@ -159,12 +159,14 @@ class TenantAdoptionService:
     # ── Internals ────────────────────────────────────────────────────────────
 
     async def _backfill_null_tenant_rows(
-        self, db: AsyncSession, system_tenant_id: uuid.UUID
+        self, db: AsyncSession, root_tenant_id: uuid.UUID
     ) -> int:
-        """Point every NULL tenant reference at the system tenant.
+        """Point every NULL tenant reference at the root tenant.
 
         Iterates the metadata in reverse topological order (children
         first) so parent rows exist for FK checks within the same pass.
+        This is the adoption-time re-homing of legacy global roles
+        (Phase 11): tenant-less business roles become root-tenant roles.
         """
         from app.db.session import Base
 
@@ -178,12 +180,12 @@ class TenantAdoptionService:
             result = await db.execute(
                 table.update()
                 .where(tenant_col.is_(None))
-                .values(tenant_id=system_tenant_id)
+                .values(tenant_id=root_tenant_id)
             )
             touched += 1
         logger.info(
-            "Adoption backfill: system_tenant=%s tables=%d",
-            system_tenant_id, touched,
+            "Adoption backfill: root_tenant=%s tables=%d",
+            root_tenant_id, touched,
         )
         return touched
 
@@ -200,7 +202,7 @@ class TenantAdoptionService:
         admin_result = await db.execute(
             select(UserRole.user_id)
             .join(Role, Role.id == UserRole.role_id)
-            .where(Role.name == SYSTEM_ADMIN_ROLE_NAME, Role.is_system.is_(True))
+            .where(Role.name == ROOT_ADMIN_ROLE_NAME, Role.is_system.is_(True))
         )
         admin_ids = set(admin_result.scalars().all())
 

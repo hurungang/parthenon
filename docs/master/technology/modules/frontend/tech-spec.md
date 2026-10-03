@@ -311,3 +311,19 @@ The MUI theme is a static constant — no runtime state is introduced. Dark-mode
 |--------|------|-------------|------|
 | `useChatSession` | hook | Manages WebSocket session lifecycle and chat turn transport to Communication Hub with API-only frontend boundaries | `frontend/src/hooks/useChatSession.ts` |
 | `service-segregation-security-audit` | frontend test | Verifies frontend boundary stays API/WS-only and does not introduce direct database transport references | `frontend/src/__tests__/service-segregation-security-audit.test.ts` |
+
+---
+
+## Multi-Tenancy Integration
+
+The frontend gains multi-tenant surfaces since the multi-tenant support change (full details: [multi-tenancy module](../multi-tenancy/tech-spec.md)).
+
+| Symbol | Type | Description | File |
+|--------|------|-------------|------|
+| platform admin console | pages + guard (new) | `/platform/*` tenant management, platform settings, security audit; gated by `PlatformAdminRoute` + `usePlatformAccess` real-permission probe (never `multiTenancyEnabled` alone) | `frontend/src/app/PlatformRoutes.tsx` (+ `PlatformAdminRoute.tsx`, `frontend/src/hooks/usePlatformAccess.ts`, `frontend/src/pages/platform/`) |
+| tenant workspace | pages (new) | Tenant settings (root-only alias edit, `LicenseUsagePanel`), guided onboarding, members/invitations | `frontend/src/pages/tenant/` |
+| public sign-up + workspace sign-in | pages (new/modified) | `SignUpPage` (account-first registration), tenancy-aware `LoginPage` (password card, workspace-address finder, `?workspace=` deep link, discreet root-only super-admin entry) | `frontend/src/pages/auth/SignUpPage.tsx`, `frontend/src/pages/auth/LoginPage.tsx` |
+| tenant state | store (modified) | `AuthProvider` holds `activeTenant`, `availableTenants`, tri-state `multiTenancyEnabled`; one session = one tenant | `frontend/src/stores/AuthContext.tsx` |
+| tenant API clients | modules (new) | `tenantAuthApi` (discovery, register, login-password, remembered-slug hint), `platformAdminApi`, `tenantApi` | `frontend/src/api/tenantAuthApi.ts` (+ `platformAdminApi.ts`, `tenantApi.ts`) |
+| `apiClient` self-heal | module (modified) | Attaches `X-Tenant` from the per-tab resolved slug; recognizes the middleware's fail-closed unknown-slug 403 and clears the invalid binding | `frontend/src/api/apiClient.ts` |
+| quota-blocked UX | components (new) | `QuotaBlockedAlert` + `extractQuotaBlocked` rendering the structured quota contract on blocked actions | `frontend/src/components/tenant/QuotaBlockedAlert.tsx`, `frontend/src/utils/quotaErrorUtils.ts` |

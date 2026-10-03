@@ -132,9 +132,9 @@ class _FakeRegistry:
     """Registry stub mirroring the real resolution order (own → shared →
     system slot)."""
 
-    def __init__(self, providers: dict, system_tenant_id: uuid.UUID | None = None):
+    def __init__(self, providers: dict, root_tenant_id: uuid.UUID | None = None):
         self._providers = providers
-        self._system_tenant_id = str(system_tenant_id) if system_tenant_id else None
+        self._root_tenant_id = str(root_tenant_id) if root_tenant_id else None
         self.initialized = True
         self._multi_tenancy_enabled = True
 
@@ -145,10 +145,10 @@ class _FakeRegistry:
             entry = self._providers.get((None, scope))
         if (
             entry is None
-            and self._system_tenant_id
-            and self._system_tenant_id != tenant_key
+            and self._root_tenant_id
+            and self._root_tenant_id != tenant_key
         ):
-            entry = self._providers.get((self._system_tenant_id, scope))
+            entry = self._providers.get((self._root_tenant_id, scope))
         if entry is None:
             return None
         return SimpleNamespace(
@@ -166,6 +166,8 @@ def _fake_request(ctx):
     request = SimpleNamespace()
     request.state = SimpleNamespace()
     request.state.tenant_context = ctx
+    # Phase 11: a resolved context is tenancy-ON in these tests.
+    request.state.tenancy_enabled = ctx is not None
     request.url = SimpleNamespace(path="/api/v1/dashboard/summary")
     request.method = "GET"
     request.client = SimpleNamespace(host="10.0.0.9")

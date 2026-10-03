@@ -349,47 +349,6 @@ def _no_access_to_workspace_detail(module: str, action: str) -> NoWorkspaceAcces
     )
 
 
-async def _system_tenant_platform_admin(db: AsyncSession, user_id: Any) -> bool:
-    """True when the user holds an ACTIVE ``platform_admin`` membership in
-    the SYSTEM tenant (the platform console's membership-based gate,
-    FIX-20260930-235927).
-
-    Both lookups run through :func:`execute_unscoped` (identity plane):
-    the platform console lives at the base domain where no tenant scope
-    is bound, but these lookups must also stay correct if a scoped
-    session ever reaches this path.
-    """
-    from sqlalchemy import select
-
-    from app.db.models.tenant import Tenant
-    from app.db.models.tenant_membership import (
-        TenantUserMembership,
-        TenantUserMembershipStatus,
-    )
-    from app.db.tenant_scoping import execute_unscoped
-
-    system = (
-        await execute_unscoped(
-            db, select(Tenant.id).where(Tenant.is_system_tenant.is_(True))
-        )
-    ).scalar_one_or_none()
-    if system is None:
-        return False
-
-    membership = (
-        await execute_unscoped(
-            db,
-            select(TenantUserMembership).where(
-                TenantUserMembership.user_id == user_id,
-                TenantUserMembership.tenant_id == system,
-                TenantUserMembership.status == TenantUserMembershipStatus.active,
-                TenantUserMembership.tenant_role == "platform_admin",
-            ),
-        )
-    ).scalar_one_or_none()
-    return membership is not None
-
-
 async def authorize_identity(
     db: AsyncSession,
     claims: dict[str, Any],
@@ -478,79 +437,58 @@ async def authorize_identity(
         user.id, user.sub,
     )
 
+    # Platform containment (Phase 11 — supersedes the FIX-20260930-235927
+    # membership gate, which is REMOVED): ``platform::*`` checks simply
+    # evaluate the SESSION tenant's roles.  ``platform::`` grants exist
+    # only in the root tenant's role space (the seeded root ``Platform
+    # Admin`` role), so a platform check with no resolved tenant context
+    # (the base-domain platform console) binds the ROOT tenant — a
+    # customer tenant's roles can structurally never satisfy it.  The
+    # super-admin bypass above is unchanged.
+    root_tenant_id: Any | None = None
+    if module.startswith("platform::") and tenant_id is None:
+        from app.services.tenancy.root_tenant import get_root_tenant_id
+
+        tenant_id = root_tenant_id = await get_root_tenant_id(db)
+
     # No-membership gate (FIX-20260929-221449): an authenticated user
     # WITHOUT an active membership in the RESOLVED tenant gets the clean
     # structured no_access_to_workspace denial — the identity is valid
     # (no re-authentication), but the workspace grants them nothing.
     # Cross-tenant safety is preserved: membership + row-level scoping
     # still gate every piece of data.
-    membership = None
+    # Phase 11: the gate applies to RESOLVED CUSTOMER tenants in any
+    # switch state.  The ROOT tenant is exempt: with the switch OFF the
+    # default context IS the root tenant (the one-tenant world), where
+    # legacy users hold no memberships by design and access is driven
+    # purely by the root's migrated roles.
     if tenant_id is not None:
-        membership = await _active_membership(db, user.id, tenant_id)
-        if membership is None:
-            logger.warning(
-                "authorize_identity: user_id=%s has no active membership in "
-                "resolved tenant=%s — no_access_to_workspace",
-                user.id, tenant_id,
-            )
-            raise _no_access_to_workspace_detail(module, action)
+        if root_tenant_id is None:
+            from app.services.tenancy.root_tenant import get_root_tenant_id
 
-    # Tenant membership grants (multi-tenancy): the ROOT membership grants
-    # every non-platform module directly (blanket tenant-owner grant);
-    # non-root membership roles keep the legacy tenant self-service
-    # grants (tenant::*).  Business modules (agent::*, integration::*,
-    # system::*) reach this path too so a root tenant owner can use them
-    # without any platform RBAC role.
-    if membership is not None and not module.startswith("platform::"):
-        if _membership_grants_from(membership, module, action):
-            logger.debug(
-                "authorize_identity ALLOWED via membership: user_id=%s module=%s action=%s",
-                user.id, module, action,
-            )
-            return claims
+            root_tenant_id = await get_root_tenant_id(db)
+        if tenant_id != root_tenant_id:
+            membership = await _active_membership(db, user.id, tenant_id)
+            if membership is None:
+                logger.warning(
+                    "authorize_identity: user_id=%s has no active membership in "
+                    "resolved tenant=%s — no_access_to_workspace",
+                    user.id, tenant_id,
+                )
+                raise _no_access_to_workspace_detail(module, action)
 
-    # Platform gating (FIX-20260930-235927): with multi-tenancy ON, the
-    # ``platform::*`` admin group is satisfied ONLY by the super-admin
-    # bypass (above) or an ACTIVE platform_admin membership in the SYSTEM
-    # tenant.  The PermissionEngine collects GLOBAL tenant-less roles for
-    # every module — legacy pre-tenancy ``system_admin`` wildcard holders
-    # would otherwise unlock the whole platform console.  Global roles
-    # remain effective for every non-platform module (legacy behaviour in
-    # tenant workspaces unchanged); multi-tenancy OFF skips this gate
-    # entirely (byte-for-byte legacy, no platform concept).
-    if module.startswith("platform::"):
-        from app.services.tenancy.platform_settings_service import (
-            get_platform_settings_service,
-        )
-
-        if await get_platform_settings_service().is_multi_tenancy_enabled(db):
-            if await _system_tenant_platform_admin(db, user.id):
+            # Tenant membership grants: the ROOT membership grants every
+            # non-platform module directly (blanket tenant-owner grant);
+            # non-root membership roles keep the legacy tenant
+            # self-service grants (tenant::*).
+            if not module.startswith("platform::") and _membership_grants_from(
+                membership, module, action
+            ):
                 logger.debug(
-                    "authorize_identity ALLOWED via system-tenant platform_admin "
-                    "membership: user_id=%s module=%s action=%s",
+                    "authorize_identity ALLOWED via membership: user_id=%s module=%s action=%s",
                     user.id, module, action,
                 )
                 return claims
-            logger.warning(
-                "authorize_identity PLATFORM DENIED: user_id=%s module=%s action=%s "
-                "— platform::* requires a system-tenant platform_admin membership "
-                "when multi-tenancy is ON",
-                user.id, module, action,
-            )
-            raise HTTPException(
-                status_code=403,
-                detail=PermissionDeniedDetail(
-                    detail=(
-                        "Platform administration requires a platform_admin "
-                        "membership in the system tenant."
-                    ),
-                    required_permission=RequiredPermission(
-                        resource_type=module,
-                        action=action,
-                        resource_id=None,
-                    ),
-                ).model_dump(),
-            )
 
     auth = await PermissionEngine().authorize(
         db=db,

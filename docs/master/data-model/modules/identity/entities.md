@@ -4,6 +4,7 @@
 erDiagram
     Identity {
         uuid id
+        uuid tenant_id "tenant-scoped"
         string subject
         string idp_subject
         string email
@@ -14,6 +15,7 @@ erDiagram
     }
     Role {
         uuid id
+        uuid tenant_id "tenant-owned; legacy global roles migrated into root tenant"
         string name
         enum role_type
         boolean is_active
@@ -31,6 +33,7 @@ erDiagram
     }
     IdentityProviderConfig {
         uuid id
+        uuid tenant_id "per-tenant OIDC binding"
         enum provider_scope
         enum provider_type
         string display_name
@@ -72,6 +75,8 @@ erDiagram
     IdentityProviderConfig ||--o{ IdentityProviderConfigAudit : "audits"
     IdentityProviderSetupState ||--o| Identity : "completed_by"
 ```
+
+> **Tenant scoping:** `Identity`, `Role`, `IdentityProviderConfig`, and `IdentityProviderConfigAudit` carry a direct tenant reference. **Per-tenant OIDC**: each tenant registers its own identity provider, sign-in credentials are tenant-bound, and a credential issued by tenant A's provider is rejected outside tenant A; the existing `provider_scope` (user/agent) uniqueness becomes per-tenant when multi-tenancy is enabled. `Permission` remains a **global catalogue** (not tenant-scoped) — grants are tenant-local via roles. `IdentityProviderSetupState` and `SuperAdminCredentials` remain platform-level. **Legacy global roles are migrated to the root tenant** (workspace `root`, `is_root_tenant = true`), so every business role is tenant-owned and the **permission containment invariant** holds: grants never cross tenant boundaries; `platform::` grants exist only in the root tenant's role space.
 
 **Sources**: `backend/app/db/models/identity.py`, `backend/app/db/models/identity_provider_config.py`, `backend/app/db/models/identity_provider_config_audit.py`, `backend/app/db/models/identity_provider_setup_state.py`, `backend/app/db/models/super_admin_credentials.py`
 
@@ -205,6 +210,8 @@ erDiagram
 ```
 
 > **Module::submodule naming convention**: `PolicyStatement.module` and `PolicyResource.resource_type` use a two-layer namespaced format (`module::submodule`, e.g. `agent::management`). There are three modules: `agent`, `integration`, and `system`. Wildcards are supported: `*::*` matches all, `module::*` matches all submodules within a module. Legacy flat values are no longer accepted — validation is enforced via `ResourceTypeManifest`.
+
+> **Tenant scoping:** `Role`, `PolicyStatement`, `PolicyAction`, `PolicyResource`, `Group`, `AccessRequest`, `AccessRequestBatch`, and `TagDefinition` carry a direct tenant reference; `UserRole`, `GroupRole`, `UserGroup`, and `PolicyTagCondition` inherit scope via their parents. **Legacy global roles are migrated to the root tenant** (workspace `root`) at adoption — no global (tenant-less) roles remain. Wildcard grants (`agent::*`, `*::*`) are shorthand within one tenant's role space and never cross tenant boundaries; `platform::` grants exist only in the root tenant's role space.
 
 **Sources**: `backend/app/db/models/tag_definition.py`, `backend/app/db/models/tag_value.py`, `backend/app/db/models/role.py`, `backend/app/db/models/policy_statement.py`, `backend/app/db/models/policy_action.py`, `backend/app/db/models/policy_resource.py`, `backend/app/db/models/policy_tag_condition.py`, `backend/app/db/models/platform_user.py`, `backend/app/db/models/user_role.py`, `backend/app/db/models/group.py`, `backend/app/db/models/group_role.py`, `backend/app/db/models/user_group.py`, `backend/app/db/models/access_request_batch.py`, `backend/app/db/models/access_request.py`
 

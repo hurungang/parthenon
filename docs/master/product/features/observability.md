@@ -50,3 +50,7 @@ Observability provides real-time insight into the health, performance, and activ
 - Depends on a vendor and model catalogue that the hierarchy can be built on top of, so that vendor enable/disable and model selection have a stable source of truth
 - Depends on reliable runtime state and delegation relationship signals to render the Agent Runtime Monitor map accurately
 - Constrained by enterprise auditability requirements: guardrail alerts, model-usage posture changes, vendor/model disable changes, and termination actions must be visible in operational logs
+
+## Multi-Tenancy Note
+
+When multi-tenancy is enabled (see [Multi-Tenancy](multi-tenancy.md)), traces, metrics, and logs carry tenant attribution, supporting accurate per-tenant per-month execution metering. With multi-tenancy disabled (the default), behavior is unchanged — the deployment operates as the root tenant's workspace.
