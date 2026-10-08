@@ -76,6 +76,8 @@ export interface McpSession {
 export interface McpTool {
   id: string
   server_id: string
+  server_slug?: string
+  server_name?: string
   name: string
   original_name: string
   description: string | null

@@ -60,6 +60,14 @@ async def authed_client(test_engine):
 
     app.dependency_overrides[get_db] = override_db
 
+    # Provision the root tenant — internal data-plane requests bind it
+    # when no signed tenant headers are present (multi-tenancy off).
+    async with SessionLocal() as session:
+        from app.services.tenancy.root_tenant import ensure_root_tenant
+
+        await ensure_root_tenant(session)
+        await session.commit()
+
     async with AsyncClient(
         transport=ASGITransport(app=app), base_url="http://test"
     ) as client:
@@ -71,9 +79,12 @@ async def _create_data_type(
     name: str | None = None,
     slug: str | None = None,
 ) -> AgentDataType:
-    """Create a data type directly in the database."""
+    """Create a data type directly in the database (root tenant)."""
+    from app.services.tenancy.root_tenant import get_root_tenant_id
+
     unique = uuid.uuid4().hex[:8]
     dt = AgentDataType(
+        tenant_id=await get_root_tenant_id(db),
         name=name or f"test-dt-{unique}",
         slug=slug or f"test-dt-{unique}",
         description="Test data type",
@@ -90,9 +101,12 @@ async def _create_data_type(
 
 
 async def _create_agent_type(db: AsyncSession) -> AgentType:
-    """Create an agent type directly in the database."""
+    """Create an agent type directly in the database (root tenant)."""
+    from app.services.tenancy.root_tenant import get_root_tenant_id
+
     unique = uuid.uuid4().hex[:8]
     at = AgentType(
+        tenant_id=await get_root_tenant_id(db),
         name=f"test-agent-{unique}",
         description="Test agent type",
     )
@@ -291,8 +305,11 @@ class TestQueryAgentOutputs:
             at = await _create_agent_type(db)
             session_id = uuid.uuid4()
 
-            # Create one output
+            # Create one output (root tenant — listing is tenant-scoped)
+            from app.services.tenancy.root_tenant import get_root_tenant_id
+
             output = AgentOutput(
+                tenant_id=await get_root_tenant_id(db),
                 data_type_id=dt.id,
                 agent_type_id=at.id,
                 execution_session_id=session_id,
@@ -320,9 +337,13 @@ class TestQueryAgentOutputs:
             dt = await _create_data_type(db)
             at = await _create_agent_type(db)
 
-            # Create 3 outputs
+            # Create 3 outputs (root tenant — listing is tenant-scoped)
+            from app.services.tenancy.root_tenant import get_root_tenant_id
+
+            root_tid = await get_root_tenant_id(db)
             for i in range(3):
                 output = AgentOutput(
+                    tenant_id=root_tid,
                     data_type_id=dt.id,
                     agent_type_id=at.id,
                     execution_session_id=uuid.uuid4(),

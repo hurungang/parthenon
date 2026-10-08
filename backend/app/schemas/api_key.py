@@ -125,6 +125,14 @@ class ApiKeyValidateResponse(BaseModel):
     tenant_id: uuid.UUID | None = Field(
         default=None, description="Tenant the API key belongs to (null = single-tenant mode / unadopted key)"
     )
+    # Multi-tenancy: HMAC-signed X-Internal-Tenant-* header set for this
+    # tenant, minted by Control Center (the only signer).  CH forwards it
+    # verbatim on internal CC calls for this MCP session — CH can never
+    # sign (or widen) a tenant context itself.
+    tenant_headers: dict[str, str] | None = Field(
+        default=None,
+        description="Signed tenant context headers to forward on internal calls (CC-signed)",
+    )
 
 
 class SkillWithVersion(BaseModel):

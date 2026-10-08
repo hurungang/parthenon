@@ -12,7 +12,7 @@ from __future__ import annotations
 import logging
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
 from app.api.deps import require_permission
 from app.core.resource_types import RT_AGENT_DATA
@@ -32,6 +32,7 @@ _data_service = AgentDataService()
 
 @AgentDataRouter.get("", response_model=AgentDataListResponse)
 async def list_agent_data(
+    request: Request,
     db: DbSession,
     data_name: str | None = Query(None, description="Exact match filter on data name"),
     agent_type_id: uuid.UUID | None = Query(None, description="Filter by agent type ID"),
@@ -47,6 +48,9 @@ async def list_agent_data(
     """
     logger.info("Listing agent data: data_name=%s agent_type=%s page=%d", data_name, agent_type_id, page)
 
+    from app.core.tenant_context import tenant_id_or_none, get_tenant_context
+
+    tenant_id = tenant_id_or_none(get_tenant_context(request))
     items, total = await _data_service.list_all(
         db=db,
         data_name=data_name,
@@ -54,6 +58,7 @@ async def list_agent_data(
         session_id=session_id,
         page=page,
         page_size=page_size,
+        tenant_id=tenant_id,
     )
 
     responses = []
@@ -84,13 +89,20 @@ async def list_agent_data(
 @AgentDataRouter.get("/{record_id}", response_model=AgentDataResponse)
 async def get_agent_data(
     record_id: uuid.UUID,
+    request: Request,
     db: DbSession,
     _: dict = Depends(require_permission(RT_AGENT_DATA, "read")),
 ) -> AgentDataResponse:
     """Get a single agent data record by ID with its full data value."""
     logger.info("Getting agent data: record_id=%s", record_id)
 
-    record = await _data_service.get_by_id(db=db, record_id=record_id)
+    from app.core.tenant_context import tenant_id_or_none, get_tenant_context
+
+    record = await _data_service.get_by_id(
+        db=db,
+        record_id=record_id,
+        tenant_id=tenant_id_or_none(get_tenant_context(request)),
+    )
     if not record:
         raise HTTPException(status_code=404, detail=f"AgentData {record_id} not found")
 

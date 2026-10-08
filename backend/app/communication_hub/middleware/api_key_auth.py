@@ -202,6 +202,15 @@ class ApiKeyAuthMiddleware(BaseHTTPMiddleware):
         tenant_id = validation.get("tenant_id")
         if tenant_id:
             request.state.tenant_id = tenant_id
+            # Bind the CC-signed header set for downstream forwarding:
+            # every internal CC call this session makes (tool listing,
+            # MCP proxy, skill resolution) carries the key tenant's
+            # signed context verbatim — CH never signs.
+            tenant_headers = validation.get("tenant_headers")
+            if tenant_headers:
+                from app.core.tenant_signature import bind_forwarded_tenant_headers
+
+                bind_forwarded_tenant_headers(dict(tenant_headers))
             logger.info(
                 "API key auth tenant binding: key_name=%s tenant=%s",
                 validation.get("api_key_name"),

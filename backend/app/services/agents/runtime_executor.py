@@ -1070,7 +1070,10 @@ class AgentRuntimeExecutor:
 
         try:
             # Query MCP sessions assigned to this role via agent_role_mcp_sessions
-            result = await db.execute(
+            from app.db.tenant_scoping import scope_for_session as _scope_for
+
+            _scope_tenant = _scope_for(db)
+            _ctx_query = (
                 select(McpSession, McpServer)
                 .join(AgentRoleMcpSession, AgentRoleMcpSession.mcp_session_id == McpSession.id)
                 .join(McpServer, McpServer.id == McpSession.server_id)
@@ -1078,6 +1081,10 @@ class AgentRuntimeExecutor:
                 .where(McpSession.is_active.is_(True))
                 .order_by(McpServer.name, McpSession.name)
             )
+            if _scope_tenant is not None:
+                # Tenant-scoped context: only the calling tenant's servers.
+                _ctx_query = _ctx_query.where(McpServer.tenant_id == _scope_tenant)
+            result = await db.execute(_ctx_query)
             session_pairs = list(result.all())
 
             if not session_pairs:
@@ -1206,6 +1213,18 @@ class AgentRuntimeExecutor:
         if agent_target_slugs:
             from sqlalchemy import select as _select
             from app.db.models.agents import AgentType
+            from app.db.tenant_scoping import scope_for_session
+
+            # A2A delegation targets resolve within the CALLING tenant only —
+            # ``agent____<slug>`` maps against the caller's own agent types
+            # (same slug in another tenant is unreachable).
+            delegated_predicates: list[Any] = [
+                AgentType.name.in_(agent_target_slugs),
+                AgentType.is_active.is_(True),
+            ]
+            _tenant_id = scope_for_session(db)
+            if _tenant_id is not None:
+                delegated_predicates.append(AgentType.tenant_id == _tenant_id)
 
             delegated_rows = await db.execute(
                 _select(
@@ -1213,10 +1232,7 @@ class AgentRuntimeExecutor:
                     AgentType.description,
                     AgentType.input_type,
                     AgentType.input_schema,
-                ).where(
-                    AgentType.name.in_(agent_target_slugs),
-                    AgentType.is_active.is_(True),
-                )
+                ).where(*delegated_predicates)
             )
 
             for name, description, input_type, input_schema in delegated_rows.fetchall():
@@ -1234,10 +1250,21 @@ class AgentRuntimeExecutor:
             return defs, tool_name_map
 
         try:
+            from app.db.tenant_scoping import scope_for_session
+
+            # Tenant-scoped resolution (defense in depth — the session
+            # choke point also constrains this): ``server____tool`` maps
+            # against the calling tenant's registry only, so the same
+            # namespaced name in another tenant never resolves here.
+            tool_predicates: list[Any] = [
+                McpTool.name.in_(tool_names),
+                McpTool.is_active.is_(True),
+            ]
+            _tenant_id = scope_for_session(db)
+            if _tenant_id is not None:
+                tool_predicates.append(McpTool.tenant_id == _tenant_id)
             result = await db.execute(
-                select(McpTool)
-                .where(McpTool.name.in_(tool_names))
-                .where(McpTool.is_active.is_(True))
+                select(McpTool).where(*tool_predicates)
             )
             mcp_tools = list(result.scalars().all())
             
@@ -3995,14 +4022,22 @@ class AgentRuntimeExecutor:
         """
         from sqlalchemy import select
         from app.db.models.agents import AgentRoleMcpSession
-        from app.db.models.mcp_hub import McpSession
-        
-        result = await db.execute(
+        from app.db.models.mcp_hub import McpServer, McpSession
+        from app.db.tenant_scoping import scope_for_session
+
+        # Tenant-scoped session resolution: joining the tenant-carrying
+        # McpServer parent ensures only the calling tenant's sessions map.
+        stmt = (
             select(McpSession.id, McpSession.server_id, McpSession.auth_type)
             .join(AgentRoleMcpSession, AgentRoleMcpSession.mcp_session_id == McpSession.id)
+            .join(McpServer, McpServer.id == McpSession.server_id)
             .where(AgentRoleMcpSession.role_id == role_id)
             .where(McpSession.is_active.is_(True))
         )
+        _tenant_id = scope_for_session(db)
+        if _tenant_id is not None:
+            stmt = stmt.where(McpServer.tenant_id == _tenant_id)
+        result = await db.execute(stmt)
         
         return {
             str(row.server_id): {
@@ -4039,10 +4074,19 @@ class AgentRuntimeExecutor:
         from app.services.mcp.proxy import McpProxyEngine, McpProxyError
 
         try:
+            from app.db.tenant_scoping import scope_for_session
+
+            # Tenant-scoped tool resolution (fail-closed): a tool name
+            # registered only in another tenant is unresolvable here.
+            tool_predicates: list[Any] = [
+                McpTool.name == tool_name,
+                McpTool.is_active.is_(True),
+            ]
+            _tenant_id = scope_for_session(db)
+            if _tenant_id is not None:
+                tool_predicates.append(McpTool.tenant_id == _tenant_id)
             result = await db.execute(
-                select(McpTool)
-                .where(McpTool.name == tool_name)
-                .where(McpTool.is_active.is_(True))
+                select(McpTool).where(*tool_predicates)
             )
             tool = result.scalar_one_or_none()
             if not tool:

@@ -8,8 +8,13 @@ from typing import Any
 from opentelemetry import trace
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
-from app.db.models.notifications import RecipientGroup, SourceType
+from app.db.models.notifications import (
+    GroupChannelMapping,
+    RecipientGroup,
+    SourceType,
+)
 from app.services.notifications.notification_service import NotificationService
 from app.services.notifications.repository import NotificationRepository
 
@@ -108,12 +113,21 @@ async def handle_send_notification(
     ):
         svc = NotificationService(db_session)
         try:
+            # Tenant containment: resolve within the calling tenant
+            # (contextvar, set by the tenant middlewares); NULL falls back
+            # to the root tenant inside the service.
+            from app.core.tenant_context import get_current_tenant_context
+
+            current_tenant = get_current_tenant_context()
             result = await svc.send_to_group(
                 group_slug=group_slug,
                 body=body,
                 subject=subject,
                 source_type=SourceType.AGENT,
                 source_id=source_id,
+                tenant_id=(
+                    current_tenant.tenant_id if current_tenant is not None else None
+                ),
             )
         except ValueError as exc:
             logger.warning("send_notification tool: group not found: %s", exc)
@@ -165,9 +179,23 @@ async def handle_get_recipient_group(
     ):
         repo = NotificationRepository(db_session)
         try:
-            # Query recipient group by slug
+            # Query recipient group by slug — scoped to the current tenant
+            # when one is active (contextvar, set by the tenant middlewares).
+            from app.core.tenant_context import get_current_tenant_context
+
+            current_tenant = get_current_tenant_context()
+            tenant_id = current_tenant.tenant_id if current_tenant is not None else None
             result = await db_session.execute(
-                select(RecipientGroup).where(RecipientGroup.slug == group_slug)
+                select(RecipientGroup)
+                .where(
+                    RecipientGroup.slug == group_slug,
+                    RecipientGroup.tenant_id == tenant_id,
+                )
+                .options(
+                    selectinload(RecipientGroup.channel_mappings).selectinload(
+                        GroupChannelMapping.channel
+                    )
+                )
             )
             group = result.scalar_one_or_none()
 

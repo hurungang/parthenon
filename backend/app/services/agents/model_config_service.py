@@ -76,13 +76,29 @@ class ModelConfigService:
         api_key: str | None,
         enabled_models: list[str],
         db: AsyncSession,
+        tenant_id: uuid.UUID | None = None,
     ) -> ModelConfig:
+        # Duplicate display names collide only within the same tenant
+        # (uq_model_configs_tenant_display_name); tenant-less rows keep the
+        # platform-wide scope via the partial global index.
+        dup = await db.execute(
+            select(ModelConfig).where(
+                ModelConfig.display_name == display_name,
+                ModelConfig.tenant_id == tenant_id,
+            )
+        )
+        if dup.scalar_one_or_none() is not None:
+            raise ModelConfigConflictError(
+                f"A model configuration named '{display_name}' already exists"
+            )
+
         encrypted_api_key: str | None = None
         if api_key:
             vault = get_vault()
             encrypted_api_key = vault.encrypt(json.dumps({"api_key": api_key}))
 
         config = ModelConfig(
+            tenant_id=tenant_id,
             display_name=display_name,
             provider_type=provider_type,
             api_base_url=api_base_url,

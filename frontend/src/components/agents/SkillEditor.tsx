@@ -180,11 +180,13 @@ export function SkillEditor({ open, skill, mode = 'create', onClose, onSaved }: 
     return m
   }, [servers])
 
-  // Group tools by server slug
+  // Group tools by server slug (prefer the tool's own server_slug so
+  // virtual servers like `system`/`decision` group correctly even when the
+  // server list is not readable).
   const toolsByServer = useMemo(() => {
     const groups: Record<string, McpTool[]> = {}
     for (const tool of allTools ?? []) {
-      const slug = serverMap[tool.server_id] ?? tool.server_id
+      const slug = tool.server_slug ?? serverMap[tool.server_id] ?? tool.server_id
       if (!groups[slug]) groups[slug] = []
       groups[slug].push(tool)
     }

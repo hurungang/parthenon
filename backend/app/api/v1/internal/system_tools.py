@@ -22,7 +22,8 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import require_service_certificate
+from app.api.deps import require_internal_tenant_context, require_service_certificate
+from app.core.tenant_context import TenantContext
 from app.db.models.agents import AgentOutputType
 from app.db.session import get_db
 
@@ -31,7 +32,10 @@ logger = logging.getLogger(__name__)
 router = APIRouter(
     prefix="/internal/system-tools",
     tags=["Internal - System Tools"],
-    dependencies=[Depends(require_service_certificate)],
+    dependencies=[
+        Depends(require_service_certificate),
+        Depends(require_internal_tenant_context),
+    ],
 )
 
 
@@ -81,6 +85,7 @@ def _content_type_from_output_type(output_type: AgentOutputType | str, requested
 @router.post("/send-notification", response_model=SystemToolResponse)
 async def send_notification_tool(
     body: SystemToolRequest,
+    tenant_ctx: Annotated[TenantContext, Depends(require_internal_tenant_context)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> SystemToolResponse:
     """Send notification via recipient group.
@@ -118,6 +123,7 @@ async def send_notification_tool(
             subject=subject,
             body=message_body,
             channel=channel,
+            tenant_id=tenant_ctx.tenant_id,
         )
 
         logger.info("Notification sent to group %s", group_slug)
@@ -137,6 +143,7 @@ async def send_notification_tool(
 @router.post("/get-recipient-group", response_model=SystemToolResponse)
 async def get_recipient_group_tool(
     body: SystemToolRequest,
+    tenant_ctx: Annotated[TenantContext, Depends(require_internal_tenant_context)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> SystemToolResponse:
     """Get recipient group information.
@@ -168,9 +175,13 @@ async def get_recipient_group_tool(
         from app.db.models.notifications import GroupChannelMapping, RecipientGroup
 
         # Get the group with channel mappings (channels are accessed via GroupChannelMapping)
+        # Tenant containment: resolve strictly within the signed tenant.
         result = await db.execute(
             select(RecipientGroup)
-            .where(RecipientGroup.slug == group_slug)
+            .where(
+                RecipientGroup.slug == group_slug,
+                RecipientGroup.tenant_id == tenant_ctx.tenant_id,
+            )
             .options(
                 selectinload(RecipientGroup.channel_mappings).selectinload(
                     GroupChannelMapping.channel
@@ -214,6 +225,7 @@ async def get_recipient_group_tool(
 @router.post("/human-intervene", response_model=SystemToolResponse)
 async def human_intervene_tool(
     body: SystemToolRequest,
+    tenant_ctx: Annotated[TenantContext, Depends(require_internal_tenant_context)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> SystemToolResponse:
     """Create a human intervene request for an agent session.
@@ -419,6 +431,7 @@ async def human_intervene_tool(
                 subject=f"Intervene Request ({intervention_type_value})",
                 source_type=SourceType.INTERVENE_REQUEST_CREATED,
                 source_id=request_id,
+                tenant_id=tenant_ctx.tenant_id,
             )
         except Exception:
             logger.warning(
@@ -447,6 +460,7 @@ async def human_intervene_tool(
 @router.post("/query-result", response_model=SystemToolResponse)
 async def query_result_tool(
     body: SystemToolRequest,
+    tenant_ctx: Annotated[TenantContext, Depends(require_internal_tenant_context)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> SystemToolResponse:
     """Query past typed agent outputs by data type name.
@@ -486,15 +500,22 @@ async def query_result_tool(
             )
 
         # Resolve data_type_name to AgentDataType.id
+        # Tenant containment: strictly within the signed tenant.
         # Try slug first (exact match), then name (exact match)
         result = await db.execute(
-            select(AgentDataType).where(AgentDataType.slug == data_type_name)
+            select(AgentDataType).where(
+                AgentDataType.slug == data_type_name,
+                AgentDataType.tenant_id == tenant_ctx.tenant_id,
+            )
         )
         data_type = result.scalar_one_or_none()
 
         if not data_type:
             result = await db.execute(
-                select(AgentDataType).where(AgentDataType.name == data_type_name)
+                select(AgentDataType).where(
+                    AgentDataType.name == data_type_name,
+                    AgentDataType.tenant_id == tenant_ctx.tenant_id,
+                )
             )
             data_type = result.scalar_one_or_none()
 
@@ -523,7 +544,7 @@ async def query_result_tool(
         # Query outputs using OutputService
         output_service = OutputService()
         items, total = await output_service.list_outputs(
-            db=db, filters=filters_dict
+            db=db, filters=filters_dict, tenant_id=tenant_ctx.tenant_id
         )
 
         # Build response
@@ -574,6 +595,7 @@ async def query_result_tool(
 @router.post("/save-data", response_model=SystemToolResponse)
 async def save_data_tool(
     body: SystemToolRequest,
+    tenant_ctx: Annotated[TenantContext, Depends(require_internal_tenant_context)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> SystemToolResponse:
     """Save a named AgentData record on behalf of an agent session.
@@ -620,6 +642,7 @@ async def save_data_tool(
             data_value=data_value,
             agent_type_id=uuid.UUID(agent_type_id_raw) if agent_type_id_raw else None,
             data_type=data_type,
+            tenant_id=tenant_ctx.tenant_id,
         )
         await db.commit()
 
@@ -652,6 +675,7 @@ async def save_data_tool(
 @router.post("/get-data", response_model=SystemToolResponse)
 async def get_data_tool(
     body: SystemToolRequest,
+    tenant_ctx: Annotated[TenantContext, Depends(require_internal_tenant_context)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> SystemToolResponse:
     """Query AgentData records for an agent session or type.
@@ -699,6 +723,7 @@ async def get_data_tool(
             session_id=uuid.UUID(session_id_raw) if session_id_raw else None,
             limit=limit,
             offset=offset,
+            tenant_id=tenant_ctx.tenant_id,
         )
 
         return SystemToolResponse(
@@ -732,6 +757,7 @@ async def get_data_tool(
 @router.post("/get-output", response_model=SystemToolResponse)
 async def get_output_tool(
     body: SystemToolRequest,
+    tenant_ctx: Annotated[TenantContext, Depends(require_internal_tenant_context)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> SystemToolResponse:
     """Query AgentOutput records for an agent session or type.
@@ -771,6 +797,7 @@ async def get_output_tool(
             date_to=date_to_raw,
             limit=limit,
             offset=offset,
+            tenant_id=tenant_ctx.tenant_id,
         )
 
         return SystemToolResponse(
@@ -810,6 +837,7 @@ from app.schemas.api_key import SkillResolveInternalRequest, SkillResolveInterna
 @router.post("/skills/resolve", response_model=SkillResolveInternalResponse)
 async def resolve_skills_internal(
     body: SkillResolveInternalRequest,
+    tenant_ctx: Annotated[TenantContext, Depends(require_internal_tenant_context)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> SkillResolveInternalResponse:
     """Resolve all accessible skills for an agent role with optional ``since`` filter.
@@ -842,8 +870,14 @@ async def resolve_skills_internal(
     )
 
     try:
-        # Verify role exists
-        role = await db.get(AgentRole, body.agent_role_id)
+        # Verify role exists within the signed tenant (tenant-contained).
+        role_result = await db.execute(
+            select(AgentRole).where(
+                AgentRole.id == body.agent_role_id,
+                AgentRole.tenant_id == tenant_ctx.tenant_id,
+            )
+        )
+        role = role_result.scalar_one_or_none()
         if not role:
             raise HTTPException(
                 status_code=404,
@@ -923,4 +957,155 @@ async def resolve_skills_internal(
         raise HTTPException(
             status_code=500,
             detail=f"Failed to resolve skills: {exc}",
+        )
+
+
+# ── Decision Tool Resolution + Execution (Communication Hub forwarding) ──────
+
+
+class DecisionToolExecuteRequest(BaseModel):
+    """Request from Communication Hub to execute a decision tool.
+
+    CH holds no credentials and makes no external calls — Control Center
+    resolves the tool within the given tenant, decrypts the provider key,
+    and dispatches. Tenant containment: the tool name resolves strictly
+    within ``tenant_id`` (identical names in different tenants are
+    independent).
+    """
+
+    session_id: str
+    tenant_id: str | None = None
+    tool_name: str
+    input_state: dict[str, Any] = {}
+    conversation_session_id: str | None = None
+
+
+class DecisionToolInfo(BaseModel):
+    """Catalog entry for one decision tool (MCP surface uses ``decision____<name>``)."""
+
+    id: str
+    name: str
+    description: str | None
+    input_schema: dict[str, Any] | None
+    enabled: bool
+
+
+class DecisionToolListResponse(BaseModel):
+    """Tenant-scoped decision tool catalog for the CH MCP bridge."""
+
+    tools: list[DecisionToolInfo]
+
+
+class DecisionToolListRequest(BaseModel):
+    """Tenant-scoped decision tool catalog request from Communication Hub."""
+
+    tenant_id: str | None = None
+
+
+@router.post("/decision/list", response_model=DecisionToolListResponse)
+async def list_decision_tools_internal(
+    body: DecisionToolListRequest,
+    tenant_ctx: Annotated[TenantContext, Depends(require_internal_tenant_context)],
+    db: AsyncSession = Depends(get_db),
+) -> DecisionToolListResponse:
+    """List active decision tools within a tenant (called by Communication Hub).
+
+    The tenant comes from the SIGNED internal tenant context (authoritative);
+    the body ``tenant_id`` is only a cross-check fallback. CH holds no
+    credentials — this endpoint returns names, generated descriptions, and
+    input schemas only.
+    """
+    from app.services.system_one.decision_tool_service import (
+        DecisionToolService,
+        build_input_schema,
+    )
+
+    tenant_id = tenant_ctx.tenant_id if tenant_ctx.is_set else _parse_uuid(body.tenant_id)
+    tools = await DecisionToolService().list(db, tenant_id)
+    return DecisionToolListResponse(
+        tools=[
+            DecisionToolInfo(
+                id=str(t.id),
+                name=t.name,
+                description=t.description,
+                input_schema=build_input_schema(t),
+                enabled=t.enabled,
+            )
+            for t in tools
+            if t.enabled
+        ]
+    )
+
+
+def _parse_uuid(raw: str | None) -> uuid.UUID | None:
+    if not raw:
+        return None
+    try:
+        return uuid.UUID(str(raw))
+    except (ValueError, TypeError):
+        return None
+
+
+@router.post("/decision/execute", response_model=SystemToolResponse)
+async def execute_decision_tool_internal(
+    body: DecisionToolExecuteRequest,
+    tenant_ctx: Annotated[TenantContext, Depends(require_internal_tenant_context)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> SystemToolResponse:
+    """Execute a decision tool via the decision engine (called by Communication Hub).
+
+    The tool name resolves strictly within the request's tenant before
+    execution; the structured decision result is returned (no credentials,
+    no provider key).
+    """
+    from app.services.system_one.decision_engine import (
+        DecisionExecutionEngine,
+        DecisionExecutionError,
+    )
+
+    logger.info(
+        "Decision tool execution requested for '%s' (session %s, tenant %s)",
+        body.tool_name,
+        body.session_id,
+        body.tenant_id,
+    )
+    try:
+        engine = DecisionExecutionEngine()
+        # Signed tenant context is authoritative (tenant containment).
+        tenant_id = tenant_ctx.tenant_id if tenant_ctx.is_set else _parse_uuid(body.tenant_id)
+        tool = await engine.resolve_tool(db, body.tool_name, tenant_id)
+
+        conversation_session_id = _parse_uuid(body.conversation_session_id)
+        decision_result = await engine.execute(
+            db=db,
+            tool=tool,
+            input_state=body.input_state,
+            conversation_session_id=conversation_session_id,
+            tenant_id=tenant_id,
+        )
+        await db.commit()
+        return SystemToolResponse(
+            result={
+                "decision_tool_id": str(tool.id),
+                "tool_name": tool.name,
+                "outcome": decision_result.outcome.value,
+                "status": decision_result.status.value,
+                "answers": (decision_result.answers or {}).get("answers", {}),
+                "input_state_snapshot": decision_result.input_state_snapshot,
+                "provider_model": decision_result.provider_model,
+                "error_message": decision_result.error_message,
+                "created_at": decision_result.created_at.isoformat()
+                if decision_result.created_at
+                else None,
+            }
+        )
+    except DecisionExecutionError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.exception("Failed to execute decision tool '%s'", body.tool_name)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to execute decision tool: {exc}",
         )

@@ -10,7 +10,14 @@ from app.db.session import Base
 
 
 class AgentData(Base):
-    """Mutable named data saved for an agent type and/or execution session."""
+    """Mutable named data saved for an agent type and/or execution session.
+
+    Tenant ownership is mandatory (strict tenant isolation): retrieval by
+    ``data_name``, agent type, or session matches the calling tenant only.
+    NOT NULL on ``tenant_id`` is enforced at the database level by
+    migration ``b8c9d0e1f2a3``; the ORM column stays nullable for legacy
+    paths.
+    """
 
     __tablename__ = "agent_data"
     __table_args__ = (

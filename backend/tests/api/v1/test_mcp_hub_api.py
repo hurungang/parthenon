@@ -177,10 +177,13 @@ async def test_list_servers_offset_zero_returns_one_system_entry():
     assert resp.status_code == 200
     body = resp.json()
     assert isinstance(body, list)
-    assert len(body) == 1, f"Expected exactly 1 item (System entry), got {len(body)}"
+    # Two virtual entries: the System server AND the Decision server
+    # (round 2 — decision tools group under their own virtual server).
+    assert len(body) == 2, f"Expected exactly 2 items (System + Decision), got {len(body)}"
     assert body[0]["name"] == "system"
     assert body[0]["slug"] == "system"
     assert body[0]["session_count"] == 0
+    assert body[1]["slug"] == "decision"
 
 
 @pytest.mark.asyncio

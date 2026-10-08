@@ -161,6 +161,17 @@ SCOPED_TABLES = [
     "model_usage_postures",
 ]
 
+# Tables tightened by migration b8c9d0e1f2a3 (strict-tenant-isolation):
+# legacy NULL-tenant rows adopted into the root tenant, then tenant_id
+# became NOT NULL — the NULL "shared slot" is retired on these tables.
+_TENANT_REQUIRED_TABLES = {
+    "mcp_servers", "mcp_tools", "agent_data", "agent_outputs",
+    "agent_data_types", "scheduled_jobs", "notification_channels",
+    "recipient_groups", "skills", "sops", "agent_types", "model_configs",
+    "groups", "tag_definitions", "agent_api_keys", "agent_roles",
+    "agent_identities",
+}
+
 # Join/child tables that MUST NOT carry a tenant column (E-01).
 JOIN_TABLES_WITHOUT_TENANT = [
     "user_roles", "group_roles", "user_groups", "tag_values",
@@ -181,7 +192,11 @@ class TestTenantColumns:
             {"t": table},
         )
         assert row is not None, f"{table}.tenant_id missing"
-        assert row == "YES", f"{table}.tenant_id must be nullable"
+        if table in _TENANT_REQUIRED_TABLES:
+            # b8c9d0e1f2a3: strict tenant isolation — tenant_id mandatory.
+            assert row == "NO", f"{table}.tenant_id must be NOT NULL after b8c9d0e1f2a3"
+        else:
+            assert row == "YES", f"{table}.tenant_id must be nullable"
 
     @pytest.mark.parametrize("table", SCOPED_TABLES)
     async def test_tenant_column_indexed(self, db, table):

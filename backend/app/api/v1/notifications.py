@@ -3,7 +3,7 @@ import re
 import uuid
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import select
 
 from app.api.deps import require_permission
@@ -215,13 +215,23 @@ async def list_recipient_groups(
 )
 async def create_recipient_group(
     body: RecipientGroupCreate,
+    request: Request,
     db: DbSession,
     _: dict = Depends(require_permission(RT_INTEGRATION_NOTIFICATIONS, "manage")),
 ) -> RecipientGroup:
+    from app.core.tenant_context import get_tenant_context
+
+    tenant_context = get_tenant_context(request)
+    tenant_id = tenant_context.tenant_id if tenant_context.is_set else None
     repo = NotificationRepository(db)
     slug = body.slug or _slugify(body.name)
 
-    existing = await db.execute(select(RecipientGroup).where(RecipientGroup.slug == slug))
+    existing = await db.execute(
+        select(RecipientGroup).where(
+            RecipientGroup.slug == slug,
+            RecipientGroup.tenant_id == tenant_id,
+        )
+    )
     if existing.scalar_one_or_none():
         raise HTTPException(status_code=409, detail=f"Recipient group slug '{slug}' already exists")
 
@@ -230,6 +240,7 @@ async def create_recipient_group(
         slug=slug,
         description=body.description,
         is_active=body.is_active,
+        tenant_id=tenant_id,
     )
     group = await repo.get_recipient_group(group.id)
     return group  # type: ignore[return-value]
@@ -330,9 +341,21 @@ async def remove_channel_from_group(
 @NotificationRouter.post("/send", status_code=status.HTTP_202_ACCEPTED)
 async def send_notification(
     body: SendNotificationRequest,
+    request: Request,
     db: DbSession,
     _: dict = Depends(require_permission(RT_INTEGRATION_NOTIFICATIONS, "manage")),
 ) -> dict:
+    # Tenant containment: resolve within the session's tenant (root when
+    # the switch is off — never the NULL shared slot).
+    from app.core.tenant_context import get_tenant_context
+    from app.services.tenancy.root_tenant import get_root_tenant_id
+
+    tenant_context = get_tenant_context(request)
+    tenant_id = (
+        tenant_context.tenant_id
+        if tenant_context.is_set
+        else await get_root_tenant_id(db)
+    )
     svc = NotificationService(db)
     try:
         result = await svc.send_to_group(
@@ -341,6 +364,7 @@ async def send_notification(
             source_type=body.source_type,
             subject=body.subject,
             source_id=body.source_id,
+            tenant_id=tenant_id,
         )
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc))

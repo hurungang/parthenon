@@ -49,16 +49,20 @@ class TagRegistry:
         resource_type: str | None = None,
         description: str | None = None,
         allowed_values: List[str] | None = None,
+        tenant_id: uuid.UUID | None = None,
     ) -> TagDefinition:
         """Create a TagDefinition + TagValue records.
 
-        Raises HTTPException 409 if key+scope already exists.
+        Raises HTTPException 409 if key+scope already exists in the tenant
+        (tenant-less rows keep the platform-wide scope via the partial
+        global index).
         """
         # Check uniqueness
         existing = await db.execute(
             select(TagDefinition).where(
                 TagDefinition.key == key,
                 TagDefinition.scope == scope,
+                TagDefinition.tenant_id == tenant_id,
             )
         )
         if existing.scalar_one_or_none() is not None:
@@ -68,6 +72,7 @@ class TagRegistry:
             )
 
         tag_def = TagDefinition(
+            tenant_id=tenant_id,
             key=key,
             scope=scope,
             resource_type=resource_type,

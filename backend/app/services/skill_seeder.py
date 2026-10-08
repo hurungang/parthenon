@@ -7,6 +7,7 @@ the API.  To add or rename a skill, update ``system_tool_registry.py``.
 from __future__ import annotations
 
 import logging
+from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -20,7 +21,12 @@ logger = logging.getLogger(__name__)
 
 
 class SkillSeeder:
-    """Idempotent service that creates default platform skills if they are absent."""
+    """Idempotent service that creates default platform skills if they are absent.
+
+    Seeds into the ROOT tenant (the platform's own tenant): lookups are
+    tenant-scoped so seeding can never match or mutate another tenant's
+    skills with identical names.
+    """
 
     async def run(self, session: AsyncSession) -> dict[str, str]:
         """Seed default skills.
@@ -29,11 +35,18 @@ class SkillSeeder:
         ('created' | 'exists' | 'skipped').
         """
         from app.services.agents.system_tool_registry import SystemToolRegistry
+        from app.services.tenancy.root_tenant import get_root_tenant_id
 
+        root_tenant_id = await get_root_tenant_id(session)
+        if root_tenant_id is None:
+            raise RuntimeError(
+                "SkillSeeder requires the root tenant to be provisioned — "
+                "run ensure_root_tenant() before seeding."
+            )
         summary: dict[str, str] = {}
         try:
             for skill_def in SystemToolRegistry.get_skill_definitions():
-                action = await self._seed_one(session, skill_def)
+                action = await self._seed_one(session, skill_def, root_tenant_id)
                 summary[skill_def["name"]] = action
             await session.flush()
         except Exception:
@@ -42,10 +55,19 @@ class SkillSeeder:
             raise
         return summary
 
-    async def _seed_one(self, session: AsyncSession, skill_def: dict) -> str:
+    async def _seed_one(
+        self, session: AsyncSession, skill_def: dict, root_tenant_id: Any
+    ) -> str:
         name: str = skill_def["name"]
 
-        result = await session.execute(select(Skill).where(Skill.name == name))
+        # Tenant-scoped lookup: only the root tenant's own skills are
+        # matched/updated — a tenant skill with the same name is untouched.
+        result = await session.execute(
+            select(Skill).where(
+                Skill.name == name,
+                Skill.tenant_id == root_tenant_id,
+            )
+        )
         existing = result.scalar_one_or_none()
         if existing is not None:
             updated = False
@@ -62,9 +84,12 @@ class SkillSeeder:
                 logger.info("SkillSeeder: updated existing skill '%s'.", name)
             else:
                 logger.info("SkillSeeder: skill '%s' already exists — checking bindings.", name)
-            return await self._ensure_bindings(session, existing, skill_def)
+            return await self._ensure_bindings(
+                session, existing, skill_def, root_tenant_id
+            )
 
         skill = Skill(
+            tenant_id=root_tenant_id,
             name=name,
             description=skill_def.get("description"),
             instructions=skill_def.get("instructions"),
@@ -75,14 +100,20 @@ class SkillSeeder:
         await session.flush()
 
         logger.info("SkillSeeder: created default skill '%s'.", name)
-        return await self._ensure_bindings(session, skill, skill_def)
+        return await self._ensure_bindings(session, skill, skill_def, root_tenant_id)
 
     async def _ensure_bindings(
-        self, session: AsyncSession, skill: Skill, skill_def: dict
+        self,
+        session: AsyncSession,
+        skill: Skill,
+        skill_def: dict,
+        root_tenant_id: Any,
     ) -> str:
         """Ensure ``SkillToolBinding`` records exist for the given skill.
 
-        Creates missing bindings for tool names listed in *skill_def*.
+        Creates missing bindings for tool names listed in *skill_def*,
+        resolving tools strictly within the root tenant (same-tenant
+        bindings only).
         Returns ``'created'`` when bindings were added, ``'exists'`` otherwise.
         """
         tool_names: list[str] = skill_def.get("tool_names", [])
@@ -101,7 +132,8 @@ class SkillSeeder:
 
             tool_result = await session.execute(
                 select(McpTool).where(
-                    (McpTool.original_name == tool_name) | (McpTool.name == tool_name)
+                    (McpTool.original_name == tool_name) | (McpTool.name == tool_name),
+                    McpTool.tenant_id == root_tenant_id,
                 )
             )
             tool = tool_result.scalars().first()

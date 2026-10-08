@@ -59,8 +59,26 @@ async def create_schedule(
     db: DbSession,
     _: dict = Depends(require_permission(RT_AGENT_SCHEDULES, "create")),
 ) -> ScheduledJob:
+    # Tenant containment: every scheduled job is created with an owning
+    # tenant (the session's tenant; root when the switch is off).  A NULL
+    # tenant would escape quotas and scoping at dispatch — rejected here.
+    from app.core.tenant_context import get_tenant_context
+    from app.services.tenancy.root_tenant import get_root_tenant_id
+
+    tenant_context = get_tenant_context(request)
+    owning_tenant_id = (
+        tenant_context.tenant_id
+        if tenant_context.is_set
+        else await get_root_tenant_id(db)
+    )
+    if owning_tenant_id is None:
+        raise HTTPException(
+            status_code=422,
+            detail="Cannot create a scheduled job without a tenant binding",
+        )
     job = ScheduledJob(
         **body.model_dump(),
+        tenant_id=owning_tenant_id,
         scheduled_by_user_id=_get_requesting_user_id(request),
     )
     db.add(job)

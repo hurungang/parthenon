@@ -16,7 +16,7 @@ import urllib.parse
 import uuid
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Optional
+from typing import Any, Optional
 
 import httpx
 from fastapi import Request
@@ -43,23 +43,74 @@ class AgentOAuthConfig:
     token_endpoint: str
 
 
-async def _resolve_agent_oauth_config(db: AsyncSession) -> Optional[AgentOAuthConfig]:
-    """Resolve the agent identity provider config from the database.
+async def resolve_agent_provider_config(
+    db: AsyncSession,
+    tenant_id: Optional[uuid.UUID] = None,
+) -> Optional[Any]:
+    """Resolve the enabled agent-scope IdentityProviderConfig for a tenant.
 
-    Reads the ``IdentityProviderConfig`` with ``provider_scope == "agent"``
-    from the database and resolves OIDC Discovery endpoints.  Falls back
-    to the legacy env-var / YAML config if no DB config exists.
+    Strict tenant containment (SaaS model): only the tenant's OWN
+    ``(tenant_id, "agent")`` slot is used — never another tenant's, the
+    root tenant's, or a shared config.  Returns ``None`` when the tenant
+    has no enabled agent provider (callers surface a config error).
+
+    With ``tenant_id=None`` (legacy/adopted rows without a tenant
+    binding), the SHARED tenant-less ``(NULL, "agent")`` slot is used,
+    falling back to the ROOT tenant's slot since pre-tenancy data was
+    adopted into root.
     """
     from app.db.models.identity_provider_config import IdentityProviderConfig
+    from app.db.models.tenant import Tenant
+
+    async def _fetch(candidate_tenant: Optional[uuid.UUID]):
+        result = await db.execute(
+            select(IdentityProviderConfig)
+            .where(
+                IdentityProviderConfig.provider_scope == "agent",
+                IdentityProviderConfig.is_enabled == True,
+                IdentityProviderConfig.tenant_id.is_(None)
+                if candidate_tenant is None
+                else IdentityProviderConfig.tenant_id == candidate_tenant,
+            )
+            .limit(1)
+        )
+        return result.scalars().first()
+
+    # strict: only the tenant's own slot — no cross-tenant fallback
+    if tenant_id is not None:
+        return await _fetch(tenant_id)
+
+    # tenant-unbound rows (legacy adoption) → shared slot, then root
+    config = await _fetch(None)
+    if config is not None:
+        return config
+    root_result = await db.execute(
+        select(Tenant.id).where(Tenant.is_system_tenant.is_(True)).limit(1)
+    )
+    root_tenant_id = root_result.scalars().first()
+    if root_tenant_id is not None:
+        return await _fetch(root_tenant_id)
+    return None
+
+
+async def _resolve_agent_oauth_config(
+    db: AsyncSession,
+    tenant_id: Optional[uuid.UUID] = None,
+) -> Optional[AgentOAuthConfig]:
+    """Resolve the agent identity provider config from the database.
+
+    Reads the agent ``IdentityProviderConfig`` for the given tenant (or the
+    current tenant context when not provided), following the own → shared →
+    root candidate chain.  Resolves OIDC Discovery endpoints.  Falls back to
+    the legacy env-var / YAML config if no DB config exists.
+    """
+    from app.core.tenant_context import get_current_tenant_context
     from app.services.oidc_config_service import OIDCConfigService
 
-    result = await db.execute(
-        select(IdentityProviderConfig).where(
-            IdentityProviderConfig.provider_scope == "agent",
-            IdentityProviderConfig.is_enabled == True,
-        )
-    )
-    agent_config = result.scalar_one_or_none()
+    if tenant_id is None:
+        context = get_current_tenant_context()
+        tenant_id = context.tenant_id if context is not None else None
+    agent_config = await resolve_agent_provider_config(db, tenant_id)
 
     if agent_config is not None:
         # Resolve OIDC Discovery to get endpoints
@@ -81,8 +132,11 @@ async def _resolve_agent_oauth_config(db: AsyncSession) -> Optional[AgentOAuthCo
         except Exception:
             logger.warning("Failed OIDC discovery for agent provider; falling back to legacy config")
 
-    # Fallback to legacy config (env / YAML) for backward compatibility
-    return _legacy_agent_oauth_config()
+    # Legacy (env / YAML) fallback only for tenant-unbound resolution —
+    # a bound tenant must never use another tenant's or a global config.
+    if tenant_id is None:
+        return _legacy_agent_oauth_config()
+    return None
 
 
 def _legacy_agent_oauth_config() -> Optional[AgentOAuthConfig]:
@@ -302,7 +356,7 @@ class AgentIdentityService:
         """
         identity = await self.get_identity(identity_id, db)
 
-        oauth_config = await _resolve_agent_oauth_config(db)
+        oauth_config = await _resolve_agent_oauth_config(db, identity.tenant_id)
         if oauth_config is None:
             raise AgentOAuthError("No agent identity provider configured")
 
@@ -571,7 +625,7 @@ class AgentIdentityService:
             )
 
         refresh_token_plain = vault.decrypt(identity.refresh_token)
-        oauth_config = await _resolve_agent_oauth_config(db)
+        oauth_config = await _resolve_agent_oauth_config(db, identity.tenant_id)
         if oauth_config is None:
             raise AgentOAuthError("No agent identity provider configured")
 

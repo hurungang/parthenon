@@ -35,10 +35,21 @@ class NotificationRepository:
 
     # ── Channel operations ─────────────────────────────────────────────────────
 
-    async def get_channel(self, channel_id: uuid.UUID) -> NotificationChannel | None:
+    async def get_channel(
+        self,
+        channel_id: uuid.UUID,
+        tenant_id: uuid.UUID | None = None,
+    ) -> NotificationChannel | None:
         result = await self._db.execute(
             select(NotificationChannel)
-            .where(NotificationChannel.id == channel_id)
+            .where(
+                NotificationChannel.id == channel_id,
+                *(
+                    [NotificationChannel.tenant_id == tenant_id]
+                    if tenant_id is not None
+                    else []
+                ),
+            )
             .options(
                 selectinload(NotificationChannel.properties),
                 selectinload(NotificationChannel.group_mappings),
@@ -46,12 +57,19 @@ class NotificationRepository:
         )
         return result.scalar_one_or_none()
 
-    async def list_channels(self, limit: int = 0, offset: int = 0) -> list[NotificationChannel]:
+    async def list_channels(
+        self,
+        limit: int = 0,
+        offset: int = 0,
+        tenant_id: uuid.UUID | None = None,
+    ) -> list[NotificationChannel]:
         query = (
             select(NotificationChannel)
             .order_by(NotificationChannel.name)
             .options(selectinload(NotificationChannel.properties))
         )
+        if tenant_id is not None:
+            query = query.where(NotificationChannel.tenant_id == tenant_id)
         if limit:
             query = query.limit(limit).offset(offset)
         result = await self._db.execute(query)
@@ -144,10 +162,21 @@ class NotificationRepository:
 
     # ── Recipient group operations ─────────────────────────────────────────────
 
-    async def get_recipient_group(self, group_id: uuid.UUID) -> RecipientGroup | None:
+    async def get_recipient_group(
+        self,
+        group_id: uuid.UUID,
+        tenant_id: uuid.UUID | None = None,
+    ) -> RecipientGroup | None:
         result = await self._db.execute(
             select(RecipientGroup)
-            .where(RecipientGroup.id == group_id)
+            .where(
+                RecipientGroup.id == group_id,
+                *(
+                    [RecipientGroup.tenant_id == tenant_id]
+                    if tenant_id is not None
+                    else []
+                ),
+            )
             .options(
                 selectinload(RecipientGroup.channel_mappings).selectinload(
                     GroupChannelMapping.channel
@@ -156,10 +185,21 @@ class NotificationRepository:
         )
         return result.scalar_one_or_none()
 
-    async def get_recipient_group_by_slug(self, slug: str) -> RecipientGroup | None:
+    async def get_recipient_group_by_slug(
+        self, slug: str, tenant_id: uuid.UUID | None = None
+    ) -> RecipientGroup | None:
+        """Resolve a recipient group strictly within ``tenant_id``.
+
+        No NULL-tenant shared slot: a NULL ``tenant_id`` argument matches
+        nothing (fail-closed) — callers must resolve the calling tenant
+        (root tenant in single-tenant mode).
+        """
         result = await self._db.execute(
             select(RecipientGroup)
-            .where(RecipientGroup.slug == slug)
+            .where(
+                RecipientGroup.slug == slug,
+                RecipientGroup.tenant_id == tenant_id,
+            )
             .options(
                 selectinload(RecipientGroup.channel_mappings).selectinload(
                     GroupChannelMapping.channel
@@ -189,8 +229,10 @@ class NotificationRepository:
         slug: str,
         description: str | None,
         is_active: bool = True,
+        tenant_id: uuid.UUID | None = None,
     ) -> RecipientGroup:
         group = RecipientGroup(
+            tenant_id=tenant_id,
             name=name,
             slug=slug,
             description=description,

@@ -39,9 +39,16 @@ def upgrade() -> None:
     op.drop_column('agent_types', 'llm_provider')
     op.drop_column('agent_types', 'llm_model')
     op.drop_column('agent_types', 'encrypted_llm_credentials')
-    op.add_column('mcp_sessions', sa.Column('oauth_expires_at', sa.DateTime(timezone=True), nullable=True))
-    op.add_column('mcp_sessions', sa.Column('oauth_refresh_expires_at', sa.DateTime(timezone=True), nullable=True))
-    op.add_column('mcp_sessions', sa.Column('oauth_metadata', sa.JSON(), nullable=True))
+    # oauth_expires_at was already added by d34d6078aae3 — guard so the
+    # chain replays cleanly from an empty database (pre-existing duplicate).
+    from sqlalchemy import inspect as _inspect
+    _existing = {c['name'] for c in _inspect(op.get_bind()).get_columns('mcp_sessions')}
+    if 'oauth_expires_at' not in _existing:
+        op.add_column('mcp_sessions', sa.Column('oauth_expires_at', sa.DateTime(timezone=True), nullable=True))
+    if 'oauth_refresh_expires_at' not in _existing:
+        op.add_column('mcp_sessions', sa.Column('oauth_refresh_expires_at', sa.DateTime(timezone=True), nullable=True))
+    if 'oauth_metadata' not in _existing:
+        op.add_column('mcp_sessions', sa.Column('oauth_metadata', sa.JSON(), nullable=True))
     # ### end Alembic commands ###
 
 

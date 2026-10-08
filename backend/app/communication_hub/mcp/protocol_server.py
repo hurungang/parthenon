@@ -77,7 +77,7 @@ class McpProtocolServer:
             if session is None:
                 return self._error(request_id, INVALID_REQUEST, "Session not initialized")
             if method == "tools/list":
-                return self._ok(request_id, {"tools": self._bridge.build_catalog(session)})
+                return self._ok(request_id, {"tools": await self._bridge.build_catalog(session, request)})
             if method == "tools/call":
                 return await self._handle_tools_call(request, request_id, session, params)
             return self._error(request_id, METHOD_NOT_FOUND, f"Method not found: {method}")

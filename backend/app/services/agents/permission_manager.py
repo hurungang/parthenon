@@ -298,10 +298,16 @@ class AgentPermissionManager:
 
         # Load McpTool records with server relationship to build qualified identifiers
         from app.db.models.mcp_hub import McpServer
+        from app.db.tenant_scoping import scope_for_session
+
+        # Same-tenant containment (defense in depth): a binding resolved
+        # for a role can only surface tools of the role's own tenant.
+        tool_stmt = select(McpTool).where(McpTool.id.in_(tool_ids_in_bindings))
+        _tenant_id = scope_for_session(db)
+        if _tenant_id is not None:
+            tool_stmt = tool_stmt.where(McpTool.tenant_id == _tenant_id)
         tool_rows = await db.execute(
-            select(McpTool)
-            .where(McpTool.id.in_(tool_ids_in_bindings))
-            .options(selectinload(McpTool.server))
+            tool_stmt.options(selectinload(McpTool.server))
         )
         tools = tool_rows.scalars().all()
 

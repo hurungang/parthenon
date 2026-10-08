@@ -197,13 +197,18 @@ async def get_identity_name(identity_id: uuid.UUID, db: AsyncSession) -> str | N
 async def check_duplicate_name(
     name: str,
     db: AsyncSession,
+    tenant_id: uuid.UUID | None = None,
 ) -> bool:
-    """Check if an API key with the given name already exists.
+    """Check if an API key with the given name already exists in the tenant.
 
-    Key names are unique platform-wide; the identity-role pair may have any
-    number of keys with distinct names.
+    Key names are unique per tenant (tenant-less rows keep the
+    platform-wide scope via the partial global index); the identity-role
+    pair may have any number of keys with distinct names.
     """
     result = await db.execute(
-        select(AgentApiKey.id).where(AgentApiKey.name == name)
+        select(AgentApiKey.id).where(
+            AgentApiKey.name == name,
+            AgentApiKey.tenant_id == tenant_id,
+        )
     )
     return result.scalar_one_or_none() is not None

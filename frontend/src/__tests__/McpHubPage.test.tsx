@@ -233,6 +233,31 @@ describe('McpHubPage — System Entry', () => {
     const systemSlug = screen.queryByText('system')
     expect(systemSlug).not.toBeNull()
   })
+
+  it('Decision entry renders as built-in — Built-in chip, no edit/delete/sync', async () => {
+    // The virtual Decision server (user-defined decision tools) must be
+    // treated like the System entry: built-in, not editable or deletable.
+    mockServers.push({
+      id: 'decision-virtual-id',
+      name: 'decision',
+      slug: 'decision',
+      base_url: '',
+      status: 'active',
+      description: "User-defined decision tools of this workspace",
+      session_count: 0,
+    })
+    const { McpHubPage } = await import('../pages/mcp/McpHubPage')
+    render(<McpHubPage />, { wrapper })
+
+    // Built-in chips cover both System and Decision entries
+    expect(screen.getAllByText('mcp.system.builtIn').length).toBe(2)
+    // Decision row shows the decision-managed caption instead of edit/delete icons
+    expect(screen.getAllByText('mcp.system.systemManaged').length).toBe(2)
+    // No edit/delete targets the decision server row; sync is disabled
+    const row = screen.getByText('decision').closest('tr')
+    expect(row?.querySelectorAll('button').length).toBe(1) // disabled sync only
+    expect(row?.querySelectorAll('button[disabled]').length).toBe(1)
+  })
 })
 
 describe('McpHubPage — Sync button visibility based on session_count', () => {

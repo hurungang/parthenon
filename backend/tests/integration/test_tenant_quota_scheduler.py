@@ -293,10 +293,10 @@ class TestSchedulerQuotaGate:
     async def test_job_without_tenant_keeps_legacy_behaviour(
         self, world, mock_launch
     ):
-        """Jobs without a tenant (pre-adoption rows) bypass the quota
-        consultation entirely (legacy single-tenant behaviour).  Both the
-        job AND its agent type must be tenant-less for the legacy path —
-        the owning tenant falls back to the agent type's tenant."""
+        """strict-tenant-isolation (B4): the legacy NULL-tenant dispatch
+        path is REMOVED.  A job without a tenant binding (and its agent
+        type) is HARD-SKIPPED at dispatch — never executed tenant-less,
+        and the quota is never consulted."""
         SessionLocal = world["sf"]
         async with SessionLocal() as db:
             job = await db.get(ScheduledJob, world["job"].id)
@@ -311,8 +311,12 @@ class TestSchedulerQuotaGate:
             result = await engine._dispatch(job, db)
             await db.commit()
 
-        assert "session_id" in result
-        mock_launch.assert_awaited_once()
+        assert result == {
+            "status": "skipped",
+            "reason": "missing_tenant",
+            "session_id": None,
+        }
+        mock_launch.assert_not_awaited()
         assert await _bucket(world) == 0  # no quota consultation
 
 

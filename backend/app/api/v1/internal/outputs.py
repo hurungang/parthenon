@@ -12,12 +12,14 @@ from __future__ import annotations
 
 import logging
 import uuid
+from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
-from app.api.deps import require_service_certificate
+from app.api.deps import require_internal_tenant_context, require_service_certificate
+from app.core.tenant_context import TenantContext
 from app.db.models.agent_data_type import AgentDataType
 from app.db.models.agent_output import AgentOutput
 from app.db.models.agents import AgentType
@@ -37,6 +39,10 @@ logger = logging.getLogger(__name__)
 InternalOutputsRouter = APIRouter(
     prefix="/internal",
     tags=["internal"],
+    dependencies=[
+        Depends(require_service_certificate),
+        Depends(require_internal_tenant_context),
+    ],
 )
 
 _output_service = OutputService()
@@ -54,19 +60,26 @@ _validation_service = SchemaValidationService()
 )
 async def validate_output(
     body: ValidateOutputRequest,
+    tenant_ctx: Annotated[TenantContext, Depends(require_internal_tenant_context)],
     db: DbSession,
 ) -> ValidationResult:
     """Validate a payload against a data type's field schema.
 
-    Fetches the data type by ID, then validates the payload fields
-    against the schema definition. Returns field-level errors for
-    invalid values.
+    Fetches the data type by ID (within the bound tenant), then validates
+    the payload fields against the schema definition. Returns field-level
+    errors for invalid values.
     """
     logger.info(
         "Validating output against data type %s", body.data_type_id
     )
 
-    data_type = await db.get(AgentDataType, body.data_type_id)
+    data_type_result = await db.execute(
+        select(AgentDataType).where(
+            AgentDataType.id == body.data_type_id,
+            AgentDataType.tenant_id == tenant_ctx.tenant_id,
+        )
+    )
+    data_type = data_type_result.scalar_one_or_none()
     if not data_type:
         raise HTTPException(
             status_code=404,
@@ -97,13 +110,14 @@ async def validate_output(
 )
 async def create_internal_output(
     body: AgentOutputCreate,
+    tenant_ctx: Annotated[TenantContext, Depends(require_internal_tenant_context)],
     db: DbSession,
 ) -> AgentOutputResponse:
     """Persist a typed output record.
 
     Called by Agent Runtime after validation to store the agent's
     typed output with the assigned data type reference and validation
-    status.
+    status.  The record is stamped with the signed tenant.
     """
     logger.info(
         "Persisting agent output for session %s, data type %s",
@@ -111,16 +125,28 @@ async def create_internal_output(
         body.data_type_id,
     )
 
-    # Verify the data type exists
-    data_type = await db.get(AgentDataType, body.data_type_id)
+    # Verify the data type exists (within the bound tenant)
+    data_type_result = await db.execute(
+        select(AgentDataType).where(
+            AgentDataType.id == body.data_type_id,
+            AgentDataType.tenant_id == tenant_ctx.tenant_id,
+        )
+    )
+    data_type = data_type_result.scalar_one_or_none()
     if not data_type:
         raise HTTPException(
             status_code=404,
             detail=f"Data type {body.data_type_id} not found",
         )
 
-    # Verify the agent type exists
-    agent_type = await db.get(AgentType, body.agent_type_id)
+    # Verify the agent type exists (within the bound tenant)
+    agent_type_result = await db.execute(
+        select(AgentType).where(
+            AgentType.id == body.agent_type_id,
+            AgentType.tenant_id == tenant_ctx.tenant_id,
+        )
+    )
+    agent_type = agent_type_result.scalar_one_or_none()
     if not agent_type:
         raise HTTPException(
             status_code=404,
@@ -135,6 +161,7 @@ async def create_internal_output(
         field_values=body.field_values,
         validation_status=body.validation_status,
         raw_output=body.raw_output,
+        tenant_id=tenant_ctx.tenant_id,
     )
 
     return AgentOutputResponse(
@@ -161,6 +188,7 @@ async def create_internal_output(
     summary="Query typed agent outputs with filters",
 )
 async def query_internal_outputs(
+    tenant_ctx: Annotated[TenantContext, Depends(require_internal_tenant_context)],
     db: DbSession,
     data_type_id: uuid.UUID | None = Query(None, description="Filter by data type"),
     agent_type_id: uuid.UUID | None = Query(None, description="Filter by agent type"),
@@ -187,7 +215,9 @@ async def query_internal_outputs(
         "page_size": page_size,
     }
 
-    items, total = await _output_service.list_outputs(db=db, filters=filters)
+    items, total = await _output_service.list_outputs(
+        db=db, filters=filters, tenant_id=tenant_ctx.tenant_id
+    )
 
     # Resolve names for each output
     output_responses = []

@@ -88,15 +88,23 @@ async def list_groups(
 @GroupsRouter.post("", response_model=GroupRead, status_code=status.HTTP_201_CREATED)
 async def create_group(
     body: GroupCreate,
+    request: Request,
     db: DbSession,
     _: dict = Depends(require_permission(RT_SYSTEM_PERMISSIONS, "manage")),
 ) -> GroupRead:
     """Create a new group. Admin only."""
-    existing = await db.execute(select(Group).where(Group.name == body.name))
+    from app.core.tenant_context import get_tenant_context
+
+    tenant_context = get_tenant_context(request)
+    tenant_id = tenant_context.tenant_id if tenant_context.is_set else None
+    existing = await db.execute(
+        select(Group).where(Group.name == body.name, Group.tenant_id == tenant_id)
+    )
     if existing.scalar_one_or_none() is not None:
         raise HTTPException(status_code=409, detail=f"Group '{body.name}' already exists.")
 
     group = Group(
+        tenant_id=tenant_id,
         name=body.name,
         description=body.description,
         owner_id=body.owner_id,

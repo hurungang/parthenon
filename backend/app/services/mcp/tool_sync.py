@@ -349,6 +349,10 @@ class ToolSyncService:
                 # Canonicalize legacy rows in-place so subsequent reads are consistent.
                 if existing.name != namespaced_name:
                     existing.name = namespaced_name
+                # Tenant binding must always equal the server's tenant —
+                # re-align here so a legacy/divergent row self-heals on sync.
+                if existing.tenant_id != server.tenant_id:
+                    existing.tenant_id = server.tenant_id
                 existing.description = tool_data.get("description")
                 existing.input_schema = tool_data.get("inputSchema") or tool_data.get("input_schema")
                 existing.is_active = True
@@ -356,6 +360,9 @@ class ToolSyncService:
             else:
                 new_tool = McpTool(
                     server_id=server.id,
+                    # Denormalized tenant stamp — the owning server's tenant
+                    # (per-tenant slug namespaces mean tools never cross tenants).
+                    tenant_id=server.tenant_id,
                     name=namespaced_name,
                     original_name=original_name,
                     description=tool_data.get("description"),

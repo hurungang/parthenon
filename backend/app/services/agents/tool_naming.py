@@ -24,7 +24,9 @@ from app.services.agents.system_tool_registry import SystemToolRegistry
 TOOL_SEPARATOR = "____"
 
 #: Server slugs that are reserved and cannot be used for custom MCP servers.
-RESERVED_SERVER_NAMES: frozenset[str] = frozenset({"system"})
+#: ``decision`` is reserved for user-defined decision tools surfaced as
+#: ``decision____<name>``.
+RESERVED_SERVER_NAMES: frozenset[str] = frozenset({"system", "decision"})
 
 #: Bare names of the built-in system tools — sourced from the registry.
 _LEGACY_SYSTEM_TOOL_NAMES: frozenset[str] = SystemToolRegistry.get_names()

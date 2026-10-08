@@ -46,10 +46,10 @@ def test_manifest_structure():
             assert len(action) > 0
 
 
-def test_manifest_has_25_entries():
-    """Manifest should contain exactly 25 resource types
-    (24 namespaced + bare 'agent')."""
-    assert len(ResourceTypeManifest) == 25
+def test_manifest_has_27_entries():
+    """Manifest should contain exactly 27 resource types
+    (26 namespaced + bare 'agent')."""
+    assert len(ResourceTypeManifest) == 27
 
 
 def test_all_resource_type_constants_exist():
@@ -127,9 +127,9 @@ def test_integration_module_has_2_submodules():
     assert len(MODULE_GROUPS["integration"]) == 2
 
 
-def test_system_module_has_3_submodules():
-    """System module should have 3 submodules."""
-    assert len(MODULE_GROUPS["system"]) == 3
+def test_system_module_has_5_submodules():
+    """System module should have 5 submodules."""
+    assert len(MODULE_GROUPS["system"]) == 5
 
 
 def test_platform_module_has_3_submodules():

@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Parthenon — System One Decision Skills Prototype</title>
+<title>Parthenon — System One Decision Tools Prototype</title>
 <style>
   :root {
     --primary: #1976d2;
@@ -31,6 +31,7 @@
   .appbar .logo { font-size: 18px; font-weight: 600; letter-spacing: .3px; display: flex; align-items: center; gap: 10px; }
   .appbar .badge { background: rgba(255,255,255,.2); font-size: 11px; padding: 2px 8px; border-radius: 10px; font-weight: 500; }
   .appbar .spacer { flex: 1; }
+  .appbar .tenant-chip { background: rgba(255,255,255,.18); border: 1px solid rgba(255,255,255,.35); font-size: 12px; padding: 4px 12px; border-radius: 14px; display: flex; align-items: center; gap: 6px; }
   .avatar { width: 32px; height: 32px; border-radius: 50%; background: rgba(255,255,255,.3); display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 600; }
 
   /* Layout */
@@ -58,8 +59,10 @@
     width: 100%; padding: 9px 12px; border: 1px solid var(--border); border-radius: 6px; font-size: 14px; font-family: inherit; background: #fff; color: var(--text);
   }
   input:focus, select:focus, textarea:focus { outline: 2px solid var(--primary-light); border-color: var(--primary); }
+  input.invalid { border-color: var(--error); }
   textarea { resize: vertical; min-height: 60px; }
   .hint { font-size: 12px; color: var(--text2); margin-top: 4px; }
+  .error-text { font-size: 12px; color: var(--error); margin-top: 4px; }
 
   /* Buttons */
   .btn { display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; border-radius: 6px; border: none; font-size: 14px; font-weight: 500; cursor: pointer; font-family: inherit; }
@@ -82,6 +85,7 @@
   .chip.error { background: var(--error-bg); color: var(--error); } .chip.error .dot { background: var(--error); }
   .chip.info { background: var(--primary-light); color: var(--primary-dark); } .chip.info .dot { background: var(--primary); }
   .chip.neutral { background: #eceff1; color: #455a64; } .chip.neutral .dot { background: #78909c; }
+  .chip.decision { background: #ede7f6; color: #4527a0; } .chip.decision .dot { background: #5e35b1; }
 
   /* Toggle switch */
   .switch { position: relative; display: inline-block; width: 40px; height: 22px; flex-shrink: 0; }
@@ -109,7 +113,6 @@
   .qcard-header { display: flex; align-items: center; gap: 10px; padding: 10px 16px; background: #fff; border-bottom: 1px solid var(--border); border-radius: var(--radius) var(--radius) 0 0; }
   .qcard-header .qid { font-weight: 600; color: var(--primary-dark); background: var(--primary-light); padding: 2px 8px; border-radius: 4px; font-family: monospace; font-size: 13px; }
   .qcard-body { padding: 16px; }
-  .qcard-footer { padding: 4px 12px 10px; display: flex; justify-content: flex-end; gap: 4px; }
   .criteria-row { display: flex; gap: 8px; margin-bottom: 8px; align-items: center; }
   .criteria-row input { flex: 1; }
   .criteria-row .idx { color: var(--text2); font-size: 12px; min-width: 18px; text-align: right; }
@@ -123,6 +126,12 @@
   .preview-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
   pre.json { background: #263238; color: #eceff1; padding: 16px; border-radius: var(--radius); font-family: 'JetBrains Mono', Consolas, monospace; font-size: 12.5px; line-height: 1.55; overflow-x: auto; white-space: pre-wrap; }
   .json .k { color: #80cbc4; } .json .s { color: #c5e1a5; } .json .n { color: #ffcc80; }
+
+  /* Tools list (invocation context) */
+  .tool-line { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--border); font-size: 13.5px; }
+  .tool-line:last-child { border-bottom: none; }
+  .tool-line .tool-name { font-family: 'JetBrains Mono', Consolas, monospace; font-size: 13px; }
+  .tool-line .tool-desc { color: var(--text2); flex: 1; }
 
   /* Result view */
   .answer-row { padding: 14px 0; border-bottom: 1px solid var(--border); }
@@ -161,7 +170,6 @@
   .toast.show { display: block; animation: fadein .2s; }
   @keyframes fadein { from { opacity: 0; transform: translate(-50%, 8px);} to { opacity: 1; transform: translate(-50%, 0);} }
   .divider { height: 1px; background: var(--border); margin: 16px 0; }
-  .runlog { max-height: 140px; overflow-y: auto; }
 </style>
 </head>
 <body>
@@ -170,17 +178,20 @@
 <div class="appbar">
   <div class="logo">🏛 Parthenon <span class="badge">prototype · system-one</span></div>
   <div class="spacer"></div>
+  <div class="tenant-chip" title="All tools and records are scoped to this tenant">🏢 tenant: <strong>&nbsp;acme-corp</strong></div>
   <div class="avatar">ML</div>
 </div>
 
 <div class="layout">
   <!-- ===== Sidebar ===== -->
   <nav class="sidebar">
-    <div class="section">Administration</div>
-    <a><span class="icon">📊</span> Dashboard</a>
+    <div class="section">Agents</div>
     <a><span class="icon">🤖</span> Agent Types</a>
     <a><span class="icon">🔐</span> Agent Roles</a>
     <a class="active" data-nav="skills"><span class="icon">⚡</span> Skills</a>
+    <a data-nav="decisiontools"><span class="icon">🧩</span> Decision Tools</a>
+    <div class="section">Administration</div>
+    <a><span class="icon">📊</span> Dashboard</a>
     <a><span class="icon">📋</span> SOPs</a>
     <a data-nav="systemone"><span class="icon">🧠</span> System One</a>
     <a><span class="icon">🔌</span> MCP Hub</a>
@@ -193,7 +204,7 @@
     <!-- ============ PAGE: SKILLS ============ -->
     <section id="page-skills">
       <h1>Skills</h1>
-      <p class="subtitle">Invocable units granted to agents through roles. Decision Skills appear alongside existing skill types.</p>
+      <p class="subtitle">Invocable units granted to agents through roles. Skills are unchanged — decision-making is provided by Decision Tools, not a skill type.</p>
 
       <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
         <div class="chip neutral" style="gap:10px; padding:6px 14px;">
@@ -212,7 +223,7 @@
               <td><span class="chip neutral">LLM · Prompt</span></td>
               <td>2 agents, 1 SOP</td>
               <td><span class="chip success"><span class="dot"></span>Enabled</span></td>
-              <td><button class="btn btn-text btn-small">Edit</button></td>
+              <td><button class="btn btn-text btn-small" onclick="openSkillEditor(true)">Edit</button></td>
             </tr>
             <tr>
               <td><strong>search-knowledge-base</strong></td>
@@ -221,15 +232,49 @@
               <td><span class="chip success"><span class="dot"></span>Enabled</span></td>
               <td><button class="btn btn-text btn-small">Edit</button></td>
             </tr>
-            <tr>
-              <td><strong>triage-inbound-request</strong></td>
-              <td><span class="chip info">Decision Skill</span></td>
-              <td>1 agent type</td>
-              <td><span class="chip success"><span class="dot"></span>Enabled</span></td>
-              <td><button class="btn btn-text btn-small" onclick="openSkillEditor(true)">Edit</button> <button class="btn btn-text btn-small" onclick="showResult()">Run</button></td>
-            </tr>
           </tbody>
         </table>
+      </div>
+
+      <!-- Invocation context: tools visible to skills -->
+      <div class="card">
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+          <div>
+            <h2>Tools available in this tenant</h2>
+            <p class="card-sub" style="margin-bottom:8px;">What a skill can invoke — system tools plus user-defined decision tools, exactly the same invocation pathway.</p>
+          </div>
+          <span class="chip neutral">🏢 acme-corp</span>
+        </div>
+        <div id="tools-context"></div>
+      </div>
+    </section>
+
+    <!-- ============ PAGE: DECISION TOOLS ============ -->
+    <section id="page-decisiontools" style="display:none;">
+      <h1>Decision Tools</h1>
+      <p class="subtitle">User-defined tools that route structured snap judgments to a System One model. They behave exactly like system tools — auto-described, grantable via roles, invocable by skills and MCP clients.</p>
+
+      <div class="alert info">
+        <span>🏢</span>
+        <div><strong>Tenant-contained naming.</strong> Tool names are unique within your tenant (<strong>acme-corp</strong>) only. Tenant B can define its own <code class="inline">tool_a</code>; the platform resolves <code class="inline">decision____tool_a</code> within the caller's tenant. All lookups, permissions, and invocations are tenant-scoped.</div>
+      </div>
+
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+        <span class="chip info" id="dt-provider-chip"><span class="dot"></span>Provider: TypeSafe AI · jev-latest</span>
+        <button class="btn btn-primary" onclick="openToolEditor()">＋ Create Decision Tool</button>
+      </div>
+
+      <div class="card" style="padding:8px 16px;">
+        <table class="table">
+          <thead><tr><th>Tool name</th><th>Description</th><th>Questions</th><th>Status</th><th></th></tr></thead>
+          <tbody id="dt-tbody"></tbody>
+        </table>
+      </div>
+
+      <div class="card">
+        <h2>MCP exposure</h2>
+        <p class="card-sub">Decision tools are published to the platform MCP interface with the <code class="inline">decision____</code> prefix (four underscores, mirroring <code class="inline">system____</code>), alongside system tools.</p>
+        <pre class="json" id="dt-mcp"></pre>
       </div>
     </section>
 
@@ -268,6 +313,17 @@
 
         <div class="divider"></div>
 
+        <div class="row">
+          <div style="flex:2;">
+            <label class="field">Base URL</label>
+            <input type="text" id="so-baseurl" value="https://api.typesafe.ai/v1" readonly style="background:#f5f6f8; color:var(--text2); cursor:not-allowed;">
+            <div class="hint">🔗 Preset for Jev — <code class="inline">https://api.typesafe.ai/v1</code> is fixed for this release and cannot be edited.</div>
+          </div>
+          <div></div>
+        </div>
+
+        <div class="divider"></div>
+
         <div class="row" style="align-items:flex-end;">
           <div style="flex:2;">
             <label class="field">TypeSafe AI API Key</label>
@@ -301,13 +357,13 @@
 
       <div class="card">
         <h2>Recent decision executions</h2>
-        <p class="card-sub">Logged and auditable like all skill executions.</p>
+        <p class="card-sub">Logged and auditable like all tool/skill executions.</p>
         <table class="table">
-          <thead><tr><th>Time</th><th>Skill</th><th>Trigger</th><th>Confidence</th><th>Outcome</th></tr></thead>
+          <thead><tr><th>Time</th><th>Tool</th><th>Trigger</th><th>Confidence</th><th>Outcome</th></tr></thead>
           <tbody>
-            <tr><td>10:42:07</td><td class="mono">triage-inbound-request</td><td>SOP step 3</td><td><span class="chip success"><span class="dot"></span>0.94</span></td><td>Acted automatically</td></tr>
-            <tr><td>10:38:51</td><td class="mono">triage-inbound-request</td><td>Agent: support-triage</td><td><span class="chip warning"><span class="dot"></span>0.61</span></td><td>Confirmation required</td></tr>
-            <tr><td>10:31:12</td><td class="mono">priority-score-doc</td><td>Agent: docs-bot</td><td><span class="chip error"><span class="dot"></span>0.22</span></td><td>Escalated to human</td></tr>
+            <tr><td>10:42:07</td><td class="mono">decision____tool_a</td><td>SOP step 3</td><td><span class="chip success"><span class="dot"></span>0.94</span></td><td>Acted automatically</td></tr>
+            <tr><td>10:38:51</td><td class="mono">decision____tool_a</td><td>Agent: support-triage</td><td><span class="chip warning"><span class="dot"></span>0.61</span></td><td>Confirmation required</td></tr>
+            <tr><td>10:31:12</td><td class="mono">decision____priority_score_doc</td><td>Agent: docs-bot</td><td><span class="chip error"><span class="dot"></span>0.22</span></td><td>Escalated to human</td></tr>
           </tbody>
         </table>
       </div>
@@ -318,9 +374,9 @@
       <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:4px;">
         <div>
           <h1>Decision Execution</h1>
-          <p class="subtitle mono">triage-inbound-request · exec-7f3a-21 · 2026-10-03 10:42:07 · triggered by SOP step 3</p>
+          <p class="subtitle mono">decision____tool_a · exec-7f3a-21 · 2026-10-03 10:42:07 · triggered by SOP step 3</p>
         </div>
-        <button class="btn btn-text" onclick="nav('skills')">← Back to skills</button>
+        <button class="btn btn-text" onclick="nav('decisiontools')">← Back to decision tools</button>
       </div>
 
       <!-- Confidence + gate -->
@@ -377,7 +433,7 @@
       <!-- Confidence-gated outcome -->
       <div class="card">
         <h2>Outcome gating</h2>
-        <p class="card-sub">Thresholds: ≥ 0.80 act automatically · 0.50–0.79 confirm · &lt; 0.50 escalate.</p>
+        <p class="card-sub">Thresholds configured on the tool: ≥ 0.80 act automatically · 0.50–0.79 confirm · &lt; 0.50 escalate.</p>
         <div style="display:flex; gap:12px; align-items:center; margin-bottom:8px;">
           <label class="field" style="margin:0;">Confidence threshold</label>
           <input type="range" min="30" max="95" value="80" id="rv-threshold" style="width:260px;" oninput="renderGate()">
@@ -389,90 +445,204 @@
   </main>
 </div>
 
-<!-- ===== DIALOG: SKILL EDITOR ===== -->
-<div class="overlay" id="dlg-editor">
+<!-- ===== DIALOG: SKILL EDITOR (simple — unchanged skill model) ===== -->
+<div class="overlay" id="dlg-skill">
+  <div class="dialog">
+    <div class="dialog-header">
+      <span id="sk-title">Create Skill</span>
+      <button class="close-x" onclick="closeDialog('dlg-skill')">✕</button>
+    </div>
+    <div class="dialog-body">
+      <div class="row">
+        <div>
+          <label class="field">Skill name</label>
+          <input type="text" id="sk-name" placeholder="e.g. summarize-ticket">
+        </div>
+        <div>
+          <label class="field">Skill type</label>
+          <select id="sk-type" onchange="onSkillTypeChange()">
+            <option value="">Select a type…</option>
+            <option value="prompt">Prompt Skill (LLM)</option>
+            <option value="mcp">MCP Tool Skill</option>
+          </select>
+        </div>
+      </div>
+      <div id="sk-info" style="margin-top:14px;"></div>
+      <div class="alert info" style="margin:14px 0 0;">
+        <span>💡</span>
+        <div>Need a structured snap judgment? Decision-making is not a skill type — define a <strong>Decision Tool</strong> instead; it appears alongside system tools and is invocable from any skill. <a onclick="closeDialog('dlg-skill'); nav('decisiontools')">Go to Decision Tools →</a></div>
+      </div>
+    </div>
+    <div class="dialog-actions">
+      <button class="btn btn-text" onclick="closeDialog('dlg-skill')">Cancel</button>
+      <button class="btn btn-primary" id="sk-save" onclick="saveSkill()" disabled>Save skill</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== DIALOG: DECISION TOOL EDITOR ===== -->
+<div class="overlay" id="dlg-tool">
   <div class="dialog" style="max-width:980px;">
     <div class="dialog-header">
-      <span id="ed-title">Create Skill</span>
-      <button class="close-x" onclick="closeDialog('dlg-editor')">✕</button>
+      <span id="dt-title">Create Decision Tool</span>
+      <button class="close-x" onclick="closeDialog('dlg-tool')">✕</button>
     </div>
     <div class="dialog-body">
 
-      <!-- Step 1: type -->
-      <div id="ed-step-type">
-        <div class="row">
-          <div>
-            <label class="field">Skill name</label>
-            <input type="text" id="ed-name" placeholder="e.g. triage-inbound-request">
-          </div>
-          <div>
-            <label class="field">Skill type</label>
-            <select id="ed-type" onchange="onTypeChange()">
-              <option value="">Select a type…</option>
-              <option value="prompt">Prompt Skill (LLM)</option>
-              <option value="mcp">MCP Tool Skill</option>
-              <option value="decision">Decision Skill (System One)</option>
-            </select>
-          </div>
-        </div>
-        <div id="ed-gate" style="margin-top:14px;"></div>
+      <div class="alert success" id="dt-ok-banner">
+        <span>✓</span>
+        <div>System One model is configured: <strong>TypeSafe AI · jev-latest</strong>. Form driven by the provider's API definition.</div>
+      </div>
+      <div class="alert warning" id="dt-unconfigured-banner" style="display:none;">
+        <span>⚠</span>
+        <div><strong>No System One model configured.</strong> Decision tools cannot be created or edited until a provider (TypeSafe AI · jev-latest) is configured. <a onclick="closeDialog('dlg-tool'); nav('systemone')">Go to System One Configuration →</a></div>
       </div>
 
-      <!-- Step 2: decision form -->
-      <div id="ed-step-form" style="display:none;">
-        <div class="alert success" id="ed-ok-banner">
-          <span>✓</span>
-          <div>System One model is configured: <strong>TypeSafe AI · jev-latest</strong>. Form driven by the provider's API definition.</div>
+      <div class="row">
+        <div>
+          <label class="field">Tool name</label>
+          <input type="text" id="tool-name" placeholder="e.g. tool_a" oninput="onToolNameInput()">
+          <div class="hint" id="tool-name-hint">Exposed as <code class="inline">decision____&lt;name&gt;</code> (four underscores, like <code class="inline">system____</code>). Must be unique within tenant <strong>acme-corp</strong>.</div>
+          <div class="error-text" id="tool-name-error" style="display:none;"></div>
         </div>
-
-        <div class="tabs" style="margin-top:8px;">
-          <div class="tab active" data-edtab="questions" onclick="switchEdTab('questions')">Question set</div>
-          <div class="tab" data-edtab="state" onclick="switchEdTab('state')">State preset</div>
-          <div class="tab" data-edtab="preview" onclick="switchEdTab('preview')">Preview</div>
+        <div>
+          <label class="field">Description (purpose)</label>
+          <input type="text" id="tool-desc" placeholder="What judgment does this tool make?" oninput="updateToolDescription()">
         </div>
+      </div>
 
-        <!-- Questions tab -->
-        <div id="ed-tab-questions">
-          <div class="alert info" style="padding:8px 12px;">
-            <span>💡</span>
-            <div>Each question is an <strong>atomic snap judgment</strong>. Compose complex judgments as multiple questions; composition happens at the consumer level.</div>
+      <div class="divider"></div>
+
+      <!-- 3. Input data type -->
+      <div class="row">
+        <div>
+          <label class="field">Input data type</label>
+          <div style="display:flex; gap:8px; align-items:center;">
+            <select id="tool-input-type" style="flex:1;" onchange="onDataTypeChange('input')">
+              <option value="">Select or create an Agent Data Type…</option>
+              <option value="customer_message">customer_message</option>
+              <option value="support_ticket">support_ticket</option>
+              <option value="routing_decision">routing_decision</option>
+              <option value="__create__">＋ Create new Agent Data Type…</option>
+            </select>
+            <button class="btn btn-outline btn-small" onclick="viewDataType('tool-input-type')">View</button>
           </div>
-          <div id="ed-questions"></div>
-          <button class="btn btn-outline" onclick="addQuestion()">＋ Add question</button>
+          <div class="hint">Select an existing Agent Data Type from the registry, or create a new one. Its fields become the tool's input schema and populate the state-mapping property selectors.</div>
         </div>
-
-        <!-- State preset tab -->
-        <div id="ed-tab-state" style="display:none;">
-          <p class="card-sub" style="margin-bottom:12px;">Map input data and agent context into the <code class="inline">state</code> JSON sent to the model. Use placeholders like <code class="inline">{{input.text}}</code> or references to agent data.</p>
-          <div id="ed-mappings"></div>
-          <button class="btn btn-outline" onclick="addMapping()">＋ Add mapping</button>
-          <div class="divider"></div>
-          <label class="field">Additional static state (JSON)</label>
-          <textarea id="ed-static-state" rows="3" class="mono">{ "locale": "en-US", "channel": "email" }</textarea>
-        </div>
-
-        <!-- Preview tab -->
-        <div id="ed-tab-preview" style="display:none;">
-          <div class="preview-grid">
-            <div>
-              <label class="field">Request → jev-latest</label>
-              <pre class="json" id="ed-preview-request"></pre>
-            </div>
-            <div>
-              <label class="field">Simulated response</label>
-              <pre class="json" id="ed-preview-response"></pre>
-            </div>
+        <!-- 4. Output data type -->
+        <div>
+          <label class="field">Output data type</label>
+          <div style="display:flex; gap:8px; align-items:center;">
+            <select id="tool-output-type" style="flex:1;" onchange="onDataTypeChange('output')">
+              <option value="">Select or create an Agent Data Type…</option>
+              <option value="customer_message">customer_message</option>
+              <option value="support_ticket">support_ticket</option>
+              <option value="routing_decision" selected>routing_decision</option>
+              <option value="__create__">＋ Create new Agent Data Type…</option>
+            </select>
+            <button class="btn btn-outline btn-small" onclick="viewDataType('tool-output-type')">View</button>
           </div>
-          <div style="margin-top:12px; display:flex; justify-content:flex-end;">
-            <button class="btn btn-outline" onclick="regeneratePreview()">↻ Re-simulate</button>
-          </div>
+          <div class="hint">The Agent Data Type describing what this tool returns (alongside per-question typed answers and confidence).</div>
         </div>
+      </div>
+
+      <div class="divider"></div>
+
+      <!-- AI generate -->
+      <div style="display:flex; align-items:center; gap:12px; margin-bottom:4px;">
+        <button class="btn btn-outline" id="tool-ai-btn" onclick="aiGenerate()">🪄 Generate with AI</button>
+        <span class="hint" style="margin:0;">Drafts questions and state mappings from the description and the chosen input/output data types. Review and adjust the draft.</span>
+      </div>
+
+      <!-- 5. Questions builder -->
+      <h2 style="margin:12px 0 4px;">Questions</h2>
+      <div class="alert info" style="padding:8px 12px;">
+        <span>💡</span>
+        <div>Each question is an <strong>atomic snap judgment</strong>. Compose complex judgments as multiple questions; composition happens at the consumer level. Reference state paths in backticks (e.g. <code class="inline">`input.tier`</code>) — they can be auto-mapped below.</div>
+      </div>
+      <div id="tool-questions"></div>
+      <button class="btn btn-outline" onclick="addQuestion()">＋ Add question</button>
+
+      <!-- 6. State mapping -->
+      <h2 style="margin:20px 0 4px;">State mapping</h2>
+      <div class="alert info" style="padding:8px 12px;">
+        <span>🧩</span>
+        <div><strong>State injection.</strong> Each row maps a path in the <code class="inline">state</code> JSON sent to jev-latest to a source value. Once an input data type is selected, the property selector lists that type's fields (<code class="inline">input.&lt;field&gt;</code>); agent and data context sources are also available. Use <strong>Auto-detect placeholders</strong> to scan question instructions for backtick-quoted state paths and pre-create matching rows.</div>
+      </div>
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+        <span class="hint" style="margin:0;">Mapping rows (state path ← source)</span>
+        <button class="btn btn-outline btn-small" onclick="autoDetectPlaceholders()">🔍 Auto-detect placeholders</button>
+      </div>
+      <div id="tool-mappings"></div>
+      <button class="btn btn-outline" onclick="addMapping()">＋ Add mapping</button>
+      <div style="margin-top:12px;">
+        <label class="field">Additional static state (JSON)</label>
+        <textarea id="tool-static-state" rows="3" class="mono">{ "locale": "en-US" }</textarea>
+      </div>
+
+      <!-- 7. Confidence thresholds -->
+      <h2 style="margin:20px 0 4px;">Confidence thresholds</h2>
+      <p class="card-sub" style="margin-bottom:12px;">Every execution returns a confidence score. Thresholds decide what consumers should do with the result.</p>
+      <div style="display:flex; gap:12px; align-items:center; margin-bottom:14px;">
+        <label class="field" style="margin:0; width:220px;">Act automatically ≥</label>
+        <input type="range" min="50" max="99" value="80" id="tool-thresh-auto" style="width:260px;" oninput="onThresholdInput()">
+        <span class="mono" id="tool-thresh-auto-val" style="font-weight:600;">0.80</span>
+      </div>
+      <div style="display:flex; gap:12px; align-items:center;">
+        <label class="field" style="margin:0; width:220px;">Escalate to human &lt;</label>
+        <input type="range" min="10" max="70" value="50" id="tool-thresh-escalate" style="width:260px;" oninput="onThresholdInput()">
+        <span class="mono" id="tool-thresh-escalate-val" style="font-weight:600;">0.50</span>
+      </div>
+      <div class="alert info" style="margin:16px 0 0;">
+        <span>🎚</span>
+        <div id="tool-thresh-summary">Between 0.50 and 0.80 the consumer should <strong>proceed with caution / confirm</strong> before applying the outcome.</div>
+      </div>
+
+      <!-- 8. Auto-generated tool description -->
+      <h2 style="margin:20px 0 4px;">Auto-generated tool description</h2>
+      <p class="card-sub" style="margin-bottom:12px;">The platform generates the tool description from your definition. This is exactly what skills, agents, and MCP clients see — no manual documentation needed.</p>
+      <div class="preview-grid">
+        <div>
+          <label class="field">Tool description (exposed to skills &amp; MCP)</label>
+          <pre class="json" id="tool-desc-preview"></pre>
+        </div>
+        <div>
+          <label class="field">Request → jev-latest (derived)</label>
+          <pre class="json" id="tool-preview-request"></pre>
+        </div>
+      </div>
+      <div style="margin-top:12px; display:flex; justify-content:flex-end;">
+        <button class="btn btn-outline" onclick="updateToolDescription(); toast('Tool description regenerated');">↻ Regenerate</button>
       </div>
 
     </div>
     <div class="dialog-actions">
-      <button class="btn btn-text" onclick="closeDialog('dlg-editor')">Cancel</button>
-      <button class="btn btn-primary" id="ed-save" onclick="saveSkill()" disabled>Save skill</button>
+      <button class="btn btn-text" onclick="closeDialog('dlg-tool')">Cancel</button>
+      <button class="btn btn-primary" id="tool-save" onclick="saveTool()" disabled>Save decision tool</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== DIALOG: AGENT DATA TYPE (read-only view) ===== -->
+<div class="overlay" id="dlg-datatype">
+  <div class="dialog">
+    <div class="dialog-header">
+      <span id="dtt-title">Agent Data Type</span>
+      <button class="close-x" onclick="closeDialog('dlg-datatype')">✕</button>
+    </div>
+    <div class="dialog-body">
+      <p class="card-sub" id="dtt-sub" style="margin-bottom:12px;"></p>
+      <table class="table">
+        <thead><tr><th>Field</th><th>Type</th><th>Description</th></tr></thead>
+        <tbody id="dtt-fields"></tbody>
+      </table>
+      <div class="alert info" style="margin:14px 0 0;">
+        <span>ℹ️</span>
+        <div>Agent Data Types are read-only here — they are managed in the platform's typed-schema registry.</div>
+      </div>
+    </div>
+    <div class="dialog-actions">
+      <button class="btn btn-primary" onclick="closeDialog('dlg-datatype')">Close</button>
     </div>
   </div>
 </div>
@@ -485,11 +655,52 @@ let soConfigured = false;   // System One configured?
 let questions = [];
 let mappings = [];
 let qSeq = 0;
+const TENANT = 'acme-corp';
+
+/* Sample Agent Data Type registry (platform typed-schema catalogue) */
+const DATA_TYPES = {
+  customer_message: { label: 'customer_message', fields: [
+    { name: 'text',        type: 'string', description: 'Raw inbound message text' },
+    { name: 'channel',     type: 'enum[email, chat, phone]', description: 'Channel the message arrived on' },
+    { name: 'received_at', type: 'date', description: 'When the message was received' }
+  ]},
+  support_ticket: { label: 'support_ticket', fields: [
+    { name: 'subject',  type: 'string', description: 'Ticket subject line' },
+    { name: 'body',     type: 'string', description: 'Full ticket body text' },
+    { name: 'priority', type: 'enum[low, medium, high]', description: 'Current priority classification' }
+  ]},
+  routing_decision: { label: 'routing_decision', fields: [
+    { name: 'department', type: 'string', description: 'Department the request should be routed to' },
+    { name: 'escalate',   type: 'boolean', description: 'Whether the request must be escalated to a human' },
+    { name: 'rationale',  type: 'string', description: 'Short explanation of the routing decision' }
+  ]}
+};
+/* Non-input context sources available in the mapping property selector */
+const CONTEXT_SOURCES = [
+  { value: '{{agent.customer_data.plan}}', label: 'agent context — customer plan tier' },
+  { value: '{{data.invoices.count}}',      label: 'data context — open invoice count' }
+];
+
+/* User-defined decision tools of this tenant */
+let decisionTools = [
+  {
+    name: 'tool_a',
+    description: 'Triages an inbound support request: category, urgency, refund eligibility.',
+    questions: 3,
+    enabled: true
+  },
+  {
+    name: 'priority_score_doc',
+    description: 'Scores documentation tickets for priority against the release rubric.',
+    questions: 2,
+    enabled: true
+  }
+];
 
 /* ===================== helpers ===================== */
 function $(id){ return document.getElementById(id); }
 function nav(page){
-  ['skills','systemone','result'].forEach(p => $('page-'+p).style.display = (p===page)?'':'none');
+  ['skills','decisiontools','systemone','result'].forEach(p => $('page-'+p).style.display = (p===page)?'':'none');
   document.querySelectorAll('.sidebar a').forEach(a => a.classList.toggle('active', a.dataset.nav===page));
   window.scrollTo(0,0);
 }
@@ -499,6 +710,57 @@ function openDialog(id){ $(id).classList.add('open'); }
 function closeDialog(id){ $(id).classList.remove('open'); }
 function esc(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;'); }
 function escJson(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;'); }
+function decisionBadge(){ return '<span class="chip decision"><span class="dot"></span>decision</span>'; }
+
+/* ===================== Tools / invocation context ===================== */
+const SYSTEM_TOOLS = [
+  { name: 'web_search',        desc: 'Search the public web.' },
+  { name: 'kb_search',         desc: 'Search the tenant knowledge base.' },
+  { name: 'notify_email',      desc: 'Send a notification email.' },
+  { name: 'ticket_create',     desc: 'Create a ticket in the connected tracker.' }
+];
+function renderToolsContext(){
+  const sys = SYSTEM_TOOLS.map(t =>
+    '<div class="tool-line"><span class="chip neutral">system</span>' +
+    '<span class="tool-name">' + esc(t.name) + '</span>' +
+    '<span class="tool-desc">' + esc(t.desc) + '</span></div>').join('');
+  const dec = decisionTools.map(t =>
+    '<div class="tool-line">' + decisionBadge() +
+    '<span class="tool-name">decision____' + esc(t.name) + '</span>' +
+    '<span class="tool-desc">' + esc(t.description) + '</span>' +
+    (t.enabled ? '<span class="chip success"><span class="dot"></span>Enabled</span>' : '<span class="chip warning"><span class="dot"></span>Disabled</span>') +
+    '</div>').join('');
+  $('tools-context').innerHTML = sys + dec;
+}
+function renderMcpList(){
+  const list = {
+    tenant: TENANT,
+    tools: SYSTEM_TOOLS.map(t => ({ name: t.name, type: 'system' }))
+      .concat(decisionTools.map(t => ({ name: 'decision____' + t.name, type: 'decision' })))
+  };
+  $('dt-mcp').innerHTML = syntaxJson(JSON.stringify(list, null, 2));
+}
+function renderDecisionTools(){
+  $('dt-tbody').innerHTML = decisionTools.map((t,i) =>
+    '<tr>' +
+    '<td><span class="mono" style="font-weight:600;">decision____' + esc(t.name) + '</span> ' + decisionBadge() + '</td>' +
+    '<td style="max-width:420px;">' + esc(t.description) + '</td>' +
+    '<td>' + t.questions + '</td>' +
+    '<td>' + (t.enabled ? '<span class="chip success"><span class="dot"></span>Enabled</span>' : '<span class="chip warning"><span class="dot"></span>Disabled</span>') + '</td>' +
+    '<td style="white-space:nowrap;">' +
+      '<button class="btn btn-text btn-small" onclick="openToolEditor(' + i + ')">Edit</button>' +
+      '<button class="btn btn-text btn-small" onclick="showResult()">Run</button>' +
+      '<button class="btn btn-danger-text btn-small" onclick="removeTool(' + i + ')">Delete</button>' +
+    '</td></tr>').join('') ||
+    '<tr><td colspan="5" class="card-sub" style="text-align:center; padding:24px;">No decision tools yet in tenant ' + TENANT + '.</td></tr>';
+  renderToolsContext();
+  renderMcpList();
+}
+function removeTool(i){
+  decisionTools.splice(i,1);
+  renderDecisionTools();
+  toast('Decision tool deleted');
+}
 
 /* ===================== System One config ===================== */
 function onApiKeyInput(){
@@ -513,8 +775,8 @@ function testConnection(){
     btn.disabled = false; btn.textContent = 'Test connection';
     const ok = $('so-apikey').value.trim().length >= 8;
     $('so-test-result').innerHTML = ok
-      ? '<div class="alert success" style="margin:0;"><span>✓</span><div>Connection successful — <strong>jev-latest</strong> reachable (latency 187 ms). Key will be stored encrypted at rest.</div></div>'
-      : '<div class="alert warning" style="margin:0;"><span>⚠</span><div>Key looks invalid. TypeSafe AI keys look like <code class="inline">tsk-…</code>.</div></div>';
+      ? '<div class="alert success" style="margin:0;"><span>✓</span><div>Connection successful — <strong>jev-latest</strong> reachable at <code class="inline">https://api.typesafe.ai/v1</code> (latency 187 ms). Key and endpoint validated; key will be stored encrypted at rest.</div></div>'
+      : '<div class="alert error" style="margin:0; background:var(--error-bg); color:#b71c1c;"><span>⚠</span><div>Connection failed — the key looks invalid. TypeSafe AI keys look like <code class="inline">tsk-…</code>. Endpoint <code class="inline">https://api.typesafe.ai/v1</code> was reached but rejected the credential.</div></div>';
   }, 700);
 }
 function saveConfig(){
@@ -523,6 +785,9 @@ function saveConfig(){
   soConfigured = true;
   $('so-status-chip').className = 'chip success';
   $('so-status-chip').innerHTML = '<span class="dot"></span>Active · jev-latest';
+  const pc = $('dt-provider-chip');
+  pc.className = 'chip info';
+  pc.innerHTML = '<span class="dot"></span>Provider: TypeSafe AI · jev-latest';
   $('so-apikey').value = '••••••••••••••••' + key.slice(-4);
   $('so-apikey').readOnly = true;
   $('so-remove-btn').style.display = '';
@@ -532,81 +797,124 @@ function removeKey(){
   soConfigured = false;
   $('so-status-chip').className = 'chip warning';
   $('so-status-chip').innerHTML = '<span class="dot"></span>Not configured';
+  const pc = $('dt-provider-chip');
+  pc.className = 'chip warning';
+  pc.innerHTML = '<span class="dot"></span>Provider: not configured';
   $('so-apikey').value = ''; $('so-apikey').readOnly = false;
   $('so-remove-btn').style.display = 'none';
   toast('Key removed');
 }
 
-/* ===================== Skill editor ===================== */
-const TYPE_INFO = {
-  prompt: { label: 'Prompt Skill (LLM)', desc: 'Prompts an LLM and returns generated text. Uses a centrally-managed model configuration.' },
-  mcp:    { label: 'MCP Tool Skill', desc: 'Wraps one or more MCP tool calls from a registered MCP server.' },
-  decision:{ label: 'Decision Skill (System One)', desc: 'Sends a predefined question set plus state to a System One model (TypeSafe AI Jev) and returns structured typed answers with probabilities and confidence.' }
+/* ===================== Skill editor (simple — no decision type) ===================== */
+const SKILL_TYPE_INFO = {
+  prompt: { label: 'Prompt Skill (LLM)', icon: '📝', desc: 'Prompts an LLM and returns generated text. Uses a centrally-managed model configuration.' },
+  mcp:    { label: 'MCP Tool Skill', icon: '🔌', desc: 'Wraps one or more MCP tool calls from a registered MCP server.' }
 };
-
 function openSkillEditor(existing){
-  $('ed-title').textContent = existing ? 'Edit Skill — triage-inbound-request' : 'Create Skill';
-  if(!existing){ $('ed-name').value=''; $('ed-type').value=''; }
-  $('ed-step-form').style.display='none';
-  $('ed-step-type').style.display='';
-  $('ed-save').disabled = true;
-  if(existing){
-    $('ed-name').value = 'triage-inbound-request';
-    $('ed-type').value = 'decision';
-    onTypeChange();
-    if(!questions.length) seedQuestions();
-    renderQuestions();
-  }
-  openDialog('dlg-editor');
+  $('sk-title').textContent = existing ? 'Edit Skill — summarize-ticket' : 'Create Skill';
+  $('sk-name').value = existing ? 'summarize-ticket' : '';
+  $('sk-type').value = existing ? 'prompt' : '';
+  $('sk-save').disabled = !existing;
+  $('sk-info').innerHTML = existing ? skillTypeInfo('prompt') : '';
+  openDialog('dlg-skill');
+}
+function skillTypeInfo(type){
+  const info = SKILL_TYPE_INFO[type];
+  return '<div class="alert info" style="margin:0;"><span>' + info.icon + '</span><div>' + info.desc + ' <span class="hint">(existing type — form not shown in this prototype)</span></div></div>';
+}
+function onSkillTypeChange(){
+  const type = $('sk-type').value;
+  $('sk-save').disabled = !type;
+  $('sk-info').innerHTML = type ? skillTypeInfo(type) : '';
+}
+function saveSkill(){
+  closeDialog('dlg-skill');
+  toast('Skill saved');
 }
 
-function onTypeChange(){
-  const type = $('ed-type').value;
-  const gate = $('ed-gate');
-  if(!type){ gate.innerHTML=''; $('ed-save').disabled = true; return; }
-  const info = TYPE_INFO[type];
-  if(type === 'decision' && !soConfigured){
-    gate.innerHTML = '<div class="alert warning"><span>🔒</span><div><strong>System One model is not configured.</strong> Decision Skills require a configured System One provider, and this deployment has none yet.<br><a onclick="closeDialog(\'dlg-editor\'); nav(\'systemone\')">Configure the TypeSafe AI provider →</a><br><span class="hint" style="display:block; margin-top:6px;">Decision-skill authoring is blocked until a provider is configured and enabled.</span></div></div>';
-    $('ed-step-form').style.display='none';
-    $('ed-save').disabled = true;
-  } else if(type === 'decision'){
-    gate.innerHTML = '';
-    $('ed-step-type').style.display='none';
-    $('ed-step-form').style.display='';
-    $('ed-save').disabled = false;
-    if(!questions.length) seedQuestions();
-    renderQuestions(); renderMappings(); updatePreview();
+/* ===================== Decision tool editor ===================== */
+function openToolEditor(existingIdx){
+  $('dt-ok-banner').style.display = soConfigured ? '' : 'none';
+  $('dt-unconfigured-banner').style.display = soConfigured ? 'none' : '';
+  if(!soConfigured){
+    toast('Configure a System One model first');
+    nav('systemone');
+    return;
+  }
+  $('dt-title').textContent = existingIdx !== undefined ? 'Edit Decision Tool — decision____' + decisionTools[existingIdx].name : 'Create Decision Tool';
+  $('tool-name').value = existingIdx !== undefined ? decisionTools[existingIdx].name : '';
+  $('tool-desc').value = existingIdx !== undefined ? decisionTools[existingIdx].description : '';
+  $('tool-input-type').value = existingIdx !== undefined && decisionTools[existingIdx].inputType ? decisionTools[existingIdx].inputType : 'customer_message';
+  $('tool-output-type').value = existingIdx !== undefined && decisionTools[existingIdx].outputType ? decisionTools[existingIdx].outputType : 'routing_decision';
+  onToolNameInput(existingIdx !== undefined ? decisionTools[existingIdx].name : '');
+  seedQuestions();
+  renderQuestions();
+  mappings = [];
+  renderMappings();
+  onThresholdInput();
+  updateToolDescription();
+  openDialog('dlg-tool');
+}
+function toolNameTaken(name, ignoreCurrent){
+  return decisionTools.some((t,i) => t.name === name && !(ignoreCurrent && $('dt-title').textContent.endsWith('decision____' + name)));
+}
+function onToolNameInput(currentName){
+  const name = $('tool-name').value.trim();
+  const err = $('tool-name-error');
+  const validName = /^[a-z0-9_][a-z0-9_-]*$/.test(name);
+  let problem = '';
+  if(!name) problem = 'Tool name is required.';
+  else if(!validName) problem = 'Use lowercase letters, digits, underscores or dashes.';
+  else if(toolNameTaken(name, currentName)) problem = 'A tool named "' + name + '" already exists in tenant ' + TENANT + '. Names must be unique within the tenant.';
+  if(problem){
+    err.style.display = ''; err.textContent = problem;
+    $('tool-name').classList.add('invalid');
   } else {
-    gate.innerHTML = '<div class="alert info" style="margin:0;"><span>' + (type==='prompt'?'📝':'🔌') + '</span><div>' + info.desc + ' <span class="hint">(existing type — form not shown in this prototype)</span></div></div>';
-    $('ed-step-form').style.display='none';
-    $('ed-save').disabled = false;
+    err.style.display = 'none';
+    $('tool-name').classList.remove('invalid');
   }
+  $('tool-save').disabled = !!problem || !$('tool-desc').value.trim() || questions.length === 0;
 }
 
-function switchEdTab(tab){
-  ['questions','state','preview'].forEach(t => {
-    $('ed-tab-'+t).style.display = (t===tab)?'':'none';
-    document.querySelector('[data-edtab="'+t+'"]').classList.toggle('active', t===tab);
-  });
-  if(tab==='preview') updatePreview();
+/* ---- Agent Data Type selection (input/output) ---- */
+function onDataTypeChange(kind){
+  const sel = kind === 'input' ? $('tool-input-type') : $('tool-output-type');
+  if(sel.value === '__create__'){
+    sel.value = '';
+    toast('Data type authoring lives in the Agent Data Type registry — select an existing type in this prototype');
+  }
+  if(kind === 'input') renderMappings(); // repopulate property selectors with the new input type's fields
+  updateToolDescription();
+}
+function viewDataType(selectId){
+  const name = $(selectId).value;
+  const dt = DATA_TYPES[name];
+  if(!dt){ toast('Select a data type first'); return; }
+  $('dtt-title').textContent = 'Agent Data Type — ' + dt.label;
+  $('dtt-sub').textContent = 'Read-only definition from the Agent Data Type registry. ' + dt.fields.length + ' field(s).';
+  $('dtt-fields').innerHTML = dt.fields.map(f =>
+    '<tr><td><strong class="mono">' + esc(f.name) + '</strong></td>' +
+    '<td><span class="chip neutral mono">' + esc(f.type) + '</span></td>' +
+    '<td style="color:var(--text2);">' + esc(f.description) + '</td></tr>').join('');
+  openDialog('dlg-datatype');
 }
 
 /* ---- Question set ---- */
 function seedQuestions(){
   qSeq = 0;
   questions = [
-    { id:'q_category', type:'choice', instructions:'Classify the support request into exactly one category.', criteria:[
+    { id:'q_category', type:'choice', instructions:'Classify the support request into exactly one category. Consider `input.channel` and the tone of `input.text`.', criteria:[
       {key:'billing', value:'Charges, invoices, refunds'},{key:'technical', value:'Errors, bugs, outages'},{key:'account', value:'Login, access, profile'} ]},
     { id:'q_urgency', type:'score', instructions:'Rate urgency 1 (low) – 5 (critical) against the SLA rubric.', criteria:[
       {level:1, label:'Routine'}, {level:2, label:'Minor inconvenience'}, {level:3, label:'Degraded workflow'}, {level:4, label:'Blocking, workaround exists'}, {level:5, label:'Critical / outage'} ]},
-    { id:'q_needs_refund', type:'noul', instructions:'Does the request plausibly qualify for a refund?', criteria:{ clarification:'If unsure, should we ask the customer for order details? (yes/no)' } }
+    { id:'q_needs_refund', type:'noul', instructions:'Does the request plausibly qualify for a refund? Check `input.channel` for prior promises.', criteria:{ clarification:'If unsure, should we ask the customer for order details? (yes/no)' } }
   ];
 }
 function typeChip(t){
   return {choice:'<span class="chip info">Choice</span>', score:'<span class="chip warning">Score</span>', noul:'<span class="chip neutral">Noul</span>'}[t];
 }
 function renderQuestions(){
-  const wrap = $('ed-questions');
+  const wrap = $('tool-questions');
   wrap.innerHTML = questions.map((q,i) => {
     let crit = '';
     if(q.type==='choice'){
@@ -649,6 +957,7 @@ function renderQuestions(){
         '</div>' + crit +
       '</div></div>';
   }).join('') || '<p class="card-sub" style="margin-bottom:12px;">No questions yet — add at least one.</p>';
+  onToolNameInput($('tool-name').value.trim());
 }
 function setQ(i,f,v){
   if(f==='type'){
@@ -658,7 +967,7 @@ function setQ(i,f,v){
     if(v==='score' && (!Array.isArray(old.criteria))) questions[i].criteria=[{level:1,label:'Low'},{level:2,label:'Medium'},{level:3,label:'High'}];
     if(v==='noul') questions[i].criteria={clarification:''};
   } else questions[i][f]=v;
-  if(f==='id'||f==='type') renderQuestions(); else updatePreview();
+  if(f==='id'||f==='type') renderQuestions(); else updateToolDescription();
 }
 function addQuestion(){
   qSeq++;
@@ -667,7 +976,7 @@ function addQuestion(){
 }
 function removeQuestion(i){ questions.splice(i,1); renderQuestions(); }
 function moveQ(i,d){ const j=i+d; if(j<0||j>=questions.length) return; [questions[i],questions[j]]=[questions[j],questions[i]]; renderQuestions(); }
-function setCrit(i,ci,f,v){ questions[i].criteria[ci][f]=v; updatePreview(); }
+function setCrit(i,ci,f,v){ questions[i].criteria[ci][f]=v; updateToolDescription(); }
 function addCrit(i){
   const q=questions[i];
   if(q.type==='choice') q.criteria.push({key:'option_'+(q.criteria.length+1),value:''});
@@ -675,49 +984,162 @@ function addCrit(i){
   renderQuestions();
 }
 function removeCrit(i,ci){ questions[i].criteria.splice(ci,1); renderQuestions(); }
-function setNoulClar(i,v){ questions[i].criteria.clarification=v; updatePreview(); }
+function setNoulClar(i,v){ questions[i].criteria.clarification=v; updateToolDescription(); }
 
-/* ---- State preset ---- */
-const SAMPLE_MAPPINGS = [
-  { state:'customer.tier',        source:'{{agent.customer_data.plan}}' },
-  { state:'request.text',         source:'{{input.text}}' },
-  { state:'request.open_invoices',source:'{{data.invoices.count}}' }
-];
+/* ---- State mapping ---- */
 function renderMappings(){
-  if(!mappings.length) mappings = SAMPLE_MAPPINGS.map(m=>({...m}));
-  $('ed-mappings').innerHTML = mappings.map((m,i) =>
+  if(!mappings.length){
+    mappings = [
+      { state:'input.text', source:'{{input.text}}' },
+      { state:'input.channel', source:'{{input.channel}}' },
+      { state:'customer.tier', source:'{{agent.customer_data.plan}}' }
+    ];
+  }
+  $('tool-mappings').innerHTML = mappings.map((m,i) =>
     '<div class="mapping-row">' +
-    '<input type="text" value="'+esc(m.state)+'" placeholder="state path (e.g. request.text)" oninput="setMap('+i+',\'state\',this.value)">' +
+    '<input type="text" value="'+esc(m.state)+'" placeholder="state path (e.g. input.text)" oninput="setMap('+i+',\'state\',this.value)">' +
     '<span class="arrow">←</span>' +
-    '<input type="text" value="'+esc(m.source)+'" placeholder="{{input.text}} | {{agent.…}} | {{data.…}}" oninput="setMap('+i+',\'source\',this.value)">' +
+    '<select onchange="setMap('+i+',\'source\',this.value)">' + sourceOptions(m.source) + '</select>' +
     '<button class="btn btn-danger-text btn-small" onclick="removeMap('+i+')">✕</button>' +
     '</div>').join('');
 }
+function sourceOptions(selected){
+  let opts = '';
+  const inName = $('tool-input-type') ? $('tool-input-type').value : '';
+  if(inName && DATA_TYPES[inName]){
+    opts += DATA_TYPES[inName].fields.map(f => {
+      const v = '{{input.' + f.name + '}}';
+      return '<option value="'+esc(v)+'"'+(selected===v?' selected':'')+'>'+esc(v)+' — input.'+esc(f.name)+' ('+esc(f.type)+')</option>';
+    }).join('');
+  }
+  CONTEXT_SOURCES.forEach(s => {
+    opts += '<option value="'+esc(s.value)+'"'+(selected===s.value?' selected':'')+'>'+esc(s.value)+' — '+esc(s.label)+'</option>';
+  });
+  if(selected && opts.indexOf('value="'+esc(selected)+'"') === -1){
+    opts += '<option value="'+esc(selected)+'" selected>'+esc(selected)+' — custom</option>';
+  }
+  return opts;
+}
 function addMapping(){ mappings.push({state:'',source:''}); renderMappings(); }
-function removeMap(i){ mappings.splice(i,1); renderMappings(); }
-function setMap(i,f,v){ mappings[i][f]=v; updatePreview(); }
+function removeMap(i){ mappings.splice(i,1); renderMappings(); updateToolDescription(); }
+function setMap(i,f,v){ mappings[i][f]=v; updateToolDescription(); }
 
-/* ---- Preview / simulation ---- */
+/* Scan question instructions for backtick-quoted state paths and pre-create mapping rows */
+function autoDetectPlaceholders(silent){
+  const found = [];
+  questions.forEach(q => {
+    const re = /`([^`]+)`/g; let m;
+    while((m = re.exec(q.instructions || ''))) {
+      const p = m[1].trim();
+      if(p && found.indexOf(p) === -1) found.push(p);
+    }
+  });
+  let added = 0;
+  found.forEach(path => {
+    if(!mappings.some(mp => mp.state === path)){
+      mappings.push({ state: path, source: '{{' + path + '}}' });
+      added++;
+    }
+  });
+  renderMappings();
+  updateToolDescription();
+  if(!silent) toast(added ? 'Auto-detected ' + added + ' placeholder(s) — mapping rows created' : 'No new placeholders found in question instructions');
+}
+
+/* Simulated AI generation of questions + state mappings */
+function aiGenerate(){
+  const btn = $('tool-ai-btn');
+  btn.disabled = true; btn.textContent = '🪄 Analyzing description & data types…';
+  setTimeout(() => {
+    btn.disabled = false; btn.textContent = '🪄 Generate with AI';
+    seedQuestions();
+    renderQuestions();
+    mappings = [];
+    autoDetectPlaceholders(true);
+    const inName = $('tool-input-type').value;
+    if(inName && DATA_TYPES[inName] && !mappings.some(mp => mp.state === 'input.' + DATA_TYPES[inName].fields[0].name)){
+      mappings.unshift({ state: 'input.' + DATA_TYPES[inName].fields[0].name, source: '{{input.' + DATA_TYPES[inName].fields[0].name + '}}' });
+      renderMappings();
+    }
+    updateToolDescription();
+    toast('AI draft ready — review the generated questions and state mappings');
+  }, 900);
+}
+
+/* ---- Confidence thresholds ---- */
+function onThresholdInput(){
+  const a = +$('tool-thresh-auto').value, e = +$('tool-thresh-escalate').value;
+  $('tool-thresh-auto-val').textContent = (a/100).toFixed(2);
+  $('tool-thresh-escalate-val').textContent = (e/100).toFixed(2);
+  $('tool-thresh-summary').innerHTML =
+    '≥ <strong>' + (a/100).toFixed(2) + '</strong> → act automatically · <strong>' + (e/100).toFixed(2) + '–' + (a/100).toFixed(2) +
+    '</strong> → proceed with caution / confirm · &lt; <strong>' + (e/100).toFixed(2) + '</strong> → escalate to a human.';
+  updateToolDescription();
+}
+
+/* ---- Auto-generated tool description ---- */
 function resolvePlaceholder(p){
+  const m = /^\{\{input\.([a-z_]+)\}\}$/.exec(p);
+  const inName = $('tool-input-type') ? $('tool-input-type').value : '';
+  if(m && inName && DATA_TYPES[inName]){
+    const f = DATA_TYPES[inName].fields.find(f => f.name === m[1]);
+    if(f) return f.type + ' — input.' + f.name;
+  }
   const samples = {
-    '{{input.text}}': '"My card was charged twice this month, please refund the duplicate — this is blocking me."',
-    '{{agent.customer_data.plan}}': '"enterprise"',
-    '{{data.invoices.count}}': '2'
+    '{{agent.customer_data.plan}}': 'string — the customer plan tier',
+    '{{data.invoices.count}}': 'integer — open invoice count'
   };
   return samples[p] !== undefined ? samples[p] : '"' + p.replace(/[{}]/g,'') + '"';
 }
 function buildState(){
   const st = {};
   mappings.forEach(m => { if(m.state) st[m.state] = resolvePlaceholder(m.source.trim()); });
-  try { Object.assign(st, JSON.parse($('ed-static-state').value||'{}')); } catch(e){}
+  try { Object.assign(st, JSON.parse($('tool-static-state').value||'{}')); } catch(e){}
   return st;
 }
-function updatePreview(){
-  if(!$('ed-tab-preview')) return;
+function schemaFromType(name, fallbackNote){
+  if(name && DATA_TYPES[name]){
+    const dt = DATA_TYPES[name];
+    return Object.assign({ $agent_data_type: dt.label, type: 'object' }, {
+      properties: Object.fromEntries(dt.fields.map(f => [f.name, { type: f.type, description: f.description }])),
+      required: dt.fields.map(f => f.name)
+    });
+  }
+  return { note: fallbackNote };
+}
+function updateToolDescription(){
+  if(!$('tool-desc-preview')) return;
+  const name = $('tool-name').value.trim() || '<name>';
+  const desc = $('tool-desc').value.trim() || '<purpose>';
+  const inName = $('tool-input-type') ? $('tool-input-type').value : '';
+  const outName = $('tool-output-type') ? $('tool-output-type').value : '';
   const state = buildState();
+  const auto = (+$('tool-thresh-auto').value/100).toFixed(2);
+  const esc2 = (+$('tool-thresh-escalate').value/100).toFixed(2);
+  const doc = {
+    name: 'decision____' + name,
+    description: desc + ' Evaluates ' + questions.length + ' predefined question(s) against the state in a single System One (jev-latest) evaluation and returns structured typed answers with probabilities and confidence, plus the output defined by the "' + (outName || '<output data type>') + '" Agent Data Type.',
+    tenant: TENANT,
+    input_schema: schemaFromType(inName, 'select an input Agent Data Type'),
+    state_preset: state,
+    output_schema: schemaFromType(outName, 'select an output Agent Data Type'),
+    answers: Object.fromEntries(questions.map(q => [q.id, {
+      type: q.type === 'choice' ? 'string' : (q.type === 'score' ? 'integer' : 'boolean'),
+      probabilities: 'object',
+      description: q.instructions || ''
+    }])),
+    confidence_gate: { confidence: 'number (0–1)', gate: 'auto ≥ ' + auto + ' · confirm ' + esc2 + '–' + auto + ' · escalate < ' + esc2 },
+    exposed_to: ['skills', 'agents', 'SOPs', 'MCP clients (tool name: decision____' + name + ')']
+  };
+  $('tool-desc-preview').innerHTML = syntaxJson(JSON.stringify(doc, null, 2));
+
   const req = {
     model: 'jev-latest',
     provider: 'typesafe',
+    endpoint: 'https://api.typesafe.ai/v1',
+    input: inName && DATA_TYPES[inName]
+      ? Object.fromEntries(DATA_TYPES[inName].fields.map(f => [f.name, '<' + f.type + '>']))
+      : { note: 'select an input Agent Data Type' },
     state: state,
     questions: questions.map(q => {
       const base = { id:q.id, type:q.type, instructions:q.instructions };
@@ -727,29 +1149,9 @@ function updatePreview(){
       return base;
     })
   };
-  $('ed-preview-request').innerHTML = syntaxJson(JSON.stringify(req, null, 2));
-
-  const rnd = (n)=>Array.from({length:n},()=>Math.random()).map(x=>0.01+x*0.99);
-  const norm = a => { const s=a.reduce((x,y)=>x+y,0); return a.map(x=>x/s); };
-  const resp = { execution_id:'sim-'+Math.random().toString(16).slice(2,8), confidence: +(0.5+Math.random()*0.49).toFixed(2), answers: questions.map(q => {
-    if(q.type==='choice'){
-      const ps = norm(rnd(Math.max(q.criteria.length,1)));
-      const keys = q.criteria.map(c=>c.key).filter(Boolean);
-      const bi = ps.indexOf(Math.max(...ps));
-      return { id:q.id, value: keys[bi] ?? null, probabilities: Object.fromEntries(keys.map((k,i)=>[k, +ps[i].toFixed(2)])) };
-    }
-    if(q.type==='score'){
-      const n = Math.max(q.criteria.length,1);
-      const ps = norm(rnd(n));
-      const v = ps.indexOf(Math.max(...ps)) + 1;
-      return { id:q.id, value:v, probabilities:Object.fromEntries(q.criteria.map((c,i)=>[c.level, +ps[i].toFixed(2)])) };
-    }
-    const p = +(0.3+Math.random()*0.69).toFixed(2);
-    return { id:q.id, value: p>=0.5, probabilities:{ yes:p, no:+(1-p).toFixed(2) } };
-  })};
-  $('ed-preview-response').innerHTML = syntaxJson(JSON.stringify(resp, null, 2));
+  $('tool-preview-request').innerHTML = syntaxJson(JSON.stringify(req, null, 2));
+  onToolNameInput($('tool-name').value.trim());
 }
-function regeneratePreview(){ updatePreview(); toast('Simulated a new run'); }
 function syntaxJson(s){
   return escJson(s)
     .replace(/&quot;([^&]+)&quot;:/g,'<span class="k">"$1":</span>')
@@ -758,10 +1160,22 @@ function syntaxJson(s){
     .replace(/: (true|false|null)/g,': <span class="n">$1</span>');
 }
 
-function saveSkill(){
-  closeDialog('dlg-editor');
-  if($('ed-type').value==='decision'){ toast('Decision skill saved'); showResult(); }
-  else toast('Skill saved');
+function saveTool(){
+  const name = $('tool-name').value.trim();
+  const existingIdx = decisionTools.findIndex(t => $('dt-title').textContent === 'Edit Decision Tool — decision____' + t.name);
+  const record = {
+    name: name,
+    description: $('tool-desc').value.trim(),
+    inputType: $('tool-input-type').value,
+    outputType: $('tool-output-type').value,
+    questions: questions.length,
+    enabled: true
+  };
+  if(existingIdx >= 0) decisionTools[existingIdx] = record;
+  else decisionTools.push(record);
+  renderDecisionTools();
+  closeDialog('dlg-tool');
+  toast('Decision tool saved — exposed as decision____' + name);
 }
 
 /* ===================== Result view ===================== */
@@ -808,7 +1222,9 @@ function renderGate(){
 }
 
 /* ===================== init ===================== */
-renderQuestions(); renderMappings();
+renderQuestions();
+renderMappings();
+renderDecisionTools();
 </script>
 </body>
 </html>

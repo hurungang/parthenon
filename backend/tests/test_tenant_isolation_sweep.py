@@ -71,7 +71,7 @@ from app.db.models.identity import Identity, Role  # noqa: E402
 from app.db.models.identity_provider_config import IdentityProviderConfig  # noqa: E402
 from app.db.models.identity_provider_config_audit import IdentityProviderConfigAudit  # noqa: E402
 from app.db.models.intervene import InterveneRequest  # noqa: E402
-from app.db.models.mcp_hub import McpServer  # noqa: E402
+from app.db.models.mcp_hub import McpServer, McpTool  # noqa: E402
 from app.db.models.model_availability import ModelAvailability  # noqa: E402
 from app.db.models.model_guardrail_configuration import ModelGuardrailConfiguration  # noqa: E402
 from app.db.models.model_guardrail_evaluation import (  # noqa: E402
@@ -90,7 +90,9 @@ from app.db.models.platform_user import PlatformUser  # noqa: E402
 from app.db.models.policy_action import PolicyAction  # noqa: E402
 from app.db.models.policy_resource import PolicyResource  # noqa: E402
 from app.db.models.policy_statement import PolicyStatement  # noqa: E402
-from app.db.models.results import ResultRecord  # noqa: E402
+from app.db.models.results import DecisionExecutionResult, DecisionOutcome, ResultRecord  # noqa: E402
+from app.db.models.system_one_provider_config import SystemOneProviderConfig  # noqa: E402
+from app.db.models.decision_tools import DecisionTool  # noqa: E402
 from app.db.models.scheduling import ScheduledJob  # noqa: E402
 from app.db.models.session_logs import ExecutionLogEntry  # noqa: E402
 from app.db.models.skills import Skill, Sop  # noqa: E402
@@ -172,7 +174,6 @@ TENANT_AGNOSTIC_REGISTRY: dict[str, str] = {
     "intervene_responses": "join/child table — inherits scope via intervene_requests (request_id)",
     "job_executions": "join/child table — inherits scope via scheduled_jobs (job_id)",
     "mcp_sessions": "join/child table — inherits scope via mcp_servers (server_id)",
-    "mcp_tools": "join/child table — inherits scope via mcp_servers (server_id)",
     "policy_tag_conditions": "join/child table — inherits scope via policy_statements (policy_statement_id)",
     "role_permissions": "join table — inherits scope via roles (role_id); permission side is global catalogue",
     "skill_tool_bindings": "join table — inherits scope via skills (skill_id) → mcp_servers (tool_id)",
@@ -186,6 +187,10 @@ TENANT_AGNOSTIC_REGISTRY: dict[str, str] = {
     "tool_permissions": "join table — inherits scope via roles (role_id) → mcp_servers (tool_id)",
     "user_groups": "join table — inherits scope via groups (group_id); user side via membership-join strategy",
     "user_roles": "join table — inherits scope via roles (role_id); user side via membership-join strategy",
+    "decision_tool_questions": (
+        "join/child table — inherits scope via decision_tools (decision_tool_id); "
+        "questions are always loaded/validated through their tenant-scoped parent tool"
+    ),
 }
 
 
@@ -242,6 +247,17 @@ _OWN_KWARGS = {
         "name": f"mcp-{s}",
         "slug": f"mcp-{s}",
         "base_url": f"https://mcp-{s}.example.test",
+    },
+    McpTool: lambda t, s: {
+        "name": f"mcp-{s}____tool_{s}",
+        "original_name": f"tool_{s}",
+    },
+    DecisionTool: lambda t, s: {"name": f"dt-{s}"},
+    DecisionExecutionResult: lambda t, s: {"outcome": DecisionOutcome.act},
+    SystemOneProviderConfig: lambda t, s: {
+        "display_name": f"s1p-{s}",
+        "base_url": f"https://s1p-{s}.example.test",
+        "encrypted_api_key": "enc-sweep",
     },
     ModelConfig: lambda t, s: {"display_name": f"mconf-{s}", "provider_type": "openai"},
     NotificationChannel: lambda t, s: {"name": f"nchan-{s}", "channel_type": "SMTP"},
@@ -415,6 +431,10 @@ async def _parent_fks(db, ctx, cls, tenant_id, suffix) -> dict:
         }
     if cls is IdentityProviderConfigAudit:
         return {"config_id": (await parent(IdentityProviderConfig)).id}
+    if cls is McpTool:
+        return {"server_id": (await parent(McpServer)).id}
+    if cls is DecisionExecutionResult:
+        return {"decision_tool_id": (await parent(DecisionTool)).id}
     if cls is TerminationRequest:
         return {
             "requested_by_user_id": (await parent(Identity)).id,

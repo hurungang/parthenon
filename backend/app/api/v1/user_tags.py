@@ -2,7 +2,7 @@
 import uuid
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Depends, Query, Request, status
 
 from app.api.deps import require_permission
 from app.core.resource_types import RT_SYSTEM_PERMISSIONS
@@ -34,10 +34,14 @@ async def list_tag_definitions(
 )
 async def create_tag_definition(
     body: TagDefinitionCreate,
+    request: Request,
     db: DbSession,
     _: dict = Depends(require_permission(RT_SYSTEM_PERMISSIONS, "manage")),
 ) -> object:
     """Create a tag definition. Admin only. Returns 409 if key+scope already exists."""
+    from app.core.tenant_context import get_tenant_context
+
+    tenant_context = get_tenant_context(request)
     return await TagRegistry().create_definition(
         db,
         key=body.key,
@@ -45,6 +49,7 @@ async def create_tag_definition(
         resource_type=body.resource_type,
         description=body.description,
         allowed_values=body.allowed_values,
+        tenant_id=tenant_context.tenant_id if tenant_context.is_set else None,
     )
 
 

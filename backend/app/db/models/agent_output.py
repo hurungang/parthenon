@@ -22,6 +22,11 @@ class AgentOutput(Base):
 
     Links the agent type, execution session, and data type schema together with
     the validated field values.
+
+    Tenant ownership is mandatory (strict tenant isolation): listing and
+    typed queries match the calling tenant only. NOT NULL on ``tenant_id``
+    is enforced at the database level by migration ``b8c9d0e1f2a3``; the
+    ORM column stays nullable for legacy paths.
     """
 
     __tablename__ = "agent_outputs"

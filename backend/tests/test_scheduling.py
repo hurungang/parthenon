@@ -78,6 +78,14 @@ async def authed_client(test_engine):
 
     app.dependency_overrides[get_db] = override_db
 
+    # Provision the root tenant — schedule creation binds it when the
+    # request has no tenant context (multi-tenancy off).
+    async with SessionLocal() as session:
+        from app.services.tenancy.root_tenant import ensure_root_tenant
+
+        await ensure_root_tenant(session)
+        await session.commit()
+
     with _bypass_auth():
         async with AsyncClient(
             transport=ASGITransport(app=app), base_url="http://test"

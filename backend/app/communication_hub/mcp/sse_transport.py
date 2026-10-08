@@ -48,6 +48,7 @@ async def handle_sse_open(
         permissions=list(getattr(request.state, "api_key_permissions", []) or []),
         skills=list(getattr(request.state, "api_key_skills", []) or []),
         api_key_name=getattr(request.state, "api_key_name", None),
+        tenant_id=getattr(request.state, "tenant_id", None),
     )
     session_id = session.session_id
 
@@ -103,6 +104,7 @@ async def handle_sse_message(
             permissions=list(getattr(request.state, "api_key_permissions", []) or []),
             skills=list(getattr(request.state, "api_key_skills", []) or []),
             api_key_name=getattr(request.state, "api_key_name", None),
+        tenant_id=getattr(request.state, "tenant_id", None),
         )
 
     response_msg = await server.handle(request, body, session)

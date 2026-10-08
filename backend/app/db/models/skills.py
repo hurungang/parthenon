@@ -15,6 +15,7 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
     func,
+    text,
 )
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -25,10 +26,16 @@ from app.db.session import Base
 class Skill(Base):
     """
     A named, permission-assignable unit wrapping one or more MCP tool invocations.
+
+    Tenant ownership is mandatory (no shared NULL-tenant slot); names are
+    unique per tenant only. NOT NULL on ``tenant_id`` is enforced at the
+    database level by migration ``b8c9d0e1f2a3``; the ORM column stays
+    nullable for legacy paths.
     """
 
     __tablename__ = "skills"
     __table_args__ = (
+        UniqueConstraint("tenant_id", "name", name="uq_skills_tenant_name"),
         Index("ix_skills_tenant_id", "tenant_id"),
     )
 
@@ -38,7 +45,7 @@ class Skill(Base):
     tenant_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("tenants.id", ondelete="SET NULL"), nullable=True
     )
-    name: Mapped[str] = mapped_column(String(200), nullable=False, unique=True)
+    name: Mapped[str] = mapped_column(String(200), nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     instructions: Mapped[str | None] = mapped_column(Text, nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
@@ -77,8 +84,12 @@ class SkillToolBinding(Base):
     skill_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("skills.id", ondelete="CASCADE"), nullable=False
     )
+    # No FK: tool_id may reference VIRTUAL tools that have no mcp_tools row
+    # (system tools are DB-seeded; tenant decision tools are pure virtual
+    # uuid5 ids — see decision_tool_service.resolve_virtual_tool_id).
+    # Referential integrity is enforced at the skills API validation layer.
     tool_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("mcp_tools.id", ondelete="CASCADE"), nullable=False
+        UUID(as_uuid=True), nullable=False, index=True
     )
     # Ordering of tool calls within the skill
     order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
@@ -88,17 +99,30 @@ class SkillToolBinding(Base):
 
     # Relationships
     skill: Mapped["Skill"] = relationship("Skill", back_populates="tool_bindings")
-    tool: Mapped["McpTool"] = relationship("McpTool")
+    # Explicit foreign() join — the column carries no database-level FK so
+    # virtual (decision) tool ids never match a row; regular tools do.
+    tool: Mapped["McpTool"] = relationship(
+        "McpTool",
+        primaryjoin="foreign(SkillToolBinding.tool_id) == McpTool.id",
+        viewonly=True,
+    )
 
     def __repr__(self) -> str:
         return f"<SkillToolBinding skill_id={self.skill_id} tool_id={self.tool_id}>"
 
 
 class Sop(Base):
-    """A Standard Operating Procedure composing multiple Skills with sequencing."""
+    """A Standard Operating Procedure composing multiple Skills with sequencing.
+
+    Tenant ownership is mandatory; names are unique per tenant only.
+    NOT NULL on ``tenant_id`` is enforced at the database level by
+    migration ``b8c9d0e1f2a3``; the ORM column stays nullable for legacy
+    paths.
+    """
 
     __tablename__ = "sops"
     __table_args__ = (
+        UniqueConstraint("tenant_id", "name", name="uq_sops_tenant_name"),
         Index("ix_sops_tenant_id", "tenant_id"),
     )
 
@@ -108,7 +132,7 @@ class Sop(Base):
     tenant_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("tenants.id", ondelete="SET NULL"), nullable=True
     )
-    name: Mapped[str] = mapped_column(String(200), nullable=False, unique=True)
+    name: Mapped[str] = mapped_column(String(200), nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     instructions: Mapped[str | None] = mapped_column(Text, nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)

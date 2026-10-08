@@ -58,6 +58,7 @@ def _make_scheduled_job(
     target_id: uuid.UUID | None = None,
     scheduled_by_user_id: uuid.UUID | None = None,
     payload: dict | None = None,
+    tenant_id: uuid.UUID | None = None,
 ) -> MagicMock:
     from app.db.models.scheduling import JobTargetType
 
@@ -68,9 +69,9 @@ def _make_scheduled_job(
     job.target_type = JobTargetType.agent
     job.scheduled_by_user_id = scheduled_by_user_id
     job.payload = payload if payload is not None else {"query": "test"}
-    # Legacy (pre-adoption) job: no tenant — the dispatch-time quota gate
-    # (Phase 10) is skipped and provenance forwarding is exercised alone.
-    job.tenant_id = None
+    # Tenant-bound job (post-adoption every schedule carries its owning
+    # tenant — NULL-tenant dispatch is a hard skip).
+    job.tenant_id = tenant_id if tenant_id is not None else uuid.uuid4()
     return job
 
 
@@ -99,11 +100,27 @@ async def test_dispatch_passes_scheduled_by_user_id_to_launch():
     job = _make_scheduled_job(scheduled_by_user_id=scheduled_by)
 
     db = _make_dispatch_db()
-    # db.get(AgentType, target_id) returns a synthetic agent type without
-    # a tenant (legacy row) so the Phase 10 quota gate stays inert.
-    legacy_agent_type = MagicMock()
-    legacy_agent_type.tenant_id = None
-    db.get = AsyncMock(return_value=legacy_agent_type)
+
+    tenant_id = job.tenant_id
+    agent_type = MagicMock()
+    agent_type.tenant_id = tenant_id
+    tenant = MagicMock()
+    tenant.id = tenant_id
+    tenant.slug = "test-tenant"
+    tenant.name = "Test Tenant"
+    tenant.is_system_tenant = False
+
+    async def fake_get(model_cls, record_id):
+        from app.db.models.agents import AgentType as AgentTypeModel
+        from app.db.models.tenant import Tenant as TenantModel
+
+        if model_cls is AgentTypeModel:
+            return agent_type
+        if model_cls is TenantModel:
+            return tenant
+        return None
+
+    db.get = AsyncMock(side_effect=fake_get)
 
     captured: dict = {}
 
@@ -134,9 +151,27 @@ async def test_dispatch_null_scheduled_by_user_id_does_not_crash():
     job = _make_scheduled_job(scheduled_by_user_id=None)
 
     db = _make_dispatch_db()
-    legacy_agent_type = MagicMock()
-    legacy_agent_type.tenant_id = None
-    db.get = AsyncMock(return_value=legacy_agent_type)
+
+    tenant_id = job.tenant_id
+    agent_type = MagicMock()
+    agent_type.tenant_id = tenant_id
+    tenant = MagicMock()
+    tenant.id = tenant_id
+    tenant.slug = "test-tenant"
+    tenant.name = "Test Tenant"
+    tenant.is_system_tenant = False
+
+    async def fake_get(model_cls, record_id):
+        from app.db.models.agents import AgentType as AgentTypeModel
+        from app.db.models.tenant import Tenant as TenantModel
+
+        if model_cls is AgentTypeModel:
+            return agent_type
+        if model_cls is TenantModel:
+            return tenant
+        return None
+
+    db.get = AsyncMock(side_effect=fake_get)
 
     captured: dict = {}
 
@@ -155,3 +190,31 @@ async def test_dispatch_null_scheduled_by_user_id_does_not_crash():
 
     assert captured["user_id"] is None
     assert "session_id" in result
+
+
+@pytest.mark.asyncio
+async def test_dispatch_null_tenant_is_hard_skip():
+    """A NULL-tenant scheduled job is skipped (logged, never dispatched) —
+    there is no unscoped dispatch path (strict tenant isolation)."""
+    from app.services.scheduling.scheduler import SchedulingEngine
+
+    job = _make_scheduled_job()
+    job.tenant_id = None  # explicit NULL-tenant job (pre-adoption legacy row)
+
+    db = _make_dispatch_db()
+    agent_type = MagicMock()
+    agent_type.tenant_id = uuid.uuid4()  # no fallback to the agent type's tenant
+    db.get = AsyncMock(return_value=agent_type)
+
+    with patch(
+        "app.services.gateway.lifecycle_handler.GatewayLifecycleHandler"
+    ) as mock_handler_cls:
+        mock_handler = MagicMock()
+        mock_handler.launch = AsyncMock()
+        mock_handler_cls.return_value = mock_handler
+
+        result = await SchedulingEngine()._dispatch(job, db)
+
+    assert result["status"] == "skipped"
+    assert result["reason"] == "missing_tenant"
+    mock_handler.launch.assert_not_called()

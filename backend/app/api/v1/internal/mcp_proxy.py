@@ -16,7 +16,7 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
-from app.api.deps import require_service_certificate
+from app.api.deps import require_internal_tenant_context, require_service_certificate
 from app.core.credential_vault import get_vault
 from app.db.models.agents import AgentIdentity, AgentRole, AgentType, AgentRoleMcpSession
 from app.db.models.mcp_hub import McpServer, McpTool, McpSession
@@ -30,6 +30,10 @@ logger = logging.getLogger(__name__)
 InternalMcpProxyRouter = APIRouter(
     prefix="/internal/mcp",
     tags=["internal"],
+    dependencies=[
+        Depends(require_service_certificate),
+        Depends(require_internal_tenant_context),
+    ],
 )
 
 

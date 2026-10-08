@@ -31,6 +31,7 @@ class AgentDataService:
         data_value: Any,
         agent_type_id: uuid.UUID | str | None = None,
         data_type: str = "json",
+        tenant_id: uuid.UUID | None = None,
     ) -> AgentData:
         """Persist a named AgentData record.
 
@@ -41,6 +42,8 @@ class AgentDataService:
             data_value: JSON-serialisable value to store.
             agent_type_id: Optional FK to AgentType.
             data_type: Value type hint (default "json").
+            tenant_id: Owning tenant — stamped explicitly (never relies on
+                session flush stamping).
 
         Returns:
             The created AgentData record.
@@ -51,6 +54,7 @@ class AgentDataService:
             agent_type_id = uuid.UUID(agent_type_id)
 
         record = AgentData(
+            tenant_id=tenant_id,
             agent_type_id=agent_type_id,
             session_id=session_id,
             data_name=data_name,
@@ -79,11 +83,13 @@ class AgentDataService:
         session_id: uuid.UUID | str | None = None,
         page: int = 1,
         page_size: int = 20,
+        tenant_id: uuid.UUID | None = None,
     ) -> tuple[list[AgentData], int]:
         """Public paginated listing of active AgentData records.
 
         All filters are optional — when none are provided, returns all active
-        records ordered by created_at DESC.
+        records ordered by created_at DESC.  When ``tenant_id`` is given,
+        only that tenant's records are visible (defense in depth).
 
         Args:
             db: Database session.
@@ -92,6 +98,7 @@ class AgentDataService:
             session_id: Optional filter by session ID.
             page: Page number (1-indexed, default 1).
             page_size: Items per page (default 20).
+            tenant_id: Optional owning-tenant predicate.
 
         Returns:
             Tuple of (list of AgentData records, total count).
@@ -102,6 +109,8 @@ class AgentDataService:
             session_id = uuid.UUID(session_id)
 
         base = select(AgentData).where(AgentData.is_active.is_(True))
+        if tenant_id is not None:
+            base = base.where(AgentData.tenant_id == tenant_id)
 
         # Eager-load agent_type to avoid MissingGreenlet errors when
         # accessing record.agent_type.name in the response layer.
@@ -117,6 +126,8 @@ class AgentDataService:
         count_q = select(func.count()).select_from(AgentData).where(
             AgentData.is_active.is_(True)
         )
+        if tenant_id is not None:
+            count_q = count_q.where(AgentData.tenant_id == tenant_id)
         if data_name is not None:
             count_q = count_q.where(AgentData.data_name == data_name)
         if agent_type_id is not None:
@@ -139,12 +150,14 @@ class AgentDataService:
         self,
         db: AsyncSession,
         record_id: uuid.UUID,
+        tenant_id: uuid.UUID | None = None,
     ) -> AgentData | None:
         """Get a single AgentData record by ID.
 
         Args:
             db: Database session.
             record_id: UUID of the record to retrieve.
+            tenant_id: Optional owning-tenant predicate.
 
         Returns:
             The AgentData record or None if not found or inactive.
@@ -155,6 +168,11 @@ class AgentDataService:
             .where(
                 AgentData.id == record_id,
                 AgentData.is_active.is_(True),
+                *(
+                    [AgentData.tenant_id == tenant_id]
+                    if tenant_id is not None
+                    else []
+                ),
             )
         )
         return result.scalar_one_or_none()
@@ -167,11 +185,13 @@ class AgentDataService:
         session_id: uuid.UUID | str | None = None,
         limit: int = 50,
         offset: int = 0,
+        tenant_id: uuid.UUID | None = None,
     ) -> list[AgentData]:
         """Query AgentData records by one or more filters.
 
         At least one of data_name, agent_type_id, or session_id must be
-        provided to prevent unbounded full-table scans.
+        provided to prevent unbounded full-table scans.  When ``tenant_id``
+        is given, only that tenant's records are returned.
         """
         if data_name is None and agent_type_id is None and session_id is None:
             raise ValueError(
@@ -185,6 +205,8 @@ class AgentDataService:
             session_id = uuid.UUID(session_id)
 
         query = select(AgentData).where(AgentData.is_active.is_(True))
+        if tenant_id is not None:
+            query = query.where(AgentData.tenant_id == tenant_id)
 
         if data_name is not None:
             query = query.where(AgentData.data_name == data_name)

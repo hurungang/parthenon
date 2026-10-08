@@ -30,7 +30,7 @@ import logging
 import uuid
 from typing import Any
 
-from sqlalchemy import func, select
+from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.models.platform_user import PlatformUser
@@ -104,6 +104,20 @@ class TenantAdoptionService:
             invalidate_root_tenant_cache()
 
         backfilled = await self._backfill_null_tenant_rows(db, system.id)
+        # Phase 3 alignment: the denormalized McpTool.tenant_id must equal
+        # its server's tenant — a legacy tool row predating the column (or
+        # re-created NULL by a race) is re-bound to its server's tenant so
+        # enabling multi-tenancy can never leave divergent tool namespaces.
+        # PostgreSQL-only DDL string; SQLite (unit tests) has no divergent
+        # rows because tool rows are stamped by the flush listener.
+        if db.bind is not None and db.bind.dialect.name == "postgresql":
+            await db.execute(
+                text(
+                    "UPDATE mcp_tools t SET tenant_id = s.tenant_id "
+                    "FROM mcp_servers s "
+                    "WHERE t.server_id = s.id AND t.tenant_id IS DISTINCT FROM s.tenant_id"
+                )
+            )
         memberships = await self._grant_memberships(db, system)
         # Consistency: the root tenant gets the four default tenant roles
         # too.  NOBODY is force-assigned here — existing users keep their

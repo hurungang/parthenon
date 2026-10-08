@@ -131,8 +131,28 @@ class TestApiKeyUniqueConstraints:
         for constraint in AgentApiKey.__table__.constraints:
             if hasattr(constraint, 'name') and constraint.name:
                 uc_names.add(constraint.name)
-        assert "uq_agent_api_keys_name" in uc_names
+        # Name uniqueness is per-tenant (tenant_id, name) since multi-tenancy.
+        assert "uq_agent_api_keys_tenant_name" in uc_names
+        assert "uq_agent_api_keys_name" not in uc_names
         assert "uq_agent_api_keys_identity_role" not in uc_names
+
+    def test_tenant_name_constraint_columns(self):
+        from app.db.models.agent_api_key import AgentApiKey
+        ucs = [
+            c for c in AgentApiKey.__table__.constraints
+            if getattr(c, "name", None) == "uq_agent_api_keys_tenant_name"
+        ]
+        assert len(ucs) == 1
+        assert {col.name for col in ucs[0].columns} == {"tenant_id", "name"}
+
+    def test_global_name_partial_index(self):
+        """The legacy platform-wide (NULL-tenant) partial name index is
+        retired by migration ``b8c9d0e1f2a3`` — name uniqueness is
+        per-tenant only."""
+        from app.db.models.agent_api_key import AgentApiKey
+        indexes = {idx.name: idx for idx in AgentApiKey.__table__.indexes}
+        assert "uq_agent_api_keys_global_name" not in indexes
+        assert "ix_agent_api_keys_tenant_id" in indexes
 
 
 class TestApiKeyIndexes:

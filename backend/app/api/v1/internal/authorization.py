@@ -12,7 +12,7 @@ import logging
 
 from fastapi import APIRouter, Depends
 
-from app.api.deps import require_service_certificate
+from app.api.deps import require_internal_tenant_context, require_service_certificate
 from app.db.session import DbSession
 from app.schemas.certificates import (
     AuthorizeToolCallRequest,
@@ -25,6 +25,10 @@ logger = logging.getLogger(__name__)
 InternalAuthorizationRouter = APIRouter(
     prefix="/internal/authorize",
     tags=["internal"],
+    dependencies=[
+        Depends(require_service_certificate),
+        Depends(require_internal_tenant_context),
+    ],
 )
 
 _permission_service = PermissionResolutionService()

@@ -40,10 +40,18 @@ class SourceType(str, enum.Enum):
 
 
 class NotificationChannel(Base):
-    """A configured outbound notification destination."""
+    """A configured outbound notification destination.
+
+    Tenant ownership is mandatory; the NULL-tenant "shared slot" is no
+    longer a dispatch target and names are unique per tenant only.
+    NOT NULL on ``tenant_id`` is enforced at the database level by
+    migration ``b8c9d0e1f2a3``; the ORM column stays nullable for legacy
+    paths.
+    """
 
     __tablename__ = "notification_channels"
     __table_args__ = (
+        UniqueConstraint("tenant_id", "name", name="uq_notification_channels_tenant_name"),
         Index("ix_notification_channels_tenant_id", "tenant_id"),
     )
 
@@ -53,7 +61,7 @@ class NotificationChannel(Base):
     tenant_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("tenants.id", ondelete="SET NULL"), nullable=True
     )
-    name: Mapped[str] = mapped_column(String(200), nullable=False, unique=True)
+    name: Mapped[str] = mapped_column(String(200), nullable=False)
     channel_type: Mapped[ChannelType] = mapped_column(
         Enum(ChannelType, name="channel_type_enum"), nullable=False
     )
@@ -127,10 +135,18 @@ class ChannelProperty(Base):
 
 
 class RecipientGroup(Base):
-    """A named, addressable audience that maps to one or more notification channels."""
+    """A named, addressable audience that maps to one or more notification channels.
+
+    Tenant ownership is mandatory; name and slug are unique per tenant
+    only and the NULL-tenant global variants were retired. NOT NULL on
+    ``tenant_id`` is enforced at the database level by migration
+    ``b8c9d0e1f2a3``; the ORM column stays nullable for legacy paths.
+    """
 
     __tablename__ = "recipient_groups"
     __table_args__ = (
+        UniqueConstraint("tenant_id", "name", name="uq_recipient_groups_tenant_name"),
+        UniqueConstraint("tenant_id", "slug", name="uq_recipient_groups_tenant_slug"),
         Index("ix_recipient_groups_tenant_id", "tenant_id"),
     )
 
@@ -140,8 +156,8 @@ class RecipientGroup(Base):
     tenant_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("tenants.id", ondelete="SET NULL"), nullable=True
     )
-    name: Mapped[str] = mapped_column(String(200), nullable=False, unique=True)
-    slug: Mapped[str] = mapped_column(String(100), nullable=False, unique=True, index=True)
+    name: Mapped[str] = mapped_column(String(200), nullable=False)
+    slug: Mapped[str] = mapped_column(String(100), nullable=False, index=True)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     created_at: Mapped[datetime] = mapped_column(

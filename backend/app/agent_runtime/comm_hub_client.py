@@ -103,6 +103,12 @@ class CommHubToolClient:
             
             # Prepare headers
             headers: dict[str, str] = {}
+            # Multi-tenancy: forward the run's CC-signed tenant header set
+            # verbatim (AR never re-signs) so CH can re-verify the context
+            # and propagate it to Control Center's fail-closed endpoints.
+            from app.core.tenant_signature import forward_tenant_headers
+
+            headers.update(forward_tenant_headers())
 
             # For HTTP (localhost dev), send certificate as header
             # For HTTPS (production), use actual TLS client cert
@@ -226,6 +232,12 @@ class CommHubToolClient:
                 "verify": get_ssl_context(),
             }
             headers: dict[str, str] = {}
+            # Multi-tenancy: forward the run's CC-signed tenant header
+            # set verbatim — the A2A target resolves within the
+            # calling tenant on the CC side (task 1.6 hop).
+            from app.core.tenant_signature import forward_tenant_headers as _fth
+
+            headers.update(_fth())
 
             if self._cert_path and self._key_path:
                 if self._comm_hub_url.startswith("https://"):
@@ -302,6 +314,10 @@ class CommHubToolClient:
                 "verify": get_ssl_context(),
             }
             headers: dict[str, str] = {}
+            # Multi-tenancy: forward the run's CC-signed tenant headers.
+            from app.core.tenant_signature import forward_tenant_headers as _fth
+
+            headers.update(_fth())
 
             if self._cert_path and self._key_path:
                 if self._comm_hub_url.startswith("https://"):
@@ -375,6 +391,10 @@ class CommHubToolClient:
                 "verify": get_ssl_context(),
             }
             headers: dict[str, str] = {}
+            # Multi-tenancy: forward the run's CC-signed tenant headers.
+            from app.core.tenant_signature import forward_tenant_headers as _fth
+
+            headers.update(_fth())
 
             if self._cert_path and self._key_path:
                 if self._comm_hub_url.startswith("https://"):

@@ -117,6 +117,7 @@ const NAV_GROUPS: NavGroup[] = [
       { labelKey: 'nav.agentManagementPanel', path: '/agents/panel', icon: <DashboardIcon /> },
       { labelKey: 'nav.runtimeControl', path: '/agents/runtime-control', icon: <AccountTreeIcon /> },
       { labelKey: 'nav.skills', path: '/skills', icon: <BuildIcon /> },
+      { labelKey: 'nav.decisionTools', path: '/agents/decision-tools', icon: <TuneIcon /> },
       { labelKey: 'nav.sops', path: '/sops', icon: <AccountTreeIcon /> },
       { labelKey: 'nav.modelConfigs', path: '/agents/model-configs', icon: <TuneIcon /> },
       { labelKey: 'nav.schedules', path: '/schedules', icon: <ScheduleIcon /> },
@@ -145,6 +146,8 @@ const NAV_GROUPS: NavGroup[] = [
       { labelKey: 'nav.observability', path: '/observability', icon: <MonitorIcon /> },
       { labelKey: 'nav.permissions', path: '/user-permissions', icon: <SecurityIcon /> },
       { labelKey: 'nav.systemConfig', path: '/system-config', icon: <SettingsIcon /> },
+      { labelKey: 'nav.systemOneProviders', path: '/system/system-one', icon: <SettingsIcon /> },
+      // Decision Tools moved to the Agent module group (round 2).
       // FIX-20261001-235247 (Defect 2): the legacy `nav.identityProviders`
       // entry was REMOVED — it duplicated the Tenant Admin group's
       // `nav.tenantIdentityProviders` entry (same /system/identity-providers

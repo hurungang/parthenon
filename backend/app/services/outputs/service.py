@@ -35,6 +35,7 @@ class OutputService:
         field_values: dict[str, Any] | None,
         validation_status: str,
         raw_output: str | None = None,
+        tenant_id: uuid.UUID | None = None,
     ) -> AgentOutput:
         """Persist a typed AgentOutput record and link to the session.
 
@@ -49,6 +50,8 @@ class OutputService:
             field_values: Validated field values (or None on validation error).
             validation_status: "valid" or "validation_error".
             raw_output: Unstructured fallback text.
+            tenant_id: Owning tenant — stamped explicitly (never relies on
+                session flush stamping).
 
         Returns:
             The created AgentOutput record.
@@ -60,6 +63,7 @@ class OutputService:
         )
 
         output = AgentOutput(
+            tenant_id=tenant_id,
             data_type_id=data_type_id,
             agent_type_id=agent_type_id,
             execution_session_id=session_id,
@@ -93,15 +97,18 @@ class OutputService:
         self,
         db: AsyncSession,
         filters: dict[str, Any] | None = None,
+        tenant_id: uuid.UUID | None = None,
     ) -> tuple[list[AgentOutput], int]:
         """List agent outputs with optional filters and pagination.
 
         Supports filters: data_type_id, agent_type_id, date_from, date_to,
-        page, page_size.
+        page, page_size.  When ``tenant_id`` is given, only that tenant's
+        outputs are visible (defense in depth).
 
         Args:
             db: Database session.
             filters: Dict of filter parameters.
+            tenant_id: Optional owning-tenant predicate.
 
         Returns:
             Tuple of (items, total_count).
@@ -112,6 +119,8 @@ class OutputService:
             selectinload(AgentOutput.agent_type),
             selectinload(AgentOutput.execution_session),
         )
+        if tenant_id is not None:
+            query = query.where(AgentOutput.tenant_id == tenant_id)
 
         # Apply filters
         if filters.get("data_type_id"):
@@ -156,11 +165,19 @@ class OutputService:
         self,
         db: AsyncSession,
         output_id: uuid.UUID,
+        tenant_id: uuid.UUID | None = None,
     ) -> AgentOutput | None:
         """Get a single output by ID with relationships loaded."""
         result = await db.execute(
             select(AgentOutput)
-            .where(AgentOutput.id == output_id)
+            .where(
+                AgentOutput.id == output_id,
+                *(
+                    [AgentOutput.tenant_id == tenant_id]
+                    if tenant_id is not None
+                    else []
+                ),
+            )
             .options(
                 selectinload(AgentOutput.data_type),
                 selectinload(AgentOutput.agent_type),
@@ -173,6 +190,7 @@ class OutputService:
         self,
         db: AsyncSession,
         filters: dict[str, Any] | None = None,
+        tenant_id: uuid.UUID | None = None,
     ) -> str:
         """Export filtered outputs as a CSV string.
 
@@ -183,6 +201,7 @@ class OutputService:
         Args:
             db: Database session.
             filters: Same filter params as list_outputs (without pagination).
+            tenant_id: Optional owning-tenant predicate.
 
         Returns:
             CSV-formatted string.
@@ -192,6 +211,8 @@ class OutputService:
             selectinload(AgentOutput.data_type),
             selectinload(AgentOutput.agent_type),
         )
+        if tenant_id is not None:
+            query = query.where(AgentOutput.tenant_id == tenant_id)
 
         # Apply filters (same as list_outputs but no pagination)
         if filters.get("data_type_id"):
@@ -262,6 +283,7 @@ class OutputService:
         self,
         db: AsyncSession,
         filters: dict[str, Any] | None = None,
+        tenant_id: uuid.UUID | None = None,
     ) -> tuple[list[AgentJob], int]:
         """List completed auto/markdown type agent jobs that have output_data.
 
@@ -272,6 +294,7 @@ class OutputService:
             db: Database session.
             filters: Dict of filter parameters (agent_type_id, date_from,
                 date_to, page, page_size).
+            tenant_id: Optional owning-tenant predicate.
 
         Returns:
             Tuple of (items, total_count).
@@ -286,6 +309,8 @@ class OutputService:
             .where(AgentJob.output_data.isnot(None))
             .options(selectinload(AgentJob.agent_type))
         )
+        if tenant_id is not None:
+            query = query.where(AgentJob.tenant_id == tenant_id)
 
         if filters.get("agent_type_id"):
             query = query.where(AgentJob.agent_type_id == filters["agent_type_id"])
@@ -325,6 +350,7 @@ class OutputService:
         date_to: datetime | str | None = None,
         limit: int = 50,
         offset: int = 0,
+        tenant_id: uuid.UUID | None = None,
     ) -> list[AgentOutput]:
         """Query AgentOutput records for agent tool use (get_output tool path).
 
@@ -340,6 +366,7 @@ class OutputService:
             date_to: Optional ISO string or datetime — include records on or before.
             limit: Maximum number of records to return (default 50).
             offset: Number of records to skip (default 0).
+            tenant_id: Optional owning-tenant predicate.
 
         Returns:
             List of matching AgentOutput records ordered by created_at desc.
@@ -354,6 +381,8 @@ class OutputService:
             date_to = datetime.fromisoformat(date_to)
 
         query = select(AgentOutput)
+        if tenant_id is not None:
+            query = query.where(AgentOutput.tenant_id == tenant_id)
 
         if agent_type_id is not None:
             query = query.where(AgentOutput.agent_type_id == agent_type_id)

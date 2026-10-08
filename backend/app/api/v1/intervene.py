@@ -2,11 +2,12 @@
 import logging
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy import select
 
 from app.api.deps import require_permission
 from app.core.resource_types import RT_AGENT_HUMAN_INTERVENTION
+from app.core.tenant_context import TenantContext
 from app.db.models.identity import Identity
 from app.db.models.intervene import (
     InterveneRequest,
@@ -32,7 +33,11 @@ _store = InterveneRequestStore()
 # ── Helper: resume agent execution via Agent Runtime ──────────────────────
 
 
-async def _resume_agent_session(session_id: uuid.UUID, response_value: dict) -> None:
+async def _resume_agent_session(
+    session_id: uuid.UUID,
+    response_value: dict,
+    tenant_context: "TenantContext | None" = None,
+) -> None:
     """Notify Agent Runtime that this session can resume after intervention.
 
     Failures are logged but do NOT propagate — the response has already been
@@ -43,7 +48,9 @@ async def _resume_agent_session(session_id: uuid.UUID, response_value: dict) -> 
             AgentRuntimeClient,
         )
         client = AgentRuntimeClient()
-        await client.resume_session(session_id, response_value)
+        await client.resume_session(
+            session_id, response_value, tenant_context=tenant_context
+        )
         logger.info(
             "Session %s resumed on Agent Runtime after human intervention",
             session_id,
@@ -94,6 +101,7 @@ async def respond_to_intervene_request(
     request_id: uuid.UUID,
     body: InterveneResponseSubmit,
     db: DbSession,
+    http_request: Request,
     claims: dict = Depends(require_permission(RT_AGENT_HUMAN_INTERVENTION, "respond")),
 ):
     # Validate request_id in path matches body
@@ -149,7 +157,19 @@ async def respond_to_intervene_request(
 
     # Resume the agent session so execution continues.
     if agent_session_id is not None:
-        await _resume_agent_session(agent_session_id, response_value)
+        # Multi-tenancy: sign the resolved tenant onto the resume call so
+        # the resumed run stays tenant-bound (switch off → no headers,
+        # single-tenant behaviour unchanged).
+        _tenant_context = None
+        from app.core.tenant_context import get_tenant_context, is_tenancy_enabled
+
+        if is_tenancy_enabled(http_request):
+            _ctx = get_tenant_context(http_request)
+            if _ctx.is_set:
+                _tenant_context = _ctx
+        await _resume_agent_session(
+            agent_session_id, response_value, tenant_context=_tenant_context
+        )
     else:
         logger.warning(
             "Could not determine agent_session_id for request %s — "

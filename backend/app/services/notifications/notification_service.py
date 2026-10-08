@@ -52,18 +52,36 @@ class NotificationService:
         subject: str | None = None,
         source_id: uuid.UUID | None = None,
         channel: str | None = None,
+        tenant_id: uuid.UUID | None = None,
     ) -> GroupSendResult:
         """
         Dispatch a notification to all channels assigned to the given recipient group.
 
+        The group resolves strictly within ``tenant_id`` — the NULL-tenant
+        shared slot is unreachable from the data plane.  Callers MUST pass
+        the calling context's tenant; when ``tenant_id`` is None (e.g. a
+        context-less background path), the ROOT tenant is used so dispatch
+        is never tenant-less.
+
         Raises:
             ValueError: if the group is not found or is inactive.
         """
+        if tenant_id is None:
+            from app.db.session import AsyncSessionLocal
+            from app.services.tenancy.root_tenant import get_root_tenant_id
+
+            async with AsyncSessionLocal() as session:
+                tenant_id = await get_root_tenant_id(session)
         with tracer.start_as_current_span(
             "notification.send_to_group",
-            attributes={"notification.group_slug": group_slug},
+            attributes={
+                "notification.group_slug": group_slug,
+                "notification.tenant_id": str(tenant_id),
+            },
         ):
-            group = await self._repo.get_recipient_group_by_slug(group_slug)
+            group = await self._repo.get_recipient_group_by_slug(
+                group_slug, tenant_id=tenant_id
+            )
             if group is None:
                 raise ValueError(f"Recipient group '{group_slug}' not found")
             if not group.is_active:
@@ -168,9 +186,16 @@ class NotificationService:
         self,
         channel_id: uuid.UUID,
         test_recipient: str,
+        tenant_id: uuid.UUID | None = None,
     ) -> ChannelDeliveryResult:
         """Send a canned test message through the channel. Does not create a log entry."""
-        channel = await self._repo.get_channel(channel_id)
+        if tenant_id is None:
+            from app.db.session import AsyncSessionLocal
+            from app.services.tenancy.root_tenant import get_root_tenant_id
+
+            async with AsyncSessionLocal() as session:
+                tenant_id = await get_root_tenant_id(session)
+        channel = await self._repo.get_channel(channel_id, tenant_id=tenant_id)
         if channel is None:
             return ChannelDeliveryResult(success=False, error="Channel not found")
 

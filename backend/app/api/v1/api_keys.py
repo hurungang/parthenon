@@ -12,7 +12,7 @@ import logging
 import uuid
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
@@ -131,6 +131,7 @@ async def list_api_keys(
 )
 async def create_api_key(
     body: ApiKeyCreate,
+    request: Request,
     db: DbSession,
 ) -> ApiKeyCreateResponse:
     """Create a new API key bound to an agent identity and role.
@@ -169,8 +170,12 @@ async def create_api_key(
             detail="The selected identity is not assigned to the selected role. Assign the identity to the role first.",
         )
 
-    # Enforce unique key names (any number of keys per identity-role pair)
-    is_duplicate = await check_duplicate_name(body.name, db)
+    # Enforce unique key names per tenant (any number of keys per identity-role pair)
+    from app.core.tenant_context import get_tenant_context
+
+    tenant_context = get_tenant_context(request)
+    tenant_id = tenant_context.tenant_id if tenant_context.is_set else None
+    is_duplicate = await check_duplicate_name(body.name, db, tenant_id=tenant_id)
     if is_duplicate:
         raise HTTPException(
             status_code=409,
@@ -182,6 +187,7 @@ async def create_api_key(
 
     # Create key record
     api_key = AgentApiKey(
+        tenant_id=tenant_id,
         name=body.name,
         key_hash=key_hash,
         key_prefix=key_prefix,

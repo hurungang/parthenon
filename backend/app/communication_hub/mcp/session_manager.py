@@ -41,6 +41,9 @@ class McpSession:
     permissions: list[str] = field(default_factory=list)
     skills: list[dict[str, Any]] = field(default_factory=list)
     api_key_name: str | None = None
+    # Tenant binding from the API key (never client-supplied) — scopes the
+    # decision-tool catalog and dispatch within the caller's tenant.
+    tenant_id: str | None = None
 
     created_at: float = field(default_factory=time.time)
     last_activity: float = field(default_factory=time.time)

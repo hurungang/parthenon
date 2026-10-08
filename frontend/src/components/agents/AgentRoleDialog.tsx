@@ -35,7 +35,7 @@ import ExpandLessIcon from '@mui/icons-material/ExpandLess'
 import { useQuery, useQueries, useQueryClient } from '@tanstack/react-query'
 import apiClient from '../../api/apiClient'
 import { useAllTools } from '../../hooks/useMcpServers'
-import { canonicalizeToolName } from '../../utils/toolNaming'
+import { canonicalizeToolName, isReservedServerName } from '../../utils/toolNaming'
 import PermissionDeniedAlert from '../../components/permissions/PermissionDeniedAlert'
 import { AssignIdentitiesToRoleDialog } from '../../pages/agents/AssignIdentitiesToRoleDialog'
 import type { AgentIdentity, AgentRole, CreateAndAssignResult, McpServer, McpSession, McpTool, Skill, Sop } from '../../types'
@@ -62,7 +62,8 @@ interface AgentRoleDialogProps {
 
 /**
  * Extracts the MCP server slug from a tool name using the canonical slug____tool format.
- * Returns null for system tools or names that cannot be parsed.
+ * Returns null for reserved-namespace tools (system tools, decision tools — neither
+ * requires an MCP session) or names that cannot be parsed.
  */
 function extractServerSlug(toolName: string): string | null {
   if (!toolName) return null
@@ -71,12 +72,12 @@ function extractServerSlug(toolName: string): string | null {
     // Legacy slash-format fallback
     if (name.includes('/')) {
       const slug = name.split('/', 1)[0]
-      return slug && slug !== 'system' ? slug : null
+      return slug && !isReservedServerName(slug) ? slug : null
     }
     return null
   }
   const slug = name.split('____', 1)[0]
-  return slug && slug !== 'system' ? slug : null
+  return slug && !isReservedServerName(slug) ? slug : null
 }
 
 /**

@@ -35,6 +35,8 @@ RT_API_KEYS: Final[str] = "agent::api_keys"
 RT_SYSTEM_OBSERVABILITY: Final[str] = "system::observability"
 RT_SYSTEM_PERMISSIONS: Final[str] = "system::permissions"
 RT_SYSTEM_CONFIG: Final[str] = "system::system_config"
+RT_SYSTEM_SYSTEM_ONE: Final[str] = "system::system_one"
+RT_SYSTEM_DECISION_TOOLS: Final[str] = "system::decision_tools"
 
 # Platform module — platform admin console.  These surfaces expose tenant
 # METADATA only (never tenant business data) and are hosted at the base
@@ -114,6 +116,12 @@ ResourceTypeManifest: Final[dict[str, dict[str, list[str]]]] = {
     RT_SYSTEM_CONFIG: {
         "actions": ["read", "manage"],
     },
+    RT_SYSTEM_SYSTEM_ONE: {
+        "actions": ["read", "manage"],
+    },
+    RT_SYSTEM_DECISION_TOOLS: {
+        "actions": ["create", "read", "update", "delete", "manage"],
+    },
     RT_PLATFORM_TENANTS: {
         "actions": ["create", "read", "update", "delete", "manage"],
     },
@@ -158,6 +166,8 @@ MODULE_GROUPS: Final[dict[str, list[str]]] = {
         RT_SYSTEM_OBSERVABILITY,
         RT_SYSTEM_PERMISSIONS,
         RT_SYSTEM_CONFIG,
+        RT_SYSTEM_SYSTEM_ONE,
+        RT_SYSTEM_DECISION_TOOLS,
     ],
     "platform": [
         RT_PLATFORM_TENANTS,

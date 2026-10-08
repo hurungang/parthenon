@@ -18,14 +18,15 @@ from __future__ import annotations
 import logging
 import uuid
 from datetime import datetime, timezone
-from typing import Any, Literal
+from typing import Annotated, Any, Literal
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
-from app.api.deps import require_service_certificate
+from app.api.deps import require_internal_tenant_context, require_service_certificate
+from app.core.tenant_context import TenantContext
 from app.db.session import DbSession
 from app.services.agents.permission_manager import get_shared_permission_manager
 from app.services.agents.tool_naming import build_tool_name, parse_tool_name
@@ -51,6 +52,10 @@ def _canonicalize_mcp_tool_name(name: str, server_slug: str | None, original_nam
 InternalSessionDataRouter = APIRouter(
     prefix="/internal/data",
     tags=["internal"],
+    dependencies=[
+        Depends(require_service_certificate),
+        Depends(require_internal_tenant_context),
+    ],
 )
 
 
@@ -704,11 +709,14 @@ async def update_session_status(
 )
 async def prepare_a2a_request(
     body: A2ADataRequest,
+    tenant_ctx: Annotated[TenantContext, Depends(require_internal_tenant_context)],
     db: DbSession,
 ) -> A2ADataResponse:
     """Resolve target agent type, enforce permission, create session link, enqueue receiver job.
 
     Communication Hub calls this endpoint so all A2A DB access remains in Control Center.
+    The target agent type resolves strictly by ``(tenant_id, name)`` — a name
+    collision across tenants never routes to the wrong tenant's agent.
     """
     from sqlalchemy import select
 
@@ -724,7 +732,12 @@ async def prepare_a2a_request(
         CommunicationHubClientError,
     )
 
-    result = await db.execute(select(AgentType).where(AgentType.name == body.target_agent_type_slug))
+    result = await db.execute(
+        select(AgentType).where(
+            AgentType.name == body.target_agent_type_slug,
+            AgentType.tenant_id == tenant_ctx.tenant_id,
+        )
+    )
     target_agent_type = result.scalar_one_or_none()
     if not target_agent_type:
         raise HTTPException(
@@ -829,6 +842,7 @@ async def prepare_a2a_request(
         user_id=delegation_user_id,
         db=db,
         parent_job_id=parent_job_id,
+        tenant_id=tenant_ctx.tenant_id,
     )
     await db.commit()
 
@@ -838,6 +852,10 @@ async def prepare_a2a_request(
             session_id=receiver_job.id,
             agent_type_id=target_agent_type.id,
             input_data=body.request_payload,
+            # Multi-tenancy: propagate the signed calling tenant so the
+            # delegated sub-agent run is tenant-bound end to end (AR
+            # verifies the headers and re-forwards them on its own CC calls).
+            tenant_context=tenant_ctx,
         )
     except CommunicationHubClientError as exc:
         logger.error(

@@ -33,8 +33,14 @@ class AgentSessionService:
         user_id: uuid.UUID | None,
         db: AsyncSession,
         parent_job_id: uuid.UUID | None = None,
+        tenant_id: uuid.UUID | None = None,
     ) -> AgentJob:
-        """Create a new AgentJob with status=queued and return it immediately."""
+        """Create a new AgentJob with status=queued and return it immediately.
+
+        ``tenant_id`` stamps the owning (calling) tenant so the job is
+        tenant-bound from creation — delegation must never create a
+        tenant-less session (strict tenant isolation).
+        """
         with tracer.start_as_current_span(
             "session_service.enqueue",
             attributes={
@@ -57,6 +63,7 @@ class AgentSessionService:
                     delegation_depth = (parent_job.delegation_depth or 0) + 1
 
             job = AgentJob(
+                tenant_id=tenant_id,
                 agent_type_id=agent_type_id,
                 triggered_by_user_id=effective_user_id,
                 input_data=input_data,

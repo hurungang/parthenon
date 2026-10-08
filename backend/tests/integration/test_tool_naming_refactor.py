@@ -184,6 +184,7 @@ class TestSendNotificationSystemTool:
         self, db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         from app.api.v1.internal.system_tools import send_notification_tool, SystemToolRequest
+        from app.core.tenant_context import TenantContext
         import app.services.notifications.notification_service as notification_module
 
         send_mock = AsyncMock(return_value=None)
@@ -200,6 +201,7 @@ class TestSendNotificationSystemTool:
                 subject: str | None = None,
                 source_id: uuid.UUID | None = None,
                 channel: str | None = None,
+                tenant_id: uuid.UUID | None = None,
             ) -> Any:
                 return await send_mock(
                     group_slug=group_slug,
@@ -208,6 +210,7 @@ class TestSendNotificationSystemTool:
                     source_type=source_type,
                     source_id=source_id,
                     channel=channel,
+                    tenant_id=tenant_id,
                 )
 
         monkeypatch.setattr(notification_module, "NotificationService", FakeNotificationService)
@@ -222,7 +225,13 @@ class TestSendNotificationSystemTool:
             },
         )
 
-        resp = await send_notification_tool(body=req, db=db_session)
+        resp = await send_notification_tool(
+            body=req,
+            tenant_ctx=TenantContext(
+                tenant_id=uuid.uuid4(), slug="tenant-a", name="Tenant A"
+            ),
+            db=db_session,
+        )
 
         assert resp.result["status"] == "sent"
         assert resp.result["group_slug"] == "ops-team"

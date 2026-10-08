@@ -131,24 +131,44 @@ class SchedulingEngine:
             if not agent_type:
                 raise ValueError(f"Agent type {job.target_id} not found")
 
-            # Multi-tenancy: scheduled jobs adopt their OWNING tenant's
-            # context for the whole dispatch chain (CC → CH → AR), so the
-            # triggered execution stays tenant-bound end to end.  Jobs
-            # without a tenant (pre-adoption rows) keep the legacy
-            # single-tenant behaviour.
+            # Multi-tenancy: scheduled jobs dispatch under their OWNING
+            # tenant's context for the whole dispatch chain (CC → CH → AR).
+            # A NULL tenant at dispatch is a HARD ERROR (log + skip) —
+            # there is no unscoped dispatch path and no agent-type tenant
+            # fallback (B4: the fallback let jobs escape quotas/scoping).
             tenant_context = None
-            owning_tenant_id = getattr(job, "tenant_id", None) or getattr(
-                agent_type, "tenant_id", None
+            owning_tenant_id = getattr(job, "tenant_id", None)
+            if owning_tenant_id is None:
+                logger.error(
+                    "Dispatch skipped (no owning tenant): scheduled job=%s "
+                    "target=%s has no tenant binding — refusing unscoped "
+                    "dispatch. Re-seed or re-save the job with a tenant.",
+                    job.id,
+                    job.target_id,
+                )
+                return {
+                    "status": "skipped",
+                    "reason": "missing_tenant",
+                    "session_id": None,
+                }
+            tenant = await db.get(Tenant, owning_tenant_id)
+            if tenant is None:
+                logger.error(
+                    "Dispatch skipped (owning tenant missing): job=%s tenant=%s",
+                    job.id,
+                    owning_tenant_id,
+                )
+                return {
+                    "status": "skipped",
+                    "reason": "missing_tenant",
+                    "session_id": None,
+                }
+            tenant_context = TenantContext(
+                tenant_id=tenant.id,
+                slug=tenant.slug,
+                name=tenant.name,
+                is_system_tenant=bool(tenant.is_system_tenant),
             )
-            if owning_tenant_id is not None:
-                tenant = await db.get(Tenant, owning_tenant_id)
-                if tenant is not None:
-                    tenant_context = TenantContext(
-                        tenant_id=tenant.id,
-                        slug=tenant.slug,
-                        name=tenant.name,
-                        is_system_tenant=bool(tenant.is_system_tenant),
-                    )
 
             # Quota gate (Phase 10): schedule-triggered executions consult
             # the owning tenant's monthly execution quota at DISPATCH time.

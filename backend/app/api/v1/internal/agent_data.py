@@ -23,7 +23,7 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
-from app.api.deps import require_service_certificate
+from app.api.deps import require_internal_tenant_context, require_service_certificate
 from app.db.models.agents import AgentType
 from app.db.models.mcp_hub import McpSessionAuthType
 from app.db.session import DbSession
@@ -35,6 +35,10 @@ logger = logging.getLogger(__name__)
 InternalAgentDataRouter = APIRouter(
     prefix="/internal/data",
     tags=["internal"],
+    dependencies=[
+        Depends(require_service_certificate),
+        Depends(require_internal_tenant_context),
+    ],
 )
 
 

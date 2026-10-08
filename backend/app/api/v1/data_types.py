@@ -2,7 +2,7 @@
 import logging
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 
 from app.api.deps import require_permission
 from app.core.resource_types import RT_AGENT_DATA_TYPES
@@ -96,10 +96,14 @@ async def list_data_types(
 )
 async def create_data_type(
     body: DataTypeCreate,
+    request: Request,
     db: DbSession,
     _: dict = Depends(require_permission(RT_AGENT_DATA_TYPES, "create")),
 ) -> DataTypeResponse:
     """Create a new data type with typed fields."""
+    from app.core.tenant_context import get_tenant_context
+
+    tenant_context = get_tenant_context(request)
     try:
         fields_dicts = [f.model_dump() for f in body.fields]
         dt = await _service.create(
@@ -108,6 +112,7 @@ async def create_data_type(
             slug=body.slug,
             description=body.description,
             fields=fields_dicts,
+            tenant_id=tenant_context.tenant_id if tenant_context.is_set else None,
         )
     except DataTypeDuplicateError as exc:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc))
@@ -152,10 +157,14 @@ async def get_data_type(
 async def update_data_type(
     data_type_id: uuid.UUID,
     body: DataTypeUpdate,
+    request: Request,
     db: DbSession,
     _: dict = Depends(require_permission(RT_AGENT_DATA_TYPES, "update")),
 ) -> DataTypeResponse:
     """Update an existing data type."""
+    from app.core.tenant_context import get_tenant_context
+
+    tenant_context = get_tenant_context(request)
     try:
         fields_dicts = (
             [f.model_dump() for f in body.fields] if body.fields is not None else None
@@ -167,6 +176,7 @@ async def update_data_type(
             slug=body.slug,
             description=body.description,
             fields=fields_dicts,
+            tenant_id=tenant_context.tenant_id if tenant_context.is_set else None,
         )
     except DataTypeNotFoundError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))

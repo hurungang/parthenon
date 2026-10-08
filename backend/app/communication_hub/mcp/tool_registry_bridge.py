@@ -22,12 +22,27 @@ import httpx
 
 from app.communication_hub.mcp.cc_client import build_cc_client, get_control_center_url
 from app.services.agents.system_tool_registry import SystemToolRegistry
-from app.services.agents.tool_naming import build_tool_name, get_bare_tool_name, is_system_tool, parse_tool_name
+from app.services.agents.tool_naming import (
+    TOOL_SEPARATOR,
+    build_tool_name,
+    get_bare_tool_name,
+    is_system_tool,
+    parse_tool_name,
+)
 
 logger = logging.getLogger(__name__)
 
 #: CH-level meta tool exposed to all authenticated MCP clients for skill discovery.
 LOAD_SKILLS_TOOL_NAME = "load_skills"
+
+#: Server slug decision tools are exposed under. Names are built with the
+#: canonical ``decision____<name>`` four-underscore convention (shared
+#: tool-naming helpers); stored names are plain.
+DECISION_SERVER_SLUG = "decision"
+DECISION_TOOL_PREFIX = f"{DECISION_SERVER_SLUG}{TOOL_SEPARATOR}"
+
+_DECISION_LIST_PATH = "/api/v1/internal/system-tools/decision/list"
+_DECISION_EXECUTE_PATH = "/api/v1/internal/system-tools/decision/execute"
 
 _LOAD_SKILLS_DESCRIPTION = (
     "Discover all skills and SOPs the authenticated agent is permitted to access. "
@@ -64,13 +79,13 @@ class ToolRegistryBridge:
 
     # ── Catalog ────────────────────────────────────────────────────────────
 
-    def build_catalog(self, session: Any) -> list[dict[str, Any]]:
+    async def build_catalog(self, session: Any, request: Any = None) -> list[dict[str, Any]]:
         """Build the permission-filtered ``tools/list`` payload for a session.
 
         Returns a list of ``{name, description, inputSchema}`` dicts covering:
-        the ``load_skills`` meta tool, permitted system tools, and permitted
-        proxied MCP tools (descriptions/schemas sourced from the role's skills
-        where available, otherwise name-only stubs).
+        the ``load_skills`` meta tool, the caller's tenant decision tools
+        (``decision:``-prefixed, auto-generated descriptions), permitted
+        system tools, and permitted proxied MCP tools.
         """
         permitted: set[str] = set(session.permissions or [])
 
@@ -96,6 +111,30 @@ class ToolRegistryBridge:
                 "inputSchema": _LOAD_SKILLS_INPUT_SCHEMA,
             }
         )
+
+        # 1b. Decision tools of the caller's tenant (forwarded to Control
+        # Center). Canonical ``decision____<name>`` naming via the shared
+        # tool-naming helpers. Tenant-contained: names resolve within the
+        # session's tenant, so identical names in different tenants never
+        # collide. CH holds no credentials — descriptions/schemas come from CC.
+        for tool in await self._list_decision_tools(session, request):
+            tools.append(
+                {
+                    "name": build_tool_name(DECISION_SERVER_SLUG, tool.get("name")),
+                    "description": tool.get("description") or "",
+                    "inputSchema": tool.get("input_schema")
+                    or {
+                        "type": "object",
+                        "properties": {
+                            "state": {
+                                "type": "object",
+                                "description": "Input state for the decision.",
+                                "additionalProperties": True,
+                            }
+                        },
+                    },
+                }
+            )
 
         # 2. System tools the role is permitted to use.
         for canonical in sorted(permitted):
@@ -146,6 +185,16 @@ class ToolRegistryBridge:
         if tool_name in (LOAD_SKILLS_TOOL_NAME, f"system____{LOAD_SKILLS_TOOL_NAME}"):
             return await self._call_load_skills(request, session, arguments)
 
+        # Decision tools: ``decision____<name>`` at the MCP surface. Tenant
+        # containment is enforced by resolving the catalog within the
+        # session's tenant; invocation is forwarded to Control Center's
+        # decision execution path — CH holds no credentials and makes no
+        # external calls.
+        if tool_name.startswith(DECISION_TOOL_PREFIX):
+            return await self._call_decision_tool(
+                request, session, tool_name, arguments
+            )
+
         canonical = _canonicalize(tool_name)
         permitted: set[str] = set(session.permissions or [])
         if canonical not in permitted:
@@ -174,6 +223,70 @@ class ToolRegistryBridge:
             request, cc_base, "/api/v1/internal/system-tools/skills/resolve", payload
         )
         return _text_result(json.dumps(result.get("skills", []), default=str))
+
+    async def _list_decision_tools(
+        self, session: Any, request: Any = None
+    ) -> list[dict[str, Any]]:
+        """Fetch the caller's tenant decision-tool catalog from Control Center."""
+        cc_base = get_control_center_url()
+        if not cc_base:
+            return []
+        try:
+            result = await self._post_cc(
+                request,
+                cc_base,
+                _DECISION_LIST_PATH,
+                {"tenant_id": getattr(session, "tenant_id", None)},
+            )
+            return list(result.get("tools", []))
+        except Exception:  # noqa: BLE001 — catalog degrades without decision tools
+            logger.exception("Failed to list decision tools from Control Center")
+            return []
+
+    async def _call_decision_tool(
+        self,
+        request: Any,
+        session: Any,
+        tool_name: str,
+        arguments: dict[str, Any],
+    ) -> dict[str, Any]:
+        """Forward a ``decision____<name>`` invocation to Control Center (no credentials)."""
+        cc_base = get_control_center_url()
+        if not cc_base:
+            raise RuntimeError("Control Center URL not configured")
+
+        bare_name = tool_name[len(DECISION_TOOL_PREFIX):]
+        tenant_id = getattr(session, "tenant_id", None)
+
+        # Tenant containment: the tool must exist in the caller's tenant.
+        known = {
+            tool.get("name")
+            for tool in await self._list_decision_tools(session, request)
+        }
+        if bare_name not in known:
+            raise PermissionError(
+                f"Decision tool '{tool_name}' is not available for this tenant"
+            )
+
+        # Accept either a bare tool name or "state"-wrapped arguments.
+        input_state = arguments.get("state") if isinstance(arguments, dict) else None
+        if not isinstance(input_state, dict):
+            input_state = dict(arguments or {})
+
+        payload = {
+            "session_id": session.session_id,
+            "tenant_id": tenant_id,
+            "tool_name": bare_name,
+            "input_state": input_state,
+            "conversation_session_id": getattr(session, "session_id", None),
+        }
+        result = await self._post_cc(
+            request,
+            cc_base,
+            _DECISION_EXECUTE_PATH,
+            payload,
+        )
+        return _text_result(json.dumps(result.get("result", {}), default=str))
 
     async def _call_system_tool(
         self, request: Any, session: Any, canonical: str, arguments: dict[str, Any]
@@ -225,6 +338,12 @@ class ToolRegistryBridge:
     ) -> dict[str, Any]:
         """POST JSON to Control Center over mTLS, returning the decoded body."""
         client_kwargs, headers = build_cc_client(request, cc_base)
+        # Multi-tenancy: forward the session tenant's CC-signed header set
+        # verbatim (CC internal data-plane endpoints fail closed without
+        # it) — same slug in another tenant never resolves here.
+        from app.core.tenant_signature import forward_tenant_headers
+
+        headers.update(forward_tenant_headers())
         url = f"{cc_base}{path}"
         try:
             async with httpx.AsyncClient(**client_kwargs) as client:

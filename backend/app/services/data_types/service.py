@@ -41,16 +41,19 @@ class DataTypeService:
         slug: str,
         description: str | None,
         fields: list[dict[str, Any]],
+        tenant_id: uuid.UUID | None = None,
     ) -> AgentDataType:
         """Create a new data type.
 
         Raises:
             DataTypeDuplicateError: If a data type with the same name or slug already exists.
         """
-        # Check for existing name or slug
+        # Check for existing name or slug (scoped to the tenant; tenant-less
+        # rows keep the platform-wide scope via the partial global index)
         existing = await db.execute(
             select(AgentDataType).where(
-                or_(AgentDataType.name == name, AgentDataType.slug == slug)
+                or_(AgentDataType.name == name, AgentDataType.slug == slug),
+                AgentDataType.tenant_id == tenant_id,
             )
         )
         existing_dt = existing.scalar_one_or_none()
@@ -64,6 +67,7 @@ class DataTypeService:
             )
 
         data_type = AgentDataType(
+            tenant_id=tenant_id,
             name=name,
             slug=slug,
             description=description,
@@ -89,6 +93,7 @@ class DataTypeService:
         slug: str | None = None,
         description: str | None = None,
         fields: list[dict[str, Any]] | None = None,
+        tenant_id: uuid.UUID | None = None,
     ) -> AgentDataType:
         """Update an existing data type.
 
@@ -100,11 +105,12 @@ class DataTypeService:
         if not data_type:
             raise DataTypeNotFoundError(f"Data type {id} not found")
 
-        # Check name/slug uniqueness if changing
+        # Check name/slug uniqueness if changing (tenant-scoped)
         if name is not None and name != data_type.name:
             existing = await db.execute(
                 select(AgentDataType).where(
                     AgentDataType.name == name,
+                    AgentDataType.tenant_id == tenant_id,
                     AgentDataType.id != id,
                 )
             )
@@ -118,6 +124,7 @@ class DataTypeService:
             existing = await db.execute(
                 select(AgentDataType).where(
                     AgentDataType.slug == slug,
+                    AgentDataType.tenant_id == tenant_id,
                     AgentDataType.id != id,
                 )
             )
@@ -157,6 +164,15 @@ class DataTypeService:
                 f"Cannot delete data type '{data_type.name}': "
                 f"referenced by {len(referencing_types)} agent type(s)",
                 referencing_types=referencing_types,
+            )
+
+        # Check if referenced by any decision tools (input/output contract)
+        decision_refs = await self._get_referencing_decision_tools(db, id)
+        if decision_refs:
+            raise DataTypeConflictError(
+                f"Cannot delete data type '{data_type.name}': "
+                f"referenced by {len(decision_refs)} decision tool(s)",
+                referencing_types=decision_refs,
             )
 
         await db.delete(data_type)
@@ -220,11 +236,14 @@ class DataTypeService:
         return items, total
 
     async def get_by_slug(
-        self, db: AsyncSession, slug: str
+        self, db: AsyncSession, slug: str, tenant_id: uuid.UUID | None = None
     ) -> AgentDataType | None:
-        """Get a data type by its slug."""
+        """Get a data type by its slug (tenant-scoped when a tenant is active)."""
         result = await db.execute(
-            select(AgentDataType).where(AgentDataType.slug == slug)
+            select(AgentDataType).where(
+                AgentDataType.slug == slug,
+                AgentDataType.tenant_id == tenant_id,
+            )
         )
         return result.scalar_one_or_none()
 
@@ -246,6 +265,27 @@ class DataTypeService:
         result = await db.execute(
             select(AgentType.id, AgentType.name).where(
                 AgentType.output_data_type_id == id
+            )
+        )
+        return [
+            {"id": str(row[0]), "name": row[1]}
+            for row in result.fetchall()
+        ]
+
+    async def _get_referencing_decision_tools(
+        self, db: AsyncSession, id: uuid.UUID
+    ) -> list[dict[str, Any]]:
+        """Get decision tools whose input/output contract references this type.
+
+        Deletion protection: a data type referenced by any decision tool
+        cannot be removed (mirrors the agent-type reference rule).
+        """
+        from app.db.models.decision_tools import DecisionTool
+
+        result = await db.execute(
+            select(DecisionTool.id, DecisionTool.name).where(
+                (DecisionTool.input_data_type_id == id)
+                | (DecisionTool.output_data_type_id == id)
             )
         )
         return [

@@ -1859,9 +1859,13 @@ async def list_model_configs(
 @ModelConfigRouter.post("", response_model=ModelConfigRead, status_code=status.HTTP_201_CREATED)
 async def create_model_config(
     body: ModelConfigCreate,
+    request: Request,
     db: DbSession,
     _: dict = Depends(require_permission(RT_AGENT, "create")),
 ) -> ModelConfigRead:
+    from app.core.tenant_context import get_tenant_context
+
+    tenant_context = get_tenant_context(request)
     config = await _model_config_service.create_model_config(
         display_name=body.display_name,
         provider_type=body.provider_type,
@@ -1869,6 +1873,7 @@ async def create_model_config(
         api_key=body.api_key,
         enabled_models=body.enabled_models,
         db=db,
+        tenant_id=tenant_context.tenant_id if tenant_context.is_set else None,
     )
     return ModelConfigRead.model_validate(config)
 

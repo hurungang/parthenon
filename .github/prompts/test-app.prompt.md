@@ -29,6 +29,7 @@ Run Parthenon's test suite across all three test layers.
 
 - The multi-tenant E2E suites (`single-tenant-regression`, `multi-tenant-lifecycle`, `multi-tenant-login-flows`, `self-serve-signup`, `quota-enforcement`) are fully **mocked — no backend or live stack needed**.
 - `multi-tenant-isolation.real-backend.spec.ts` and `self-serve-signup.real-backend.spec.ts` require a live running stack and **auto-skip** when the backend is not up (no failure).
+- `system-one-real-backend.spec.ts` (`Real Backend Integration - Decision Tools`) also requires a live stack (backend on :8000 + Postgres + migrations applied); it registers/logs into two real tenants, authors identical `tool_a` decision tools in both (tenant containment), executes via the real internal `decision:` path with a local stub TypeSafe server (no external API calls), and verifies persistence via psql. Uses the persistent E2E account pattern (`e2e-ds-persistent@e2e.test`; registration is rate-limited to 10/hour/IP). Auto-skips when the backend is not up.
 
 ## Pre-Test Checklist
 

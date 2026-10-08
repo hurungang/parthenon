@@ -26,6 +26,8 @@ export const RESOURCE_TYPE_MANIFEST = {
   "system::observability": { actions: ["read"] },
   "system::permissions": { actions: ["create", "read", "update", "delete", "manage", "approve", "reject"] },
   "system::system_config": { actions: ["read", "manage"] },
+  "system::system_one": { actions: ["read", "manage"] },
+  "system::decision_tools": { actions: ["create", "read", "update", "delete", "manage"] },
   "platform::tenants": { actions: ["create", "read", "update", "delete", "manage"] },
   "platform::settings": { actions: ["read", "manage"] },
   "platform::audit": { actions: ["read"] },
@@ -77,6 +79,8 @@ export const MODULE_GROUPS: Record<string, ModuleGroup> = {
       "system::observability",
       "system::permissions",
       "system::system_config",
+      "system::system_one",
+      "system::decision_tools",
     ],
   },
   platform: {

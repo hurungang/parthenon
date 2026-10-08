@@ -143,7 +143,19 @@ async def test_get_output_endpoint_returns_output_history(
         job = await _create_agent_job(db, agent_type.id)
         data_type = await _create_data_type(db)
 
+        # strict-tenant-isolation: outputs are tenant-bound; stamp the root
+        # tenant (the single-tenant deployment's tenant) so the internal
+        # endpoint — which filters by the bound tenant — can see it.
+        from sqlalchemy import select as _select
+
+        from app.db.models.tenant import Tenant as _Tenant
+
+        root_tenant_id = (
+            await db.execute(_select(_Tenant.id).where(_Tenant.is_system_tenant.is_(True)))
+        ).scalar_one()
+
         output = AgentOutput(
+            tenant_id=root_tenant_id,
             data_type_id=data_type.id,
             agent_type_id=agent_type.id,
             execution_session_id=job.id,

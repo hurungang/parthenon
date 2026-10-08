@@ -30,10 +30,20 @@ class McpServerStatus(str, enum.Enum):
 
 
 class McpServer(Base):
-    """A registered external tool server with a unique slug."""
+    """A registered external tool server.
+
+    Tenant ownership is mandatory (strict tenant isolation): every server
+    belongs to exactly one tenant and ``slug`` is unique **per tenant**
+    (business identity is ``(tenant_id, slug)``) — the platform-wide slug
+    uniqueness was retired. The ORM column stays nullable for legacy
+    code paths; the database enforces NOT NULL via migration
+    ``b8c9d0e1f2a3`` after NULL-tenant rows are adopted into the root
+    tenant.
+    """
 
     __tablename__ = "mcp_servers"
     __table_args__ = (
+        UniqueConstraint("tenant_id", "slug", name="uq_mcp_servers_tenant_slug"),
         Index("ix_mcp_servers_tenant_id", "tenant_id"),
     )
 
@@ -44,7 +54,7 @@ class McpServer(Base):
         UUID(as_uuid=True), ForeignKey("tenants.id", ondelete="SET NULL"), nullable=True
     )
     name: Mapped[str] = mapped_column(String(200), nullable=False)
-    slug: Mapped[str] = mapped_column(String(100), nullable=False, unique=True)
+    slug: Mapped[str] = mapped_column(String(100), nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     base_url: Mapped[str] = mapped_column(String(2000), nullable=False)
     # OAuth configuration for server-level authentication (auto-discovered or manually configured)
@@ -148,11 +158,20 @@ class McpSession(Base):
 
 
 class McpTool(Base):
-    """A tool synced from an MCP server, namespaced under the server slug."""
+    """A tool synced from an MCP server, namespaced under the server slug.
+
+    Carries a denormalized ``tenant_id`` (defense in depth — tool lookups
+    in hot paths do not need to join through the server to prove tenant
+    containment). The server remains the source of truth; the tool's
+    tenant always equals its server's tenant (kept consistent by tool
+    sync). NOT NULL is enforced at the database level by migration
+    ``b8c9d0e1f2a3``; the ORM column stays nullable for legacy paths.
+    """
 
     __tablename__ = "mcp_tools"
     __table_args__ = (
         UniqueConstraint("server_id", "name", name="uq_mcp_tool_server_name"),
+        Index("ix_mcp_tools_tenant_id", "tenant_id"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(
@@ -160,6 +179,10 @@ class McpTool(Base):
     )
     server_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("mcp_servers.id", ondelete="CASCADE"), nullable=False
+    )
+    # Denormalized tenant binding — must always equal the owning server's tenant.
+    tenant_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("tenants.id", ondelete="SET NULL"), nullable=True
     )
     # Namespaced name: "{slug}/{tool_name}"
     name: Mapped[str] = mapped_column(String(400), nullable=False)

@@ -6,6 +6,7 @@ from typing import Any
 from fastapi import Depends, HTTPException, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.tenant_context import TenantContext
 from app.db.session import DbSession, get_db
 from app.schemas.errors import PermissionDeniedDetail, RequiredPermission
 
@@ -61,6 +62,8 @@ _CH_ALLOWLIST: set[tuple[str, str]] = {
     ("POST", "/api/v1/internal/data/intervene/respond"),
     ("POST", "/api/v1/internal/auth/validate-api-key"),
     ("POST", "/api/v1/internal/system-tools/skills/resolve"),
+    ("POST", "/api/v1/internal/system-tools/decision/list"),
+    ("POST", "/api/v1/internal/system-tools/decision/execute"),
 }
 
 _INTERNAL_ALLOWLISTS: dict[str, set[tuple[str, str]]] = {
@@ -572,6 +575,62 @@ def require_permission(module: str, action: str) -> Callable:
 
     _permission_dep_cache[(module, action)] = _dep
     return _dep
+
+
+async def require_internal_tenant_context(
+    request: Request,
+    db: DbSession,
+) -> TenantContext:
+    """Mandatory signed tenant context on internal data-plane endpoints.
+
+    Applied as a router-level dependency on the ``/api/v1/internal/*``
+    data-plane routers (system tools, session data, outputs, agent data,
+    MCP proxy, authorization).  Fail-closed:
+
+    - Signed ``X-Internal-Tenant-*`` headers present → the FULL set must
+      verify; missing/partial/tampered/stale sets raise **401**.
+    - No headers → allowed ONLY when multi-tenancy is disabled, in which
+      case the ROOT tenant is bound (single-tenant regression safety).
+      With the switch on, headerless requests are rejected with **401**.
+
+    Returns the verified (or root-default) :class:`TenantContext`.
+    """
+    from app.core.tenant_signature import (
+        TenantSignatureError,
+        extract_tenant_signature_headers,
+        verify_tenant_signature_headers,
+    )
+    from app.services.tenancy.platform_settings_service import (
+        get_platform_settings_service,
+    )
+    from app.services.tenancy.root_tenant import get_root_tenant_context
+
+    if extract_tenant_signature_headers(request.headers):
+        try:
+            verified = verify_tenant_signature_headers(request.headers)
+        except TenantSignatureError as exc:
+            raise HTTPException(
+                status_code=401,
+                detail=f"Invalid tenant context headers: {exc}",
+            )
+        return verified.to_tenant_context()
+
+    # No headers at all — permitted only in single-tenant mode (root bound).
+    if await get_platform_settings_service().is_multi_tenancy_enabled(db):
+        raise HTTPException(
+            status_code=401,
+            detail=(
+                "Signed tenant context headers are required on internal "
+                "data-plane endpoints"
+            ),
+        )
+    root_context = await get_root_tenant_context(db)
+    if root_context is None:
+        raise HTTPException(
+            status_code=503,
+            detail="Root tenant not provisioned — cannot bind internal request",
+        )
+    return root_context
 
 
 async def require_service_certificate(

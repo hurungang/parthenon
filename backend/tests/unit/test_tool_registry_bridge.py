@@ -7,6 +7,7 @@ via ``_post_cc``.
 """
 from __future__ import annotations
 
+import asyncio
 from unittest.mock import AsyncMock
 
 import pytest
@@ -39,7 +40,7 @@ def _session(**kwargs) -> McpSession:
 
 
 def test_build_catalog_always_includes_load_skills(bridge: ToolRegistryBridge) -> None:
-    catalog = bridge.build_catalog(_session())
+    catalog = asyncio.run(bridge.build_catalog(_session()))
     assert catalog[0]["name"] == LOAD_SKILLS_TOOL_NAME
     assert catalog[0]["description"]
     assert catalog[0]["inputSchema"]["type"] == "object"
@@ -49,7 +50,7 @@ def test_build_catalog_includes_only_permitted_system_tools(
     bridge: ToolRegistryBridge,
 ) -> None:
     session = _session(permissions=["system____save_data"])
-    catalog = bridge.build_catalog(session)
+    catalog = asyncio.run(bridge.build_catalog(session))
     names = [t["name"] for t in catalog]
     assert LOAD_SKILLS_TOOL_NAME in names
     assert "system____save_data" in names
@@ -78,7 +79,7 @@ def test_build_catalog_proxied_tool_sources_skill_metadata(
         }
     ]
     session = _session(permissions=["github____list_prs"], skills=skills)
-    catalog = bridge.build_catalog(session)
+    catalog = asyncio.run(bridge.build_catalog(session))
     entry = next(t for t in catalog if t["name"] == "github____list_prs")
     assert entry["description"] == "List pull requests"
     assert entry["inputSchema"]["properties"] == {"state": {"type": "string"}}
@@ -88,7 +89,7 @@ def test_build_catalog_proxied_tool_stub_when_skill_absent(
     bridge: ToolRegistryBridge,
 ) -> None:
     session = _session(permissions=["github____list_prs"], skills=[])
-    catalog = bridge.build_catalog(session)
+    catalog = asyncio.run(bridge.build_catalog(session))
     entry = next(t for t in catalog if t["name"] == "github____list_prs")
     assert entry["description"] == ""
     assert entry["inputSchema"] == {"type": "object", "properties": {}}

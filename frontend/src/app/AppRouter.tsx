@@ -35,6 +35,8 @@ import { PermissionsPage } from '../pages/permissions/PermissionsPage'
 import { AccessRequestsPage } from '../pages/permissions/AccessRequestsPage'
 import { SystemConfigPage } from '../pages/system/SystemConfigPage'
 import { IdentityProvidersConfigPage } from '../pages/system/IdentityProvidersConfigPage'
+import { SystemOneProviderConfigPage } from '../pages/system/SystemOneProviderConfigPage'
+import { DecisionToolsPage } from '../pages/agents/DecisionToolsPage'
 import { DataTypesPage } from '../pages/data-types/DataTypesPage'
 import { AgentOutputsPage } from '../pages/agent-outputs/AgentOutputsPage'
 import { ApiKeyListPage } from '../pages/api-keys/ApiKeyListPage'
@@ -105,6 +107,9 @@ export function AppRouter() {
           <Route path="/admin/agent-outputs" element={<AgentOutputsPage />} />
           <Route path="/system-config" element={<SystemConfigPage />} />
           <Route path="/system/identity-providers" element={<IdentityProvidersConfigPage />} />
+          <Route path="/system/system-one" element={<SystemOneProviderConfigPage />} />
+          {/* Decision Tools live under the Agent module (round 2, task 6.8) */}
+          <Route path="/agents/decision-tools" element={<DecisionToolsPage />} />
           <Route path="/chat/:agentTypeId?" element={<ChatPage />} />
           <Route path="/agents/:agentTypeId/chat/:sessionId" element={<ChatPage />} />
           <Route path="/api-keys" element={<ApiKeyListPage />} />

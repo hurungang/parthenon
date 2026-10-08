@@ -31,6 +31,7 @@ def _session_from_request(request: Request, manager: McpSessionManager) -> McpSe
         permissions=list(getattr(request.state, "api_key_permissions", []) or []),
         skills=list(getattr(request.state, "api_key_skills", []) or []),
         api_key_name=getattr(request.state, "api_key_name", None),
+        tenant_id=getattr(request.state, "tenant_id", None),
     )
 
 

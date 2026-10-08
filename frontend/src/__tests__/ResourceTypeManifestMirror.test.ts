@@ -13,9 +13,9 @@ import {
 } from "../constants/resourceTypes"
 
 describe("ResourceTypeManifestMirror", () => {
-  it("has exactly 24 namespaced resource types", () => {
+  it("has exactly 26 namespaced resource types", () => {
     const keys = Object.keys(RESOURCE_TYPE_MANIFEST)
-    expect(keys).toHaveLength(24)
+    expect(keys).toHaveLength(26)
   })
 
   it("all identifiers use :: delimiter with exactly two layers", () => {
@@ -34,8 +34,8 @@ describe("ResourceTypeManifestMirror", () => {
     expect(MODULE_GROUPS.integrations.submodules).toHaveLength(2)
   })
 
-  it("has 3 system submodules", () => {
-    expect(MODULE_GROUPS.system.submodules).toHaveLength(3)
+  it("has 5 system submodules", () => {
+    expect(MODULE_GROUPS.system.submodules).toHaveLength(5)
   })
 
   it("has 3 platform submodules", () => {
@@ -71,7 +71,7 @@ describe("ResourceTypeManifestMirror", () => {
         seen.add(submodule)
       }
     }
-    expect(seen.size).toBe(24)
+    expect(seen.size).toBe(26)
   })
 
   it("all agent submodules start with 'agent::'", () => {
@@ -104,8 +104,8 @@ describe("ResourceTypeManifestMirror", () => {
     }
   })
 
-  it("RESOURCE_TYPE_OPTIONS contains all 24 types", () => {
-    expect(RESOURCE_TYPE_OPTIONS).toHaveLength(24)
+  it("RESOURCE_TYPE_OPTIONS contains all 26 types", () => {
+    expect(RESOURCE_TYPE_OPTIONS).toHaveLength(26)
   })
 
   it("no legacy flat values in the manifest", () => {

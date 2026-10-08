@@ -41,9 +41,9 @@ class _CachedProvider:
 
 
 # Cache key: (tenant_id or None, provider_scope).
-# None tenant_id = the SHARED provider — platform-wide (legacy,
-# single-tenant mode) and the fallback slot for any tenant without its
-# own config (FIX-20260929-221449).
+# None tenant_id = the SHARED provider — the fallback slot for any
+# tenant without its own config (FIX-20260929-221449).  Tenancy OFF
+# resolves the ROOT tenant's (root_id, scope) slot instead (root only).
 _CacheKey = tuple
 
 
@@ -52,8 +52,8 @@ class OIDCProviderRegistry:
 
     Providers are cached by ``(tenant_id, scope)`` when multi-tenancy is
     on — per-tenant credentials take precedence inside their tenant —
-    and by ``(None, scope)`` when it is off (platform-wide registry,
-    unchanged single-tenant behaviour).
+    and by the ROOT tenant's ``(root_id, scope)`` slot when it is off
+    (tenancy off = root only).
 
     SHARED providers (FIX-20260929-221449): a tenant-less (NULL
     ``tenant_id``) config is the SHARED provider — usable by the platform
@@ -104,8 +104,18 @@ class OIDCProviderRegistry:
         self._multi_tenancy_enabled = bool(enabled)
 
     def _key(self, scope: str, tenant_id: Any = None) -> tuple:
-        """Cache key for a lookup: per-tenant only when tenancy is on."""
-        if not self._multi_tenancy_enabled or tenant_id is None:
+        """Cache key for a lookup: per-tenant only when tenancy is on.
+
+        Tenancy OFF: the ROOT tenant's ``(root_id, scope)`` slot — the
+        root tenant IS the default tenant.  When the root tenant is
+        absent (empty DB pre-seed), the tenant-less ``(None, scope)``
+        slot is the only one that can exist.
+        """
+        if not self._multi_tenancy_enabled:
+            if self._root_tenant_id is not None:
+                return (self._root_tenant_id, scope)
+            return (None, scope)
+        if tenant_id is None:
             return (None, scope)
         return (str(tenant_id), scope)
 
@@ -131,12 +141,16 @@ class OIDCProviderRegistry:
         ``/auth/tenant-memberships``) resolve shared → system.
         ``is_system_tenant`` is retained for API compatibility — the
         fallback no longer depends on it.
+
+        Tenancy OFF: the ROOT tenant's ``(root_id, scope)`` slot only
+        (``_key`` resolves there) — NULL-tenant and other tenants'
+        rows never resolve (tenancy off = root only).
         """
         cached = self._providers.get(self._key(scope, tenant_id))
         if cached is not None:
             return cached
         if not self._multi_tenancy_enabled:
-            return None  # tenancy OFF: legacy single-global slot only
+            return None  # tenancy OFF: ROOT-tenant slot only
         tenant_key = str(tenant_id) if tenant_id is not None else None
         if tenant_key is not None:
             # 2. shared slot
@@ -186,19 +200,22 @@ class OIDCProviderRegistry:
         )
         rows = result.scalars().all()
         self._providers.clear()
+        # Tenancy OFF: only the ROOT tenant's rows populate the map —
+        # the root tenant IS the default tenant; NULL-tenant (shared)
+        # and other tenants' rows never resolve.  When no root tenant
+        # exists yet (empty DB pre-seed), the tenant-less seed rows
+        # populate the (None, scope) slot, which ``_key`` resolves.
+        off_tenant_key: Optional[str] = self._root_tenant_id
         for row in rows:
             if self._multi_tenancy_enabled:
                 tenant_key: Optional[str] = (
                     str(row.tenant_id) if row.tenant_id is not None else None
                 )
             else:
-                # Single-tenant mode: everything is platform-wide.  When
-                # tenant-bound rows exist (e.g. the switch was just turned
-                # off), the tenant-less legacy provider wins deterministically.
-                tenant_key = None
-                key = (tenant_key, row.provider_scope)
-                if key in self._providers and row.tenant_id is not None:
+                row_key = str(row.tenant_id) if row.tenant_id is not None else None
+                if row_key != off_tenant_key:
                     continue
+                tenant_key = off_tenant_key
             self._providers[(tenant_key, row.provider_scope)] = _CachedProvider(
                 config=row,
                 decrypted_secret=_decrypt_if_present(row.encrypted_client_secret),
@@ -237,16 +254,20 @@ class OIDCProviderRegistry:
             logger.info(
                 "OIDCProviderRegistry: removed provider scope=%s", scope
             )
+        # Tenancy OFF: only the ROOT tenant's rows (same rule as
+        # ``initialize``); tenant-less seed rows only when no root
+        # tenant exists yet.
+        off_tenant_key: Optional[str] = self._root_tenant_id
         for row in rows:
             if self._multi_tenancy_enabled:
                 tenant_key: Optional[str] = (
                     str(row.tenant_id) if row.tenant_id is not None else None
                 )
             else:
-                tenant_key = None
-                key = (tenant_key, scope)
-                if key in self._providers and row.tenant_id is not None:
+                row_key = str(row.tenant_id) if row.tenant_id is not None else None
+                if row_key != off_tenant_key:
                     continue
+                tenant_key = off_tenant_key
             self._providers[(tenant_key, scope)] = _CachedProvider(
                 config=row,
                 decrypted_secret=_decrypt_if_present(row.encrypted_client_secret),
@@ -322,7 +343,9 @@ class OIDCProviderRegistry:
                 candidates.append(cached.config)
 
         if not self._multi_tenancy_enabled:
-            _add((None, scope))  # tenancy OFF: legacy global slot only
+            # tenancy OFF: ROOT-tenant slot only (tenant-less fallback
+            # when no root tenant exists yet)
+            _add(self._key(scope, tenant_id))
             return candidates
         if tenant_id is not None:
             _add((str(tenant_id), scope))  # 1. own slot

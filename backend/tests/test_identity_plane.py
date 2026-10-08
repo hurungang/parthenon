@@ -487,24 +487,28 @@ class TestSharedIdentityProvider:
         assert registry.get_provider("user", TENANT_X_ID) is None
         assert registry.get_provider("user", None) is None
 
-    async def test_tenancy_off_everything_uses_global_provider(self, seeded_engine):
-        """Tenancy OFF: byte-for-byte legacy — every lookup resolves the
-        (single, global) provider regardless of tenant ids."""
+    async def test_tenancy_off_everything_uses_root_provider(self, seeded_engine):
+        """Tenancy OFF: the ROOT tenant IS the default tenant — every
+        lookup resolves the ROOT tenant's slot; NULL-tenant (shared) and
+        other tenants' providers never resolve."""
         SessionLocal = async_sessionmaker(
             bind=seeded_engine, class_=AsyncSession, expire_on_commit=False
         )
         async with SessionLocal() as db:
             await _set_tenancy(db, False)
             db.add(_provider_row("user", None, "https://legacy.example.com"))
+            db.add(_provider_row(
+                "user", TENANT_SYSTEM_ID, "https://root.example.com"
+            ))
             db.add(_provider_row("user", TENANT_X_ID, "https://stale-x.example.com"))
             await db.commit()
             registry = OIDCProviderRegistry()
             await registry.initialize(db)
 
-        for tenant_id in (None, TENANT_X_ID, TENANT_Y_ID):
+        for tenant_id in (None, TENANT_X_ID, TENANT_Y_ID, TENANT_SYSTEM_ID):
             provider = registry.get_provider("user", tenant_id)
             assert provider is not None
-            assert provider.issuer_url == "https://legacy.example.com"
+            assert provider.issuer_url == "https://root.example.com"
 
 
 # ── T5/T6: no-membership UX + member access (endpoint level) ─────────────────

@@ -37,7 +37,22 @@ from app.db.models.conversations import (  # noqa: F401
     ConversationTurn,
     ToolCallRecord,
 )
-from app.db.models.results import ResultRecord  # noqa: F401
+from app.db.models.results import (  # noqa: F401
+    DecisionExecutionResult,
+    DecisionExecutionStatus,
+    DecisionOutcome,
+    ResultRecord,
+)
+from app.db.models.system_one_provider_config import (  # noqa: F401
+    SystemOneProviderConfig,
+    SystemOneProviderType,
+)
+from app.db.models.decision_tools import (  # noqa: F401
+    DecisionQuestionType,
+    DecisionTool,
+    DecisionToolQuestion,
+    DecisionToolStatus,
+)
 from app.db.models.agent_api_key import (  # noqa: F401
     AgentApiKey,
     ApiKeyUsageLog,

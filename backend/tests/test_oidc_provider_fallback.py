@@ -232,17 +232,21 @@ class TestSystemTenantSlotFallback:
         assert registry.get_provider("user", None) is None
         assert registry.get_provider("user", _x_id()) is None
 
-    async def test_tenancy_off_unchanged(self, db):
-        """Tenancy OFF: byte-for-byte legacy — the tenant-less global slot is
-        the only resolution; no root-slot behaviour."""
+    async def test_tenancy_off_root_slot_only(self, db):
+        """Tenancy OFF: the ROOT tenant IS the default tenant — its slot
+        resolves for every lookup; the NULL-tenant shared slot and other
+        tenants' rows never resolve."""
         await _set_tenancy(db, False)
-        db.add(_provider_row("user", _system_id(), "https://stale-system.example.com"))
+        db.add(_provider_row("user", _system_id(), "https://root.example.com"))
         db.add(_provider_row("user", None, "https://legacy.example.com"))
+        db.add(_provider_row("user", _x_id(), "https://stale-x.example.com"))
         await db.commit()
         registry = OIDCProviderRegistry()
         await registry.initialize(db)
-        assert registry.get_provider("user", None).issuer_url == "https://legacy.example.com"
-        assert registry.get_provider("user", _x_id()).issuer_url == "https://legacy.example.com"
+        for tenant_id in (None, _x_id(), _system_id()):
+            provider = registry.get_provider("user", tenant_id)
+            assert provider is not None
+            assert provider.issuer_url == "https://root.example.com"
 
     async def test_system_tenant_itself_resolves_own_slot(self, registry):
         """The system tenant's own context resolves its own (adopted) slot —
@@ -329,15 +333,17 @@ class TestProviderCandidateFallback:
         assert empty_registry.get_provider_candidates("user", None) == []
         assert empty_registry.get_provider_candidates("user", "00000000-0000-0000-0000-000000000000") == []
 
-    async def test_tenancy_off_candidates_single_global_slot(self, db):
+    async def test_tenancy_off_candidates_root_slot_only(self, db):
+        """Tenancy OFF: candidates come from the ROOT tenant's slot only —
+        NULL-tenant (shared) and other tenants' rows never resolve."""
         await _set_tenancy(db, False)
-        db.add(_provider_row("user", _system_id(), "https://stale.example.com"))
+        db.add(_provider_row("user", _system_id(), "https://root.example.com"))
         db.add(_provider_row("user", None, "https://legacy.example.com"))
         await db.commit()
         registry = OIDCProviderRegistry()
         await registry.initialize(db)
         issuers = [p.issuer_url for p in registry.get_provider_candidates("user", _x_id())]
-        assert issuers == ["https://legacy.example.com"]
+        assert issuers == ["https://root.example.com"]
 
     async def test_t_new_1_parthenon_token_validates_on_tenant_less_path(
         self, dual_registry

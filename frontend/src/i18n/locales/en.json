@@ -83,7 +83,9 @@
     "tenantSettings": "Workspace Settings",
     "tenantMembers": "Members",
     "tenantIdentityProviders": "Sign-In Providers",
-    "tenantPrefix": "· {{name}}"
+    "tenantPrefix": "· {{name}}",
+    "systemOneProviders": "System One Providers",
+    "decisionTools": "Decision Tools"
   },
   "auth": {
     "login": "Sign In",
@@ -165,6 +167,10 @@
       "systemManaged": "System managed",
       "aboutTitle": "About the System entry",
       "aboutBody": "The System entry represents Parthenon's built-in platform tools. It is shown only once, is not editable or deletable, and cannot be synced from this view. Add real MCP servers below to connect external tools."
+    },
+    "decision": {
+      "aboutTitle": "About the Decision entry",
+      "aboutBody": "The Decision entry represents this workspace's user-defined decision tools. It is built in, shown only once, and is not editable, deletable, or syncable from this view. Manage the tools themselves under Agents → Decision Tools."
     },
     "sync": {
       "noSessions": "Add a session before syncing",
@@ -1202,7 +1208,32 @@
     "payload": "Payload",
     "tags": "Tags",
     "contentType": "Content Type",
-    "viewDetail": "View Detail"
+    "viewDetail": "View Detail",
+    "tabResults": "Results",
+    "tabDecision": "Decision Results",
+    "decision": {
+      "outcome": "Gate Outcome",
+      "completed": "Completed",
+      "failed": "Failed",
+      "detailTitle": "Decision result — tool {{tool}}",
+      "answers": "Answers",
+      "inputState": "Input State",
+      "confidence": "Confidence {{value}}",
+      "gateConfidence": "Gate confidence {{value}}",
+      "probabilities": "Probability distribution",
+      "noulProbability": "Noul probability",
+      "questionTypes": {
+        "choice": "Choice",
+        "score": "Score",
+        "noul": "Noul"
+      },
+      "outcomes": {
+        "act": "Act",
+        "confirm": "Confirm",
+        "escalate": "Escalate"
+      },
+      "tool": "Tool"
+    }
   },
   "notifications": {
     "title": "Notification Configuration",
@@ -2082,6 +2113,120 @@
       "slugTaken": "This address is already taken — choose another",
       "oneTenantPerUser": "Each user can own only one organization",
       "generic": "Registration failed — please try again"
+    }
+  },
+  "systemOne": {
+    "title": "System One Providers",
+    "addProvider": "Add Provider",
+    "editProvider": "Edit Provider",
+    "displayName": "Display Name",
+    "baseUrl": "Base URL",
+    "baseUrlPresetHint": "Preset endpoint for the TypeSafe System One API (not editable).",
+    "testConnection": "Test connection",
+    "testSuccess": "Connection succeeded ({{latency}} ms)",
+    "testFailure": "Connection failed: {{message}}",
+    "defaultModel": "Default Model",
+    "enabledModels": "Enabled Models",
+    "enabledModelsHint": "Comma-separated list of enabled models (optional)",
+    "enabled": "Enabled",
+    "apiKey": "API Key",
+    "apiKeyStored": "Stored",
+    "apiKeyMissing": "Missing",
+    "apiKeyUnchanged": "unchanged",
+    "apiKeyUnchangedHint": "Leave blank to keep the existing key. The key is never displayed after being saved.",
+    "apiKeyWriteOnlyHint": "Write-only: the key is stored encrypted and never shown again.",
+    "noProviders": "No System One providers configured yet.",
+    "saveSuccess": "Provider saved",
+    "status": {
+      "configured": "Configured",
+      "notConfigured": "Not configured"
+    },
+    "validation": {
+      "displayNameRequired": "Display name is required.",
+      "baseUrlRequired": "Base URL is required.",
+      "defaultModelRequired": "Default model is required.",
+      "apiKeyRequired": "API key is required."
+    }
+  },
+  "decisionTools": {
+    "title": "Decision Tools",
+    "subtitle": "User-definable decision tools behave like built-in system tools: input/output data types, auto-generated descriptions, exposed as decision____<name> MCP tools.",
+    "addTool": "Add Decision Tool",
+    "editTool": "Edit Decision Tool",
+    "noTools": "No decision tools defined yet.",
+    "name": "Tool Name",
+    "nameHint": "Lowercase letters, numbers, and hyphens. Unique within your tenant. Exposed as decision____<name>.",
+    "purpose": "Purpose",
+    "purposeHint": "What decision does this tool make? Used in the generated description.",
+    "inputDataType": "Input Data Type",
+    "outputDataType": "Output Data Type",
+    "inputDataTypeView": "Input Data Type (read-only)",
+    "outputDataTypeView": "Output Data Type (read-only)",
+    "dataTypeHint": "Optional — reference a registered Agent Data Type as the contract.",
+    "noDataType": "None (state-only)",
+    "viewDataType": "View data type fields",
+    "fieldName": "Field",
+    "fieldType": "Type",
+    "fieldDescription": "Description",
+    "generateWithAi": "Generate with AI",
+    "stateInjectionHelp": "State values are injected into the model's context. Reference a state key in question instructions by wrapping it in backticks, e.g. `input.tier` — detected paths can be added as mappings below.",
+    "autoDetect": "Auto-detect placeholders",
+    "detectedPaths": "{{count}} state path(s) detected in instructions",
+    "status": "Status",
+    "enabled": "Enabled",
+    "generatedDescription": "Generated Description",
+    "generatedDescriptionHint": "Auto-generated from the definition — what skills, agents, and MCP clients see.",
+    "statePreset": "State Preset",
+    "statePresetHint": "Maps input and agent data into the state sent to the model.",
+    "addStateMapping": "Add State Mapping",
+    "stateKey": "State Key",
+    "source": "Source",
+    "sources": {
+      "input": "Input",
+      "agent_data": "Agent Data"
+    },
+    "dataKey": "Data Key",
+    "thresholds": "Confidence Thresholds",
+    "actThreshold": "Act threshold",
+    "confirmThreshold": "Confirm threshold",
+    "thresholdsHint": "confidence ≥ act → act; ≥ confirm → confirm; else escalate.",
+    "providerModel": "Provider Model",
+    "questionsTitle": "Questions",
+    "addQuestion": "Add Question",
+    "questionKey": "Question Key",
+    "questionType": "Question Type",
+    "questionTypes": {
+      "choice": "Choice",
+      "score": "Score",
+      "noul": "Noul"
+    },
+    "instructions": "Instructions",
+    "required": "Required",
+    "choiceOptions": "Options (one per line: key = description)",
+    "addOption": "Add Option",
+    "scoreLegend": "Rubric Legend (one entry per line)",
+    "noulHint": "Noul is a binary numeric judgment (0–1); no criteria required.",
+    "removeQuestion": "Remove",
+    "optionKey": "Option key",
+    "optionDescription": "Option description",
+    "notConfigured": "No System One model is configured. Configure a provider before creating decision tools.",
+    "openConfig": "Open System One config",
+    "configuredHint": "System One model available: {{model}} ({{provider}})",
+    "deleteConfirm": "Delete decision tool '{{name}}'? Its execution results are removed too.",
+    "saveSuccess": "Decision tool saved",
+    "duplicateName": "A decision tool with this name already exists in your tenant.",
+    "validation": {
+      "nameRequired": "Tool name is required.",
+      "nameFormat": "Name must use lowercase letters, numbers, and hyphens only.",
+      "purposeRequired": "Purpose is required.",
+      "questionsRequired": "At least one question is required.",
+      "questionKeyRequired": "Each question needs a key.",
+      "duplicateQuestionKey": "Duplicate question key: '{{key}}'.",
+      "thresholdsOrder": "Act threshold must be greater than or equal to confirm threshold.",
+      "invalidDataType": "The selected data type could not be found.",
+      "choiceOptionsRequired": "Choice questions need at least one option.",
+      "scoreLegendRequired": "Score questions need a rubric legend.",
+      "stateKeyRequired": "Each state mapping needs a state key and data key."
     }
   }
 }

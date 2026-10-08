@@ -9,7 +9,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
 from app.db.models.agents import AgentIdentity, AgentRole, AgentRoleIdentity, AgentRoleMcpSession, AgentRoleSOP, AgentRoleSkill, AgentType
-from app.services.agents.tool_naming import parse_tool_name
+from app.services.agents.tool_naming import RESERVED_SERVER_NAMES, parse_tool_name
 
 logger = logging.getLogger(__name__)
 
@@ -414,7 +414,7 @@ class AgentRoleService:
         for name in tool_names:
             try:
                 server_slug, _ = parse_tool_name(name)
-                if server_slug != "system":
+                if server_slug not in RESERVED_SERVER_NAMES:
                     server_slugs.append(server_slug)
                 continue
             except ValueError:
@@ -504,7 +504,7 @@ class AgentRoleService:
         for name in tool_names:
             try:
                 server_slug, _ = parse_tool_name(name)
-                if server_slug != "system":
+                if server_slug not in RESERVED_SERVER_NAMES:
                     required_slugs.add(server_slug)
             except ValueError:
                 if "/" in name:

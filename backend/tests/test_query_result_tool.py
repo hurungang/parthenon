@@ -56,6 +56,14 @@ async def authed_client(test_engine):
 
     app.dependency_overrides[get_db] = override_db
 
+    # Provision the root tenant — internal data-plane requests bind it
+    # when no signed tenant headers are present (multi-tenancy off).
+    async with SessionLocal() as session:
+        from app.services.tenancy.root_tenant import ensure_root_tenant
+
+        await ensure_root_tenant(session)
+        await session.commit()
+
     async with AsyncClient(
         transport=ASGITransport(app=app), base_url="http://test"
     ) as client:
@@ -67,9 +75,12 @@ async def _create_data_type(
     name: str | None = None,
     slug: str | None = None,
 ) -> AgentDataType:
-    """Create a data type directly in the database."""
+    """Create a data type directly in the database (root tenant)."""
+    from app.services.tenancy.root_tenant import get_root_tenant_id
+
     unique = uuid.uuid4().hex[:8]
     dt = AgentDataType(
+        tenant_id=await get_root_tenant_id(db),
         name=name or f"test-dt-{unique}",
         slug=slug or f"test-dt-{unique}",
         description="Test data type",
@@ -103,8 +114,11 @@ async def _seed_agent_output(
     field_values: dict | None = None,
     created_at_override: str | None = None,
 ) -> AgentOutput:
-    """Create a typed AgentOutput record directly."""
+    """Create a typed AgentOutput record directly (root tenant)."""
+    from app.services.tenancy.root_tenant import get_root_tenant_id
+
     output = AgentOutput(
+        tenant_id=await get_root_tenant_id(db),
         data_type_id=data_type_id,
         agent_type_id=agent_type_id,
         execution_session_id=uuid.uuid4(),

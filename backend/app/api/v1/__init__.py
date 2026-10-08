@@ -39,6 +39,8 @@ from app.api.v1.results import ResultRouter
 from app.api.v1.scheduling import ScheduleRouter
 from app.api.v1.setup import SetupRouter
 from app.api.v1.system_config import AuthRouter, SystemConfigRouter
+from app.api.v1.decision_tools import DecisionToolsRouter
+from app.api.v1.system_one import SystemOneRouter
 from app.api.v1.skills import SkillRouter
 from app.api.v1.sops import SopRouter
 from app.api.v1.telemetry import TelemetryRouter
@@ -79,6 +81,12 @@ router.include_router(InvitationAcceptRouter)
 
 # System Config (identity providers, super admin management)
 router.include_router(SystemConfigRouter)
+
+# System One (TypeSafe Jev provider config)
+router.include_router(SystemOneRouter)
+
+# Decision tools (user-definable, tenant-scoped tools)
+router.include_router(DecisionToolsRouter)
 
 # Dashboard
 router.include_router(DashboardRouter)

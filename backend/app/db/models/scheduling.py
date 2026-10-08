@@ -3,7 +3,7 @@ import enum
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, Index, String, Text, func
+from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, Index, String, Text, UniqueConstraint, func
 from sqlalchemy.dialects.postgresql import JSON, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -33,10 +33,17 @@ class ExecutionStatus(str, enum.Enum):
 
 
 class ScheduledJob(Base):
-    """A cron-based schedule for a prompt or SOP."""
+    """A cron-based schedule for a prompt or SOP.
+
+    Tenant ownership is mandatory at creation and dispatch; job names are
+    unique per tenant only. NOT NULL on ``tenant_id`` is enforced at the
+    database level by migration ``b8c9d0e1f2a3``; the ORM column stays
+    nullable for legacy paths.
+    """
 
     __tablename__ = "scheduled_jobs"
     __table_args__ = (
+        UniqueConstraint("tenant_id", "name", name="uq_scheduled_jobs_tenant_name"),
         Index("ix_scheduled_jobs_tenant_id", "tenant_id"),
     )
 
@@ -46,7 +53,7 @@ class ScheduledJob(Base):
     tenant_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("tenants.id", ondelete="SET NULL"), nullable=True
     )
-    name: Mapped[str] = mapped_column(String(200), nullable=False, unique=True)
+    name: Mapped[str] = mapped_column(String(200), nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     cron_expression: Mapped[str] = mapped_column(String(100), nullable=False)
     target_type: Mapped[JobTargetType] = mapped_column(

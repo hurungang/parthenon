@@ -4,7 +4,7 @@ import uuid
 import logging
 from dataclasses import dataclass
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy import select, delete
 from sqlalchemy.orm import selectinload
 
@@ -13,6 +13,7 @@ from app.api.v1.mcp_hub import (
     SYSTEM_TOOL_IDS,
 )
 from app.core.resource_types import RT_AGENT_SKILLS
+from app.core.tenant_context import get_tenant_context
 from app.db.session import DbSession
 from app.db.models.mcp_hub import McpTool
 from app.db.models.skills import Skill, SkillToolBinding
@@ -98,8 +99,37 @@ def assemble_tool_section(tools: list[_ToolRecord]) -> str:
     return "\n".join(lines)
 
 
-def _build_skill_read(skill: Skill) -> SkillRead:
-    """Construct a SkillRead response with computed instructions_with_tools."""
+def _tenant_id_from(request: Request) -> uuid.UUID | None:
+    """Tenant of the caller (None when tenancy is unset/disabled)."""
+    context = get_tenant_context(request)
+    return context.tenant_id if context.is_set else None
+
+
+async def _get_decision_tool_record(
+    db, tool_id: uuid.UUID, tenant_id: uuid.UUID | None
+) -> _ToolRecord | None:
+    """Return a _ToolRecord for a virtual decision tool id, or None.
+
+    Mirrors ``_get_system_tool_record`` — decision tools are virtual
+    (no ``mcp_tools`` row) and surface canonically as ``decision____<name>``.
+    """
+    from app.services.system_one.decision_tool_service import (
+        build_input_schema,
+        resolve_virtual_tool_id,
+    )
+
+    tool = await resolve_virtual_tool_id(db, tool_id, tenant_id)
+    if tool is None:
+        return None
+    return _ToolRecord(
+        name=build_tool_name("decision", tool.name),
+        description=tool.description,
+        input_schema=build_input_schema(tool),
+    )
+
+
+async def _build_tool_records(db, skill: Skill, tenant_id: uuid.UUID | None) -> list[_ToolRecord]:
+    """Resolve a skill's bindings to tool records in binding order."""
     tool_records: list[_ToolRecord] = []
     for binding in sorted(skill.tool_bindings, key=lambda b: b.order):
         # Prefer canonical system tool definitions so generated references always
@@ -107,6 +137,11 @@ def _build_skill_read(skill: Skill) -> SkillRead:
         system_tool = _get_system_tool_record(binding.tool_id)
         if system_tool:
             tool_records.append(system_tool)
+            continue
+        # Virtual decision tools (no mcp_tools row)
+        decision_tool = await _get_decision_tool_record(db, binding.tool_id, tenant_id)
+        if decision_tool:
+            tool_records.append(decision_tool)
         elif binding.tool is not None:
             # Regular MCP tool from database
             tool_records.append(
@@ -120,47 +155,31 @@ def _build_skill_read(skill: Skill) -> SkillRead:
                     input_schema=binding.tool.input_schema,
                 )
             )
+    return tool_records
+
+
+def _instructions_with_tools(skill: Skill, tool_records: list[_ToolRecord]) -> str | None:
     tool_section = assemble_tool_section(tool_records)
     if tool_section:
-        instructions_with_tools = (skill.instructions or "") + "\n\n" + tool_section
-    else:
-        instructions_with_tools = skill.instructions
+        return (skill.instructions or "") + "\n\n" + tool_section
+    return skill.instructions
 
+
+async def _build_skill_read(db, skill: Skill, tenant_id: uuid.UUID | None) -> SkillRead:
+    """Construct a SkillRead response with computed instructions_with_tools."""
+    tool_records = await _build_tool_records(db, skill, tenant_id)
     skill_read = SkillRead.model_validate(skill)
-    skill_read.instructions_with_tools = instructions_with_tools
+    skill_read.instructions_with_tools = _instructions_with_tools(skill, tool_records)
     return skill_read
 
 
-def _build_skill_detail_read(skill: Skill) -> SkillDetailRead:
+async def _build_skill_detail_read(
+    db, skill: Skill, tenant_id: uuid.UUID | None
+) -> SkillDetailRead:
     """Construct a SkillDetailRead response with computed instructions_with_tools."""
-    tool_records: list[_ToolRecord] = []
-    for binding in sorted(skill.tool_bindings, key=lambda b: b.order):
-        # Prefer canonical system tool definitions so generated references always
-        # include full schemas, even if DB-seeded rows have partial metadata.
-        system_tool = _get_system_tool_record(binding.tool_id)
-        if system_tool:
-            tool_records.append(system_tool)
-        elif binding.tool is not None:
-            # Regular MCP tool from database
-            tool_records.append(
-                _ToolRecord(
-                    name=_canonicalize_mcp_tool_name(
-                        binding.tool.name,
-                        None,
-                        binding.tool.original_name,
-                    ),
-                    description=binding.tool.description,
-                    input_schema=binding.tool.input_schema,
-                )
-            )
-    tool_section = assemble_tool_section(tool_records)
-    if tool_section:
-        instructions_with_tools = (skill.instructions or "") + "\n\n" + tool_section
-    else:
-        instructions_with_tools = skill.instructions
-
+    tool_records = await _build_tool_records(db, skill, tenant_id)
     skill_detail = SkillDetailRead.model_validate(skill)
-    skill_detail.instructions_with_tools = instructions_with_tools
+    skill_detail.instructions_with_tools = _instructions_with_tools(skill, tool_records)
     return skill_detail
 
 
@@ -182,6 +201,7 @@ def _require_workflow_model_id() -> str:
 @SkillRouter.get("", response_model=list[SkillRead])
 async def list_skills(
     db: DbSession,
+    request: Request,
     _: dict = Depends(require_permission(RT_AGENT_SKILLS, "read")),
     limit: int = Query(default=25, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
@@ -194,19 +214,28 @@ async def list_skills(
         .limit(limit)
     )
     skills = list(result.scalars().all())
-    return [_build_skill_read(s) for s in skills]
+    tenant_id = _tenant_id_from(request)
+    return [await _build_skill_read(db, s, tenant_id) for s in skills]
 
 
-@SkillRouter.post("", response_model=SkillDetailRead, status_code=status.HTTP_201_CREATED)
-async def create_skill(
-    body: SkillCreate,
-    db: DbSession,
-    _: dict = Depends(require_permission(RT_AGENT_SKILLS, "create")),
-) -> SkillDetailRead:
-    # Validate all tool IDs exist (skip system tools)
-    for tool_id in body.tool_ids:
-        # System tools are virtual and don't exist in database
+async def _validate_tool_ids(
+    db, tool_ids: list[uuid.UUID], tenant_id: uuid.UUID | None
+) -> None:
+    """Validate every tool id bound to a skill.
+
+    - System tools are virtual registry entries (no DB row).
+    - Decision tools are virtual tenant-scoped uuid5 entries resolved via
+      ``resolve_virtual_tool_id`` (must exist AND be enabled in the
+      caller's tenant — a foreign tenant's decision id 422s).
+    - Everything else must be an existing McpTool row.
+    """
+    from app.services.system_one.decision_tool_service import resolve_virtual_tool_id
+
+    for tool_id in tool_ids:
         if tool_id in SYSTEM_TOOL_IDS:
+            continue
+        decision_tool = await resolve_virtual_tool_id(db, tool_id, tenant_id)
+        if decision_tool is not None:
             continue
         tool = await db.get(McpTool, tool_id)
         if not tool:
@@ -215,6 +244,16 @@ async def create_skill(
                 detail=f"MCP tool with id {tool_id} not found",
             )
 
+
+@SkillRouter.post("", response_model=SkillDetailRead, status_code=status.HTTP_201_CREATED)
+async def create_skill(
+    body: SkillCreate,
+    request: Request,
+    db: DbSession,
+    _: dict = Depends(require_permission(RT_AGENT_SKILLS, "create")),
+) -> SkillDetailRead:
+    tenant_id = _tenant_id_from(request)
+    await _validate_tool_ids(db, body.tool_ids, tenant_id)
     skill = Skill(
         name=body.name,
         description=body.description,
@@ -235,12 +274,13 @@ async def create_skill(
     result = await db.execute(
         select(Skill).options(*_SKILL_LOAD_OPTIONS).where(Skill.id == skill.id)
     )
-    return _build_skill_detail_read(result.scalar_one())
+    return await _build_skill_detail_read(db, result.scalar_one(), tenant_id)
 
 
 @SkillRouter.get("/{skill_id}", response_model=SkillDetailRead)
 async def get_skill(
     skill_id: uuid.UUID,
+    request: Request,
     db: DbSession,
     _: dict = Depends(require_permission(RT_AGENT_SKILLS, "read")),
 ) -> SkillDetailRead:
@@ -250,13 +290,14 @@ async def get_skill(
     skill = result.scalar_one_or_none()
     if not skill:
         raise HTTPException(status_code=404, detail="Skill not found")
-    return _build_skill_detail_read(skill)
+    return await _build_skill_detail_read(db, skill, _tenant_id_from(request))
 
 
 @SkillRouter.put("/{skill_id}", response_model=SkillDetailRead)
 async def update_skill(
     skill_id: uuid.UUID,
     body: SkillUpdate,
+    request: Request,
     db: DbSession,
     _: dict = Depends(require_permission(RT_AGENT_SKILLS, "update")),
 ) -> SkillDetailRead:
@@ -269,24 +310,19 @@ async def update_skill(
     if skill.is_system:
         raise HTTPException(status_code=403, detail="System skills cannot be modified")
 
+    tenant_id = _tenant_id_from(request)
+
     for field, value in body.model_dump(exclude_unset=True, exclude={"tool_ids"}).items():
         setattr(skill, field, value)
 
     if body.tool_ids is not None:
-        # Validate new tool IDs (skip system tools)
-        for tool_id in body.tool_ids:
-            # System tools are virtual and don't exist in database
-            if tool_id in SYSTEM_TOOL_IDS:
-                continue
-            tool = await db.get(McpTool, tool_id)
-            if not tool:
-                raise HTTPException(
-                    status_code=422,
-                    detail=f"MCP tool with id {tool_id} not found",
-                )
-
+        # Validate new tool IDs (system + virtual decision tools included)
+        await _validate_tool_ids(db, body.tool_ids, tenant_id)
         # Remove old bindings
         await db.execute(delete(SkillToolBinding).where(SkillToolBinding.skill_id == skill_id))
+        # The identity map caches the eagerly-loaded collection — expire it so
+        # the response below reflects the NEW bindings, not the stale ones.
+        db.expire(skill, ["tool_bindings"])
 
         # Create new bindings
         for order, tool_id in enumerate(body.tool_ids):
@@ -300,7 +336,7 @@ async def update_skill(
     result = await db.execute(
         select(Skill).options(*_SKILL_LOAD_OPTIONS).where(Skill.id == skill_id)
     )
-    return _build_skill_detail_read(result.scalar_one())
+    return await _build_skill_detail_read(db, result.scalar_one(), tenant_id)
 
 
 @SkillRouter.post("/workflow/generate", response_model=SkillWorkflowGenerateResponse)

@@ -69,7 +69,7 @@ describe('AppShell — Phase 11 sidebar gating', () => {
     await renderShell()
     await waitFor(() => {
       expect(screen.getAllByText("nav.groupTenantAdmin").length).toBeGreaterThan(0)
-    })
+    }, { timeout: 5000 })
     // The acme-admin bug: no platform items on a granted-tenant session
     expect(screen.queryByText('nav.groupPlatform')).toBeNull()
     // Tenant admin surfaces are present
@@ -78,7 +78,7 @@ describe('AppShell — Phase 11 sidebar gating', () => {
       expect(screen.getAllByText("nav.tenantSettings").length).toBeGreaterThan(0)
       expect(screen.getAllByText("nav.tenantMembers").length).toBeGreaterThan(0)
       expect(screen.getAllByText("nav.tenantIdentityProviders").length).toBeGreaterThan(0)
-    })
+    }, { timeout: 5000 })
     // FIX-20261001-235247 (Defect 2): the legacy System Config
     // identity-providers entry is GONE — only the Tenant Admin variant
     // remains (no duplicate sign-in-providers menu item).

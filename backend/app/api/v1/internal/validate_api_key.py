@@ -209,6 +209,32 @@ async def validate_api_key_internal(
     await update_last_used_at(api_key.id, db)
     await db.commit()
 
+    # 6. Multi-tenancy: sign the key's tenant context so CH can forward it
+    # (verbatim, never re-signed) on this MCP session's internal CC calls —
+    # those data-plane endpoints fail closed without signed headers.
+    tenant_id = getattr(api_key, "tenant_id", None)
+    tenant_headers: dict[str, str] | None = None
+    if tenant_id is not None:
+        from sqlalchemy import select as _select
+
+        from app.core.tenant_signature import build_tenant_signature_headers
+        from app.db.models.tenant import Tenant
+
+        tenant_row = (
+            await db.execute(_select(Tenant).where(Tenant.id == tenant_id))
+        ).scalar_one_or_none()
+        if tenant_row is not None:
+            from app.core.tenant_context import TenantContext
+
+            tenant_headers = build_tenant_signature_headers(
+                TenantContext(
+                    tenant_id=tenant_row.id,
+                    slug=tenant_row.slug,
+                    name=tenant_row.name,
+                    is_system_tenant=tenant_row.is_system_tenant,
+                )
+            )
+
     logger.info(
         "API key validated successfully: key_id=%s identity=%s role=%s",
         api_key.id,
@@ -227,4 +253,6 @@ async def validate_api_key_internal(
         api_key_name=api_key.name,
         # Multi-tenancy: tenant binding for MCP session scoping at CH.
         tenant_id=getattr(api_key, "tenant_id", None),
+        # CC-signed header set — CH forwards verbatim on internal calls.
+        tenant_headers=tenant_headers,
     )

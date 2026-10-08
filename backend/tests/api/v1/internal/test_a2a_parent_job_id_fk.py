@@ -71,6 +71,14 @@ async def authed_client(fk_test_engine):
 
     app.dependency_overrides[get_db] = override_db
 
+    # Provision the root tenant — internal data-plane requests bind it
+    # when no signed tenant headers are present (multi-tenancy off).
+    async with SessionLocal() as session:
+        from app.services.tenancy.root_tenant import ensure_root_tenant
+
+        await ensure_root_tenant(session)
+        await session.commit()
+
     async with AsyncClient(
         transport=ASGITransport(app=app),
         base_url="http://test",
@@ -101,7 +109,10 @@ async def test_a2a_request_with_non_job_uuid_requester_creates_receiver_with_nul
     )() as db:
         await db.execute(text("PRAGMA foreign_keys=ON"))
 
+        from app.services.tenancy.root_tenant import get_root_tenant_id
+
         target_agent_type = AgentType(
+            tenant_id=await get_root_tenant_id(db),
             name=f"a2a-target-{uuid.uuid4().hex[:8]}",
             description="A2A target agent for FK regression test",
             is_active=True,

@@ -40,8 +40,23 @@ def _mock_db() -> AsyncMock:
     db.add = MagicMock()
     db.delete = AsyncMock()
     db.get = AsyncMock()
-    db.execute = AsyncMock()
+    # Default duplicate-check result: no existing row (scalar_one_or_none → None).
+    # Individual tests override db.execute when they need a different result.
+    default_result = MagicMock()
+    default_result.scalar_one_or_none.return_value = None
+    db.execute = AsyncMock(return_value=default_result)
     return db
+
+
+def _flush_persists_id(db: AsyncMock) -> None:
+    """Make the mocked ``db.flush`` assign an id to the pending ModelConfig,
+    mimicking the server-side default applied on a real flush."""
+    async def flush():
+        obj = db.add.call_args[0][0]
+        if getattr(obj, "id", None) is None:
+            obj.id = uuid.uuid4()
+
+    db.flush.side_effect = flush
 
 
 def _mock_vault(encrypted: str = "enc:test-key") -> MagicMock:
@@ -60,22 +75,14 @@ async def test_create_model_config_openai_encrypts_api_key():
     service = ModelConfigService()
     db = _mock_db()
     vault = _mock_vault("enc:openai-key")
-    config = _make_config(encrypted_api_key="enc:openai-key")
-
-    async def flush():
-        pass
-
-    db.flush.side_effect = flush
+    _flush_persists_id(db)
 
     async def refresh(obj, attrs=None):
         pass
 
     db.refresh.side_effect = refresh
 
-    with (
-        patch("app.services.agents.model_config_service.ModelConfig", return_value=config),
-        patch("app.services.agents.model_config_service.get_vault", return_value=vault),
-    ):
+    with patch("app.services.agents.model_config_service.get_vault", return_value=vault):
         result = await service.create_model_config(
             display_name="GPT-4 Config",
             provider_type=ModelProvider.openai,
@@ -88,7 +95,7 @@ async def test_create_model_config_openai_encrypts_api_key():
     vault.encrypt.assert_called_once()
     call_arg = vault.encrypt.call_args[0][0]
     assert "sk-rawkey" in call_arg
-    assert result.id == config.id
+    assert result.id is not None
 
 
 @pytest.mark.asyncio
@@ -97,17 +104,13 @@ async def test_create_model_config_no_api_key_skips_encryption():
     service = ModelConfigService()
     db = _mock_db()
     vault = _mock_vault()
-    config = _make_config(encrypted_api_key=None)
 
     async def refresh(obj, attrs=None):
         pass
 
     db.refresh.side_effect = refresh
 
-    with (
-        patch("app.services.agents.model_config_service.ModelConfig", return_value=config),
-        patch("app.services.agents.model_config_service.get_vault", return_value=vault),
-    ):
+    with patch("app.services.agents.model_config_service.get_vault", return_value=vault):
         await service.create_model_config(
             display_name="LiteLLM Proxy",
             provider_type=ModelProvider.litellm_proxy,
@@ -126,17 +129,14 @@ async def test_create_model_config_litellm_proxy_optional_key():
     service = ModelConfigService()
     db = _mock_db()
     vault = _mock_vault("enc:proxy-key")
-    config = _make_config(provider_type=ModelProvider.litellm_proxy)
+    _flush_persists_id(db)
 
     async def refresh(obj, attrs=None):
         pass
 
     db.refresh.side_effect = refresh
 
-    with (
-        patch("app.services.agents.model_config_service.ModelConfig", return_value=config),
-        patch("app.services.agents.model_config_service.get_vault", return_value=vault),
-    ):
+    with patch("app.services.agents.model_config_service.get_vault", return_value=vault):
         result = await service.create_model_config(
             display_name="LiteLLM Proxy with Key",
             provider_type=ModelProvider.litellm_proxy,
@@ -146,8 +146,65 @@ async def test_create_model_config_litellm_proxy_optional_key():
             db=db,
         )
 
-    assert result.id == config.id
+    assert result.id is not None
     vault.encrypt.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_create_model_config_populates_tenant_id():
+    """create_model_config passes tenant_id through to the new record."""
+    service = ModelConfigService()
+    db = _mock_db()
+    vault = _mock_vault()
+    tenant_id = uuid.uuid4()
+    _flush_persists_id(db)
+
+    async def refresh(obj, attrs=None):
+        pass
+
+    db.refresh.side_effect = refresh
+
+    with patch("app.services.agents.model_config_service.get_vault", return_value=vault):
+        result = await service.create_model_config(
+            display_name="Tenant Config",
+            provider_type=ModelProvider.openai,
+            api_base_url=None,
+            api_key=None,
+            enabled_models=[],
+            db=db,
+            tenant_id=tenant_id,
+        )
+
+    added = db.add.call_args[0][0]
+    assert added.tenant_id == tenant_id
+    assert result.tenant_id == tenant_id
+    # The duplicate-check query must have run before insertion.
+    db.execute.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_create_model_config_raises_conflict_on_duplicate_name():
+    """create_model_config raises ModelConfigConflictError when a same-tenant config exists."""
+    service = ModelConfigService()
+    db = _mock_db()
+    vault = _mock_vault()
+
+    dup_result = MagicMock()
+    dup_result.scalar_one_or_none.return_value = MagicMock()  # duplicate found
+    db.execute = AsyncMock(return_value=dup_result)
+
+    with patch("app.services.agents.model_config_service.get_vault", return_value=vault):
+        with pytest.raises(ModelConfigConflictError):
+            await service.create_model_config(
+                display_name="GPT-4 Config",
+                provider_type=ModelProvider.openai,
+                api_base_url=None,
+                api_key=None,
+                enabled_models=[],
+                db=db,
+            )
+
+    db.add.assert_not_called()
 
 
 # ── Read ───────────────────────────────────────────────────────────────────────
@@ -319,17 +376,14 @@ async def test_create_model_config_stores_enabled_models():
     db = _mock_db()
     vault = _mock_vault()
     models = ["gpt-4o", "gpt-4-turbo"]
-    config = _make_config(enabled_models=models)
+    _flush_persists_id(db)
 
     async def refresh(obj, attrs=None):
         pass
 
     db.refresh.side_effect = refresh
 
-    with (
-        patch("app.services.agents.model_config_service.ModelConfig", return_value=config),
-        patch("app.services.agents.model_config_service.get_vault", return_value=vault),
-    ):
+    with patch("app.services.agents.model_config_service.get_vault", return_value=vault):
         result = await service.create_model_config(
             display_name="Models Config",
             provider_type=ModelProvider.openai,
@@ -454,17 +508,14 @@ async def test_create_model_config_new_provider_encrypts_api_key(provider: Model
     service = ModelConfigService()
     db = _mock_db()
     vault = _mock_vault(f"enc:{provider.value}-key")
-    config = _make_config(provider_type=provider, encrypted_api_key=f"enc:{provider.value}-key")
+    _flush_persists_id(db)
 
     async def refresh(obj, attrs=None):
         pass
 
     db.refresh.side_effect = refresh
 
-    with (
-        patch("app.services.agents.model_config_service.ModelConfig", return_value=config),
-        patch("app.services.agents.model_config_service.get_vault", return_value=vault),
-    ):
+    with patch("app.services.agents.model_config_service.get_vault", return_value=vault):
         result = await service.create_model_config(
             display_name=f"{provider.value} config",
             provider_type=provider,
@@ -477,7 +528,7 @@ async def test_create_model_config_new_provider_encrypts_api_key(provider: Model
     vault.encrypt.assert_called_once()
     call_arg = vault.encrypt.call_args[0][0]
     assert "sk-rawkey" in call_arg
-    assert result.id == config.id
+    assert result.id is not None
 
 
 @pytest.mark.asyncio

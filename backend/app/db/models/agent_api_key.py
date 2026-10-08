@@ -43,16 +43,20 @@ class AgentApiKey(Base):
     clear-text key is displayed once at creation and never retrievable afterward.
 
     Business rules:
-    - Key names are unique; multiple keys may exist per identity-role pair.
+    - Key names are unique per tenant (no NULL-tenant global variant).
     - Keys inherit the full permission set of the bound role.
     - Revocation is immediate — the key becomes unusable on next authentication.
     - Keys may optionally carry an ``expires_at`` timestamp; a ``NULL`` value
       means the key never expires. Expired keys are rejected at authentication.
+
+    Tenant ownership is mandatory (migration ``b8c9d0e1f2a3`` enforces
+    NOT NULL at the DB level); the ORM column stays nullable for legacy
+    paths.
     """
 
     __tablename__ = "agent_api_keys"
     __table_args__ = (
-        UniqueConstraint("name", name="uq_agent_api_keys_name"),
+        UniqueConstraint("tenant_id", "name", name="uq_agent_api_keys_tenant_name"),
         Index("ix_agent_api_keys_key_hash", "key_hash"),
         Index("ix_agent_api_keys_status", "status"),
         Index("ix_agent_api_keys_tenant_id", "tenant_id"),

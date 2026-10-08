@@ -35,6 +35,7 @@ import PermissionDeniedAlert from '../../components/permissions/PermissionDenied
 import { McpSessionManager } from './McpSessionManager'
 import { McpToolBrowser } from './McpToolBrowser'
 import apiClient from '../../api/apiClient'
+import { isReservedServerName } from '../../utils/toolNaming'
 import { useQueryClient } from '@tanstack/react-query'
 import type { McpServer } from '../../types'
 
@@ -145,7 +146,11 @@ export function McpHubPage() {
                 </TableHead>
                 <TableBody>
                   {(servers ?? []).map((server) => {
-                    const isSystem = isSystemServer(server)
+                    // Reserved namespaces (system, decision) are built-in
+                    // virtual servers — no base URL, sessions, sync, or edit.
+                    const isSystem = isSystemServer(server) || isReservedServerName(server.slug)
+                    const aboutTitle = server.slug === 'decision' ? t('mcp.decision.aboutTitle') : t('mcp.system.aboutTitle')
+                    const aboutBody = server.slug === 'decision' ? t('mcp.decision.aboutBody') : t('mcp.system.aboutBody')
                     return (
                     <TableRow key={server.id}>
                       <TableCell>
@@ -154,8 +159,8 @@ export function McpHubPage() {
                           {isSystem && (
                             <Tooltip title={
                               <Box>
-                                <Typography variant="subtitle2">{t('mcp.system.aboutTitle')}</Typography>
-                                <Typography variant="body2">{t('mcp.system.aboutBody')}</Typography>
+                                <Typography variant="subtitle2">{aboutTitle}</Typography>
+                                <Typography variant="body2">{aboutBody}</Typography>
                               </Box>
                             } arrow placement="top">
                               <Chip label={t('mcp.system.builtIn')} color="error" size="small" variant="outlined" />

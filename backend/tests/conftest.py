@@ -7,6 +7,7 @@ import pytest
 import pytest_asyncio
 from fastapi.testclient import TestClient
 from httpx import AsyncClient, ASGITransport
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 # Set test environment variables before importing app modules
@@ -104,6 +105,28 @@ async def test_engine():
     )
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+    # strict-tenant-isolation: internal data-plane endpoints resolve the
+    # ROOT tenant when multi-tenancy is off; tests driving the app
+    # headerless need the root tenant provisioned in the test database.
+    from app.db.models.tenant import Tenant
+
+    async with async_sessionmaker(
+        bind=engine, class_=AsyncSession, expire_on_commit=False
+    )() as session:
+        existing = (
+            await session.execute(
+                select(Tenant).where(Tenant.is_system_tenant.is_(True))
+            )
+        ).scalar_one_or_none()
+        if existing is None:
+            session.add(
+                Tenant(
+                    name="Root",
+                    slug="root",
+                    is_system_tenant=True,
+                )
+            )
+            await session.commit()
     yield engine
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.drop_all)

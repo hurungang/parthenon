@@ -43,6 +43,7 @@ logger = logging.getLogger(__name__)
 
 # ── System (virtual) server constants ─────────────────────────────────────────
 SYSTEM_SERVER_ID = uuid.UUID("00000000-0000-0000-0000-000000000001")
+DECISION_SERVER_ID = uuid.UUID("00000000-0000-0000-0000-000000000002")
 
 # System tool IDs — derived from SystemToolRegistry at module load time.
 # Do NOT add hardcoded UUID constants here; register tools in system_tool_registry.py.
@@ -149,6 +150,68 @@ def _system_tool_reads() -> list[McpToolRead]:
     ]
 
 
+async def _decision_tool_reads(db: AsyncSession, tenant_id: uuid.UUID | None) -> list[McpToolRead]:
+    """Return virtual McpToolRead objects for the caller's tenant decision tools.
+
+    Each tool surfaces canonically as ``decision____<name>`` (shared
+    tool-naming convention) with its auto-generated description and an
+    AgentDataType-derived input schema. Tenant-contained: only the caller's
+    tenant tools are listed.
+    """
+    from app.db.models.decision_tools import DecisionTool
+    from app.core.tenant_context import get_tenant_context  # noqa: F401 (context via caller)
+    from app.services.system_one.decision_tool_service import build_input_schema
+
+    now = datetime.now(timezone.utc)
+    result = await db.execute(
+        select(DecisionTool)
+        .where(
+            DecisionTool.tenant_id == tenant_id,
+            DecisionTool.enabled.is_(True),
+        )
+        .options(selectinload(DecisionTool.questions))
+        .order_by(DecisionTool.name)
+    )
+    reads: list[McpToolRead] = []
+    for tool in result.scalars().all():
+        tool_id = uuid.uuid5(uuid.NAMESPACE_URL, f"decision-tool:{tool.id}")
+        reads.append(
+            McpToolRead(
+                id=tool_id,
+                server_id=DECISION_SERVER_ID,
+                server_slug="decision",
+                server_name="decision",
+                name=build_tool_name("decision", tool.name),
+                original_name=tool.name,
+                description=tool.description or "",
+                input_schema=build_input_schema(tool)
+                or {"type": "object", "properties": {}},
+                is_active=True,
+                created_at=now,
+                updated_at=now,
+            )
+        )
+    return reads
+
+
+def _decision_server_read() -> McpServerRead:
+    """Return a virtual McpServerRead for tenant decision tools."""
+    now = datetime.now(timezone.utc)
+    return McpServerRead(
+        id=DECISION_SERVER_ID,
+        name="decision",
+        slug="decision",
+        description="User-defined decision tools of this workspace",
+        base_url="",
+        oauth_config=None,
+        status=McpServerStatus.active,
+        last_synced_at=None,
+        session_count=0,
+        created_at=now,
+        updated_at=now,
+    )
+
+
 async def seed_system_tools(db: "AsyncSession") -> None:
     """Idempotently seed the system server and its built-in tools into the database.
 
@@ -160,11 +223,20 @@ async def seed_system_tools(db: "AsyncSession") -> None:
     """
     from app.services.agents.system_tool_registry import SystemToolRegistry
 
+    # Tenant binding: the system server (and its tools) belong to the ROOT
+    # tenant — startup seeding runs on an unscoped session, so the stamp is
+    # explicit.  Pre-bootstrap (no root tenant yet) stays NULL; the adoption
+    # migration re-homes the rows when the root tenant appears.
+    from app.services.tenancy.root_tenant import get_root_tenant_id
+
+    root_tenant_id = await get_root_tenant_id(db)
+
     # ── Seed system server ────────────────────────────────────────────────────
     existing_server = await db.get(McpServer, SYSTEM_SERVER_ID)
     if not existing_server:
         system_server = McpServer(
             id=SYSTEM_SERVER_ID,
+            tenant_id=root_tenant_id,
             name="system",
             slug="system",
             description="Built-in system tools available to all agents",
@@ -174,6 +246,9 @@ async def seed_system_tools(db: "AsyncSession") -> None:
         db.add(system_server)
         await db.flush()
         logger.info("System server seeded (id=%s)", SYSTEM_SERVER_ID)
+    elif root_tenant_id is not None and existing_server.tenant_id is None:
+        # Self-heal a legacy NULL-tenant row (pre-adoption deployment).
+        existing_server.tenant_id = root_tenant_id
 
     # ── Migrate legacy save_result row → save_data ────────────────────────────
     save_data_id = uuid.UUID("00000000-0000-0000-0000-000000000002")
@@ -191,6 +266,8 @@ async def seed_system_tools(db: "AsyncSession") -> None:
         if not existing_tool:
             tool = McpTool(
                 id=entry["id"],
+                # Denormalized tenant binding — the system server's tenant.
+                tenant_id=root_tenant_id,
                 server_id=SYSTEM_SERVER_ID,
                 name=entry["name"],
                 original_name=entry["original_name"],
@@ -202,6 +279,9 @@ async def seed_system_tools(db: "AsyncSession") -> None:
             logger.info("System tool seeded: %s (id=%s)", entry["name"], entry["id"])
         else:
             updated = False
+            if root_tenant_id is not None and existing_tool.tenant_id != root_tenant_id:
+                existing_tool.tenant_id = root_tenant_id
+                updated = True
             if existing_tool.name != entry["name"]:
                 existing_tool.name = entry["name"]
                 updated = True
@@ -240,7 +320,9 @@ async def list_mcp_servers(
     )
     db_servers_raw = list(result.scalars().all())
     # Filter out the DB-seeded System server — only the virtual entry appears
-    db_servers: list[McpServer] = [s for s in db_servers_raw if s.id != SYSTEM_SERVER_ID]
+    db_servers: list[McpServer] = [
+        s for s in db_servers_raw if s.id not in (SYSTEM_SERVER_ID, DECISION_SERVER_ID)
+    ]
     # Build schema objects with session_count populated from eager-loaded relationship
     server_reads: list[McpServerRead] = []
     for server in db_servers:
@@ -248,6 +330,7 @@ async def list_mcp_servers(
         s_read.session_count = len(server.sessions)
         server_reads.append(s_read)
     if offset == 0:
+        server_reads.insert(0, _decision_server_read())
         server_reads.insert(0, _system_server_read())
     return server_reads
 
@@ -258,18 +341,33 @@ async def create_mcp_server(
     db: DbSession,
     _: dict = Depends(require_permission(RT_INTEGRATION_MCP_HUB, "create")),
 ) -> McpServer:
-    # Reject reserved slugs — "system" is used for built-in system tools
-    if body.slug == "system":
+    # Reject reserved slugs — "system" (built-in system tools) and "decision"
+    # (user-defined decision tools) are namespaces, not registerable servers.
+    if body.slug in ("system", "decision"):
         raise HTTPException(
             status_code=409,
-            detail="The slug 'system' is reserved for built-in system tools",
+            detail=f"The slug '{body.slug}' is reserved for built-in tools",
         )
-    # Enforce slug uniqueness
-    existing = await db.execute(select(McpServer).where(McpServer.slug == body.slug))
+    # Enforce slug uniqueness PER TENANT — business identity is
+    # (tenant_id, slug); the same slug may exist in different tenants.
+    # The session-scoped tenant id is authoritative (fail-closed internal
+    # traffic binds the signed tenant; browser traffic the resolved one).
+    from app.db.tenant_scoping import scope_for_session
+
+    tenant_id = scope_for_session(db)
+    existing = await db.execute(
+        select(McpServer).where(
+            McpServer.slug == body.slug,
+            McpServer.tenant_id == tenant_id,  # noqa: E711 — NULL never matches
+        )
+    )
     if existing.scalar_one_or_none():
         raise HTTPException(status_code=409, detail=f"MCP server slug '{body.slug}' already exists")
 
     server = McpServer(**body.model_dump())
+    if tenant_id is not None:
+        # Explicit stamping (defense in depth — the flush listener also stamps).
+        server.tenant_id = tenant_id
     db.add(server)
     await db.flush()
     await db.refresh(server)
@@ -298,7 +396,27 @@ async def update_mcp_server(
     server = await db.get(McpServer, server_id)
     if not server:
         raise HTTPException(status_code=404, detail="MCP server not found")
-    for field, value in body.model_dump(exclude_unset=True).items():
+    # Enforce PER-TENANT slug uniqueness when the slug is being changed —
+    # business identity is (tenant_id, slug), so a duplicate check is only
+    # meaningful within the server's own tenant.
+    new_fields = body.model_dump(exclude_unset=True)
+    if "slug" in new_fields and new_fields["slug"] != server.slug:
+        from app.db.tenant_scoping import scope_for_session
+
+        tenant_id = scope_for_session(db)
+        existing = await db.execute(
+            select(McpServer).where(
+                McpServer.slug == new_fields["slug"],
+                McpServer.id != server.id,
+                McpServer.tenant_id == tenant_id,
+            )
+        )
+        if existing.scalar_one_or_none():
+            raise HTTPException(
+                status_code=409,
+                detail=f"MCP server slug '{new_fields['slug']}' already exists",
+            )
+    for field, value in new_fields.items():
         setattr(server, field, value)
     await db.flush()
     await db.refresh(server)
@@ -736,11 +854,16 @@ McpToolRouter = APIRouter(prefix="/mcp/tools", tags=["MCP Hub — Tools"])
 
 @McpToolRouter.get("", response_model=list[McpToolRead])
 async def list_all_tools(
+    request: Request,
     db: DbSession,
     _: dict = Depends(require_permission(RT_INTEGRATION_MCP_HUB, "read")),
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
 ) -> list[McpToolRead]:
+    from app.core.tenant_context import get_tenant_context
+
+    context = get_tenant_context(request)
+    tenant_id = context.tenant_id if context.is_set else None
     result = await db.execute(
         select(McpTool)
         .options(selectinload(McpTool.server))
@@ -757,7 +880,7 @@ async def list_all_tools(
             _, bare_name = tool_read.name.split("/", 1)
             tool_read.name = build_tool_name(tool_read.server_slug, bare_name)
         db_tool_reads.append(tool_read)
-    all_tools = _system_tool_reads() + db_tool_reads
+    all_tools = _system_tool_reads() + await _decision_tool_reads(db, tenant_id) + db_tool_reads
     # Deduplicate by tool ID — system tools are both returned as virtual objects
     # AND seeded into the DB, so without dedup they appear twice in the response.
     seen_ids: set[uuid.UUID] = set()

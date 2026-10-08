@@ -85,23 +85,55 @@ def _legacy_token_config() -> tuple[str, str, str | None]:
     return token_url, client_id, None
 
 
-async def _resolve_agent_refresh_config(
-    db: AsyncSession,
-) -> tuple[str, str, str | None]:
-    """Resolve (token_url, client_id, client_secret) for agent token refresh.
-
-    Uses the DB IdentityProviderConfig for agent scope when available,
-    falling back to legacy env-var / YAML settings.
-    """
+async def _fetch_agent_scope_config(db: AsyncSession, tenant_id: uuid.UUID | None):
+    """Fetch at most one enabled agent-scope IdP config for a tenant slot."""
     from app.db.models.identity_provider_config import IdentityProviderConfig
 
     result = await db.execute(
-        select(IdentityProviderConfig).where(
+        select(IdentityProviderConfig)
+        .where(
             IdentityProviderConfig.provider_scope == "agent",
             IdentityProviderConfig.is_enabled == True,
+            IdentityProviderConfig.tenant_id.is_(None)
+            if tenant_id is None
+            else IdentityProviderConfig.tenant_id == tenant_id,
         )
+        .limit(1)
     )
-    config = result.scalar_one_or_none()
+    return result.scalars().first()
+
+
+async def _resolve_agent_refresh_config(
+    db: AsyncSession,
+    tenant_id: uuid.UUID | None = None,
+) -> tuple[str, str, str | None]:
+    """Resolve (token_url, client_id, client_secret) for agent token refresh.
+
+    Uses the DB IdentityProviderConfig for agent scope, resolved STRICTLY
+    within the identity's own tenant (no cross-tenant fallback), falling
+    back to legacy env-var / YAML settings only when the identity is not
+    tenant-bound.
+    """
+    from app.db.models.identity_provider_config import IdentityProviderConfig
+
+    if tenant_id is not None:
+        config = await _fetch_agent_scope_config(db, tenant_id)
+    else:
+        own = await _fetch_agent_scope_config(db, None)
+        if own is not None:
+            config = own
+        else:
+            from app.db.models.tenant import Tenant
+
+            root_result = await db.execute(
+                select(Tenant.id).where(Tenant.is_system_tenant.is_(True)).limit(1)
+            )
+            root_tenant_id = root_result.scalars().first()
+            config = (
+                await _fetch_agent_scope_config(db, root_tenant_id)
+                if root_tenant_id is not None
+                else None
+            )
 
     if config is not None:
         token_url = f"{config.issuer_url.rstrip('/')}/protocol/openid-connect/token"
@@ -114,7 +146,11 @@ async def _resolve_agent_refresh_config(
                 logger.warning("Failed to decrypt agent provider client_secret; proceeding without")
         return token_url, client_id, client_secret
 
-    return _legacy_token_config()
+    # Legacy (env / YAML) fallback only when the identity is not tenant-bound —
+    # a bound tenant must never use another tenant's or a global config.
+    if tenant_id is None:
+        return _legacy_token_config()
+    return None
 
 
 # ── Core functions ────────────────────────────────────────────────────────────
@@ -192,7 +228,9 @@ async def refresh_oauth_token(
             f"Failed to decrypt refresh token for identity {identity_id}: {exc}"
         ) from exc
 
-    token_url, client_id, client_secret = await _resolve_agent_refresh_config(db)
+    token_url, client_id, client_secret = await _resolve_agent_refresh_config(
+        db, identity.tenant_id
+    )
 
     last_error: str = "unknown"
     is_rate_limited = False

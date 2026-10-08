@@ -40,6 +40,12 @@ async def _multi_tenancy_on(db: AsyncSession) -> bool:
     return await get_platform_settings_service().is_multi_tenancy_enabled(db)
 
 
+async def _root_tenant_id(db: AsyncSession) -> Optional[uuid.UUID]:
+    """The ROOT tenant's id (``Tenant.is_system_tenant``), or ``None``."""
+    from app.services.tenancy.root_tenant import get_root_tenant_id
+    return await get_root_tenant_id(db)
+
+
 class OIDCConfigService:
     """Full CRUD for ``IdentityProviderConfig``, with encryption and auditing.
 
@@ -47,8 +53,9 @@ class OIDCConfigService:
     optional ``tenant_id`` and addresses ONLY the provider config in that
     ``(tenant_id, scope)`` slot — a tenant admin can never read or write
     another tenant's provider config, and provider scope uniqueness is
-    enforced per tenant.  With the switch off, behaviour is unchanged:
-    platform-wide uniqueness with a single global config per scope.
+    enforced per tenant.  With the switch off, the ROOT tenant's slots
+    are addressed — the root tenant IS the default tenant (tenancy off
+    = root only; never a legacy global/unfiltered lookup).
     """
 
     # ── Read ──────────────────────────────────────────────────────────────
@@ -63,6 +70,11 @@ class OIDCConfigService:
         tenant the SHARED (NULL-tenant) configs only — the public
         login-page listing must never expose other tenants' provider
         metadata (FIX-20261001-010107).
+
+        With the switch OFF, the deployment IS the root tenant: ONLY
+        the ROOT tenant's configs are returned — never the legacy
+        unfiltered dump, never other tenants' rows, and not the
+        NULL-tenant shared slot either (tenancy off = root only).
         """
         query = select(IdentityProviderConfig).order_by(
             IdentityProviderConfig.created_at.desc()
@@ -78,6 +90,16 @@ class OIDCConfigService:
                 # platform surface): shared slot only — fail-closed
                 # privacy, never a cross-tenant metadata dump.
                 query = query.where(IdentityProviderConfig.tenant_id.is_(None))
+        else:
+            # Tenancy OFF: the ROOT tenant IS the default tenant — its
+            # slots are the only ones that exist for identity resolution.
+            root_id = await _root_tenant_id(db)
+            if root_id is None:
+                # Empty DB pre-seed (no root tenant adopted yet) — the
+                # only rows that can exist are tenant-less seed rows.
+                query = query.where(IdentityProviderConfig.tenant_id.is_(None))
+            else:
+                query = query.where(IdentityProviderConfig.tenant_id == root_id)
         result = await db.execute(query)
         return list(result.scalars().all())
 
@@ -92,7 +114,10 @@ class OIDCConfigService:
 
         With multi-tenancy on, the exact ``(tenant_id, scope)`` slot is
         addressed (``tenant_id=None`` → the global config).  With the
-        switch off, the legacy single-config-per-scope lookup is used.
+        switch off, the ROOT tenant's ``(root_id, scope)`` slot is
+        addressed — never a legacy unfiltered/global lookup (tenancy
+        off = root only).  ``None`` when the root tenant is absent
+        (empty DB pre-seed).
         """
         _validate_scope(scope)
         query = select(IdentityProviderConfig).where(
@@ -106,6 +131,12 @@ class OIDCConfigService:
                 query = query.where(IdentityProviderConfig.tenant_id.is_(None))
             else:
                 query = query.where(IdentityProviderConfig.tenant_id == tenant_id)
+        else:
+            root_id = await _root_tenant_id(db)
+            if root_id is None:
+                # Empty DB pre-seed — no root slot exists yet.
+                return None
+            query = query.where(IdentityProviderConfig.tenant_id == root_id)
         result = await db.execute(query)
         return result.scalar_one_or_none()
 
@@ -145,8 +176,10 @@ class OIDCConfigService:
         Validates OIDC Discovery at the issuer URL before persisting.
         Rejects duplicate *provider_scope* entries — platform-wide when
         the tenancy switch is off, per ``(tenant_id, scope)`` slot when
-        on.  With the switch off, *tenant_id* is ignored (the config is
-        stored tenant-less, preserving single-tenant behaviour).
+        on.  With the switch off, *tenant_id* is ignored and the config
+        is written to the ROOT tenant's slot (the root tenant IS the
+        default tenant); when the root tenant is absent (empty DB
+        pre-seed), the row is stored tenant-less.
         *default_tenant_role* — the JIT role preset key for first OIDC
         sign-ins (FIX-20260930-075014); validated against the seeded
         presets.
@@ -155,21 +188,28 @@ class OIDCConfigService:
         _validate_provider_type(provider_type)
         _validate_default_tenant_role(default_tenant_role)
 
+        tenancy_on = await _multi_tenancy_on(db)
+
         # Reject duplicates occupying the same slot
-        if await _multi_tenancy_on(db):
+        if tenancy_on:
             existing = await self.get_by_scope(
                 db, provider_scope, tenant_id=tenant_id
             )
         else:
-            # Switch off: registry is platform-wide — no other row may
-            # hold this scope at all.
-            tenant_id = None
-            existing = await db.execute(
-                select(IdentityProviderConfig).where(
-                    IdentityProviderConfig.provider_scope == provider_scope
+            # Switch off: the ROOT tenant's slot is the only slot.
+            root_id = await _root_tenant_id(db)
+            tenant_id = root_id
+            existing = await self.get_by_scope(db, provider_scope)
+            if existing is None and root_id is None:
+                # Empty DB pre-seed — no root tenant yet; address the
+                # tenant-less slot so first-run seeding still works.
+                existing = await db.execute(
+                    select(IdentityProviderConfig).where(
+                        IdentityProviderConfig.provider_scope == provider_scope,
+                        IdentityProviderConfig.tenant_id.is_(None),
+                    )
                 )
-            )
-            existing = existing.scalar_one_or_none()
+                existing = existing.scalar_one_or_none()
         if existing is not None:
             raise OIDCConfigError(
                 f"A provider config already exists for scope '{provider_scope}'."
@@ -215,7 +255,7 @@ class OIDCConfigService:
         )
 
         # Update setup state sentinel (platform scope only)
-        if tenant_id is None:
+        if tenant_id is None or not tenancy_on:
             await _update_setup_state(db, provider_scope, configured=True)
 
         await db.flush()

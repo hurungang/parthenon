@@ -15,6 +15,13 @@ logger = logging.getLogger(__name__)
 
 settings = get_settings()
 
+#: Internal prefixes that are NOT data-plane (no tenant context applies).
+_INTERNAL_DATA_PLANE_EXEMPT_PREFIXES: tuple[str, ...] = (
+    "/api/v1/internal/certificates",
+    "/api/v1/internal/bootstrap",
+    "/api/v1/internal/auth",
+)
+
 # In the test environment every async test runs on its own event loop;
 # pooled asyncpg connections are loop-bound and a pooled connection from
 # a previous test's loop fails with "attached to a different loop".
@@ -74,6 +81,12 @@ async def _maybe_apply_request_tenant_scope(
     )
     from app.db.tenant_scoping import apply_tenant_scope, register_tenant_scope_listener
 
+    path = request.url.path
+    internal_data_plane = path.startswith("/api/v1/internal/") and not any(
+        path.startswith(prefix)
+        for prefix in _INTERNAL_DATA_PLANE_EXEMPT_PREFIXES
+    )
+
     context = get_tenant_context(request)
     if context.is_set and is_tenancy_enabled(request):
         # Phase 11: a resolved context alone no longer implies scoping —
@@ -85,7 +98,10 @@ async def _maybe_apply_request_tenant_scope(
         apply_tenant_scope(session, context.tenant_id, request)
         return
 
-    # Internal path: verify the signed tenant headers (verify-if-present).
+    # Internal path: verify the signed tenant headers.  Data-plane
+    # internal traffic is FAIL-CLOSED — absent headers are a hard 401
+    # (multi-tenancy on) or bind the root tenant (switch off); the
+    # silent "unscoped session" fallback is retired.
     from app.core.tenant_signature import (
         TenantSignatureError,
         verify_request_tenant_context,
@@ -101,7 +117,29 @@ async def _maybe_apply_request_tenant_scope(
             detail=f"Invalid tenant context headers: {exc}",
         )
     if internal_context is None:
-        return  # no tenant headers — single-tenant internal traffic
+        if not internal_data_plane:
+            return  # no tenant headers — single-tenant internal traffic
+        from app.services.tenancy.platform_settings_service import (
+            get_platform_settings_service,
+        )
+        from app.services.tenancy.root_tenant import get_root_tenant_id
+
+        if await get_platform_settings_service().is_multi_tenancy_enabled(session):
+            from fastapi import HTTPException
+
+            raise HTTPException(
+                status_code=401,
+                detail=(
+                    "Signed tenant context headers are required on internal "
+                    "data-plane endpoints"
+                ),
+            )
+        root_tenant_id = await get_root_tenant_id(session)
+        if root_tenant_id is None:
+            return  # pre-bootstrap: root tenant not provisioned yet
+        register_tenant_scope_listener()
+        apply_tenant_scope(session, root_tenant_id, request)
+        return
     register_tenant_scope_listener()
     apply_tenant_scope(session, internal_context.tenant_id, request)
 

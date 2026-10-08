@@ -14,6 +14,7 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
     func,
+    text,
 )
 from sqlalchemy.dialects.postgresql import JSON, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -190,10 +191,17 @@ class AgentTokenStatus(str, enum.Enum):
 
 
 class AgentRole(Base):
-    """A named permission set granting access to specific SOPs and/or Skills."""
+    """A named permission set granting access to specific SOPs and/or Skills.
+
+    Tenant ownership is mandatory; the NULL-tenant global name variant is
+    retired. NOT NULL on ``tenant_id`` is enforced at the database level
+    by migration ``b8c9d0e1f2a3``; the ORM column stays nullable for
+    legacy paths.
+    """
 
     __tablename__ = "agent_roles"
     __table_args__ = (
+        UniqueConstraint("tenant_id", "name", name="uq_agent_roles_tenant_name"),
         Index("ix_agent_roles_tenant_id", "tenant_id"),
     )
 
@@ -203,7 +211,7 @@ class AgentRole(Base):
     tenant_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("tenants.id", ondelete="SET NULL"), nullable=True
     )
-    name: Mapped[str] = mapped_column(String(200), nullable=False, unique=True)
+    name: Mapped[str] = mapped_column(String(200), nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
@@ -376,10 +384,17 @@ class AgentRoleMcpSession(Base):
 
 
 class AgentIdentity(Base):
-    """A first-class OIDC principal representing an agent's credentials in the identity provider."""
+    """A first-class OIDC principal representing an agent's credentials in the identity provider.
+
+    Tenant ownership is mandatory; the NULL-tenant global name variant is
+    retired. NOT NULL on ``tenant_id`` is enforced at the database level
+    by migration ``b8c9d0e1f2a3``; the ORM column stays nullable for
+    legacy paths.
+    """
 
     __tablename__ = "agent_identities"
     __table_args__ = (
+        UniqueConstraint("tenant_id", "name", name="uq_agent_identities_tenant_name"),
         Index("ix_agent_identities_tenant_id", "tenant_id"),
     )
 
@@ -389,7 +404,7 @@ class AgentIdentity(Base):
     tenant_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("tenants.id", ondelete="SET NULL"), nullable=True
     )
-    name: Mapped[str] = mapped_column(String(200), nullable=False, unique=True)
+    name: Mapped[str] = mapped_column(String(200), nullable=False)
     identity_type: Mapped[AgentIdentityType] = mapped_column(
         Enum(AgentIdentityType, name="agent_identity_type_enum"), nullable=False
     )
@@ -444,10 +459,17 @@ class AgentIdentity(Base):
 
 
 class ModelConfig(Base):
-    """LLM provider configuration: credentials and endpoint for a specific provider."""
+    """LLM provider configuration: credentials and endpoint for a specific provider.
+
+    Tenant ownership is mandatory; the NULL-tenant global display-name
+    variant is retired. NOT NULL on ``tenant_id`` is enforced at the
+    database level by migration ``b8c9d0e1f2a3``; the ORM column stays
+    nullable for legacy paths.
+    """
 
     __tablename__ = "model_configs"
     __table_args__ = (
+        UniqueConstraint("tenant_id", "display_name", name="uq_model_configs_tenant_display_name"),
         Index("ix_model_configs_tenant_id", "tenant_id"),
     )
 
@@ -457,7 +479,7 @@ class ModelConfig(Base):
     tenant_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("tenants.id", ondelete="SET NULL"), nullable=True
     )
-    display_name: Mapped[str] = mapped_column(String(200), nullable=False, unique=True)
+    display_name: Mapped[str] = mapped_column(String(200), nullable=False)
     provider_type: Mapped[ModelProvider] = mapped_column(
         Enum(ModelProvider, name="model_provider_enum"), nullable=False
     )
@@ -494,10 +516,18 @@ class ModelConfig(Base):
 
 
 class AgentType(Base):
-    """Definition of an agent: role, identity, model binding, and input/output configuration."""
+    """Definition of an agent: role, identity, model binding, and input/output configuration.
+
+    Tenant ownership is mandatory; bindings (skills, SOPs, output data
+    type) resolve within the same tenant only, and A2A delegation names
+    resolve by ``(tenant, name)``. NOT NULL on ``tenant_id`` is enforced
+    at the database level by migration ``b8c9d0e1f2a3``; the ORM column
+    stays nullable for legacy paths.
+    """
 
     __tablename__ = "agent_types"
     __table_args__ = (
+        UniqueConstraint("tenant_id", "name", name="uq_agent_types_tenant_name"),
         Index("ix_agent_types_tenant_id", "tenant_id"),
     )
 
@@ -507,7 +537,7 @@ class AgentType(Base):
     tenant_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("tenants.id", ondelete="SET NULL"), nullable=True
     )
-    name: Mapped[str] = mapped_column(String(200), nullable=False, unique=True)
+    name: Mapped[str] = mapped_column(String(200), nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     # Identity and role

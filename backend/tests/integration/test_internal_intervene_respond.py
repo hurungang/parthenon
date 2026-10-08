@@ -101,6 +101,9 @@ async def test_engine():
     )
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+    from tests.integration._strict_tenant_utils import seed_root_tenant
+
+    await seed_root_tenant(engine)
     yield engine
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.drop_all)
