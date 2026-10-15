@@ -98,3 +98,20 @@ Test data conventions: timestamp-suffixed identifiable names, per-test cleanup v
 3. Frontend Vitest with JSON reporter (`npx vitest run --reporter=json --outputFile=vitest_results.json`)
 4. E2E: `single-tenant-regression.spec.ts` first (canary), then mocked tenant suites, then real-backend variants last
 5. Manual Phase 9.8 security hardening review against `top_priority_rules` before sign-off
+
+---
+
+## 6. strict-tenant-isolation Update (2026-10)
+
+Change `strict-tenant-isolation` retired the NULL-tenant shared slot and made tenant containment strict across the data plane. Covered areas: NULL→root adoption migration with NOT NULL enforcement; fail-closed signed `X-Internal-Tenant-*` headers on all internal data-plane routers; system tools (query_result/save_data/get_data/get_output) and notification dispatch strictly tenant-stamped and tenant-filtered; per-tenant MCP slug scoping.
+
+Test files added (all verified present, all paths relative to repo root):
+
+- `backend/tests/integration/_strict_tenant_utils.py` — shared parthenon_test schema/fixture helpers (two-tenant builder, agent type/job builders, NULL-row counters)
+- `backend/tests/integration/test_multitenant_auth_chain.py` — per-tenant OIDC provider isolation, tenant-claim binding, signed-header acceptance/fail-closed 401/stale/tampered/mismatched rejections, tenancy-off root binding
+- `backend/tests/integration/test_internal_tenant_header_failclosed.py` — 401 on missing/invalid/stale/tampered/partial/mismatched signed headers on every internal data-plane router; root binding when multi-tenancy off; structural enforcement check
+- `backend/tests/integration/test_system_tools_tenant_containment.py` — cross-tenant negatives with identical names for query_result/save_data/get_data/get_output/outputs; DB-level tenant stamping; service-level defense in depth
+- `backend/tests/integration/test_notification_tenant_dispatch.py` — per-tenant group resolution/dispatch, shared-slot retirement, fail-closed group miss
+- `backend/tests/db/test_tenant_adoption_migration.py` — runs the real Alembic chain from scratch on parthenon_test; `information_schema` NOT NULL verification, retired NULL-variant index checks, DB-level negative inserts, upgrade-twice idempotency, downgrade→replay
+
+E2E: N/A — backend-only change, no UI changes; the real-migration-chain integration suite provides the real-backend coverage.

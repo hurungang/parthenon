@@ -21,4 +21,4 @@ scheduler_check_interval_seconds: 60
 scheduler_enabled: true
 secret_key: change-me-in-production
 test_service_bootstrap_key: null
-workflow_generation_model_id: deepseek-v4-flash
+workflow_generation_model_id: deepseek-flash

@@ -41,9 +41,11 @@ class _CachedProvider:
 
 
 # Cache key: (tenant_id or None, provider_scope).
-# None tenant_id = the SHARED provider — the fallback slot for any
-# tenant without its own config (FIX-20260929-221449).  Tenancy OFF
-# resolves the ROOT tenant's (root_id, scope) slot instead (root only).
+# Tenancy ON: the tenant's OWN (tenant, scope) slot only — there is no
+# shared fallback slot (retired).  Tenancy OFF resolves the ROOT
+# tenant's (root_id, scope) slot instead (root only); the tenant-less
+# (None, scope) key is used only for the empty-DB pre-seed (no root
+# tenant yet).
 _CacheKey = tuple
 
 
@@ -51,27 +53,18 @@ class OIDCProviderRegistry:
     """In-memory registry of active OIDC provider configurations.
 
     Providers are cached by ``(tenant_id, scope)`` when multi-tenancy is
-    on — per-tenant credentials take precedence inside their tenant —
-    and by the ROOT tenant's ``(root_id, scope)`` slot when it is off
-    (tenancy off = root only).
+    on — each tenant resolves ONLY its own slot — and by the ROOT
+    tenant's ``(root_id, scope)`` slot when it is off (tenancy off =
+    root only).
 
-    SHARED providers (FIX-20260929-221449): a tenant-less (NULL
-    ``tenant_id``) config is the SHARED provider — usable by the platform
-    AND by any tenant whose login context resolves to it.  ROOT-slot
-    fallback (FIX-20260930-075014): when neither the own nor the shared
-    slot holds a config, the ROOT tenant's (``root_id``, scope) slot —
-    the ADOPTED PLATFORM provider — resolves, for BOTH tenant-scoped and
-    tenant-less lookups ("one provider serves the platform and all
-    tenants").  The root tenant id is resolved with the same helper the
-    adoption flow uses (``Tenant.is_system_tenant``) and cached with the
-    same invalidation hooks as the provider map (initialize/reload).
+    Every tenant uses ONLY its own identity provider.  There is NO
+    shared provider and NO candidate chain: a tenant without its own
+    enabled provider for a scope simply has no OIDC login for that
+    scope.  NULL-tenant (shared) rows are ignored on load — they are
+    inert legacy data.
 
-    Full resolution order (multi-tenancy ON):
-
-        own (tenant, scope) → shared (None, scope) → system (root_id, scope)
-
-    A tenant with none of the three resolves ``None`` — fail-closed
-    (sign-in not configured).
+    Full resolution (multi-tenancy ON): the single own
+    ``(tenant, scope)`` slot, or nothing (fail-closed).
 
     Usage::
 
@@ -103,20 +96,33 @@ class OIDCProviderRegistry:
         """Update the tenancy mode (call from the settings toggle path)."""
         self._multi_tenancy_enabled = bool(enabled)
 
-    def _key(self, scope: str, tenant_id: Any = None) -> tuple:
-        """Cache key for a lookup: per-tenant only when tenancy is on.
+    def _default_key(self, scope: str) -> tuple:
+        """Cache key of the DEFAULT (root) provider slot for *scope*.
 
         Tenancy OFF: the ROOT tenant's ``(root_id, scope)`` slot — the
         root tenant IS the default tenant.  When the root tenant is
         absent (empty DB pre-seed), the tenant-less ``(None, scope)``
         slot is the only one that can exist.
         """
+        if self._root_tenant_id is not None:
+            return (self._root_tenant_id, scope)
+        return (None, scope)
+
+    def _key(self, scope: str, tenant_id: Any = None) -> tuple:
+        """Cache key for a lookup: per-tenant only when tenancy is on.
+
+        Tenancy OFF the caller must use :meth:`get_default_provider` —
+        ``_resolve_cached`` rejects tenant-addressed tenancy-off lookups
+        before this method is reached, so ``tenant_id`` is irrelevant
+        here when the switch is off (the default key is returned).
+        """
         if not self._multi_tenancy_enabled:
-            if self._root_tenant_id is not None:
-                return (self._root_tenant_id, scope)
-            return (None, scope)
+            return self._default_key(scope)
         if tenant_id is None:
-            return (None, scope)
+            # No tenant resolved → no slot addressed; use a key that can
+            # never be present (distinct per call) so the lookup is a
+            # guaranteed miss.
+            return (object(), scope)
         return (str(tenant_id), scope)
 
     def _resolve_cached(
@@ -125,45 +131,27 @@ class OIDCProviderRegistry:
         tenant_id: Any = None,
         is_system_tenant: bool = False,
     ) -> Optional[_CachedProvider]:
-        """Resolve the cached provider for (scope, tenant) — shared- and
-        root-slot aware.
+        """Resolve the cached provider for (scope, tenant) — OWN slot only.
 
-        Resolution order (multi-tenancy ON; FIX-20260930-075014):
+        Multi-tenancy ON: the tenant's OWN ``(tenant, scope)`` slot ONLY.
+        There is no shared or root fallback chain — a tenant without its
+        own provider resolves ``None`` (fail-closed).  Tenant-less
+        lookups (``tenant_id=None``) resolve nothing.
+        ``is_system_tenant`` is retained for API compatibility.
 
-        1. the tenant's OWN ``(tenant, scope)`` slot (per-tenant
-           precedence — a tenant's own config always wins);
-        2. the SHARED tenant-less ``(None, scope)`` slot;
-        3. the ROOT tenant's ``(root_id, scope)`` slot — the adopted
-           platform provider serving the platform and every tenant
-           without own/shared config.
-
-        Tenant-less lookups (``tenant_id=None`` — platform surfaces,
-        ``/auth/tenant-memberships``) resolve shared → system.
-        ``is_system_tenant`` is retained for API compatibility — the
-        fallback no longer depends on it.
-
-        Tenancy OFF: the ROOT tenant's ``(root_id, scope)`` slot only
-        (``_key`` resolves there) — NULL-tenant and other tenants'
-        rows never resolve (tenancy off = root only).
+        Tenancy OFF: tenant-addressed lookups are REJECTED — the ONLY
+        tenancy-off lookup is :meth:`get_default_provider` (the ROOT
+        slot).  NULL-tenant and other tenants' rows never resolve
+        (tenancy off = root only, explicitly).
         """
+        if not self._multi_tenancy_enabled and tenant_id is not None:
+            raise ValueError(
+                "tenancy is disabled: use get_default_provider(scope) — "
+                "a tenant-addressed provider lookup is not valid when "
+                "multi-tenancy is off (the root tenant is THE default "
+                "tenant)"
+            )
         cached = self._providers.get(self._key(scope, tenant_id))
-        if cached is not None:
-            return cached
-        if not self._multi_tenancy_enabled:
-            return None  # tenancy OFF: ROOT-tenant slot only
-        tenant_key = str(tenant_id) if tenant_id is not None else None
-        if tenant_key is not None:
-            # 2. shared slot
-            cached = self._providers.get((None, scope))
-            if cached is not None:
-                return cached
-        # 3. root-tenant slot (own slot already tried when tenant IS
-        # the root tenant — skip the redundant lookup then)
-        if (
-            self._root_tenant_id
-            and self._root_tenant_id != tenant_key
-        ):
-            cached = self._providers.get((self._root_tenant_id, scope))
         return cached
 
     async def _load_root_tenant_id(self, db: AsyncSession) -> None:
@@ -200,6 +188,15 @@ class OIDCProviderRegistry:
         )
         rows = result.scalars().all()
         self._providers.clear()
+        # NULL-tenant (shared) rows are RETIRED — never loaded.  They
+        # remain inert in the database (no cleanup migration applied).
+        null_tenant_rows = [r for r in rows if r.tenant_id is None]
+        if null_tenant_rows:
+            logger.warning(
+                "OIDCProviderRegistry: ignoring %d legacy NULL-tenant "
+                "(shared-slot) provider row(s) — the shared slot is retired",
+                len(null_tenant_rows),
+            )
         # Tenancy OFF: only the ROOT tenant's rows populate the map —
         # the root tenant IS the default tenant; NULL-tenant (shared)
         # and other tenants' rows never resolve.  When no root tenant
@@ -207,13 +204,14 @@ class OIDCProviderRegistry:
         # populate the (None, scope) slot, which ``_key`` resolves.
         off_tenant_key: Optional[str] = self._root_tenant_id
         for row in rows:
-            if self._multi_tenancy_enabled:
-                tenant_key: Optional[str] = (
-                    str(row.tenant_id) if row.tenant_id is not None else None
-                )
+            if row.tenant_id is None:
+                if not (not self._multi_tenancy_enabled and off_tenant_key is None):
+                    continue
+                tenant_key: Optional[str] = None
+            elif self._multi_tenancy_enabled:
+                tenant_key = str(row.tenant_id)
             else:
-                row_key = str(row.tenant_id) if row.tenant_id is not None else None
-                if row_key != off_tenant_key:
+                if str(row.tenant_id) != off_tenant_key:
                     continue
                 tenant_key = off_tenant_key
             self._providers[(tenant_key, row.provider_scope)] = _CachedProvider(
@@ -255,17 +253,19 @@ class OIDCProviderRegistry:
                 "OIDCProviderRegistry: removed provider scope=%s", scope
             )
         # Tenancy OFF: only the ROOT tenant's rows (same rule as
-        # ``initialize``); tenant-less seed rows only when no root
-        # tenant exists yet.
+        # ``initialize``); NULL-tenant (shared) rows are RETIRED and
+        # never loaded, except the empty-DB pre-seed case (no root
+        # tenant yet) where tenant-less seed rows are the only ones.
         off_tenant_key: Optional[str] = self._root_tenant_id
         for row in rows:
-            if self._multi_tenancy_enabled:
-                tenant_key: Optional[str] = (
-                    str(row.tenant_id) if row.tenant_id is not None else None
-                )
+            if row.tenant_id is None:
+                if not (not self._multi_tenancy_enabled and off_tenant_key is None):
+                    continue
+                tenant_key: Optional[str] = None
+            elif self._multi_tenancy_enabled:
+                tenant_key = str(row.tenant_id)
             else:
-                row_key = str(row.tenant_id) if row.tenant_id is not None else None
-                if row_key != off_tenant_key:
+                if str(row.tenant_id) != off_tenant_key:
                     continue
                 tenant_key = off_tenant_key
             self._providers[(tenant_key, scope)] = _CachedProvider(
@@ -279,6 +279,21 @@ class OIDCProviderRegistry:
             )
 
     # ── Provider resolution ───────────────────────────────────────────────
+
+    def get_default_provider(
+        self, scope: str
+    ) -> Optional[IdentityProviderConfig]:
+        """Return the DEFAULT (root-tenant) provider config for *scope*.
+
+        THE tenancy-off lookup: with the switch off the root workspace
+        IS the default tenant, so the ROOT tenant's ``(root_id, scope)``
+        slot is the only provider that exists.  When the root tenant
+        does not exist yet (empty-DB pre-seed), the tenant-less
+        ``(None, scope)`` seed slot resolves.  Takes no ``tenant_id`` —
+        there is nothing to address when tenancy is off.
+        """
+        cached = self._providers.get(self._default_key(scope))
+        return cached.config if cached else None
 
     def get_user_provider(
         self, tenant_id: Any = None, is_system_tenant: bool = False
@@ -300,11 +315,24 @@ class OIDCProviderRegistry:
     ) -> Optional[IdentityProviderConfig]:
         """Return the active provider config for the given scope, or ``None``.
 
-        With multi-tenancy on and a resolved tenant, the tenant's OWN
-        provider wins and the SHARED (tenant-less) provider is the
-        fallback; with neither, the result is ``None`` — fail-closed
-        (sign-in not configured).
+        With multi-tenancy on and a resolved tenant, ONLY the tenant's
+        OWN provider resolves; with no tenant or no own provider, the
+        result is ``None`` — fail-closed (sign-in not configured).
+
+        With multi-tenancy OFF, ``tenant_id`` MUST be ``None``: the
+        lookup resolves the DEFAULT (root) provider via
+        :meth:`get_default_provider`.  Passing a ``tenant_id`` raises
+        ``ValueError`` — under tenancy off there is exactly one tenant
+        (root) and exactly one lookup; there is no hidden fallback.
         """
+        if not self._multi_tenancy_enabled:
+            if tenant_id is not None:
+                raise ValueError(
+                    "tenancy is disabled: use get_default_provider(scope) — "
+                    "get_provider(scope, tenant_id) is not a valid "
+                    "tenancy-off lookup"
+                )
+            return self.get_default_provider(scope)
         cached = self._resolve_cached(scope, tenant_id, is_system_tenant)
         return cached.config if cached else None
 
@@ -314,22 +342,18 @@ class OIDCProviderRegistry:
         tenant_id: Any = None,
         is_system_tenant: bool = False,
     ) -> list[IdentityProviderConfig]:
-        """Return the ordered, deduped candidate providers for (scope,
-        tenant) — the full resolution chain, not just the first match
-        (FIX-20261002-110000).
+        """Return the candidate providers for (scope, tenant) — a SINGLE
+        candidate (the own slot), or an empty list.
 
-        Multi-tenancy ON — own (tenant, scope) slot (when a tenant
-        context is resolved) → shared (None, scope) slot → root
-        tenant's (root_id, scope) slot.  Tenant-less lookups: shared →
-        root.  Multi-tenancy OFF: the single tenant-less (legacy
-        global) slot only.  Missing slots are excluded; the chain may
-        be empty (fail-closed).
+        Multi-tenancy ON: the tenant's OWN ``(tenant, scope)`` slot only
+        (when a tenant context is resolved).  There is no shared or root
+        fallback — a tenant without its own provider has no candidates
+        (fail-closed).  Tenant-less lookups: empty.
 
-        Token validation (``auth._try_oidc_token``) iterates these
-        candidates and accepts the first that validates — a root-slot
-        (adopted platform realm) token must validate on tenant-less
-        paths even when the shared slot holds a DIFFERENT provider
-        whose JWKS shadowed the root slot under first-match resolution.
+        Multi-tenancy OFF: ``tenant_id`` MUST be ``None``; the single
+        DEFAULT (root-tenant) candidate is returned.  A tenant-addressed
+        tenancy-off call raises ``ValueError`` — use
+        :meth:`get_default_provider` instead.
         """
         candidates: list[IdentityProviderConfig] = []
         seen: set[tuple] = set()
@@ -343,15 +367,45 @@ class OIDCProviderRegistry:
                 candidates.append(cached.config)
 
         if not self._multi_tenancy_enabled:
-            # tenancy OFF: ROOT-tenant slot only (tenant-less fallback
-            # when no root tenant exists yet)
-            _add(self._key(scope, tenant_id))
+            if tenant_id is not None:
+                raise ValueError(
+                    "tenancy is disabled: use get_default_provider(scope) — "
+                    "get_provider_candidates(scope, tenant_id) is not a "
+                    "valid tenancy-off lookup"
+                )
+            # tenancy OFF: the DEFAULT (root-tenant) slot only (tenant-less
+            # seed slot when no root tenant exists yet)
+            _add(self._default_key(scope))
             return candidates
         if tenant_id is not None:
-            _add((str(tenant_id), scope))  # 1. own slot
-        _add((None, scope))  # 2. shared slot (tenant-less: first candidate)
-        if self._root_tenant_id:  # 3. root-tenant slot
-            _add((str(self._root_tenant_id), scope))
+            _add((str(tenant_id), scope))  # own slot only — no chain
+        return candidates
+
+    def get_bootstrap_candidates(
+        self, scope: str
+    ) -> list[IdentityProviderConfig]:
+        """Return ALL loaded tenant providers for a scope — login-bootstrap
+        candidates for requests with NO resolved tenant context yet
+        (e.g. ``/auth/tenant-memberships`` before a workspace is chosen).
+
+        Strict containment is unaffected: validating a token against all
+        providers only proves WHICH tenant realm issued it (issuers are
+        distinct); authorization still derives from the token subject's
+        memberships, never from the provider slot.  Tenant-less legacy
+        rows are never included (the shared slot is retired).
+        """
+        if not self._multi_tenancy_enabled:
+            default = self.get_default_provider(scope)
+            return [default] if default is not None else []
+        candidates: list[IdentityProviderConfig] = []
+        seen: set[str] = set()
+        for (tenant_key, provider_scope), cached in self._providers.items():
+            if provider_scope != scope or tenant_key is None:
+                continue
+            if tenant_key in seen:
+                continue
+            seen.add(tenant_key)
+            candidates.append(cached.config)
         return candidates
 
     def get_decrypted_secret_for(

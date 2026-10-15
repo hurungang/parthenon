@@ -135,8 +135,9 @@ async def hub_client(test_engine):
 
 
 @pytest_asyncio.fixture
-async def decision_tool_in_tenant_a(hub_client):
-    """An enabled provider + one decision tool in tenant A."""
+async def decision_tool_in_tenant_a(hub_client, test_engine):
+    """An enabled provider + one decision tool in tenant A (READY — both
+    data types attached, per the readiness gate)."""
     resp = await hub_client.post(
         PROVIDERS_URL,
         json={
@@ -149,11 +150,39 @@ async def decision_tool_in_tenant_a(hub_client):
         headers={"x-test-tenant": str(TENANT_A)},
     )
     assert resp.status_code == 201, resp.text
+
+    from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+
+    from app.db.models.agent_data_type import AgentDataType
+
+    SessionLocal = async_sessionmaker(
+        bind=test_engine, class_=AsyncSession, expire_on_commit=False
+    )
+    async with SessionLocal() as session:
+        suffix = uuid.uuid4().hex[:6]
+        input_type = AgentDataType(
+            tenant_id=TENANT_A,
+            name=f"tool_a-input-{suffix}",
+            slug=f"tool_a-input-{suffix}",
+            fields=[{"name": "situation", "type": "string"}],
+        )
+        output_type = AgentDataType(
+            tenant_id=TENANT_A,
+            name=f"tool_a-output-{suffix}",
+            slug=f"tool_a-output-{suffix}",
+            fields=[{"name": "decision", "type": "string"}],
+        )
+        session.add_all([input_type, output_type])
+        await session.commit()
+        input_id, output_id = str(input_type.id), str(output_type.id)
+
     created = await hub_client.post(
         DECISION_TOOLS_URL,
         json={
             "name": "tool_a",
             "purpose": "Reserved-slug MCP exposure test tool",
+            "input_data_type_id": input_id,
+            "output_data_type_id": output_id,
             "questions": [
                 {
                     "question_key": "approve",

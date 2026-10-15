@@ -18,8 +18,14 @@ import {
 import AddIcon from '@mui/icons-material/Add'
 import DeleteIcon from '@mui/icons-material/Delete'
 import PermissionDeniedAlert from '../../components/permissions/PermissionDeniedAlert'
+import { EnumValuesEditor } from './EnumValuesEditor'
 import { useCreateDataType, useUpdateDataType } from '../../hooks/useDataTypes'
-import type { AgentDataType, AgentDataTypeField, CreateAndAssignResult, DataTypeFieldType } from '../../types'
+import type {
+  AgentDataType,
+  AgentDataTypeField,
+  CreateAndAssignResult,
+  DataTypeFieldType,
+} from '../../types'
 
 interface DataTypeFormDialogProps {
   open: boolean
@@ -270,24 +276,11 @@ export function DataTypeFormDialog({
                   sx={{ minWidth: 200, flex: 2 }}
                 />
 
-                {/* Enum values (conditional) */}
+                {/* Enum values (conditional): nested sub-block under the field row */}
                 {field.type === 'enum' && (
-                  <TextField
-                    label={t('admin.dataTypes.enumValues')}
-                    value={(field.enum_values ?? []).join(', ')}
-                    onChange={(e) =>
-                      handleFieldChange(
-                        index,
-                        'enum_values',
-                        e.target.value
-                          .split(',')
-                          .map((v) => v.trim())
-                          .filter(Boolean),
-                      )
-                    }
-                    size="small"
-                    placeholder="val1, val2, val3"
-                    sx={{ minWidth: 180, flex: 1 }}
+                  <EnumValuesEditor
+                    values={field.enum_values}
+                    onChange={(vals) => handleFieldChange(index, 'enum_values', vals)}
                   />
                 )}
 

@@ -9,7 +9,7 @@ import type { AvailableModel } from '../components/agents/AvailableModel'
  * so callers (e.g. AddGuardrailForm) can post the `(config_id, model_name)`
  * pair to the per-guardrail API.
  */
-export function useAvailableModels() {
+export function useAvailableModels(enabled = true) {
   return useQuery<AvailableModel[]>({
     queryKey: ['agents', 'model-configs', 'available-models'],
     queryFn: async () => {
@@ -29,5 +29,6 @@ export function useAvailableModels() {
       }
       return models
     },
+    enabled,
   })
 }

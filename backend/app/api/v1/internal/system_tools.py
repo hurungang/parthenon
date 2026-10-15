@@ -988,6 +988,9 @@ class DecisionToolInfo(BaseModel):
     description: str | None
     input_schema: dict[str, Any] | None
     enabled: bool
+    provider_type: str | None = None
+    provider_display_name: str | None = None
+    model_name: str | None = None
 
 
 class DecisionToolListResponse(BaseModel):
@@ -1015,26 +1018,54 @@ async def list_decision_tools_internal(
     credentials — this endpoint returns names, generated descriptions, and
     input schemas only.
     """
+    from app.services.system_one.decision_model_availability_service import (
+        DecisionModelCatalogueService,
+    )
     from app.services.system_one.decision_tool_service import (
         DecisionToolService,
         build_input_schema,
     )
 
-    tenant_id = tenant_ctx.tenant_id if tenant_ctx.is_set else _parse_uuid(body.tenant_id)
+    # Signed tenant context is authoritative (see execute_decision_tool_internal).
+    tenant_id = tenant_ctx.tenant_id
     tools = await DecisionToolService().list(db, tenant_id)
-    return DecisionToolListResponse(
-        tools=[
+    catalogue = DecisionModelCatalogueService()
+    identity: dict[str, dict] = {}
+    for t in tools:
+        if t.decision_model_availability_id is None:
+            continue
+        try:
+            resolved = await catalogue.resolve_selection(
+                db, t.decision_model_availability_id, tenant_id
+            )
+        except Exception:
+            continue
+        identity[str(t.id)] = {
+            "provider_type": resolved.provider_type.value,
+            "provider_display_name": resolved.provider_display_name,
+            "model_name": resolved.model_name,
+        }
+    entries = []
+    for t in tools:
+        if not t.enabled:
+            continue
+        info = identity.get(str(t.id), {})
+        model_name = info.get("model_name")
+        if model_name is None:
+            model_name = t.provider_model  # legacy free-text fallback
+        entries.append(
             DecisionToolInfo(
                 id=str(t.id),
                 name=t.name,
                 description=t.description,
                 input_schema=build_input_schema(t),
                 enabled=t.enabled,
+                provider_type=info.get("provider_type"),
+                provider_display_name=info.get("provider_display_name"),
+                model_name=model_name,
             )
-            for t in tools
-            if t.enabled
-        ]
-    )
+        )
+    return DecisionToolListResponse(tools=entries)
 
 
 def _parse_uuid(raw: str | None) -> uuid.UUID | None:
@@ -1062,18 +1093,42 @@ async def execute_decision_tool_internal(
         DecisionExecutionEngine,
         DecisionExecutionError,
     )
+    from app.services.system_one.decision_tool_service import (
+        is_decision_tool_ready,
+        unavailable_tool_message,
+    )
 
+    # Signed tenant context is authoritative (tenant containment). It is
+    # ALWAYS bound here: require_internal_tenant_context fails closed —
+    # verified signed headers, or the ROOT tenant in single-tenant mode.
+    # body.tenant_id (legacy CH→CC field, no longer sent) is only a
+    # cross-check fallback and is never authoritative.
+    bound_tenant_id = tenant_ctx.tenant_id
     logger.info(
         "Decision tool execution requested for '%s' (session %s, tenant %s)",
         body.tool_name,
         body.session_id,
-        body.tenant_id,
+        bound_tenant_id,
     )
     try:
         engine = DecisionExecutionEngine()
-        # Signed tenant context is authoritative (tenant containment).
-        tenant_id = tenant_ctx.tenant_id if tenant_ctx.is_set else _parse_uuid(body.tenant_id)
+        tenant_id = bound_tenant_id
         tool = await engine.resolve_tool(db, body.tool_name, tenant_id)
+
+        # Enabled-but-unready tool (pre-gate rows with NULL input/output
+        # data types): do NOT run the engine (no model inference, no
+        # persisted result). Return the actionable error IN-BAND (HTTP
+        # 200, like validation errors) so CH/AR surface it to the agent
+        # instead of retrying against a 5xx.
+        if not is_decision_tool_ready(tool):
+            logger.info(
+                "decision tool '%s' called but not ready: missing "
+                "input/output data type configuration",
+                body.tool_name,
+            )
+            return SystemToolResponse(
+                result={"error": unavailable_tool_message(tool.name)}
+            )
 
         conversation_session_id = _parse_uuid(body.conversation_session_id)
         decision_result = await engine.execute(
@@ -1093,6 +1148,7 @@ async def execute_decision_tool_internal(
                 "answers": (decision_result.answers or {}).get("answers", {}),
                 "input_state_snapshot": decision_result.input_state_snapshot,
                 "provider_model": decision_result.provider_model,
+                "provider": (decision_result.answers or {}).get("provider"),
                 "error_message": decision_result.error_message,
                 "created_at": decision_result.created_at.isoformat()
                 if decision_result.created_at

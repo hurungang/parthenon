@@ -108,6 +108,18 @@ Practices introduced by the `multi-tenant-support` change, applicable to any fut
 - **Environmental-failure classification**: when a suite run reports failures, distinguish real defects from environmental contamination — e.g. stale dev services reachable during the run convert service-dependent skips into live calls against outdated binaries. Re-run with the dependent service URLs unreachable to restore skip semantics before declaring pass/fail (documented in the multi-tenancy Phase 10 verification).
 - **Default-off canary ordering**: for changes behind a platform-mode switch, run the switch-off regression suite FIRST (canary), then the feature suites, then the gated real-backend variants last.
 
+### Strict Tenant Isolation (added by `strict-tenant-isolation`)
+
+Multi-tenancy isolation is a **first-class testing dimension** for every change that touches tenant-scoped data or internal service traffic — not an afterthought. Practices introduced by the `strict-tenant-isolation` change, on top of the base practices above:
+
+- **Dual-mode matrix is mandatory**: every critical isolation scenario is run twice — multi-tenancy enabled (strict per-tenant) and disabled (everything resolves to the root tenant, behavior unchanged byte-for-byte).
+- **Identical names across tenants**: negative tests must use the *same* wire names (`server____tool`, `agent____<slug>`, data type slugs, recipient group names) in tenants A and B — identical names maximize collision surface and prove `(tenant, name)`-qualified resolution; different names alone prove nothing.
+- **Fail-closed internal endpoints**: every `/api/v1/internal/*` data-plane router must reject missing/invalid/stale/tampered/mismatched signed `X-Internal-Tenant-*` headers with 401 *before any handler or DB access*; when multi-tenancy is disabled, headerless internal calls bind the root tenant instead of failing. A structural test asserts every data-plane router enforces `require_internal_tenant_context`.
+- **Real-migration-chain replay**: tenant isolation changes run the real Alembic chain from scratch on `parthenon_test` (not just ORM metadata), verifying `information_schema` NOT NULL / unique constraints and negative DB-level inserts, plus upgrade-twice idempotency and downgrade→replay. Reference: `backend/tests/db/test_tenant_adoption_migration.py`.
+- **DB-level stamping proof**: tenant stamping of writes (`save_data`, delegated jobs, tool sync) is asserted by querying the database directly, not just via API responses.
+- **Forwarded-header hygiene**: AR resolves the tenant once per run and stamps signed headers on every downstream internal call; tests assert verbatim forwarding, no contextvar bleed between concurrent runs, and scheduler NULL-tenant hard-skip.
+- **Backend-only changes still get real-backend coverage**: when a change has no UI surface, the E2E layer is N/A — the real-Alembic-chain integration suite replaces the real-backend E2E canary (it catches unapplied-migration failures the same way).
+
 Refer to `test-plans/multi-tenancy-test-plan.md` for the full coverage map and test file references.
 
 ## Critical Quality Gates

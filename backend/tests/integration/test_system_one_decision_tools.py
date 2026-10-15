@@ -34,6 +34,7 @@ from app.core.resource_types import (
     RT_SYSTEM_DECISION_TOOLS,
     RT_SYSTEM_SYSTEM_ONE,
 )
+from app.db.models.agent_data_type import AgentDataType
 from app.db.models.decision_tools import DecisionTool
 from app.db.models.skills import Skill, SkillToolBinding
 from app.db.session import get_db
@@ -73,9 +74,12 @@ def _allow_all():
 VALID_TOOL = {
     "name": "approve_loan",
     "purpose": "Approve or reject small loan applications",
+    # Readiness gate: enabled tools require input AND output data types.
+    # CRUD tests post this DISABLED draft; use the ``ready_tool`` fixture
+    # for tests that need an enabled, usable tool.
+    "enabled": False,
     "state_preset": {
         "amount": {"source": "input", "key": "amount"},
-        "history": {"source": "agent_data", "key": "customer_history"},
     },
     "act_threshold": 0.9,
     "confirm_threshold": 0.7,
@@ -554,7 +558,7 @@ class TestAuthoringGate:
     async def test_create_without_provider_422(self, tools_client):
         resp = await tools_client.post(TOOLS_URL, json=VALID_TOOL)
         assert resp.status_code == 422
-        assert "No System One model" in str(resp.json()["detail"])
+        assert "No Decision Model provider is configured" in str(resp.json()["detail"])
 
     async def test_create_with_provider_succeeds(self, tools_client, provider_configured):
         resp = await tools_client.post(TOOLS_URL, json=VALID_TOOL)
@@ -567,6 +571,48 @@ class TestAuthoringGate:
         resp = await tools_client.post(TOOLS_URL, json=VALID_TOOL)
         assert resp.status_code == 422
 
+    async def test_tool_response_serializes_decision_model_availability_id(
+        self, tools_client, provider_configured
+    ):
+        """FIX-20261014-004500 contract: enabled-models listing hands out a
+        stable availability_id and the tool list/detail responses serialize
+        it back under the exact `decision_model_availability_id` name the
+        editor form pre-fills from (plus the enriched model identity)."""
+        resp = await tools_client.get(f"{TOOLS_URL}/enabled-models")
+        assert resp.status_code == 200
+        enabled = resp.json()
+        assert len(enabled) >= 1
+        entry = next(
+            m for m in enabled if m["provider_id"] == provider_configured
+        )
+        availability_id = entry["availability_id"]
+        assert availability_id, "enabled-models entries must carry availability_id"
+
+        tool_name = f"model-contract-{uuid.uuid4().hex[:8]}"
+        created = await tools_client.post(
+            TOOLS_URL,
+            json={
+                **VALID_TOOL,
+                "name": tool_name,
+                "decision_model_availability_id": availability_id,
+            },
+        )
+        assert created.status_code == 201, created.text
+        body = created.json()
+        assert body["decision_model_availability_id"] == availability_id
+        assert body["model_name"] == entry["model_name"]
+
+        listed = await tools_client.get(TOOLS_URL)
+        assert listed.status_code == 200
+        match = next(t for t in listed.json() if t["name"] == tool_name)
+        assert match["decision_model_availability_id"] == availability_id
+        assert match["model_name"] == entry["model_name"]
+        assert match["provider_display_name"]
+
+        detail = await tools_client.get(f"{TOOLS_URL}/{body['id']}")
+        assert detail.status_code == 200
+        assert detail.json()["decision_model_availability_id"] == availability_id
+
 
 # ── Per-type question validation negatives ────────────────────────────────
 
@@ -578,9 +624,14 @@ class TestQuestionValidation:
             TOOLS_URL, json={**VALID_TOOL, "name": f"v-{uuid.uuid4().hex[:8]}", "questions": questions}
         )
 
-    async def test_zero_questions_rejected(self, tools_client, provider_configured):
+    async def test_zero_questions_allowed_and_derived(self, tools_client, provider_configured):
+        """Owner-approved change: manual questions are optional. A tool with
+        zero questions is valid — questions are derived 1:1 from the output
+        data type at execution time (manual questions win as override)."""
         resp = await self._post(tools_client, [])
-        assert resp.status_code == 422
+        assert resp.status_code == 201
+        body = resp.json()
+        assert body["questions"] == []
 
     async def test_choice_without_options_rejected(self, tools_client, provider_configured):
         resp = await self._post(
@@ -661,7 +712,7 @@ class TestExecution:
         fake = FakeTransport()
         import app.services.system_one.decision_engine as engine_module
 
-        monkeypatch.setattr(engine_module, "TypeSafeJevClient", lambda: fake)
+        monkeypatch.setattr(engine_module, "get_system_one_client", lambda pt: fake)
 
         SessionLocal = async_sessionmaker(
             bind=test_engine, class_=AsyncSession, expire_on_commit=False
@@ -681,7 +732,7 @@ class TestExecution:
             result = await engine.execute(
                 db=session,
                 tool=tool,
-                input_state={"amount": 5000, "agent_data": {"customer_history": "clean"}},
+                input_state={"amount": 5000},
                 tenant_id=tool.tenant_id,
             )
             await session.commit()
@@ -695,7 +746,7 @@ class TestExecution:
                 "identity_verified",
             }
             assert call["state"]["amount"] == 5000
-            assert call["state"]["history"] == "clean"
+            assert "history" not in call["state"]
             assert call["api_key"] == "sk-decision-test-key-1234567890"
             assert call["model"] == "jev-latest"
             # noul question carries no criteria
@@ -735,7 +786,7 @@ class TestExecution:
         fake = FakeTransport()
         import app.services.system_one.decision_engine as engine_module
 
-        monkeypatch.setattr(engine_module, "TypeSafeJevClient", lambda: fake)
+        monkeypatch.setattr(engine_module, "get_system_one_client", lambda pt: fake)
 
         SessionLocal = async_sessionmaker(
             bind=test_engine, class_=AsyncSession, expire_on_commit=False
@@ -751,7 +802,7 @@ class TestExecution:
                 )
             ).scalar_one()
             await DecisionExecutionEngine().execute(
-                db=session, tool=tool, input_state={"amount": 1, "agent_data": {"customer_history": "x"}},
+                db=session, tool=tool, input_state={"amount": 1},
                 tenant_id=tool.tenant_id,
             )
             await session.commit()
@@ -782,7 +833,7 @@ class TestExecution:
 
         import app.services.system_one.decision_engine as engine_module
 
-        monkeypatch.setattr(engine_module, "TypeSafeJevClient", lambda: Failing())
+        monkeypatch.setattr(engine_module, "get_system_one_client", lambda pt: Failing())
 
         SessionLocal = async_sessionmaker(
             bind=test_engine, class_=AsyncSession, expire_on_commit=False
@@ -798,7 +849,7 @@ class TestExecution:
                 )
             ).scalar_one()
             result = await DecisionExecutionEngine().execute(
-                db=session, tool=tool, input_state={"amount": 1, "agent_data": {"customer_history": "x"}},
+                db=session, tool=tool, input_state={"amount": 1},
                 tenant_id=tool.tenant_id,
             )
             await session.commit()
@@ -830,6 +881,47 @@ def _virtual_id(decision_tool_id: str) -> str:
     return str(uuid.uuid5(uuid.NAMESPACE_URL, f"decision-tool:{uuid.UUID(decision_tool_id)}"))
 
 
+@pytest_asyncio.fixture
+async def ready_tool(tools_client, test_engine):
+    """Factory posting an ENABLED, READY decision tool (both data types
+    attached, per the readiness gate). Returns the created tool payload."""
+
+    async def _make(name: str = "approve_loan") -> dict:
+        SessionLocal = async_sessionmaker(
+            bind=test_engine, class_=AsyncSession, expire_on_commit=False
+        )
+        async with SessionLocal() as session:
+            inp = AgentDataType(
+                name=f"{name}-input-{uuid.uuid4().hex[:6]}",
+                slug=f"{name}-input-{uuid.uuid4().hex[:6]}",
+                tenant_id=None,
+                fields=[{"name": "amount", "type": "number"}],
+            )
+            out = AgentDataType(
+                name=f"{name}-output-{uuid.uuid4().hex[:6]}",
+                slug=f"{name}-output-{uuid.uuid4().hex[:6]}",
+                tenant_id=None,
+                fields=[{"name": "decision", "type": "string"}],
+            )
+            session.add_all([inp, out])
+            await session.commit()
+            input_id, output_id = str(inp.id), str(out.id)
+        resp = await tools_client.post(
+            TOOLS_URL,
+            json={
+                **VALID_TOOL,
+                "name": name,
+                "enabled": True,
+                "input_data_type_id": input_id,
+                "output_data_type_id": output_id,
+            },
+        )
+        assert resp.status_code == 201, resp.text
+        return resp.json()
+
+    return _make
+
+
 SKILL_PAYLOAD = {
     "description": "Triage loan applications",
     "instructions": "Evaluate the application with the bound tool.",
@@ -844,9 +936,9 @@ def _skill_payload() -> dict:
 @pytest.mark.asyncio
 class TestSkillDecisionBindings:
     async def test_create_skill_with_decision_binding_succeeds(
-        self, tools_client, skills_client, provider_configured
+        self, tools_client, skills_client, provider_configured, ready_tool
     ):
-        created = (await tools_client.post(TOOLS_URL, json=VALID_TOOL)).json()
+        created = await ready_tool()
         payload = {
             **_skill_payload(),
             "tool_ids": [_virtual_id(created["id"])],
@@ -862,9 +954,9 @@ class TestSkillDecisionBindings:
         assert "decision____approve_loan" in detail.json()["instructions_with_tools"]
 
     async def test_update_skill_with_decision_binding_succeeds(
-        self, tools_client, skills_client, provider_configured
+        self, tools_client, skills_client, provider_configured, ready_tool
     ):
-        created = (await tools_client.post(TOOLS_URL, json=VALID_TOOL)).json()
+        created = await ready_tool()
         skill = (
             await skills_client.post(SKILLS_URL, json={**_skill_payload(), "tool_ids": []})
         ).json()
@@ -902,9 +994,9 @@ class TestSkillDecisionBindings:
         assert resp.status_code == 422
 
     async def test_executor_executes_decision_binding_via_decision_path(
-        self, tools_client, skills_client, provider_configured, test_engine, monkeypatch
+        self, tools_client, skills_client, provider_configured, test_engine, monkeypatch, ready_tool
     ):
-        created = (await tools_client.post(TOOLS_URL, json=VALID_TOOL)).json()
+        created = await ready_tool()
         skill = (
             await skills_client.post(
                 SKILLS_URL,
@@ -915,7 +1007,7 @@ class TestSkillDecisionBindings:
         fake = FakeTransport()
         import app.services.system_one.decision_engine as engine_module
 
-        monkeypatch.setattr(engine_module, "TypeSafeJevClient", lambda: fake)
+        monkeypatch.setattr(engine_module, "get_system_one_client", lambda pt: fake)
 
         SessionLocal = async_sessionmaker(
             bind=test_engine, class_=AsyncSession, expire_on_commit=False
@@ -925,7 +1017,7 @@ class TestSkillDecisionBindings:
         async with SessionLocal() as session:
             results = await SkillExecutor().execute(
                 uuid.UUID(skill["id"]),
-                {"amount": 5000, "agent_data": {"customer_history": "clean"}},
+                {"amount": 5000},
                 session,
             )
             await session.commit()
@@ -966,3 +1058,170 @@ class TestSkillDecisionBindings:
         async with SessionLocal() as session:
             with pytest.raises(SkillExecutionError, match="not found"):
                 await SkillExecutor().execute(skill_id, {}, session)
+
+
+# ── Per-tool model selection + migration backward-compat ─────────────────
+
+
+@pytest.mark.asyncio
+class TestPerToolModelSelection:
+    async def test_tool_saved_with_model_selection_shows_identity(
+        self, tools_client, provider_configured
+    ):
+        """A tool saved with an enabled-model selection displays the provider
+        and model identity on BOTH the detail and list reads."""
+        enabled = (
+            await tools_client.get(f"{PROVIDERS_URL.rsplit('/', 1)[0]}/enabled-models")
+        ).json()
+        assert enabled
+        model = enabled[0]
+
+        created = (
+            await tools_client.post(
+                TOOLS_URL,
+                json={
+                    **VALID_TOOL,
+                    "name": "model_selected_tool",
+                    "decision_model_availability_id": model["availability_id"],
+                },
+            )
+        ).json()
+        assert created["decision_model_availability_id"] == model["availability_id"]
+        assert created["model_name"] == model["model_name"]
+        assert created["provider_display_name"] == model["provider_display_name"]
+
+        listing = (await tools_client.get(TOOLS_URL)).json()
+        row = next(t for t in listing if t["id"] == created["id"])
+        assert row["model_name"] == model["model_name"]
+        assert row["provider_display_name"] == model["provider_display_name"]
+
+    async def test_changing_selection_takes_effect_next_execution(
+        self, tools_client, provider_configured, test_engine, monkeypatch
+    ):
+        """Switching the selected model is picked up by the NEXT evaluation
+        without restart/re-deploy."""
+        so_base = PROVIDERS_URL.rsplit("/", 1)[0]
+        # dedicated provider with a 2-model catalogue for the switch
+        made = await tools_client.post(
+            PROVIDERS_URL,
+            json={
+                "provider_type": "typesafe",
+                "display_name": f"Switch Provider {uuid.uuid4().hex[:6]}",
+                "base_url": "http://localhost:9999/v1",
+                "default_model": "switch-a",
+                "api_key": "sk-switch-test-key-1234567890",
+                "enabled": True,
+                "enabled_models": ["switch-a", "switch-b"],
+            },
+        )
+        assert made.status_code == 201, made.text
+        enabled = (
+            await tools_client.get(
+                f"{so_base}/enabled-models",
+                params={"provider_id": made.json()["id"]},
+            )
+        ).json()
+        enabled = [m for m in enabled if m["provider_id"] == made.json()["id"]]
+        first, second = enabled[0], enabled[1]
+
+        created = (
+            await tools_client.post(
+                TOOLS_URL,
+                json={
+                    **VALID_TOOL,
+                    "name": "switching_tool",
+                    "decision_model_availability_id": first["availability_id"],
+                },
+            )
+        ).json()
+
+        fake = FakeTransport()
+        import app.services.system_one.decision_engine as engine_module
+        from app.db.models.decision_tools import DecisionTool
+        from app.services.system_one.decision_engine import DecisionExecutionEngine
+
+        monkeypatch.setattr(engine_module, "get_system_one_client", lambda pt: fake)
+
+        SessionLocal = async_sessionmaker(
+            bind=test_engine, class_=AsyncSession, expire_on_commit=False
+        )
+
+        async def _run():
+            async with SessionLocal() as session:
+                tool = (
+                    await session.execute(
+                        select(DecisionTool)
+                        .where(DecisionTool.id == uuid.UUID(created["id"]))
+                        .options(selectinload(DecisionTool.questions))
+                    )
+                ).scalar_one()
+                result = await DecisionExecutionEngine().execute(
+                    db=session, tool=tool, input_state={"amount": 1},
+                    tenant_id=tool.tenant_id,
+                )
+                await session.commit()
+                return result
+
+        result = await _run()
+        assert result.status.value == "completed"
+        assert fake.calls[-1]["model"] == first["model_name"]
+
+        # switch selection to the second model (no restart)
+        resp = await tools_client.put(
+            f"{TOOLS_URL}/{created['id']}",
+            json={"decision_model_availability_id": second["availability_id"]},
+        )
+        assert resp.status_code == 200, resp.text
+        assert resp.json()["model_name"] == second["model_name"]
+
+        result = await _run()
+        assert result.status.value == "completed"
+        assert fake.calls[-1]["model"] == second["model_name"]
+        identity = result.answers["provider"]
+        assert identity["model_name"] == second["model_name"]
+
+
+@pytest.mark.asyncio
+class TestLegacyBackwardCompat:
+    async def test_legacy_tool_without_model_reference_still_executes(
+        self, tools_client, provider_configured, test_engine, monkeypatch
+    ):
+        """A tool authored pre-upgrade (NULL availability reference, legacy
+        free-text provider_model) resolves through the legacy fallback and
+        executes against the migrated provider."""
+        created = (
+            await tools_client.post(
+                TOOLS_URL,
+                json={**VALID_TOOL, "name": "legacy_tool", "provider_model": "jev-latest"},
+            )
+        ).json()
+        assert created["decision_model_availability_id"] is None
+
+        fake = FakeTransport()
+        import app.services.system_one.decision_engine as engine_module
+        from app.db.models.decision_tools import DecisionTool
+        from app.services.system_one.decision_engine import DecisionExecutionEngine
+
+        monkeypatch.setattr(engine_module, "get_system_one_client", lambda pt: fake)
+
+        SessionLocal = async_sessionmaker(
+            bind=test_engine, class_=AsyncSession, expire_on_commit=False
+        )
+        async with SessionLocal() as session:
+            tool = (
+                await session.execute(
+                    select(DecisionTool)
+                    .where(DecisionTool.id == uuid.UUID(created["id"]))
+                    .options(selectinload(DecisionTool.questions))
+                )
+            ).scalar_one()
+            result = await DecisionExecutionEngine().execute(
+                db=session, tool=tool, input_state={"amount": 1},
+                tenant_id=tool.tenant_id,
+            )
+            await session.commit()
+
+        assert result.status.value == "completed"
+        assert fake.calls[0]["model"] == "jev-latest"
+        # usage identity is recorded even on the legacy path
+        assert result.answers["provider"]["model_name"] == "jev-latest"

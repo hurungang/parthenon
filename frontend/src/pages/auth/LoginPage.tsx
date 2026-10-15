@@ -93,6 +93,7 @@ export function LoginPage() {
     multiTenancyEnabled,
     resolvedTenant,
     refreshProviders,
+    bindTenantSlug,
     clearResolvedTenant,
   } = useAuthStore()
   const navigate = useNavigate()
@@ -187,8 +188,14 @@ export function LoginPage() {
   function bindWorkspace(tenant: PublicTenantInfo) {
     setAddressTenant(tenant)
     // Per-tab session binding — apiClient attaches X-Tenant on every
-    // subsequent call (provider listing, password sign-in, ...).
-    setResolvedTenantSlug(tenant.slug)
+    // subsequent call (provider listing, password sign-in, ...).  Bind
+    // through the store when available so provider discovery re-runs
+    // reactively for the newly bound workspace.
+    if (bindTenantSlug) {
+      bindTenantSlug(tenant.slug)
+    } else {
+      setResolvedTenantSlug(tenant.slug)
+    }
   }
 
   // Auto-resolve on entry (tenancy on, no host-derived tenant):

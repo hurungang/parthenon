@@ -68,11 +68,11 @@ test.describe('System One Provider Config (mocked)', () => {
     const dialog = page.getByRole('dialog')
     await expect(dialog).toBeVisible()
     await dialog.getByLabel('Display Name').fill('E2E Provider')
-    // Round 2: the base URL is preset and read-only — it can't be filled,
-    // and create sends the preset URL.
+    // The base URL is the FULL endpoint URL, editable per tenant, preset to
+    // the TypeSafe endpoint — create sends the preset URL unchanged.
     const baseUrl = dialog.getByLabel('Base URL')
-    await expect(baseUrl).toBeDisabled()
-    await expect(baseUrl).toHaveValue('https://api.typesafe.ai/v1')
+    await expect(baseUrl).not.toBeDisabled()
+    await expect(baseUrl).toHaveValue('https://api.typesafe.ai/v1/systemone')
     await dialog.getByLabel('API Key').fill('sk-e2e-secret')
     await dialog.getByText('Save').click()
 
@@ -86,7 +86,7 @@ test.describe('System One Provider Config (mocked)', () => {
       'E2E Provider',
     )
     expect((createdPayload as Record<string, unknown>)['base_url']).toBe(
-      'https://api.typesafe.ai/v1',
+      'https://api.typesafe.ai/v1/systemone',
     )
   })
 
@@ -112,7 +112,7 @@ test.describe('System One Provider Config (mocked)', () => {
     await standardSetup(page)
     await page.goto('/system/system-one')
 
-    await expect(page.getByText('No System One providers configured yet.')).toBeVisible()
+    await expect(page.getByText('No Decision Model providers configured yet.')).toBeVisible()
     await expect(page.getByText('Not configured')).toBeVisible()
   })
 

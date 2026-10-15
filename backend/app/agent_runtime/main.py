@@ -177,6 +177,9 @@ async def _validate_control_center_reachable() -> None:
     import asyncio
     import httpx
 
+    # Egress-scan exemption: startup health probe — no tenant context exists
+    # at startup, so this client is deliberately headerless and does NOT use
+    # app.core.internal_http.internal_httpx_client.
     cc_url = settings.control_center_url.rstrip("/")
     health_url = f"{cc_url}/health"
 

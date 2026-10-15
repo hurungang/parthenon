@@ -39,7 +39,7 @@ from app.communication_hub.data_client import (
 def _make_ar_client() -> ControlCenterDataClient:
     """Create an AR data client with a mock cert manager."""
     cert_manager = MagicMock()
-    cert_manager.configure_mtls_client.side_effect = lambda: httpx.AsyncClient(timeout=30.0)
+    cert_manager.mtls_client_kwargs.return_value = {}
     return ControlCenterDataClient(
         cert_manager=cert_manager,
         control_center_url="http://cc.test",
@@ -49,7 +49,7 @@ def _make_ar_client() -> ControlCenterDataClient:
 def _make_ch_client() -> CHDataClient:
     """Create a CH data client with a mock cert manager."""
     cert_manager = MagicMock()
-    cert_manager.configure_mtls_client.side_effect = lambda: httpx.AsyncClient(timeout=30.0)
+    cert_manager.mtls_client_kwargs.return_value = {}
     return CHDataClient(
         cert_manager=cert_manager,
         control_center_url="http://cc.test",

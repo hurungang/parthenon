@@ -194,3 +194,15 @@
 - `e2e/tests/agent-a2a-communication.spec.ts` — MCP server slug validation coverage (`mcp server registration blocks invalid slug values`)
 - `e2e/tests/permission-errors.spec.ts` — structured 403 error rendering per page
 - `e2e/tests/passthrough-sessions.spec.ts` — mocked suite: admin creates passthrough session via UI, chip displayed, tool test dialog shows identity picker, API contract validated; `test.describe('Real Backend Integration')` suite: backend health check, unauthenticated tool test returns correct status, passthrough+credentials rejected by real backend
+
+---
+
+## strict-tenant-isolation Update (2026-10)
+
+Per-tenant MCP slug scoping: `mcp_servers.slug` uniqueness is now `(tenant, slug)` (platform-wide unique dropped); `mcp_tools` carries a denormalized NOT NULL `tenant_id`; tool sync, skill bindings, and ToolPermission grants are tenant-bound; the `server____tool` wire format is unchanged (tenant qualification at resolution time only).
+
+Test files added (verified present):
+
+- `backend/tests/integration/test_mcp_hub_tenant_slug_isolation.py` — same slug `supabase` registered in two tenants (both succeed), duplicate within one tenant rejected, per-tenant slug DB constraint positive/negative inserts, tenant-stamped tool sync, same-tenant skill binding resolution, scoped-session invocation resolution, ToolPermission grant containment
+
+E2E: N/A — backend-only change.

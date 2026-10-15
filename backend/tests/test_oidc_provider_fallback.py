@@ -1,24 +1,19 @@
-"""FIX-20260930-075014 — provider resolution falls back to the ROOT tenant slot.
+"""Shared-slot retirement — every tenant resolves ONLY its own provider.
 
-The adopted platform provider (the OIDC config bound to the implicit
-``is_system_tenant`` tenant) previously only resolved for the system tenant
-itself: a tenant-less lookup (e.g. ``GET /auth/tenant-memberships``) and a
-tenant WITHOUT its own/shared config both resolved ``None`` → "All auth
-tiers failed" → session wipe → login loop.
+Product rule: EVERY tenant uses ONLY its own identity provider (root
+uses its own).  There is NO shared provider and NO candidate chain.
+A tenant without its own enabled provider for a scope simply has no
+OIDC login for that scope.  Tenancy OFF ⇒ the ROOT tenant's providers
+only.  NULL-tenant (shared) rows are inert legacy data — never loaded.
 
-Resolution order (both tenant-scoped and tenant-less lookups):
-
-    own (tenant, scope) slot → shared (None, scope) slot → SYSTEM
-    tenant's (system_id, scope) slot
-
-Pins: tenancy-OFF unchanged (single global provider); fail-closed preserved
-when NO provider exists anywhere; a tenant's OWN config still wins.
+Pins: own-slot-only resolution (multi-tenancy ON); fail-closed None for
+tenant-less / unconfigured tenants; NULL-tenant rows ignored on load;
+tenancy-OFF root-slot-only unchanged.
 """
 from __future__ import annotations
 
 import os
 import uuid
-from types import SimpleNamespace
 from unittest.mock import patch
 
 import pytest
@@ -123,14 +118,14 @@ def _patch_registry(registry):
     return patch.object(main_module, "_get_registry", lambda: registry)
 
 
-class TestSystemTenantSlotFallback:
-    """A — the adopted platform provider serves tenant-less and other-tenant
-    lookups via the ROOT tenant slot fallback."""
+class TestOwnSlotOnlyResolution:
+    """Multi-tenancy ON: ONLY the tenant's OWN (tenant, scope) slot
+    resolves — no shared slot, no root-slot fallback chain."""
 
     @pytest_asyncio.fixture
     async def registry(self, db):
         """Tenancy ON; the ONLY provider row lives in the ROOT tenant slot
-        (the adopted-platform-provider situation from the defect report)."""
+        (the legacy adopted-platform-provider situation — inert now)."""
         await _set_tenancy(db, True)
         db.add(_provider_row("user", _system_id(), "https://adopted.example.com"))
         await db.commit()
@@ -138,104 +133,80 @@ class TestSystemTenantSlotFallback:
         await registry.initialize(db)
         return registry
 
-    async def test_a_tenant_less_lookup_resolves_system_slot(self, registry):
-        """(a) Tenant-less lookups (platform surfaces, /auth/tenant-memberships)
-        resolve the ROOT tenant's slot when no shared config exists.
-        Today: None → 'All auth tiers failed' → login loop."""
-        provider = registry.get_provider("user", None)
-        assert provider is not None, (
-            "SYSTEM-TENANT FALLBACK MISSING (FIX-20260930-075014 / a): the "
-            "adopted platform provider lives only in the system-tenant slot — "
-            "a tenant-less lookup must fall back to it, got None"
-        )
-        assert provider.issuer_url == "https://adopted.example.com"
+    async def test_tenant_less_lookup_resolves_none(self, registry):
+        """(a) Tenant-less lookups resolve NOTHING — no shared slot, no
+        root fallback (no tenant resolved = no providers)."""
+        assert registry.get_provider("user", None) is None
 
-    async def test_a_tenant_less_request_validates_token(self, db, registry):
-        """(a) end-to-end: a tenant-less request validates against the
-        root-slot provider (today `_try_oidc_token` returns None)."""
+    async def test_tenant_less_request_bootstrap_validates_via_all_providers(
+        self, db, registry
+    ):
+        """(a) end-to-end: a tenant-less request (login bootstrap, before a
+        workspace is chosen) validates against ALL tenants' providers —
+        the issuer that validates identifies the realm.  No tenant claim
+        is injected (no resolved context to bind)."""
         import app.middleware.auth as auth_module
 
         with _patch_registry(registry), patch.object(
             auth_module, "OIDCClient", _FakeOIDCClient
         ):
             claims = await auth_module._try_oidc_token("tok", None)
-        assert claims is not None, (
-            "TENANT-LESS OIDC VALIDATION FAILS (FIX-20260930-075014 / a): the "
-            "'All auth tiers failed' loop — a tenant-less request must validate "
-            "the token against the adopted (root-slot) provider"
-        )
-        assert claims["_provider_scope"] == "user"
-        # tenant-less validation injects NO tenant claim (semantics unchanged)
-        assert claims.get("tenant") is None
+        assert claims is not None
+        assert "tenant" not in claims
 
-    async def test_b_tenant_without_own_or_shared_resolves_system_slot(
+    async def test_b_tenant_without_own_config_resolves_none(self, registry):
+        """(b) Tenant X (no own config) resolves None — fail-closed, the
+        root-slot provider does NOT serve other tenants."""
+        assert registry.get_provider("user", _x_id()) is None
+
+    async def test_b_tenant_login_context_fails_without_own_provider(
         self, registry
     ):
-        """(b) Tenant X (no own config, no shared config) resolves the SYSTEM
-        provider for its login context — one provider serves all tenants."""
-        provider = registry.get_provider("user", _x_id())
-        assert provider is not None, (
-            "SYSTEM-TENANT FALLBACK MISSING FOR TENANT CONTEXT "
-            "(FIX-20260930-075014 / b): a tenant without own/shared config "
-            "must resolve the adopted system provider"
-        )
-        assert provider.issuer_url == "https://adopted.example.com"
-
-    async def test_b_tenant_login_context_validates_against_system_provider(
-        self, registry
-    ):
-        """(b) middleware level: tenant X's login context validates the token
-        via the root-slot provider AND injects the tenant claim (semantics
-        unchanged)."""
+        """(b) middleware level: tenant X's login context has no candidates
+        → validation fails (no OIDC login for that tenant)."""
         import app.middleware.auth as auth_module
 
         with _patch_registry(registry), patch.object(
             auth_module, "OIDCClient", _FakeOIDCClient
         ):
             claims = await auth_module._try_oidc_token("tok", CTX_X)
-        assert claims is not None
-        assert _FakeOIDCClient.captured["issuer"] == "https://adopted.example.com"
-        assert claims.get("tenant") == CTX_X.slug
+        assert claims is None
 
-    async def test_c_tenant_own_config_wins_over_system_slot(self, db, registry):
-        """(c) precedence pin: X's OWN config still wins over the root-slot
-        fallback."""
+    async def test_c_tenant_own_config_resolves(self, db, registry):
+        """(c) Tenant X's OWN config resolves for X once configured."""
         db.add(_provider_row("user", _x_id(), "https://x-own.example.com"))
         await db.commit()
         await registry.reload(db)
         provider = registry.get_provider("user", _x_id())
         assert provider is not None
-        assert provider.issuer_url == "https://x-own.example.com", (
-            "PRECEDENCE (FIX-20260930-075014 / c): the tenant's OWN provider "
-            "slot must win over the system-tenant fallback"
-        )
+        assert provider.issuer_url == "https://x-own.example.com"
 
-    async def test_shared_slot_still_precedes_system_slot(self, db, registry):
-        """Ordering within the fallback: shared (None) slot beats the system
-        slot for both tenant-less and tenant-scoped lookups."""
+    async def test_shared_slot_ignored_on_load(self, db, registry):
+        """A NULL-tenant (shared) row is NEVER loaded — inert legacy data;
+        it resolves for nobody."""
         db.add(_provider_row("user", None, "https://shared.example.com"))
         await db.commit()
         await registry.reload(db)
-        assert registry.get_provider("user", None).issuer_url == (
-            "https://shared.example.com"
-        )
-        assert registry.get_provider("user", _x_id()).issuer_url == (
-            "https://shared.example.com"
-        )
+        assert registry.get_provider("user", None) is None
+        assert registry.get_provider("user", _x_id()) is None
+        # and it is not cached at all
+        assert all(k[0] is not None for k in registry._providers)
 
     async def test_no_provider_anywhere_is_fail_closed_none(self, db):
-        """Fail-closed preserved: no provider anywhere → None (both lookup
-        kinds)."""
+        """Fail-closed preserved: no providers anywhere → None (both
+        lookup kinds)."""
         await _set_tenancy(db, True)
         registry = OIDCProviderRegistry()
         await registry.initialize(db)
         assert registry.get_provider("user", None) is None
         assert registry.get_provider("user", _x_id()) is None
 
-    async def test_tenancy_off_root_slot_only(self, db):
-        """Tenancy OFF: the ROOT tenant IS the default tenant — its slot
-        resolves for every lookup; the NULL-tenant shared slot and other
-        tenants' rows never resolve."""
+    async def test_tenancy_off_default_provider_is_explicit(self, db):
+        """Tenancy OFF: the ROOT tenant IS the default tenant — the ONLY
+        lookup is the explicit ``get_default_provider``; a tenant-addressed
+        lookup raises (no hidden root fallback for arbitrary tenant ids).
+        NULL-tenant (shared) rows are never loaded and other tenants'
+        rows never resolve."""
         await _set_tenancy(db, False)
         db.add(_provider_row("user", _system_id(), "https://root.example.com"))
         db.add(_provider_row("user", None, "https://legacy.example.com"))
@@ -243,14 +214,21 @@ class TestSystemTenantSlotFallback:
         await db.commit()
         registry = OIDCProviderRegistry()
         await registry.initialize(db)
-        for tenant_id in (None, _x_id(), _system_id()):
-            provider = registry.get_provider("user", tenant_id)
-            assert provider is not None
-            assert provider.issuer_url == "https://root.example.com"
+
+        default = registry.get_default_provider("user")
+        assert default is not None
+        assert default.issuer_url == "https://root.example.com"
+        assert registry.get_provider("user", None).issuer_url == (
+            "https://root.example.com"
+        )
+        for tenant_id in (_x_id(), _system_id()):
+            with pytest.raises(ValueError, match="get_default_provider"):
+                registry.get_provider("user", tenant_id)
+            with pytest.raises(ValueError, match="get_default_provider"):
+                registry.get_provider_candidates("user", tenant_id)
 
     async def test_system_tenant_itself_resolves_own_slot(self, registry):
-        """The system tenant's own context resolves its own (adopted) slot —
-        direct lookup, not through the fallback."""
+        """The system (root) tenant's own context resolves its own slot."""
         provider = registry.get_provider("user", _system_id())
         assert provider is not None
         assert provider.issuer_url == "https://adopted.example.com"
@@ -258,8 +236,8 @@ class TestSystemTenantSlotFallback:
 
 class _IssuerGatedOIDCClient:
     """Fake OIDC client that only validates tokens signed by ONE issuer
-    (the issuer whose JWKS holds the token's key) — models the real
-    "Unknown key id" failure when the validator probes the WRONG provider."""
+    (models the real "Unknown key id" failure when the validator probes
+    the WRONG provider)."""
 
     signing_issuer: str | None = None
     captured_issuers: list[str] = []
@@ -274,31 +252,14 @@ class _IssuerGatedOIDCClient:
         return {"sub": "user-1", "email": "u@example.test"}
 
 
-class TestProviderCandidateFallback:
-    """FIX-20261002-110000 — token validation tries ALL ordered candidate
-    providers (own → shared → root slot, deduped), not just the FIRST.
-
-    The defect: a parthenon-realm (root-slot) token fails validation on
-    tenant-less paths because ``_try_oidc_token`` validates against the
-    single first-match provider (shared = acme slot) → "Unknown key id" → 401.
-    """
+class TestSingleCandidateResolution:
+    """get_provider_candidates returns a SINGLE candidate (the tenant's
+    own slot) or an empty list — never a chain."""
 
     @pytest_asyncio.fixture
-    async def dual_registry(self, db):
-        """Tenancy ON; SHARED slot = acme realm, ROOT slot = parthenon realm
-        (exactly the live defect configuration)."""
-        await _set_tenancy(db, True)
-        db.add(_provider_row("user", None, "https://acme.example.com"))
-        db.add(_provider_row("user", _system_id(), "https://parthenon.example.com"))
-        await db.commit()
-        registry = OIDCProviderRegistry()
-        await registry.initialize(db)
-        return registry
-
-    async def test_candidates_api_ordering_and_dedup(self, db):
-        """get_provider_candidates returns the ordered, deduped chain:
-        own slot (when tenant context) → shared (None) slot → root slot;
-        tenant-less: shared → root. Tenancy OFF: the single global slot."""
+    async def registry(self, db):
+        """Tenancy ON; root slot and X's own slot configured; a legacy
+        NULL-tenant row present (must be ignored)."""
         await _set_tenancy(db, True)
         db.add(_provider_row("user", None, "https://acme.example.com"))
         db.add(_provider_row("user", _system_id(), "https://parthenon.example.com"))
@@ -306,100 +267,41 @@ class TestProviderCandidateFallback:
         await db.commit()
         registry = OIDCProviderRegistry()
         await registry.initialize(db)
+        return registry
 
-        issuers = [p.issuer_url for p in registry.get_provider_candidates("user", None)]
-        assert issuers == ["https://acme.example.com", "https://parthenon.example.com"]
-
+    async def test_candidates_own_slot_only(self, registry):
+        """Candidates: own slot only for a resolved tenant; empty for a
+        tenant-less lookup; the NULL-tenant row never appears."""
         issuers = [p.issuer_url for p in registry.get_provider_candidates("user", _x_id())]
-        assert issuers == [
-            "https://x-own.example.com",
-            "https://acme.example.com",
-            "https://parthenon.example.com",
-        ]
+        assert issuers == ["https://x-own.example.com"]
 
-        # Root tenant's own context: own slot first, then the shared slot
-        # (matches _resolve_cached — only the redundant root repeat dedupes).
-        root_cands = [p.issuer_url for p in registry.get_provider_candidates("user", _system_id())]
-        assert root_cands == ["https://parthenon.example.com", "https://acme.example.com"]
+        assert registry.get_provider_candidates("user", None) == []
+        root = registry.get_provider_candidates("user", _system_id())
+        assert [p.issuer_url for p in root] == ["https://parthenon.example.com"]
+        # The shared (NULL-tenant) slot never appears anywhere.
+        for tenant_id in (None, _x_id(), _system_id()):
+            for p in registry.get_provider_candidates("user", tenant_id):
+                assert p.issuer_url != "https://acme.example.com"
 
-        # Fail-closed: no providers anywhere → empty list.
-        # (Isolate from the fixture rows: initialize loads the fixture DB's
-        # configs, so simulate the empty state explicitly.)
-        empty_registry = OIDCProviderRegistry()
-        await empty_registry.initialize(db)
-        empty_registry._multi_tenancy_enabled = True
-        empty_registry._providers.clear()
-        empty_registry._root_tenant_id = "00000000-0000-0000-0000-000000000000"
-        assert empty_registry.get_provider_candidates("user", None) == []
-        assert empty_registry.get_provider_candidates("user", "00000000-0000-0000-0000-000000000000") == []
-
-    async def test_tenancy_off_candidates_root_slot_only(self, db):
-        """Tenancy OFF: candidates come from the ROOT tenant's slot only —
-        NULL-tenant (shared) and other tenants' rows never resolve."""
+    async def test_tenancy_off_candidates_default_slot_only(self, db):
+        """Tenancy OFF: candidates come from the DEFAULT (root-tenant)
+        slot only — a tenant-addressed candidates call raises instead of
+        silently resolving root; NULL-tenant rows never load."""
         await _set_tenancy(db, False)
         db.add(_provider_row("user", _system_id(), "https://root.example.com"))
         db.add(_provider_row("user", None, "https://legacy.example.com"))
         await db.commit()
         registry = OIDCProviderRegistry()
         await registry.initialize(db)
-        issuers = [p.issuer_url for p in registry.get_provider_candidates("user", _x_id())]
-        assert issuers == ["https://root.example.com"]
+        candidates = registry.get_provider_candidates("user", None)
+        assert [p.issuer_url for p in candidates] == ["https://root.example.com"]
+        with pytest.raises(ValueError, match="get_default_provider"):
+            registry.get_provider_candidates("user", _x_id())
 
-    async def test_t_new_1_parthenon_token_validates_on_tenant_less_path(
-        self, dual_registry
-    ):
-        """T-new-1 — tenant-less (None context); shared=acme + root=parthenon;
-        a parthenon-signed token validates via the ROOT candidate.
-        Today: fails — the shared (acme) slot is tried alone → unknown kid."""
+    async def test_tenant_context_validates_own_provider_only(self, registry):
+        """Token validation probes ONLY the tenant's own provider — a
+        root-slot-signed token does NOT validate in X's context."""
         import app.middleware.auth as auth_module
-
-        _IssuerGatedOIDCClient.signing_issuer = "https://parthenon.example.com"
-        _IssuerGatedOIDCClient.captured_issuers = []
-        with _patch_registry(dual_registry), patch.object(
-            auth_module, "OIDCClient", _IssuerGatedOIDCClient
-        ):
-            claims = await auth_module._try_oidc_token("tok", None)
-        assert claims is not None, (
-            "FIX-20261002-110000 / T-new-1: a parthenon-realm (root-slot) "
-            "token must validate on tenant-less paths — the validator must "
-            "try ALL candidate providers, not only the shared slot "
-            "('Unknown key id' → 401)"
-        )
-        assert "https://parthenon.example.com" in _IssuerGatedOIDCClient.captured_issuers
-        # tenant-less validation injects NO tenant claim (semantics unchanged)
-        assert claims.get("tenant") is None
-
-    async def test_t_new_2_acme_token_validates_via_shared_candidate(
-        self, dual_registry
-    ):
-        """T-new-2 — same registry, acme-signed token validates via the
-        SHARED candidate (first match, precedence preserved)."""
-        import app.middleware.auth as auth_module
-
-        _IssuerGatedOIDCClient.signing_issuer = "https://acme.example.com"
-        _IssuerGatedOIDCClient.captured_issuers = []
-        with _patch_registry(dual_registry), patch.object(
-            auth_module, "OIDCClient", _IssuerGatedOIDCClient
-        ):
-            claims = await auth_module._try_oidc_token("tok", None)
-        assert claims is not None
-        # First candidate wins — the root slot must NOT have been probed.
-        assert _IssuerGatedOIDCClient.captured_issuers == ["https://acme.example.com"]
-
-    async def test_t_new_3_tenant_context_token_from_root_slot_injects_context_claim(
-        self, db
-    ):
-        """T-new-3 — tenant X context (own=acme); a parthenon (root-slot)
-        signed token resolves via the own→shared/root chain and validates;
-        the injected tenant claim is the RESOLVED CONTEXT (X)."""
-        import app.middleware.auth as auth_module
-
-        await _set_tenancy(db, True)
-        db.add(_provider_row("user", _x_id(), "https://acme.example.com"))
-        db.add(_provider_row("user", _system_id(), "https://parthenon.example.com"))
-        await db.commit()
-        registry = OIDCProviderRegistry()
-        await registry.initialize(db)
 
         _IssuerGatedOIDCClient.signing_issuer = "https://parthenon.example.com"
         _IssuerGatedOIDCClient.captured_issuers = []
@@ -407,30 +309,35 @@ class TestProviderCandidateFallback:
             auth_module, "OIDCClient", _IssuerGatedOIDCClient
         ):
             claims = await auth_module._try_oidc_token("tok", CTX_X)
-        assert claims is not None, (
-            "FIX-20261002-110000 / T-new-3: a root-slot-signed token must "
-            "validate within tenant X's context via the candidate chain"
+        assert claims is None, (
+            "a foreign (root-slot) token must NOT validate in tenant X's "
+            "context — X's own provider is the only candidate"
         )
-        assert "https://parthenon.example.com" in _IssuerGatedOIDCClient.captured_issuers
-        # Claim injected from the RESOLVED CONTEXT (X), not the provider slot.
+        assert _IssuerGatedOIDCClient.captured_issuers == ["https://x-own.example.com"]
+
+    async def test_own_signed_token_validates_and_injects_claim(self, registry):
+        """A token signed by X's OWN provider validates and gets X's claim
+        injected (semantics unchanged)."""
+        import app.middleware.auth as auth_module
+
+        _IssuerGatedOIDCClient.signing_issuer = "https://x-own.example.com"
+        _IssuerGatedOIDCClient.captured_issuers = []
+        with _patch_registry(registry), patch.object(
+            auth_module, "OIDCClient", _IssuerGatedOIDCClient
+        ):
+            claims = await auth_module._try_oidc_token("tok", CTX_X)
+        assert claims is not None
+        assert _IssuerGatedOIDCClient.captured_issuers == ["https://x-own.example.com"]
         assert claims.get("tenant") == CTX_X.slug
 
-    async def test_t_new_4_unknown_key_fails_all_candidates(self, dual_registry):
-        """T-new-4 (security pin) — a token signed by an unknown/untrusted
-        key fails against EVERY candidate → 401 path (None)."""
+    async def test_untrusted_key_fails_closed(self, registry):
+        """A token signed by an unknown/untrusted key fails → 401 path."""
         import app.middleware.auth as auth_module
 
         _IssuerGatedOIDCClient.signing_issuer = "https://evil.example.com"
         _IssuerGatedOIDCClient.captured_issuers = []
-        with _patch_registry(dual_registry), patch.object(
+        with _patch_registry(registry), patch.object(
             auth_module, "OIDCClient", _IssuerGatedOIDCClient
         ):
-            claims = await auth_module._try_oidc_token("tok", None)
-            claims_scoped = await auth_module._try_oidc_token("tok", CTX_X)
-        assert claims is None, "untrusted key must fail ALL candidates"
-        assert claims_scoped is None
-        # Both candidates were probed before giving up.
-        assert set(_IssuerGatedOIDCClient.captured_issuers) == {
-            "https://acme.example.com",
-            "https://parthenon.example.com",
-        }
+            claims = await auth_module._try_oidc_token("tok", CTX_X)
+        assert claims is None

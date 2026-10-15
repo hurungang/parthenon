@@ -185,7 +185,15 @@ export function DecisionResultView({ result }: DecisionResultViewProps) {
           />
         )}
         {result.provider_model && (
-          <Chip label={result.provider_model} size="small" variant="outlined" />
+          <Chip
+            label={
+              result.answers?.provider?.provider_display_name
+                ? `${result.provider_model} — ${result.answers.provider.provider_display_name}`
+                : result.provider_model
+            }
+            size="small"
+            variant="outlined"
+          />
         )}
       </Stack>
 

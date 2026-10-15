@@ -1,34 +1,32 @@
-"""OIDC provider CRUD slot-addressing tests (FIX-20261001-010107).
+"""OIDC provider CRUD slot-addressing tests.
 
 Covers:
 
-- ``OIDCConfigService.get_by_scope`` shared-slot lookup: ``tenant_id=None``
-  MUST produce ``tenant_id IS NULL`` (the ``== None`` form compiled to
-  ``tenant_id = NULL`` which matches nothing — the latent NULL-comparison
-  bug that made every shared-slot write fail with 400 "No provider config
-  exists").
+- ``OIDCConfigService.get_by_scope``: with multi-tenancy ON the exact
+  ``(tenant_id, scope)`` slot is addressed; ``tenant_id=None`` resolves
+  NOTHING (the shared NULL-tenant slot is RETIRED — legacy NULL-tenant
+  rows are inert).
 - Handler-level slot addressing: ``/system/identity-providers`` CRUD
   derives ``tenant_id`` from the RESOLVED tenant context
   (``core/tenant_context.py`` on ``request.state``) and passes it into the
   service — a workspace request addresses that tenant's ``(tenant, scope)``
   slot only.
-- Platform surface: the SHARED (NULL-tenant) provider config is managed
-  from ``/platform/identity-providers`` (bypassed prefix, guarded by
+- Platform surface: the ROOT tenant's provider configs are managed from
+  ``/platform/identity-providers`` (bypassed prefix, guarded by
   ``platform::settings``), which calls the same service with
-  ``tenant_id=None``.  ``/system/*`` writes WITHOUT a tenant context stay
-  fail-closed 403 (A3 pins in test_tenant_login_probe_bypass.py).
+  ``tenant_id=root_tenant_id``.  ``/system/*`` writes WITHOUT a tenant
+  context stay fail-closed 403 (A3 pins in test_tenant_login_probe_bypass.py).
 - Privacy: the public ``GET /system/identity-providers`` listing returns
-  ONLY the shared configs when no tenant context resolves, and shared +
-  own-tenant configs with a workspace context — NEVER other tenants'
-  metadata.
+  NOTHING without a resolved tenant context, and ONLY the own-tenant
+  configs with a workspace context — NEVER other tenants' metadata.
 - Middleware soft resolution: a bypassed public GET carrying a valid
-  ``X-Tenant`` binds the tenant context (so workspace-scoped reads see
-  shared + own); an invalid slug degrades to the shared-only public view
-  (never a 403 on a public read).
+  ``X-Tenant`` binds the tenant context; an invalid slug degrades to the
+  empty public view (never a 403 on a public read).
 """
 from __future__ import annotations
 
 import os
+import time
 import uuid
 from unittest.mock import AsyncMock, patch
 
@@ -47,10 +45,11 @@ os.environ.setdefault("ENVIRONMENT", "test")
 from app.core.tenant_context import TenantContext, get_tenant_context  # noqa: E402
 from app.db.models.identity_provider_config import IdentityProviderConfig  # noqa: E402
 from app.db.session import Base, get_db  # noqa: E402
-from app.services.oidc_config_service import OIDCConfigService  # noqa: E402
+from app.services.oidc_config_service import OIDCConfigError, OIDCConfigService
 
 TENANT_A = uuid.UUID("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")
 TENANT_B = uuid.UUID("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb")
+ROOT_TENANT = uuid.UUID("cccccccc-cccc-cccc-cccc-cccccccccccc")
 
 CTX_A = TenantContext(tenant_id=TENANT_A, slug="acme", name="Acme")
 CTX_B = TenantContext(tenant_id=TENANT_B, slug="globex", name="Globex")
@@ -120,25 +119,38 @@ def _provider_row(scope: str, tenant_id, issuer: str) -> IdentityProviderConfig:
 
 
 class TestSharedSlotLookup:
-    async def test_get_by_scope_shared_slot_resolves_null_tenant_row(self, db):
-        """FIX-20261001-010107 (latent bug): with multi-tenancy ON and
-        tenant_id=None the SQL must be ``tenant_id IS NULL`` — the legacy
-        ``== None`` form compiled to ``tenant_id = NULL`` (matches nothing),
-        so every shared-slot CRUD operation failed with 400."""
+    async def test_get_by_scope_without_tenant_resolves_nothing(self, db):
+        """The shared NULL-tenant slot is RETIRED: with multi-tenancy ON
+        and tenant_id=None the lookup resolves NOTHING — even a legacy
+        NULL-tenant row present in the DB stays inert."""
         await _set_tenancy(db, True)
         db.add(_provider_row("user", None, "https://shared.example.com"))
         await db.commit()
         config = await OIDCConfigService().get_by_scope(db, "user", tenant_id=None)
-        assert config is not None
-        assert config.issuer_url == "https://shared.example.com"
+        assert config is None
 
-    async def test_get_by_scope_shared_slot_ignores_tenant_rows(self, db):
-        """The shared lookup must not match a tenant-bound row either."""
+    async def test_get_by_scope_without_tenant_ignores_tenant_rows(self, db):
+        """The tenant-less lookup must not match a tenant-bound row either."""
         await _set_tenancy(db, True)
         db.add(_provider_row("user", TENANT_A, "https://idp-a.example.com"))
         await db.commit()
         config = await OIDCConfigService().get_by_scope(db, "user", tenant_id=None)
         assert config is None
+
+    async def test_create_without_tenant_is_rejected(self, db):
+        """Writes require a resolved tenant — the shared slot is never
+        written."""
+        await _set_tenancy(db, True)
+        with pytest.raises(OIDCConfigError):
+            await OIDCConfigService().create_provider(
+                db,
+                provider_scope="user",
+                provider_type="keycloak",
+                display_name="shared",
+                issuer_url="https://shared.example.com",
+                client_id="client-shared",
+                tenant_id=None,
+            )
 
 
 # ── Handler-level app harness ────────────────────────────────────────────────
@@ -220,8 +232,11 @@ async def _allow():  # pragma: no cover — overridden dependency stub
 
 @pytest_asyncio.fixture
 async def seeded_two_tenants(db):
-    """Tenancy ON + (user, A) and (user, B) provider rows."""
+    """Tenancy ON + (user, A) and (user, B) provider rows + the ROOT tenant."""
+    from app.db.models.tenant import Tenant
+
     await _set_tenancy(db, True)
+    db.add(Tenant(id=ROOT_TENANT, name="Root", slug="root", is_system_tenant=True))
     db.add_all(
         [
             _provider_row("user", TENANT_A, "https://idp-a.example.com"),
@@ -317,48 +332,22 @@ class TestTenantContextCrud:
         }
         assert rows == {TENANT_B}  # only B remains
 
-    async def test_update_without_tenant_context_targets_shared_slot(
+    async def test_update_without_tenant_context_resolves_nothing(
         self, api, db, seeded_two_tenants
     ):
         """Platform-context-shaped request on /system/*: the middleware A3
         pins keep writes fail-closed 403 (resolution rejects before the
         handler).  Here the test middleware admits the request (super admin)
-        — the handler must address the SHARED slot (tenant_id=None), not
-        silently fail against ``tenant_id = NULL`` rows."""
+        — with NO resolved tenant context the handler resolves NOTHING (the
+        shared NULL-tenant slot is retired), so the update fails 400."""
         db.add(_provider_row("user", None, "https://shared.example.com"))
         await db.commit()
         resp = await api.put(
             f"{USER_PATH}/user",
             json={"issuer_url": "https://shared-v2.example.com"},
         )
-        assert resp.status_code == 200, resp.text
-        shared = (
-            await db.execute(
-                select(IdentityProviderConfig).where(
-                    IdentityProviderConfig.tenant_id.is_(None),
-                    IdentityProviderConfig.provider_scope == "user",
-                )
-            )
-        ).scalar_one()
-        assert shared.issuer_url == "https://shared-v2.example.com"
-
-
-class TestPlatformSurface:
-    """T4: the SHARED provider config is managed from /platform/*.  The
-    shared slot must never be addressable from a tenant-scoped request."""
-
-    async def test_t4_platform_create_targets_shared_slot(self, api, db, seeded_two_tenants):
-        resp = await api.post(
-            PLATFORM_PATH,
-            json={
-                "provider_scope": "user",
-                "provider_type": "keycloak",
-                "display_name": "shared",
-                "issuer_url": "https://shared.example.com",
-                "client_id": "client-shared",
-            },
-        )
-        assert resp.status_code == 201, resp.text
+        assert resp.status_code == 400, resp.text
+        # The legacy NULL-tenant row is untouched and still inert.
         shared = (
             await db.execute(
                 select(IdentityProviderConfig).where(
@@ -369,23 +358,51 @@ class TestPlatformSurface:
         ).scalar_one()
         assert shared.issuer_url == "https://shared.example.com"
 
-    async def test_t4_platform_update_toggles_shared_slot(self, api, db, seeded_two_tenants):
-        db.add(_provider_row("user", None, "https://shared.example.com"))
+
+class TestPlatformSurface:
+    """The ROOT tenant's provider configs are managed from /platform/*
+    (platform admins manage root = their own tenant).  The shared
+    NULL-tenant slot is never addressed."""
+
+    async def test_t4_platform_create_targets_root_slot(self, api, db, seeded_two_tenants):
+        resp = await api.post(
+            PLATFORM_PATH,
+            json={
+                "provider_scope": "agent",
+                "provider_type": "keycloak",
+                "display_name": "root-agent",
+                "issuer_url": "https://root-agent.example.com",
+                "client_id": "client-root-agent",
+            },
+        )
+        assert resp.status_code == 201, resp.text
+        root = (
+            await db.execute(
+                select(IdentityProviderConfig).where(
+                    IdentityProviderConfig.tenant_id == ROOT_TENANT,
+                    IdentityProviderConfig.provider_scope == "agent",
+                )
+            )
+        ).scalar_one()
+        assert root.issuer_url == "https://root-agent.example.com"
+
+    async def test_t4_platform_update_toggles_root_slot(self, api, db, seeded_two_tenants):
+        db.add(_provider_row("user", ROOT_TENANT, "https://root.example.com"))
         await db.commit()
         resp = await api.put(
             f"{PLATFORM_PATH}/user",
-            json={"display_name": "shared-v2"},
+            json={"display_name": "root-v2"},
         )
         assert resp.status_code == 200, resp.text
-        shared = (
+        root = (
             await db.execute(
                 select(IdentityProviderConfig).where(
-                    IdentityProviderConfig.tenant_id.is_(None),
+                    IdentityProviderConfig.tenant_id == ROOT_TENANT,
                     IdentityProviderConfig.provider_scope == "user",
                 )
             )
         ).scalar_one()
-        assert shared.display_name == "shared-v2"
+        assert root.display_name == "root-v2"
         # Tenant slots untouched.
         a = (
             await db.execute(
@@ -397,47 +414,56 @@ class TestPlatformSurface:
         ).scalar_one()
         assert a.display_name == "user-aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
 
-    async def test_platform_delete_removes_shared_slot_only(self, api, db, seeded_two_tenants):
-        db.add(_provider_row("user", None, "https://shared.example.com"))
+    async def test_platform_delete_removes_root_slot_only(self, api, db, seeded_two_tenants):
+        db.add(_provider_row("user", ROOT_TENANT, "https://root.example.com"))
         await db.commit()
         resp = await api.delete(f"{PLATFORM_PATH}/user")
         assert resp.status_code == 204, resp.text
         remaining = (
             await db.execute(
                 select(IdentityProviderConfig).where(
-                    IdentityProviderConfig.tenant_id.is_(None)
+                    IdentityProviderConfig.tenant_id == ROOT_TENANT
                 )
             )
         ).scalars().all()
         assert remaining == []
+        # Other tenants' rows untouched.
+        others = (
+            await db.execute(
+                select(IdentityProviderConfig).where(
+                    IdentityProviderConfig.tenant_id.in_([TENANT_A, TENANT_B])
+                )
+            )
+        ).scalars().all()
+        assert len(others) == 2
 
-    async def test_platform_list_returns_shared_only(self, api, db, seeded_two_tenants):
-        db.add(_provider_row("user", None, "https://shared.example.com"))
+    async def test_platform_list_returns_root_only(self, api, db, seeded_two_tenants):
+        db.add(_provider_row("user", ROOT_TENANT, "https://root.example.com"))
         await db.commit()
         resp = await api.get(PLATFORM_PATH)
         assert resp.status_code == 200, resp.text
         items = resp.json()["items"]
-        assert [i["display_name"] for i in items] == ["user-global"]
+        assert [i["display_name"] for i in items] == ["user-cccccccc-cccc-cccc-cccc-cccccccccccc"]
 
 
 class TestPublicListPrivacy:
-    """T5: the public listing never leaks other tenants' metadata."""
+    """T5: the public listing never leaks other tenants' metadata — and
+    with no resolved tenant context it returns NOTHING."""
 
-    async def test_no_tenant_context_returns_shared_only(self, api, db, seeded_two_tenants):
+    async def test_no_tenant_context_returns_empty(self, api, db, seeded_two_tenants):
         db.add(_provider_row("user", None, "https://shared.example.com"))
         await db.commit()
         resp = await api.get(USER_PATH)
         assert resp.status_code == 200
-        names = {i["display_name"] for i in resp.json()["items"]}
-        assert names == {"user-global"}  # NO idp-a / idp-b rows
+        assert resp.json()["items"] == []  # no tenant resolved = no providers
 
-    async def test_tenant_context_returns_shared_plus_own(self, api, db, seeded_two_tenants):
+    async def test_tenant_context_returns_own_only(self, api, db, seeded_two_tenants):
         db.add(_provider_row("user", None, "https://shared.example.com"))
         await db.commit()
         resp = await api.get(USER_PATH, headers=_hdrs(CTX_A))
         assert resp.status_code == 200
         names = {i["display_name"] for i in resp.json()["items"]}
-        assert names == {"user-global", f"user-{TENANT_A}"}
+        assert names == {f"user-{TENANT_A}"}  # own only — no shared, no B
 
     async def test_never_other_tenants_rows(self, api, db, seeded_two_tenants):
         resp = await api.get(USER_PATH, headers=_hdrs(CTX_A))
@@ -536,3 +562,236 @@ class TestBypassedGetSoftResolution:
 
 
 from fastapi import Request as FastAPIRequest  # noqa: E402
+
+
+# ── Test connection: client validation & test-login hardening ───────────────
+
+
+class TestConnectionClientValidation:
+    """test_connection validates the client after discovery and reports
+    the outcome in ``client_id_status``; test-login rejects an empty
+    client_id and never echoes stored secrets via the status poll."""
+
+    async def test_missing_client_id_is_warning_not_failure(self):
+        import app.services.oidc_config_service as svc_module
+
+        discovery = {
+            "issuer": "https://idp.example.com",
+            "authorization_endpoint": "https://idp.example.com/auth",
+        }
+
+        class _Client:
+            def __init__(self, *a, **k):
+                pass
+
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, *a):
+                return False
+
+            async def get(self, url):
+                raise AssertionError("no authorization probe expected without client_id")
+
+        with patch.object(
+            svc_module, "_fetch_discovery", AsyncMock(return_value=discovery)
+        ), patch.object(svc_module.httpx, "AsyncClient", _Client):
+            result = await svc_module.OIDCConfigService().test_connection(
+                issuer_url="https://idp.example.com", client_id=""
+            )
+        assert result["success"] is True  # warning, not failure
+        status = result["client_id_status"]
+        assert status["status"] == "missing"
+        assert status["client_id"] is None
+        step = next(s for s in result["steps"] if s["step"] == "client_validation")
+        assert step["status"] == "warning"
+
+    async def test_definitive_invalid_client_fails(self):
+        import app.services.oidc_config_service as svc_module
+
+        discovery = {
+            "issuer": "https://idp.example.com",
+            "authorization_endpoint": "https://idp.example.com/auth",
+        }
+        html = "<html><body><div class='error'>Client not found.</div></body></html>"
+
+        class _Resp:
+            status_code = 400
+            text = html
+
+        class _Client:
+            def __init__(self, *a, **k):
+                pass
+
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, *a):
+                return False
+
+            async def get(self, url):
+                assert "client_id=ghost-client" in url
+                assert "response_type=code" in url
+                return _Resp()
+
+        with patch.object(
+            svc_module, "_fetch_discovery", AsyncMock(return_value=discovery)
+        ), patch.object(svc_module.httpx, "AsyncClient", _Client):
+            result = await svc_module.OIDCConfigService().test_connection(
+                issuer_url="https://idp.example.com", client_id="ghost-client"
+            )
+        assert result["success"] is False
+        assert result["client_id_status"]["status"] == "invalid"
+        step = next(s for s in result["steps"] if s["step"] == "client_validation")
+        assert step["status"] == "failed"
+
+    async def test_ambiguous_client_response_passes_ok(self):
+        """IdPs commonly render their login page for ANY client_id — only
+        a definitive invalid-client error may fail the probe."""
+        import app.services.oidc_config_service as svc_module
+
+        discovery = {
+            "issuer": "https://idp.example.com",
+            "authorization_endpoint": "https://idp.example.com/auth",
+        }
+
+        class _Resp:
+            status_code = 200
+            text = "<html><body>Sign in</body></html>"
+
+        class _Client:
+            def __init__(self, *a, **k):
+                pass
+
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, *a):
+                return False
+
+            async def get(self, url):
+                return _Resp()
+
+        with patch.object(
+            svc_module, "_fetch_discovery", AsyncMock(return_value=discovery)
+        ), patch.object(svc_module.httpx, "AsyncClient", _Client):
+            result = await svc_module.OIDCConfigService().test_connection(
+                issuer_url="https://idp.example.com", client_id="parthenon-api"
+            )
+        assert result["success"] is True
+        assert result["client_id_status"]["status"] == "ok"
+        assert result["client_id_status"]["client_id"] == "parthenon-api"
+
+    async def test_update_with_empty_client_id_rejected(self, api, db, seeded_two_tenants):
+        """The legacy empty-client_id rows (pre-validation) can no longer
+        be (re)written without a client_id."""
+        resp = await api.put(
+            f"{USER_PATH}/user",
+            json={"client_id": "  "},
+            headers=_hdrs(CTX_A),
+        )
+        assert resp.status_code == 400
+        assert "client_id" in resp.json()["detail"]
+
+    async def _login_session(self, api):
+        from app.api.v1.system_config import _test_sessions
+        import app.services.oidc_config_service as svc_module
+
+        discovery = {
+            "issuer": "https://idp.example.com",
+            "authorization_endpoint": "https://idp.example.com/auth",
+        }
+
+        class _Resp:
+            status_code = 200
+            text = "<html><body>Sign in</body></html>"
+
+        class _Client:
+            def __init__(self, *a, **k):
+                pass
+
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, *a):
+                return False
+
+            async def get(self, url):
+                return _Resp()
+
+        with patch.object(
+            svc_module, "_fetch_discovery", AsyncMock(return_value=discovery)
+        ), patch.object(svc_module.httpx, "AsyncClient", _Client):
+            resp = await api.post(
+                f"{USER_PATH}/test-login",
+                json={
+                    "issuer_url": "https://idp.example.com",
+                    "client_id": "client-agent",
+                    "client_secret": "s3cret-value",
+                },
+                headers=_hdrs(CTX_A),
+            )
+        assert resp.status_code == 200, resp.text
+        test_id = resp.json()["test_id"]
+        return _test_sessions, test_id
+
+    async def test_test_login_requires_client_id(self, api, seeded_two_tenants):
+        import app.services.oidc_config_service as svc_module
+
+        discovery = {"issuer": "https://idp.example.com"}
+        with patch.object(
+            svc_module, "_fetch_discovery", AsyncMock(return_value=discovery)
+        ):
+            resp = await api.post(
+                f"{USER_PATH}/test-login",
+                json={"issuer_url": "https://idp.example.com", "client_id": ""},
+                headers=_hdrs(CTX_A),
+            )
+        assert resp.status_code == 400
+        assert "client_id" in resp.json()["detail"]
+
+    async def test_test_login_status_never_leaks_secret(self, api, seeded_two_tenants):
+        import app.services.oidc_config_service as svc_module
+
+        discovery = {
+            "issuer": "https://idp.example.com",
+            "authorization_endpoint": "https://idp.example.com/auth",
+        }
+        with patch.object(
+            svc_module, "_fetch_discovery", AsyncMock(return_value=discovery)
+        ):
+            _sessions, test_id = await self._login_session(api)
+
+        resp = await api.get(
+            f"{USER_PATH}/test-login/status/{test_id}", headers=_hdrs(CTX_A)
+        )
+        assert resp.status_code == 200
+        body = resp.text
+        assert "s3cret-value" not in body
+        assert resp.json()["status"] == "initiated"
+
+    async def test_test_login_status_expires_abandoned_session(
+        self, api, seeded_two_tenants
+    ):
+        import app.api.v1.system_config as sc_module
+        import app.services.oidc_config_service as svc_module
+
+        discovery = {
+            "issuer": "https://idp.example.com",
+            "authorization_endpoint": "https://idp.example.com/auth",
+        }
+        with patch.object(
+            svc_module, "_fetch_discovery", AsyncMock(return_value=discovery)
+        ):
+            _sessions, test_id = await self._login_session(api)
+
+        # Age the session past the TTL → status poll must terminate it.
+        sc_module._test_sessions[test_id]["created_ts"] = (
+            time.monotonic() - sc_module._TEST_SESSION_TTL_SECONDS - 1
+        )
+        resp = await api.get(
+            f"{USER_PATH}/test-login/status/{test_id}", headers=_hdrs(CTX_A)
+        )
+        assert resp.status_code == 200
+        assert resp.json()["status"] == "failed"
+        assert "expired" in resp.json()["error"]

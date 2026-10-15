@@ -300,8 +300,12 @@ def _build_output_json_schema(dt: Any) -> dict | None:
             prop["description"] = description
         if ftype == "enum":
             prop["type"] = "string"
-            if f.get("enum_values"):
-                prop["enum"] = f["enum_values"]
+            raw_enum = f.get("enum_values")
+            if raw_enum:
+                prop["enum"] = [
+                    entry if isinstance(entry, str) else str(entry.get("value"))
+                    for entry in raw_enum
+                ]
         elif ftype == "date":
             prop["type"] = "string"
         elif ftype in ("string", "number", "boolean"):
@@ -334,11 +338,19 @@ def _build_output_schema_prompt(dt: Any) -> str | None:
         ftype = f.get("type", "string")
         required = f.get("required", False)
         description = f.get("description", "")
-        enum_values = f.get("enum_values")
+        raw_enum = f.get("enum_values")
         req_label = "**required**" if required else "optional"
         type_detail = f"**{ftype}** ({req_label})"
-        if enum_values:
-            type_detail += f" — allowed values: {', '.join(str(v) for v in enum_values)}"
+        if raw_enum:
+            enum_details = []
+            for entry in raw_enum:
+                if isinstance(entry, str):
+                    enum_details.append(f"`{entry}`")
+                else:
+                    val = str(entry.get("value"))
+                    desc = entry.get("description")
+                    enum_details.append(f"`{val}`" + (f" ({desc})" if desc else ""))
+            type_detail += " — allowed values: " + ", ".join(enum_details)
         lines.append(f"- **{name}** ({type_detail})")
         if description:
             lines.append(f"  {description}")
@@ -423,6 +435,8 @@ async def get_agent_context(
     # ── Resolve allowed tools ─────────────────────────────────────────────────
     allowed_tools: set[str] = set()
     resolved_tool_names_raw: set[str] = set()
+    decision_tools_resolved: list[Any] = []  # DecisionTool rows from virtual bindings
+    decision_unready_names: set[str] = set()  # enabled-but-unready (stub defs)
     skill_ids: set[uuid.UUID] = set()
     sops_summary: list[SopSummary] = []
     skills_summary: list[SkillSummary] = []
@@ -613,6 +627,54 @@ async def get_agent_context(
                     resolved_tool_names_raw.add(tool_name)
                     allowed_tools.add(_canonicalize_tool_identifier(tool_name))
 
+        # ── Decision tools (virtual bindings — no mcp_tools row) ─────────────
+        # SkillToolBinding rows for decision tools store a deterministic
+        # uuid5 virtual id that never matches mcp_tools (the INNER JOIN
+        # above drops them).  Resolve those leftovers strictly within the
+        # calling tenant and surface them as ``decision____<name>``.
+        if skill_ids:
+            from app.db.models.decision_tools import DecisionTool  # noqa: F401
+            from app.db.tenant_scoping import scope_for_session
+            from app.services.system_one.decision_tool_service import (
+                is_decision_tool_ready,
+                resolve_virtual_tool_id,
+            )
+
+            binding_id_rows = await db.execute(
+                select(SkillToolBinding.tool_id).where(
+                    SkillToolBinding.skill_id.in_(skill_ids)
+                )
+            )
+            binding_tool_ids = [row[0] for row in binding_id_rows.fetchall()]
+            if binding_tool_ids:
+                matched_rows = await db.execute(
+                    select(McpTool.id).where(McpTool.id.in_(binding_tool_ids))
+                )
+                matched_ids = {row[0] for row in matched_rows.fetchall()}
+                unmatched_ids = [
+                    tid for tid in binding_tool_ids if tid not in matched_ids
+                ]
+                _tenant_id = scope_for_session(db)
+                for virtual_id in unmatched_ids:
+                    tool = await resolve_virtual_tool_id(db, virtual_id, _tenant_id)
+                    if tool is None:
+                        continue
+                    if not is_decision_tool_ready(tool):
+                        # Enabled-but-unready: register a STUB so the LLM
+                        # knows the tool exists but is unavailable (it must
+                        # REPORT that instead of emitting raw tool-call
+                        # syntax). The dispatch path returns an in-band
+                        # not-ready error if it is ever called.
+                        logger.warning(
+                            "decision tool '%s' is enabled but not ready: "
+                            "missing input/output data type — registered "
+                            "as an unavailable stub in the toolset",
+                            tool.name,
+                        )
+                        decision_unready_names.add(tool.name)
+                    decision_tools_resolved.append(tool)
+                    allowed_tools.add(build_tool_name("decision", tool.name))
+
     # ── Tool definitions (OpenAI format) ─────────────────────────────────────
     tool_definitions: list[dict[str, Any]] = []
     tool_name_map: dict[str, str] = {}
@@ -642,6 +704,36 @@ async def get_agent_context(
                     },
                 }
             )
+
+    # Add decision tool schemas built from the System One definition
+    # (decision tools have no mcp_tools row).
+    from app.services.system_one.decision_tool_service import (
+        UNAVAILABLE_TOOL_NOTE,
+        build_input_schema,
+        generate_tool_description,
+    )
+
+    for tool in sorted(decision_tools_resolved, key=lambda t: t.name):
+        canonical_tool_name = build_tool_name("decision", tool.name)
+        sanitized = canonical_tool_name.replace("____", "__")
+        tool_name_map[sanitized] = canonical_tool_name
+        description = generate_tool_description(tool)
+        if tool.name in decision_unready_names:
+            # Stub tool: permissive schema (input type unknown) + the
+            # unavailable note so the model prefers NOT to call it and
+            # reports the unavailability to the user instead.
+            description = f"{description}\n\n{UNAVAILABLE_TOOL_NOTE}"
+        tool_definitions.append(
+            {
+                "type": "function",
+                "function": {
+                    "name": sanitized,
+                    "description": description,
+                    "parameters": build_input_schema(tool)
+                    or {"type": "object", "properties": {}},
+                },
+            }
+        )
 
     # Add system tool schemas only when they are explicitly present in allowed_tools.
     for tool_name in sorted(allowed_tools):

@@ -13,6 +13,8 @@ import uuid
 from typing import Any
 
 import httpx
+
+from app.core.internal_http import internal_httpx_client
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 
@@ -104,13 +106,11 @@ async def trigger_agent_execution(
     }
 
     def _build_headers() -> dict:
-        """Build request headers with current cert (re-read on each retry for freshness)."""
-        hdrs: dict = {}
-        # Multi-tenancy: forward the signed tenant context received
-        # from CC so Agent Runtime binds the execution to the tenant.
+        """Build request headers with current cert (re-read on each retry for freshness).
 
-        from app.core.tenant_signature import forward_tenant_headers
-        hdrs.update(forward_tenant_headers())
+        Tenant headers are attached by the internal_httpx_client egress hook.
+        """
+        hdrs: dict = {}
         mgr = getattr(request.app.state, "certificate_manager", None)
         if mgr and mgr.cert_path and mgr.key_path:
             if ar_base.startswith("https://"):
@@ -152,7 +152,7 @@ async def trigger_agent_execution(
                 await asyncio.sleep(delay)
             
             headers = _build_headers()
-            async with httpx.AsyncClient(**client_kwargs) as client:
+            async with internal_httpx_client(**client_kwargs) as client:
                 response = await client.post(
                     ar_endpoint,
                     json=payload,

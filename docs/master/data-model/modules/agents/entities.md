@@ -4,6 +4,7 @@
 erDiagram
     ModelConfig {
         uuid id
+        uuid tenant_id "mandatory; display_name unique per tenant"
         string name
         enum provider_type "12 providers — 4 incumbent (openai, anthropic, litellm_proxy, azure_openai) + 8 new (gemini, mistral, cohere, groq, together, fireworks, perplexity, deepseek). Adding a new value is a release-led activity."
         string api_endpoint
@@ -15,6 +16,7 @@ erDiagram
     }
     AgentRole {
         uuid id
+        uuid tenant_id "mandatory; name unique per tenant"
         string name
         string slug
         string description
@@ -51,6 +53,7 @@ erDiagram
     }
     AgentIdentity {
         uuid id
+        uuid tenant_id "mandatory; name unique per tenant"
         string name
         string slug
         string display_name
@@ -69,12 +72,13 @@ erDiagram
     }
     AgentType {
         uuid id
+        uuid tenant_id "mandatory; name unique per tenant"
         string name
         string slug
         string display_name
         string description
-        uuid identity_id
-        uuid role_id
+        uuid identity_id "same tenant"
+        uuid role_id "same tenant"
         string model_id
         string system_instruction
         enum input_type
@@ -149,6 +153,7 @@ erDiagram
     }
     AgentData {
         uuid id
+        uuid tenant_id "mandatory; get_data matches the calling tenant only"
         uuid agent_type_id
         uuid session_id
         string data_name
@@ -159,6 +164,7 @@ erDiagram
     }
     AgentOutput {
         uuid id
+        uuid tenant_id "mandatory; get_output/query_result match the calling tenant only"
         uuid data_type_id
         uuid agent_type_id
         uuid execution_session_id
@@ -169,10 +175,11 @@ erDiagram
     }
     AgentDataType {
         uuid id
-        string name
-        string slug
+        uuid tenant_id "mandatory; no platform-shared types"
+        string name "unique per tenant"
+        string slug "unique per tenant"
         string description
-        json fields "array of typed field definitions"
+        json fields "typed field definitions; enum fields carry {value, description} entries"
         datetime created_at
         datetime updated_at
     }
@@ -284,6 +291,8 @@ erDiagram
 
 **Sources**: `backend/app/db/models/agents.py`, `backend/app/db/models/agent_data.py`, `backend/app/db/models/agent_output.py`, `backend/app/db/models/agent_data_type.py`, `backend/app/db/models/agent_security.py`
 
+**Tenant containment:** `ModelConfig`, `AgentRole`, `AgentIdentity`, `AgentType`, `AgentData`, `AgentOutput`, and `AgentDataType` carry a **mandatory** tenant reference; names, slugs, and display names are unique **per tenant only** (NULL-tenant global uniqueness variants retired). Bindings resolve within the tenant: agent type → skill/SOP bindings and role grants are same-tenant only; SOP delegation steps and A2A delegation **by name** resolve the target agent type by **(tenant, name)** — a name collision across tenants never routes to the wrong tenant's agent. Data saves and typed output queries match the calling tenant only.
+
 | Entity | Description |
 |--------|-------------|
 | **ModelConfig** | A named, reusable LLM provider backend configuration. Stores provider type, API endpoint, encrypted credentials, and the explicit list of enabled model IDs. The runtime resolves which config to use by matching a model ID against `enabled_models` on active configs. |
@@ -303,14 +312,14 @@ erDiagram
 | **AgentA2ASessionLink** | Tracks A2A requester/receiver linkage for delegated runs. Supports shared-session lifecycle tracking, receiver cleanup decisions, and delegated execution status visibility. |
 | **AgentData** | A named, typed data record explicitly saved via the `save_data` tool during an agent execution session. Multiple AgentData records may exist per session (intermediate, optional); each is scoped to an AgentType and AgentSession. Queried at runtime via `get_data` by data_name and session. |
 | **AgentOutput** | Immutable record of a single typed agent execution result. Links the agent type, execution session, and data type schema together with validated field values. `validation_status` is `valid` when field values pass schema validation, `validation_error` otherwise. `raw_output` stores the unparsed agent output as a fallback for UI rendering when validation fails. `field_values` stores values keyed by field name per the referenced `AgentDataType` schema. |
-| **AgentDataType** | Central registry of reusable output schemas. Each type defines a named collection of typed fields (`fields` is an ordered array of field definitions with name, type, and validation constraints) that agent types reference as their output contract. The `slug` is the canonical identifier used by the `query_result` tool at runtime. |
+| **AgentDataType** | Central registry of reusable output schemas. Each type defines a named collection of typed fields (`fields` is an ordered array of field definitions with name, type, and validation constraints) that agent types reference as their output contract. **Enum fields** carry allowed values as `{value, description}` entries (legacy bare strings are still accepted and treated as description-less). The `slug` is the canonical identifier used by the `query_result` tool at runtime. Tenant-owned (no platform-shared types); name and slug are unique per tenant only and resolve within the calling tenant. Cannot be deleted while referenced by an agent type or a decision tool. |
 | **AgentPlan** | Stores the most recent LLM-generated implementation plan for an agent type. One record per `AgentType` (unique on `agent_type_id`). `plan_steps` is a structured, ordered plan payload that is both human-readable (for UI preview) and machine-parseable (for runtime execution guidance). `topology` is an opaque node-edge JSON payload produced by the Topology Builder service for frontend rendering. `generation_status` tracks `pending` \| `success` \| `failed` state; `generation_error` captures the failure reason without discarding the last successful plan. `agent_config_hash` is a hash of the inputs at generation time (role, SOPs, skills, system instruction) used to detect plan staleness. The Agent Runtime loads the saved plan during session initialization to guide execution. |
 | **AgentInstanceCertificate** | X.509 certificate issued to a specific agent runtime instance by the Control Center CA. Tracks the full certificate lifecycle: issuance, expiration (24-hour validity), and revocation. The `instance_id` combined with `agent_type_id` uniquely identifies the runtime instance. `status` is computed: `revoked` if `revoked_at` is set, `expired` if past `expires_at`, otherwise `active`. |
 | **TokenRefreshLog** | Audit trail for every automatic OAuth token refresh attempt on an agent identity. Records the outcome (`success`, `failure`, `rate_limited`), retry attempt number, and any error message. Supports compliance review and debugging of refresh failures. Old entries (> 90 days) may be archived. |
 
 **Business rules:**
-- `AgentType.slug` is the canonical agent routing identifier and must be unique and normalized.
-- Agent identity runtime identifier (name/slug) must be slug-safe for protocol metadata and routing.
+- `AgentType.slug` is the canonical agent routing identifier within its tenant, unique and normalized. A2A and SOP delegation by name resolve targets by **(tenant, name)**.
+- Agent identity runtime identifier (name/slug) must be slug-safe for protocol metadata and routing; identities are tenant-owned and identity–role assignments are same-tenant only.
 - Role-to-agent-type allow-list mappings are used to preview and enforce delegation boundaries.
 - Binding order is shared across both SOP and skill binding types — the merged list sorted by `order` defines the curated capability sequence for plan generation and system instruction context.
 - Bound SOPs and skills must be accessible through at least one role assigned to the agent type; validation runs on save and rejects invalid references.
@@ -318,7 +327,7 @@ erDiagram
 - A session in `waiting_for_human` may transition to `running` (resume), `terminated` (operator terminated), or `failed` (system error during resume).
 - Multiple concurrent intervene requests per session are not permitted — a duplicate `human_intervene` call while a `pending` request exists returns the existing request ID.
 - When a session transitions from `waiting_for_human` to `terminated`, all `pending` intervene requests for that session are automatically marked `cancelled`.
-- `AgentDataType.name` must be unique. At least one field is required in `fields`.
+- `AgentDataType.name` and `AgentDataType.slug` must be unique **per tenant**. At least one field is required in `fields`.
 - `AgentDataType.slug` is the canonical identifier used by the `query_result` tool at runtime and should be slug-safe.
 - When `AgentType.output_type` is `typed`, `output_data_type_id` must be non-null; it must be null for `auto` and `markdown` output types.
 - `AgentOutput.validation_status` is `valid` when `field_values` passes schema validation against the referenced `AgentDataType.fields`, `validation_error` otherwise.

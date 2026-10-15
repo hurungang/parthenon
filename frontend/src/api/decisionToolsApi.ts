@@ -7,10 +7,12 @@
  * are exposed as `decision____<name>` MCP tools.
  */
 import apiClient from './apiClient'
+import type { DecisionEnabledModel } from './systemOneApi'
 
 export type DecisionToolStatus = 'draft' | 'active' | 'disabled'
 export type DecisionQuestionType = 'choice' | 'score' | 'noul'
-export type StatePresetSource = 'input' | 'agent_data'
+/** State maps from the execution input only (agent_data is retired). */
+export type StatePresetSource = 'input'
 
 /** Read-only summary of a referenced AgentDataType. */
 export interface AgentDataTypeSummary {
@@ -51,8 +53,15 @@ export interface DecisionTool {
   act_threshold: number
   confirm_threshold: number
   provider_model: string
+  /** Selected enabled decision model (replaces legacy provider_model). */
+  decision_model_availability_id: string | null
+  provider_type: string | null
+  provider_display_name: string | null
+  model_name: string | null
   status: DecisionToolStatus
   enabled: boolean
+  /** Readiness: both input and output data types are configured. */
+  ready: boolean
   is_system: boolean
   created_at: string
   updated_at: string
@@ -68,6 +77,7 @@ export interface DecisionToolCreate {
   act_threshold?: number
   confirm_threshold?: number
   provider_model?: string
+  decision_model_availability_id?: string | null
   status?: DecisionToolStatus
   enabled?: boolean
   questions: DecisionToolQuestion[]
@@ -81,6 +91,7 @@ export interface DecisionToolUpdate {
   act_threshold?: number
   confirm_threshold?: number
   provider_model?: string
+  decision_model_availability_id?: string | null
   status?: DecisionToolStatus
   enabled?: boolean
   questions?: DecisionToolQuestion[]
@@ -138,6 +149,21 @@ export async function getDecisionToolDescription(
 ): Promise<DecisionToolDescription> {
   const { data } = await apiClient.get<DecisionToolDescription>(
     `/decision-tools/${id}/description`,
+  )
+  return data
+}
+
+// ── Enabled decision models (authoring selector) ───────────────────────────
+
+/**
+ * Enabled decision models for the authoring selector (provider enabled AND
+ * model enabled within the caller's tenant).
+ */
+export async function listEnabledModelsForAuthoring(): Promise<
+  DecisionEnabledModel[]
+> {
+  const { data } = await apiClient.get<DecisionEnabledModel[]>(
+    '/decision-tools/enabled-models',
   )
   return data
 }

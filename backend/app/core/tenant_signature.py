@@ -178,6 +178,26 @@ def tenant_context_headers(context: TenantContext | None) -> dict[str, str]:
     return build_tenant_signature_headers(context)
 
 
+def sign_context_for_authenticated_session(context: TenantContext) -> dict[str, str]:
+    """Sign a tenant context for an outbound call originating from an
+    authenticated WebSocket session.
+
+    WebSocket connections bypass the HTTP tenant-resolution middleware, so no
+    CC-signed header set is ever bound for them.  Instead, the WebSocket
+    handler authenticates the user token itself, resolves the tenant from the
+    VERIFIED claims, and binds it via ``set_current_tenant_context`` —
+    provenance equivalent to Control Center's own middleware.  This helper
+    lets such a session mint a FRESH signed header set per outbound call (a
+    signature signed once at connect time would exceed the replay window on
+    any long-lived connection).
+
+    Deliberately distinct from :func:`build_tenant_signature_headers` so the
+    CS-20 receiver-purity scan stays meaningful: receiver middleware in
+    AR/CH must keep FORWARDING what they received and never sign.
+    """
+    return build_tenant_signature_headers(context)
+
+
 # ── Receiver-side forwarding (AR/CH never re-sign) ───────────────────────────
 #
 # Agent Runtime / Communication Hub verify inbound signed headers and then

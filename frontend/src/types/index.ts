@@ -859,11 +859,35 @@ export interface GatewayRequestResponse {
 
 export type DataTypeFieldType = 'string' | 'number' | 'boolean' | 'date' | 'enum'
 
+export interface EnumValueDef {
+  value: string
+  description?: string | null
+}
+
+/** Legacy plain strings and described object values are both valid. */
+export type EnumValue = string | EnumValueDef
+
+export function enumPlainValues(values: EnumValue[] | null | undefined): string[] {
+  if (!values) return []
+  return values.map((v) => (typeof v === 'string' ? v : v.value))
+}
+
+export function enumValueDescriptions(
+  values: EnumValue[] | null | undefined,
+): Record<string, string | null> {
+  const result: Record<string, string | null> = {}
+  for (const v of values ?? []) {
+    if (typeof v === 'string') result[v] = null
+    else result[v.value] = v.description ?? null
+  }
+  return result
+}
+
 export interface AgentDataTypeField {
   name: string
   description?: string
   type: DataTypeFieldType
-  enum_values?: string[] | null
+  enum_values?: EnumValue[] | null
   required?: boolean
   default?: string | number | boolean | null
 }

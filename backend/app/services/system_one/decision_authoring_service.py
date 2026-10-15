@@ -45,16 +45,16 @@ _SYSTEM_PROMPT = (
     'in backticks like `input.tier`", "criteria_options": {...for choice...} '
     "| [...ordered rubric for score...] | null, \"is_required\": true}\n"
     "  ],\n"
-    '  "state_preset": {"state_key": {"source": "input"|"agent_data", '
-    '"key": "data_key"}}\n'
+    '  "state_preset": {"state_key": {"source": "input", '
+    '"key": "input_field_name"}}\n'
     "}\n"
     "Rules: choice questions require a non-empty criteria_options object "
     "(option key → description); score questions require a non-empty ordered "
-    "rubric list; noul questions must have criteria_options null. At least "
-    "one question. Every value the questions need from the execution input "
-    "must be mapped in state_preset with source 'input' and a key that is a "
-    "field of the input data type; reference those state keys in backticks "
-    "inside instructions."
+    "rubric list; noul questions must have criteria_options null. Every "
+    "value the questions need from the execution input must be mapped in "
+    "state_preset with source 'input' and a key that is a field of the "
+    "input data type (source 'agent_data' is retired — never emit it); "
+    "reference those state keys in backticks inside instructions."
 )
 
 

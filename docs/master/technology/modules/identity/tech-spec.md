@@ -634,3 +634,22 @@ Non-sensitive OIDC settings written by `IdentityBootstrapService` after provisio
 | (various) | test | Frontend component and auth state unit tests | `frontend/src/__tests__/` |
 | (various) | test | E2E login flow tests | `e2e/tests/` |
 
+## Strict Tenant Isolation (as-built — strict-tenant-isolation change)
+
+Identity provider configuration is strictly per-tenant — the tenant-less "shared slot" as a fallback-wide is retired in favour of exact tenant matching:
+
+- `OIDCProviderRegistry` resolution remains own `(tenant, scope)` → shared `(None, scope)` → root tenant slot, but none of the slots widens across tenants: token validation for a tenant-bound login context only accepts providers resolvable for that exact tenant.
+- `get_default_provider` resolves the default provider within the bound tenant (root tenant when multi-tenancy is off) — never a platform-global default.
+- `OIDCConfigService` enforces per-tenant scope uniqueness on `identity_provider_configs` (migration `c9d0e1f2a3b4`).
+- Signed tenant headers (`X-Internal-Tenant-*`) carry the resolved identity context on all internal hops; see the [multi-tenancy spec](../multi-tenancy/tech-spec.md).
+
+### As-built Code Reference Map additions
+
+| Symbol | Type | Description | File |
+|--------|------|-------------|------|
+| `OIDCProviderRegistry` | class | Strict per-tenant provider cache: own → shared → root resolution, no tenant widening | `backend/app/services/oidc_provider_registry.py` |
+| `OIDCProviderRegistry.get_default_provider` | method | Default provider resolution within the bound tenant (root tenant when tenancy off) | `backend/app/services/oidc_provider_registry.py` |
+| `OIDCConfigService` | class | Per-tenant provider CRUD with strict per-tenant scope uniqueness | `backend/app/services/oidc_config_service.py` |
+| `_multi_tenancy_on` / `_root_tenant_id` | functions | Tenancy-switch and root-tenant helpers for config scoping | `backend/app/services/oidc_config_service.py` |
+| Per-tenant IdP scope uniqueness | migration | Unique tenant scope on `identity_provider_configs` | `backend/alembic/versions/c9d0e1f2a3b4_unique_tenant_scope_on_identity_provider_configs.py` |
+

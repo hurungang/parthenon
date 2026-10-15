@@ -21,6 +21,7 @@ from typing import Any
 import httpx
 
 from app.communication_hub.mcp.cc_client import build_cc_client, get_control_center_url
+from app.core.internal_http import internal_httpx_client
 from app.services.agents.system_tool_registry import SystemToolRegistry
 from app.services.agents.tool_naming import (
     TOOL_SEPARATOR,
@@ -306,7 +307,11 @@ class ToolRegistryBridge:
             "session_id": session.session_id,
             "tool_args": arguments,
         }
-        result = await self._post_cc(request, cc_base, endpoint, payload)
+        # get_cc_endpoint_map returns FULL URLs — strip the base back off,
+        # _post_cc re-attaches it.
+        result = await self._post_cc(
+            request, cc_base, endpoint[len(cc_base.rstrip("/")):], payload
+        )
         return _text_result(json.dumps(result.get("result", {}), default=str))
 
     async def _call_mcp_tool(
@@ -338,15 +343,12 @@ class ToolRegistryBridge:
     ) -> dict[str, Any]:
         """POST JSON to Control Center over mTLS, returning the decoded body."""
         client_kwargs, headers = build_cc_client(request, cc_base)
-        # Multi-tenancy: forward the session tenant's CC-signed header set
-        # verbatim (CC internal data-plane endpoints fail closed without
-        # it) — same slug in another tenant never resolves here.
-        from app.core.tenant_signature import forward_tenant_headers
-
-        headers.update(forward_tenant_headers())
+        # Tenant headers are attached by the internal_httpx_client egress
+        # hook (forwards the session's CC-signed set verbatim; single-tenant
+        # → headerless, unchanged).
         url = f"{cc_base}{path}"
         try:
-            async with httpx.AsyncClient(**client_kwargs) as client:
+            async with internal_httpx_client(**client_kwargs) as client:
                 response = await client.post(url, json=payload, headers=headers)
                 response.raise_for_status()
                 return response.json()

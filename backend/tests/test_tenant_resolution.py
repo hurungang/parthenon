@@ -362,6 +362,48 @@ class TestMiddlewareSwitchOff:
         assert response.status_code == 200
         assert response.json()["tenant"] is None
 
+    async def test_switch_off_binds_root_default_regardless_of_requested_tenant(
+        self, mw_client, switch, tenancy_engine
+    ):
+        """LOGIN ADMISSION anchor (tenancy OFF): the ROOT tenant is THE
+        default tenant — every (non-bypassed) request resolves INTO the
+        root workspace even when a stray ``X-Tenant`` header names another
+        tenant.  There is no per-callsite tenancy switch: the resolution
+        middleware is the single mechanism."""
+        switch.enabled = False
+        SessionLocal = async_sessionmaker(
+            bind=tenancy_engine, class_=AsyncSession, expire_on_commit=False
+        )
+        tag = uuid.uuid4().hex[:8]
+        async with SessionLocal() as db:
+            # At most one system tenant may exist (partial unique index) —
+            # reuse it when an earlier test in this module created one.
+            root = (
+                await db.execute(
+                    select(Tenant).where(Tenant.is_system_tenant.is_(True))
+                )
+            ).scalar_one_or_none()
+            if root is None:
+                root = Tenant(
+                    name=f"Root-{tag}", slug=f"root-{tag}",
+                    status=TenantStatus.active, is_system_tenant=True,
+                )
+                db.add(root)
+            root_slug = root.slug
+            db.add(
+                Tenant(name=f"Acme-{tag}", slug=f"acme-{tag}", status=TenantStatus.active)
+            )
+            await db.commit()
+
+        response = await mw_client.get(
+            "/api/v1/echo", headers={"X-Tenant": f"acme-{tag}"}
+        )
+        assert response.status_code == 200
+        assert response.json()["tenant"] == root_slug, (
+            "tenancy OFF must bind the ROOT default context regardless of "
+            "any requested tenant address"
+        )
+
 
 class TestMiddlewareSwitchOn:
     @pytest_asyncio.fixture

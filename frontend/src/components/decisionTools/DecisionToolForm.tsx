@@ -5,6 +5,9 @@ import {
   Box,
   Button,
   Chip,
+  Accordion,
+  AccordionDetails,
+  AccordionSummary,
   CircularProgress,
   Dialog,
   DialogActions,
@@ -31,6 +34,7 @@ import AutoFixHighIcon from '@mui/icons-material/AutoFixHigh'
 import DeleteIcon from '@mui/icons-material/Delete'
 import OpenInNewIcon from '@mui/icons-material/OpenInNew'
 import VisibilityIcon from '@mui/icons-material/Visibility'
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore'
 import { useDialogErrorHandler } from '../../hooks/useDialogErrorHandler'
 import PermissionDeniedAlert from '../permissions/PermissionDeniedAlert'
 import {
@@ -44,24 +48,30 @@ import type {
   DecisionToolCreate,
   DecisionToolQuestion,
   DecisionToolStatus,
-  StatePresetSource,
 } from '../../api/decisionToolsApi'
 import { DecisionToolQuestionEditor } from './DecisionToolQuestionEditor'
-import { getSystemOneStatus } from '../../api/systemOneApi'
-import type { SystemOneStatus } from '../../api/systemOneApi'
+import { getSystemOneStatus, listEnabledDecisionModels } from '../../api/systemOneApi'
+import type { DecisionEnabledModel, SystemOneStatus } from '../../api/systemOneApi'
 import { useDataTypes } from '../../hooks/useDataTypes'
 import type { AgentDataType } from '../../types'
-import { detectStatePlaceholdersFromQuestions } from '../../utils/decisionStatePaths'
+import {
+  detectStatePlaceholdersFromQuestions,
+  resolveStateMapping,
+} from '../../utils/decisionStatePaths'
+import type { StateMappingRow } from '../../utils/decisionStatePaths'
 
 interface FormState {
   name: string
   purpose: string
   input_data_type_id: string
   output_data_type_id: string
-  state_preset: { state_key: string; source: StatePresetSource; key: string }[]
+  /** Explicit mappings only (state_key → input property). 1:1 keys need
+      no row — they auto-match from the input data type. */
+  state_preset: StateMappingRow[]
   act_threshold: number
   confirm_threshold: number
-  provider_model: string
+  /** Selected enabled decision model (replaces the legacy provider_model). */
+  decision_model_availability_id: string
   status: DecisionToolStatus
   enabled: boolean
   questions: DecisionToolQuestion[]
@@ -84,10 +94,12 @@ const EMPTY_FORM = (): FormState => ({
   state_preset: [],
   act_threshold: 0.9,
   confirm_threshold: 0.7,
-  provider_model: 'jev-latest',
+  decision_model_availability_id: '',
   status: 'active',
-  enabled: true,
-  questions: [EMPTY_QUESTION()],
+  // New tools start as DISABLED drafts: enabling requires input+output
+  // data types (pre-validated inline), so drafts save cleanly by default.
+  enabled: false,
+  questions: [],
 })
 
 function formFromTool(tool: DecisionTool): FormState {
@@ -96,16 +108,18 @@ function formFromTool(tool: DecisionTool): FormState {
     purpose: tool.purpose ?? '',
     input_data_type_id: tool.input_data_type_id ?? '',
     output_data_type_id: tool.output_data_type_id ?? '',
-    state_preset: Object.entries(tool.state_preset ?? {}).map(
-      ([state_key, mapping]) => ({
+    // Legacy agent_data mappings (retired source) are dropped here —
+    // they disappear on the next save.
+    state_preset: Object.entries(tool.state_preset ?? {})
+      .filter(([, mapping]) => mapping.source === 'input')
+      .map(([state_key, mapping]) => ({
         state_key,
-        source: mapping.source,
         key: mapping.key,
-      }),
-    ),
+      })),
     act_threshold: tool.act_threshold,
     confirm_threshold: tool.confirm_threshold,
-    provider_model: tool.provider_model,
+    decision_model_availability_id:
+      tool.decision_model_availability_id ?? '',
     status: tool.status,
     enabled: tool.enabled,
     questions: tool.questions.map((q) => ({ ...q })),
@@ -183,11 +197,13 @@ export function DecisionToolForm({
   const { dialogError, setDialogError, clearDialogError } = useDialogErrorHandler()
   const [form, setForm] = useState<FormState>(EMPTY_FORM())
   const [formError, setFormError] = useState<string | null>(null)
+  const [advancedOpen, setAdvancedOpen] = useState(false)
   const [saving, setSaving] = useState(false)
   const [generating, setGenerating] = useState(false)
   const [statusInfo, setStatusInfo] = useState<SystemOneStatus | null>(null)
   const [statusLoading, setStatusLoading] = useState(false)
   const [statusError, setStatusError] = useState<string | null>(null)
+  const [enabledModels, setEnabledModels] = useState<DecisionEnabledModel[]>([])
   const [viewingType, setViewingType] = useState<{ type: AgentDataType; title: string } | null>(
     null,
   )
@@ -209,6 +225,12 @@ export function DecisionToolForm({
     getSystemOneStatus()
       .then((s) => {
         if (!cancelled) setStatusInfo(s)
+        // Selector feed: enabled models only (provider enabled + model
+        // enabled), fetched fresh per open to avoid stale selections.
+        return listEnabledDecisionModels()
+      })
+      .then((models) => {
+        if (!cancelled) setEnabledModels(models)
       })
       .catch(() => {
         if (!cancelled) setStatusError(t('decisionTools.validation.statusCheckFailed'))
@@ -232,6 +254,47 @@ export function DecisionToolForm({
 
   const systemOneConfigured = statusInfo?.configured === true
 
+  /** Backtick-quoted state paths detected across question instructions —
+      these are the placeholders the tool's prompt/questions use. */
+  const detectedPaths = useMemo(
+    () =>
+      detectStatePlaceholdersFromQuestions(form.questions.map((q) => q.instructions)),
+    [form.questions],
+  )
+
+  /**
+   * The state keys are the detected placeholders plus the explicit
+   * mapping keys (e.g. loaded from an existing tool). Each key that
+   * equals an input data type field name resolves 1:1 silently; the
+   * rest are UNMATCHED and rendered as one mapper row each.
+   */
+  const placeholders = useMemo(() => {
+    const keys: string[] = []
+    for (const m of form.state_preset) {
+      const k = m.state_key.trim()
+      if (k && !keys.includes(k)) keys.push(k)
+    }
+    for (const p of detectedPaths) {
+      if (!keys.includes(p)) keys.push(p)
+    }
+    return keys
+  }, [form.state_preset, detectedPaths])
+
+  const inputFieldNames = useMemo(
+    () => (inputDataType?.fields ?? []).map((f) => f.name),
+    [inputDataType],
+  )
+
+  const { matched, unmatched } = useMemo(
+    () => resolveStateMapping(placeholders, form.state_preset, inputFieldNames),
+    [placeholders, form.state_preset, inputFieldNames],
+  )
+
+  /** Enabling requires both data types — pre-validated inline instead of a
+      raw 422: the Save button is disabled with an explanatory hint. */
+  const readinessBlocked =
+    form.enabled && (!form.input_data_type_id || !form.output_data_type_id)
+
   /** Client-side preview mirroring the server's generate_tool_description. */
   const descriptionPreview = useMemo(() => {
     const lines: string[] = []
@@ -239,7 +302,7 @@ export function DecisionToolForm({
     lines.push(
       form.purpose.trim()
         ? `${title}: ${form.purpose.trim()}`
-        : `${title}: evaluates predefined System One questions against a constructed state and returns structured typed answers with confidence.`,
+        : `${title}: evaluates predefined questions against a constructed state and returns structured typed answers with confidence.`,
     )
     const inputType = dataTypeList.find((d) => d.id === form.input_data_type_id)
     const outputType = dataTypeList.find((d) => d.id === form.output_data_type_id)
@@ -268,9 +331,7 @@ export function DecisionToolForm({
         lines.push(desc)
       }
     }
-    const stateKeys = form.state_preset
-      .map((m) => m.state_key)
-      .filter((k) => k.trim())
+    const stateKeys = placeholders
     if (stateKeys.length > 0) {
       lines.push('', `State fields sent to the model: ${stateKeys.join(', ')}.`)
     }
@@ -279,14 +340,7 @@ export function DecisionToolForm({
       `Returns per-question typed answers with probabilities and an overall gate outcome (act >= ${form.act_threshold}, confirm >= ${form.confirm_threshold}, else escalate).`,
     )
     return lines.join('\n')
-  }, [form, dataTypeList])
-
-  /** Backtick-quoted state paths detected across question instructions. */
-  const detectedPaths = useMemo(
-    () =>
-      detectStatePlaceholdersFromQuestions(form.questions.map((q) => q.instructions)),
-    [form.questions],
-  )
+  }, [form, dataTypeList, placeholders])
 
   const setQuestions = (questions: DecisionToolQuestion[]) =>
     setForm((f) => ({
@@ -294,27 +348,13 @@ export function DecisionToolForm({
       questions: questions.map((q, i) => ({ ...q, ordering: q.ordering || i })),
     }))
 
-  const addDetectedMappings = () => {
-    setForm((f) => {
-      const existing = new Set(f.state_preset.map((m) => m.state_key))
-      const additions = detectedPaths
-        .filter((p) => !existing.has(p))
-        .map((p) => ({
-          state_key: p,
-          source: 'input' as StatePresetSource,
-          key: inputDataType?.fields.some((fd) => fd.name === p) ? p : '',
-        }))
-      return { ...f, state_preset: [...f.state_preset, ...additions] }
-    })
-  }
-
   const validate = (): string | null => {
     if (!form.name.trim()) return t('decisionTools.validation.nameRequired')
     if (!/^[a-z0-9][a-z0-9-]*[a-z0-9]$|^[a-z0-9]$/.test(form.name.trim()))
       return t('decisionTools.validation.nameFormat')
     if (!form.purpose.trim()) return t('decisionTools.validation.purposeRequired')
-    if (form.questions.length === 0)
-      return t('decisionTools.validation.questionsRequired')
+    // Questions are optional: with none authored they are auto-derived from
+    // the output data type at execution time (override wins).
     const keys = form.questions.map((q) => q.question_key.trim())
     if (keys.some((k) => !k)) return t('decisionTools.validation.questionKeyRequired')
     const dup = keys.find((k, i) => keys.indexOf(k) !== i)
@@ -337,6 +377,27 @@ export function DecisionToolForm({
       if (!m.state_key.trim() || !m.key.trim())
         return t('decisionTools.validation.stateKeyRequired')
     }
+    // Unmatched placeholders need an explicit mapping — surfaced inline as
+    // one mapper row per key.
+    for (const key of unmatched) {
+      const row = form.state_preset.find((m) => m.state_key.trim() === key)
+      if (!row || !row.key.trim())
+        return t('decisionTools.validation.mapPlaceholder', { key })
+    }
+    // Model selection: only enabled models are selectable; a selection is
+    // required whenever the enabled-models listing is non-empty.
+    if (enabledModels.length > 0 && !form.decision_model_availability_id)
+      return t('decisionTools.validation.modelRequired')
+    if (
+      form.decision_model_availability_id &&
+      !enabledModels.some(
+        (m) => m.availability_id === form.decision_model_availability_id,
+      )
+    )
+      return t('decisionTools.validation.modelUnavailable')
+    // Pre-validate the readiness rule — a blocked save shows an inline
+    // hint instead of a raw 422.
+    if (readinessBlocked) return t('decisionTools.validation.readinessRequiresTypes')
     return null
   }
 
@@ -358,12 +419,14 @@ export function DecisionToolForm({
             : (q.criteria_options as string[]) ?? [],
       is_required: q.is_required,
     }))
+    // Only EXPLICIT mappings are saved — 1:1 keys auto-match at
+    // execution time (empty preset = passthrough) and are omitted.
     const state_preset = Object.fromEntries(
       form.state_preset
         .filter((m) => m.state_key.trim() && m.key.trim())
         .map((m) => [
           m.state_key.trim(),
-          { source: m.source, key: m.key.trim() },
+          { source: 'input' as const, key: m.key.trim() },
         ]),
     )
     return {
@@ -374,7 +437,8 @@ export function DecisionToolForm({
       state_preset: Object.keys(state_preset).length > 0 ? state_preset : null,
       act_threshold: form.act_threshold,
       confirm_threshold: form.confirm_threshold,
-      provider_model: form.provider_model.trim() || 'jev-latest',
+      decision_model_availability_id:
+        form.decision_model_availability_id || null,
       status: form.status,
       enabled: form.enabled,
       questions,
@@ -401,13 +465,13 @@ export function DecisionToolForm({
         const existingPreset = f.state_preset.filter((m) =>
           draftedStateKeys.includes(m.state_key),
         )
-        const presetEntries = Object.entries(draft.state_preset ?? {}).map(
-          ([state_key, mapping]) => ({
+        // Only input-sourced draft rows are kept (agent_data is retired).
+        const presetEntries = Object.entries(draft.state_preset ?? {})
+          .filter(([, mapping]) => mapping.source === 'input')
+          .map(([state_key, mapping]) => ({
             state_key,
-            source: mapping.source,
             key: mapping.key,
-          }),
-        )
+          }))
         return {
           ...f,
           questions: draft.questions.map((q, i) => ({ ...q, ordering: i })),
@@ -523,6 +587,13 @@ export function DecisionToolForm({
             {formError}
           </Alert>
         )}
+        {/* Readiness pre-validation: enabling requires both data types —
+            explain inline instead of failing with a raw 422 on save. */}
+        {readinessBlocked && (
+          <Alert severity="warning" sx={{ mt: 1 }}>
+            {t('decisionTools.validation.readinessRequiresTypes')}
+          </Alert>
+        )}
 
         {/* Configured-model gate */}
         {statusLoading ? (
@@ -600,11 +671,17 @@ export function DecisionToolForm({
           </Button>
         </Box>
 
-        {/* Questions builder */}
+        {/* Questions builder — optional: auto-derived from the output data
+            type when no manual questions are authored (override wins). */}
         <Divider sx={{ my: 2 }} />
         <Typography variant="subtitle1" fontWeight={600}>
           {t('decisionTools.questionsTitle')}
         </Typography>
+        {form.questions.length === 0 && (
+          <Alert severity="info" sx={{ mt: 1 }}>
+            {t('decisionTools.questionsAutoGenerated')}
+          </Alert>
+        )}
         {form.questions.map((q, idx) => (
           <DecisionToolQuestionEditor
             key={idx}
@@ -625,75 +702,116 @@ export function DecisionToolForm({
           {t('decisionTools.addQuestion')}
         </Button>
 
-        {/* Guided state preset mapper */}
+        {/* Guided state preset mapper — ADVANCED: state is auto-generated
+            from the input data type by default; advanced mapping optional. */}
         <Divider sx={{ my: 2 }} />
-        <Typography variant="subtitle1" fontWeight={600}>
-          {t('decisionTools.statePreset')}
-        </Typography>
+        <Accordion
+          expanded={advancedOpen}
+          onChange={(_, next) => setAdvancedOpen(next)}
+        >
+          <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+            <Stack direction="row" spacing={1} alignItems="center">
+              <Typography variant="subtitle1" fontWeight={600}>
+                {t('decisionTools.statePreset')}
+              </Typography>
+              <Chip size="small" label={t('decisionTools.advanced')} />
+            </Stack>
+          </AccordionSummary>
+          <AccordionDetails>
         <Typography variant="caption" color="text.secondary">
           {t('decisionTools.statePresetHint')}
         </Typography>
-        <Alert severity="info" sx={{ mt: 1 }}>
-          {t('decisionTools.stateInjectionHelp')}
-        </Alert>
-        {detectedPaths.length > 0 && (
-          <Stack direction="row" spacing={1} alignItems="center" mt={1}>
-            <Chip
-              size="small"
-              label={t('decisionTools.detectedPaths', { count: detectedPaths.length })}
-            />
-            <Button size="small" onClick={addDetectedMappings}>
-              {t('decisionTools.autoDetect')}
-            </Button>
-            <Typography variant="caption" color="text.secondary">
-              {detectedPaths.map((p) => `\`${p}\``).join(' ')}
-            </Typography>
-          </Stack>
-        )}
-        {form.state_preset.map((m, idx) => {
-          const inputFields = inputDataType?.fields ?? []
-          const isInputSource = m.source === 'input' && inputFields.length > 0
-          return (
-            <Stack key={idx} direction="row" spacing={1} alignItems="center" mt={1}>
-              <TextField
-                size="small"
-                label={t('decisionTools.stateKey')}
-                value={m.state_key}
-                sx={{ width: 180 }}
-                onChange={(e) =>
-                  setForm((f) => ({
-                    ...f,
-                    state_preset: f.state_preset.map((x, i) =>
-                      i === idx ? { ...x, state_key: e.target.value } : x,
-                    ),
-                  }))
-                }
-              />
-              <TextField
-                size="small"
-                select
-                label={t('decisionTools.source')}
-                value={m.source}
-                sx={{ width: 150 }}
-                onChange={(e) =>
-                  setForm((f) => ({
-                    ...f,
-                    state_preset: f.state_preset.map((x, i) =>
-                      i === idx
-                        ? { ...x, source: e.target.value as StatePresetSource }
-                        : x,
-                    ),
-                  }))
-                }
-              >
-                <MenuItem value="input">
-                  {t('decisionTools.sources.input')}
-                </MenuItem>
-                <MenuItem value="agent_data">
-                  {t('decisionTools.sources.agent_data')}
-                </MenuItem>
-              </TextField>
-              {isInputSource ? (
+        {!inputDataType ? (
+          <Alert severity="info" sx={{ mt: 1 }}>
+            {t('decisionTools.selectInputTypeFirst')}
+          </Alert>
+        ) : (
+          <>
+            <Alert severity="info" sx={{ mt: 1 }}>
+              {t('decisionTools.stateInjectionHelp')}
+            </Alert>
+            {/* AUTO-MATCH: placeholders equal to an input property resolve
+                silently — the user is asked NOTHING about them. */}
+            {Object.keys(matched).length > 0 && (
+              <Stack direction="row" spacing={1} alignItems="center" mt={1} flexWrap="wrap">
+                {Object.entries(matched).map(([key, field]) => (
+                  <Chip
+                    key={key}
+                    size="small"
+                    color="success"
+                    variant="outlined"
+                    label={`${key} → ${field}`}
+                  />
+                ))}
+                <Typography variant="caption" color="text.secondary">
+                  {t('decisionTools.autoMatchedHint')}
+                </Typography>
+              </Stack>
+            )}
+            {/* UNMATCHED placeholders: one mapper row each — the user must
+                map the key to an input property. */}
+            {unmatched.map((key) => {
+              const row = form.state_preset.find((m) => m.state_key.trim() === key)
+              const value = row?.key ?? ''
+              return (
+                <Stack key={key} direction="row" spacing={1} alignItems="center" mt={1}>
+                  <Typography variant="body2" sx={{ minWidth: 220 }}>
+                    {t('decisionTools.mapPlaceholder', { key })}
+                  </Typography>
+                  <TextField
+                    size="small"
+                    select
+                    label={t('decisionTools.dataKey')}
+                    value={value}
+                    fullWidth
+                    onChange={(e) =>
+                      setForm((f) => {
+                        const existing = f.state_preset.find(
+                          (m) => m.state_key.trim() === key,
+                        )
+                        return {
+                          ...f,
+                          state_preset: existing
+                            ? f.state_preset.map((m) =>
+                                m.state_key.trim() === key
+                                  ? { ...m, key: e.target.value }
+                                  : m,
+                              )
+                            : [
+                                ...f.state_preset,
+                                { state_key: key, key: e.target.value },
+                              ],
+                        }
+                      })
+                    }
+                  >
+                    {inputFieldNames.map((name) => (
+                      <MenuItem key={name} value={name}>
+                        {name}
+                      </MenuItem>
+                    ))}
+                  </TextField>
+                </Stack>
+              )
+            })}
+            {/* Explicit rows with an editable state key (loaded from the
+                tool, AI-drafted, or added manually). */}
+            {form.state_preset.map((m, idx) => (
+              <Stack key={idx} direction="row" spacing={1} alignItems="center" mt={1}>
+                <TextField
+                  size="small"
+                  label={t('decisionTools.stateKey')}
+                  value={m.state_key}
+                  sx={{ width: 180 }}
+                  onChange={(e) =>
+                    setForm((f) => ({
+                      ...f,
+                      state_preset: f.state_preset.map((x, i) =>
+                        i === idx ? { ...x, state_key: e.target.value } : x,
+                      ),
+                    }))
+                  }
+                />
                 <TextField
                   size="small"
                   select
@@ -709,60 +827,44 @@ export function DecisionToolForm({
                     }))
                   }
                 >
-                  {inputFields.map((fd) => (
-                    <MenuItem key={fd.name} value={fd.name}>
-                      {fd.name}
+                  {inputFieldNames.map((name) => (
+                    <MenuItem key={name} value={name}>
+                      {name}
                     </MenuItem>
                   ))}
                 </TextField>
-              ) : (
-                <TextField
-                  size="small"
-                  label={t('decisionTools.dataKey')}
-                  value={m.key}
-                  fullWidth
-                  onChange={(e) =>
-                    setForm((f) => ({
-                      ...f,
-                      state_preset: f.state_preset.map((x, i) =>
-                        i === idx ? { ...x, key: e.target.value } : x,
-                      ),
-                    }))
-                  }
-                />
-              )}
-              <Tooltip title={t('app.delete')}>
-                <IconButton
-                  size="small"
-                  onClick={() =>
-                    setForm((f) => ({
-                      ...f,
-                      state_preset: f.state_preset.filter((_, i) => i !== idx),
-                    }))
-                  }
-                >
-                  <DeleteIcon fontSize="small" />
-                </IconButton>
-              </Tooltip>
-            </Stack>
-          )
-        })}
-        <Button
-          size="small"
-          startIcon={<AddIcon />}
-          sx={{ mt: 1 }}
-          onClick={() =>
-            setForm((f) => ({
-              ...f,
-              state_preset: [
-                ...f.state_preset,
-                { state_key: '', source: 'input' as StatePresetSource, key: '' },
-              ],
-            }))
-          }
-        >
-          {t('decisionTools.addStateMapping')}
-        </Button>
+                <Tooltip title={t('app.delete')}>
+                  <IconButton
+                    size="small"
+                    onClick={() =>
+                      setForm((f) => ({
+                        ...f,
+                        state_preset: f.state_preset.filter((_, i) => i !== idx),
+                      }))
+                    }
+                  >
+                    <DeleteIcon fontSize="small" />
+                  </IconButton>
+                </Tooltip>
+              </Stack>
+            ))}
+            <Button
+              size="small"
+              startIcon={<AddIcon />}
+              sx={{ mt: 1 }}
+              onClick={() =>
+                setForm((f) => ({
+                  ...f,
+                  state_preset: [...f.state_preset, { state_key: '', key: '' }],
+                }))
+              }
+            >
+              {t('decisionTools.addStateMapping')}
+            </Button>
+          </>
+        )}
+          </AccordionDetails>
+        </Accordion>
 
         {/* Thresholds + flags */}
         <Divider sx={{ my: 2 }} />
@@ -797,13 +899,48 @@ export function DecisionToolForm({
             }
           />
           <TextField
-            label={t('decisionTools.providerModel')}
-            value={form.provider_model}
-            sx={{ width: 200 }}
+            select
+            label={t('decisionTools.modelSelection')}
+            value={form.decision_model_availability_id}
+            sx={{ minWidth: 260 }}
             onChange={(e) =>
-              setForm((f) => ({ ...f, provider_model: e.target.value }))
+              setForm((f) => ({
+                ...f,
+                decision_model_availability_id: e.target.value,
+              }))
             }
-          />
+            helperText={t('decisionTools.modelSelectionHint')}
+          >
+            {/* Placeholder: never render a silently blank select (create
+                mode / legacy tools without an availability selection). */}
+            <MenuItem value="">{t('decisionTools.modelNone')}</MenuItem>
+            {enabledModels.map((m) => (
+              <MenuItem key={m.availability_id} value={m.availability_id}>
+                {m.model_name} — {m.provider_display_name}
+              </MenuItem>
+            ))}
+            {/* FIX-20261014-004500: a stored selection that is no longer in
+                the enabled list (vendor cascade / manual disable) must be
+                visible as a disabled, clearly-hinted option instead of the
+                select silently rendering empty. Validation still blocks the
+                save (modelUnavailable) so the user must re-select. */}
+            {form.decision_model_availability_id &&
+              !enabledModels.some(
+                (m) => m.availability_id === form.decision_model_availability_id,
+              ) && (
+                <MenuItem
+                  value={form.decision_model_availability_id}
+                  disabled
+                >
+                  {editing?.model_name || form.decision_model_availability_id}
+                  {editing?.provider_display_name
+                    ? ` — ${editing.provider_display_name}`
+                    : ''}
+                  {' — '}
+                  {t('decisionTools.modelUnavailableOption')}
+                </MenuItem>
+              )}
+          </TextField>
           <TextField
             select
             label={t('decisionTools.status')}
@@ -858,7 +995,11 @@ export function DecisionToolForm({
         <Button
           variant="contained"
           onClick={() => void handleSave()}
-          disabled={saving || (statusInfo != null && !systemOneConfigured)}
+          disabled={
+            saving ||
+            readinessBlocked ||
+            (statusInfo != null && !systemOneConfigured)
+          }
         >
           {saving ? <CircularProgress size={20} /> : t('app.save')}
         </Button>

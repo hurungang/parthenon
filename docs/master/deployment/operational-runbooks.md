@@ -321,3 +321,28 @@ Use this runbook when enabling or disabling the tenancy platform switch (`multi_
 1. On any sustained non-zero `tenant.cross_tenant_attempts_total`, treat as a possible isolation probe; triage by `surface` and `tenant_id`.
 2. Search `control-center.log` for `tenant.scope` and `tenant.claim`, then filter platform audit events by `tenant_id` (cross-tenant attempts and quota-exhaustion events are written as tenant audit events).
 3. Decide containment (suspend the source tenant) per the operations runbook; preserve audit events for forensic review.
+
+## 11. Strict Tenant Isolation — Troubleshooting (strict-tenant-isolation)
+
+### 401 "Signed tenant context headers are required" on internal calls
+
+Every `/api/v1/internal/*` data-plane router requires valid signed `X-Internal-Tenant-*` headers; missing, stale (timestamp out of window), tampered, or mismatched headers return 401 **before any DB access**.
+
+1. Identify the caller from `control-center.log` / `agent-runtime.log` / `communication-hub.log` (search for `tenant.signature` or the 401 path).
+2. **Missing headers** — the caller was not rebuilt with the new header-stamping behavior, or a custom integration calls internal endpoints directly. Fix: roll the caller to the current build; external code must never hand-craft internal calls.
+3. **Stale headers** — clock skew between services beyond the signature timestamp window. Fix: sync NTP on the hosts, restart services.
+4. **Signature mismatch** — `TENANT_CONTEXT_SIGNING_KEY` differs between services. Fix: align the key and restart CC first, then AR/CH (same fix path as the multi-tenancy rollback note).
+5. **Multi-tenancy disabled** — headerless internal calls should bind the root tenant, not 401. If they still 401 with the switch off, verify the platform setting actually read false at startup.
+
+When multi-tenancy is enabled and headers are legitimately absent, the 401 is **correct behavior** (fail-closed); fix the caller, never loosen the check.
+
+### Migration head and the typesafe stub `base_url` `/systemone` suffix pitfall
+
+- After `alembic upgrade head`, `alembic current` must report `c9d0e1f2a3b4` (chain: `a7b9c1d3e5f7` → `b8c9d0e1f2a3` → `c9d0e1f2a3b4`). 500s or missing-tenant errors right after deploy usually mean **unapplied migrations** — run `python -m alembic current`, compare against the latest file in `backend/alembic/versions/`, apply `alembic upgrade head`, restart the backend.
+- **Typesafe stub `base_url` suffix pitfall:** when registering a typesafe stub MCP server, the configured `base_url` gets an internal path suffix appended (e.g. a `base_url` of `.../systemone` already containing a path fragment). If tool calls 404 or route to the wrong path, check whether the `base_url` was entered with a trailing path segment that collides with the suffix the hub appends — enter the bare origin/base URL and let the hub compose the full path. Symptom in logs: `mcp_proxy` calls hitting `/systemone/systemone/...` or similar doubled paths.
+
+### Post-migration NULL-tenant verification
+
+1. Re-run the pre-flight NULL-count queries per affected table — every count must be **zero** after `b8c9d0e1f2a3`.
+2. Spot-check previously NULL-tenant rows now carry the root tenant id.
+3. Scope-miss audit events: search `control-center.log` for scope-miss/`cross_tenant_access_denied` audit entries when triaging failed lookups — a scope miss after migration means the row was not adopted (or a strict predicate regressed).

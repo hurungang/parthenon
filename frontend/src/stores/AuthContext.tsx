@@ -69,7 +69,13 @@ export interface AvailableProvider {
 }
 
 interface AuthContextValue extends AuthState {
-  login: () => void
+  /**
+   * Start the OIDC authorize redirect.  Resolves `true` when the redirect
+   * was started, `false` when it was refused (a workspace slug is bound
+   * but no provider/authority could be resolved for it — redirecting
+   * would send the visitor to the wrong realm).
+   */
+  login: () => Promise<boolean>
   logout: () => void
   setToken: (token: string) => void
   availableProviders: AvailableProvider[] | null
@@ -101,6 +107,13 @@ interface AuthContextValue extends AuthState {
    * up X-Tenant from the per-tab resolved slug).
    */
   refreshProviders: () => Promise<void>
+  /**
+   * Bind a tenant slug to this tab (sessionStorage AND reactive state).
+   * The reactive state re-runs provider discovery so the OIDC start
+   * config is resolved for the newly bound workspace before anything
+   * redirects.  Pass `null` to unbind.
+   */
+  bindTenantSlug: (slug: string | null) => void
   /**
    * FIX-20261001-235247: drop the host-derived tenant (store state AND the
    * per-tab sessionStorage binding) so the login page's workspace finder
@@ -136,6 +149,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [superAdminEnabled, setSuperAdminEnabled] = useState(false)
   const [oidcAuthority, setOidcAuthority] = useState<string>(OIDC_AUTHORITY_FALLBACK)
   const [oidcClientId, setOidcClientId] = useState<string>(OIDC_CLIENT_ID_FALLBACK)
+  // Reactive mirror of the per-tab tenant binding: provider discovery
+  // re-runs whenever it changes so the OIDC start config always matches
+  // the bound workspace.
+  const [boundTenantSlug, setBoundTenantSlug] = useState<string | null>(
+    () => getResolvedTenantSlug(),
+  )
+  // The workspace slug the CURRENT oidcAuthority was resolved for (null =
+  // the static env fallback, never tenant-resolved).  login() uses this to
+  // refuse redirects whose authority does not belong to the bound slug.
+  const authorityForSlugRef = useRef<string | null>(null)
   const [multiTenancyEnabled, setMultiTenancyEnabled] = useState<boolean | null>(null)
   const [resolvedTenant, setResolvedTenant] = useState<TenantDiscovery['tenant'] | null>(null)
   const [availableTenants, setAvailableTenants] = useState<TenantMembership[]>([])
@@ -175,7 +198,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // Discover active providers and super admin status on app load.
   // Extracted so the workspace-address sign-in flow can re-run it after
   // binding a tenant (X-Tenant is read from storage at fetch time).
-  const discoverProviders = useCallback(async () => {
+  // Resolves with the discovered user provider config (null when none was
+  // found) so login() can redirect against a freshly resolved authority
+  // without waiting on a re-render.
+  const discoverProviders = useCallback(async (): Promise<{ authority: string; clientId: string } | null> => {
+    let resolved: { authority: string; clientId: string } | null = null
     try {
       const apiBase = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000/api/v1'
       const headers: Record<string, string> = {}
@@ -217,8 +244,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           // Update dynamic OIDC config from discovered user provider
           const userP = data.items.find((p) => p.provider_scope === 'user' && p.is_enabled)
           if (userP) {
+            const clientId = userP.public_client_id || userP.ui_client_id || userP.client_id || OIDC_CLIENT_ID_FALLBACK
             setOidcAuthority(userP.issuer_url)
-            setOidcClientId(userP.public_client_id || userP.ui_client_id || userP.client_id || OIDC_CLIENT_ID_FALLBACK)
+            setOidcClientId(clientId)
+            authorityForSlugRef.current = tenantSlug
+            resolved = { authority: userP.issuer_url, clientId }
           }
         }
       } catch {
@@ -238,11 +268,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } catch {
       // Silently fail; discovery is best-effort
     }
+    return resolved
   }, [token])
 
   useEffect(() => {
     void discoverProviders()
-  }, [discoverProviders])
+  }, [discoverProviders, boundTenantSlug])
 
   // Multi-tenancy: resolve the tenant from the current host on load.
   // Inert when the switch is off (discovery reports enabled=false) so the
@@ -260,6 +291,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         // the explicit flows (workspace switch, logout).
         if (discovery.tenant?.slug) {
           setResolvedTenantSlug(discovery.tenant.slug)
+          // Reactive mirror: re-runs provider discovery for the host-
+          // resolved workspace BEFORE anything can start a sign-in.
+          setBoundTenantSlug(discovery.tenant.slug)
         }
         if (discovery.tenant && discovery.tenant.status !== 'active') {
           // Suspended/deleted tenant: no sign-in redirect should occur —
@@ -293,7 +327,36 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     void refreshAvailableTenants()
   }, [refreshAvailableTenants])
 
-  const login = useCallback(async () => {
+  // Bind (or unbind) the per-tab tenant slug through the store so the
+  // reactive mirror updates and provider discovery re-runs for the new
+  // workspace — callers (LoginPage finder, TenantSessionGate picker) must
+  // use this instead of writing sessionStorage directly.
+  const bindTenantSlug = useCallback((slug: string | null) => {
+    setResolvedTenantSlug(slug)
+    setBoundTenantSlug(slug)
+    if (slug === null) authorityForSlugRef.current = null
+  }, [])
+
+  const login = useCallback(async (): Promise<boolean> => {
+    let authority = oidcAuthority
+    let clientId = oidcClientId
+    // Hardening: never redirect with an authority that was not resolved
+    // for the CURRENTLY bound workspace.  A slug is bound but the authority
+    // is still the static fallback (or belongs to another context) →
+    // re-run discovery synchronously and use the fresh config; if none
+    // resolves for this slug, refuse the redirect rather than sending the
+    // visitor to the wrong (root) realm.
+    const tenantSlug = getResolvedTenantSlug()
+    if (tenantSlug && authorityForSlugRef.current !== tenantSlug) {
+      const cfg = await discoverProviders()
+      if (cfg) {
+        authority = cfg.authority
+        clientId = cfg.clientId
+      } else {
+        return false
+      }
+    }
+
     // Generate PKCE code verifier and challenge
     const codeVerifier = await generateCodeVerifier()
     const codeChallenge = await generateCodeChallenge(codeVerifier)
@@ -303,19 +366,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // FIX-20260929-043443 #3: persist the resolved start config so the
     // callback exchanges the code against the SAME provider (issuer +
     // client) this authorize redirect was built for.
-    sessionStorage.setItem(OIDC_AUTHORITY_KEY, oidcAuthority)
-    sessionStorage.setItem(OIDC_CLIENT_ID_KEY, oidcClientId)
+    sessionStorage.setItem(OIDC_AUTHORITY_KEY, authority)
+    sessionStorage.setItem(OIDC_CLIENT_ID_KEY, clientId)
 
     const params = new URLSearchParams({
       response_type: 'code',
-      client_id: oidcClientId,
+      client_id: clientId,
       redirect_uri: OIDC_REDIRECT_URI,
       scope: 'openid profile email',
       code_challenge: codeChallenge,
       code_challenge_method: 'S256',
     })
-    window.location.href = `${oidcAuthority}/protocol/openid-connect/auth?${params}`
-  }, [oidcAuthority, oidcClientId])
+    window.location.href = `${authority}/protocol/openid-connect/auth?${params}`
+    return true
+  }, [oidcAuthority, oidcClientId, discoverProviders])
 
   // FIX-20261001-235247 (Defect 1): drop the host-derived tenant (store
   // state AND the per-tab sessionStorage binding) so the login page's
@@ -323,6 +387,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const clearResolvedTenant = useCallback(() => {
     setResolvedTenant(null)
     setResolvedTenantSlug(null)
+    setBoundTenantSlug(null)
+    authorityForSlugRef.current = null
   }, [])
 
   const logout = useCallback(() => {
@@ -337,6 +403,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setSuperAdminEnabled(false)
     setAvailableTenants([])
     setResolvedTenantSlug(null)
+    setBoundTenantSlug(null)
+    authorityForSlugRef.current = null
     if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current)
 
     // For super admin sessions, just redirect to login
@@ -424,12 +492,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       availableTenants,
       refreshAvailableTenants,
       activeTenant,
-      refreshProviders: discoverProviders,
+      refreshProviders: async () => { await discoverProviders() },
+      bindTenantSlug,
       // FIX-20261001-235247 (Defect 1): "Use a different workspace" must
       // also unbind a host-derived tenant so the finder can render.
       clearResolvedTenant,
     }),
-    [isAuthenticated, isLoading, token, claims, login, logout, setToken, availableProviders, superAdminEnabled, isSuperAdmin, multiTenancyEnabled, resolvedTenant, availableTenants, refreshAvailableTenants, activeTenant, discoverProviders, clearResolvedTenant],
+    [isAuthenticated, isLoading, token, claims, login, logout, setToken, availableProviders, superAdminEnabled, isSuperAdmin, multiTenancyEnabled, resolvedTenant, availableTenants, refreshAvailableTenants, activeTenant, discoverProviders, bindTenantSlug, clearResolvedTenant],
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

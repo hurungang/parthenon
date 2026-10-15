@@ -115,37 +115,64 @@ export function DecisionToolsPage() {
       {isLoading ? (
         <CircularProgress />
       ) : (
-        <TableContainer component={Paper}>
-          <Table>
+        <TableContainer component={Paper} sx={{ overflowX: 'auto' }}>
+          {/* Fixed layout + constrained columns keeps the actions column
+              on-screen; horizontal scroll handles narrow viewports. */}
+          <Table size="small" sx={{ minWidth: 880, tableLayout: 'fixed' }}>
             <TableHead>
               <TableRow>
-                <TableCell>{t('decisionTools.name')}</TableCell>
+                <TableCell sx={{ width: 230 }}>{t('decisionTools.name')}</TableCell>
                 <TableCell>{t('decisionTools.purpose')}</TableCell>
                 <TableCell>{t('decisionTools.generatedDescription')}</TableCell>
-                <TableCell>{t('decisionTools.status')}</TableCell>
-                <TableCell>{t('app.actions')}</TableCell>
+                <TableCell sx={{ width: 200 }}>
+                  {t('decisionTools.modelSelection')}
+                </TableCell>
+                <TableCell sx={{ width: 100 }}>{t('decisionTools.status')}</TableCell>
+                <TableCell
+                  sx={{
+                    width: 110,
+                    position: 'sticky',
+                    right: 0,
+                    bgcolor: 'background.paper',
+                    zIndex: 2,
+                  }}
+                >
+                  {t('app.actions')}
+                </TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
               {(tools ?? []).map((tool) => (
                 <TableRow key={tool.id}>
                   <TableCell>
-                    <Typography variant="body2" sx={{ fontFamily: 'monospace' }}>
-                      {buildToolName(DECISION_SERVER_SLUG, tool.name)}
-                    </Typography>
+                    <Tooltip title={buildToolName(DECISION_SERVER_SLUG, tool.name)}>
+                      <Typography
+                        variant="body2"
+                        sx={{
+                          fontFamily: 'monospace',
+                          whiteSpace: 'nowrap',
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                        }}
+                      >
+                        {buildToolName(DECISION_SERVER_SLUG, tool.name)}
+                      </Typography>
+                    </Tooltip>
                   </TableCell>
                   <TableCell>
-                    <Typography
-                      variant="body2"
-                      sx={{
-                        maxWidth: 280,
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                        whiteSpace: 'nowrap',
-                      }}
-                    >
-                      {tool.purpose ?? '—'}
-                    </Typography>
+                    <Tooltip title={tool.purpose ?? ''}>
+                      <Typography
+                        variant="body2"
+                        sx={{
+                          maxWidth: 280,
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap',
+                        }}
+                      >
+                        {tool.purpose ?? '—'}
+                      </Typography>
+                    </Tooltip>
                   </TableCell>
                   <TableCell>
                     <Tooltip title={tool.description ?? ''}>
@@ -164,17 +191,70 @@ export function DecisionToolsPage() {
                     </Tooltip>
                   </TableCell>
                   <TableCell>
-                    <Chip
-                      label={tool.enabled ? tool.status : t('decisionTools.status')}
-                      size="small"
-                      color={
-                        tool.enabled && tool.status === 'active'
-                          ? 'success'
-                          : 'default'
+                    <Tooltip
+                      title={
+                        tool.model_name
+                          ? `${tool.model_name}${
+                              tool.provider_display_name
+                                ? ` — ${tool.provider_display_name}`
+                                : ''
+                            }`
+                          : ''
                       }
-                    />
+                    >
+                      <Chip
+                        size="small"
+                        variant="outlined"
+                        sx={{
+                          maxWidth: '100%',
+                          '& .MuiChip-label': {
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                          },
+                        }}
+                        label={
+                          tool.model_name
+                            ? `${tool.model_name}${
+                                tool.provider_display_name
+                                  ? ` — ${tool.provider_display_name}`
+                                  : ''
+                              }`
+                            : '—'
+                        }
+                      />
+                    </Tooltip>
                   </TableCell>
                   <TableCell>
+                    {tool.ready === false ? (
+                      <Tooltip title={t('decisionTools.notReadyDetail')}>
+                        <Chip
+                          label={t('decisionTools.notReady')}
+                          size="small"
+                          color="warning"
+                        />
+                      </Tooltip>
+                    ) : tool.enabled ? (
+                      <Chip
+                        label={t('decisionTools.statusActive')}
+                        size="small"
+                        color="success"
+                      />
+                    ) : (
+                      <Chip
+                        label={t('decisionTools.status')}
+                        size="small"
+                        color="default"
+                      />
+                    )}
+                  </TableCell>
+                  <TableCell
+                    sx={{
+                      position: 'sticky',
+                      right: 0,
+                      bgcolor: 'background.paper',
+                      zIndex: 1,
+                    }}
+                  >
                     <Tooltip title={t('app.edit')}>
                       <IconButton size="small" onClick={() => openEdit(tool)}>
                         <EditIcon fontSize="small" />
@@ -200,7 +280,7 @@ export function DecisionToolsPage() {
               ))}
               {(tools ?? []).length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={5}>
+                  <TableCell colSpan={6}>
                     <Typography variant="body2" color="text.secondary">
                       {t('decisionTools.noTools')}
                     </Typography>

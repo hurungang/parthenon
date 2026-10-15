@@ -15,7 +15,7 @@ from typing import Any
 
 import httpx
 
-from app.core.tenant_signature import forward_tenant_headers
+from app.core.internal_http import internal_httpx_client
 
 logger = logging.getLogger(__name__)
 
@@ -64,20 +64,27 @@ class ControlCenterDataClient:
     # ── Private helpers ───────────────────────────────────────────────────────
 
     def _make_client(self) -> httpx.AsyncClient:
-        """Return an mTLS-configured HTTP client using the current agent cert."""
+        """Return an mTLS-configured HTTP client using the current agent cert.
+
+        Built via ``internal_httpx_client`` — the single egress mechanism
+        that attaches forwarded tenant headers (no per-call merging).
+        """
         if self._cert_manager is None:
             if _allow_insecure_internal_fallback():
                 logger.warning(
                     "Agent Runtime data client using insecure HTTP fallback because "
                     "ALLOW_INSECURE_INTERNAL_CALL_FALLBACK is enabled in development"
                 )
-                return httpx.AsyncClient(timeout=_DEFAULT_TIMEOUT)
+                return internal_httpx_client(timeout=_DEFAULT_TIMEOUT)
             raise RuntimeError(
                 "Agent Runtime certificate manager is unavailable; "
                 "internal Control Center calls fail closed"
             )
         try:
-            return self._cert_manager.configure_mtls_client()
+            return internal_httpx_client(
+                **self._cert_manager.mtls_client_kwargs(),
+                timeout=_DEFAULT_TIMEOUT,
+            )
         except Exception as exc:
             if _allow_insecure_internal_fallback():
                 logger.warning(
@@ -85,7 +92,7 @@ class ControlCenterDataClient:
                     exc,
                     exc_info=True,
                 )
-                return httpx.AsyncClient(timeout=_DEFAULT_TIMEOUT)
+                return internal_httpx_client(timeout=_DEFAULT_TIMEOUT)
             raise RuntimeError(
                 "Agent Runtime service certificate is required for internal calls"
             ) from exc
@@ -96,14 +103,12 @@ class ControlCenterDataClient:
     async def _get(self, path: str) -> dict[str, Any]:
         """GET request with error propagation and auto-recovery from 401.
 
-        Multi-tenancy: forwards the signed tenant context received from
-        CC so every data resolve is tenant-scoped at the CC choke point.
+        Tenant headers are attached by the internal_httpx_client egress hook.
         """
         url = self._url(path)
-        headers = forward_tenant_headers()
         async with self._make_client() as client:
             try:
-                resp = await client.get(url, timeout=_DEFAULT_TIMEOUT, headers=headers)
+                resp = await client.get(url, timeout=_DEFAULT_TIMEOUT)
                 resp.raise_for_status()
                 return resp.json()
             except httpx.HTTPStatusError as exc:
@@ -117,7 +122,7 @@ class ControlCenterDataClient:
                     # Retry once after re-bootstrap
                     async with self._make_client() as retry_client:
                         retry_resp = await retry_client.get(
-                            url, timeout=_DEFAULT_TIMEOUT, headers=headers
+                            url, timeout=_DEFAULT_TIMEOUT
                         )
                         retry_resp.raise_for_status()
                         return retry_resp.json()
@@ -134,14 +139,13 @@ class ControlCenterDataClient:
     async def _post(self, path: str, body: dict[str, Any]) -> dict[str, Any]:
         """POST request with error propagation and auto-recovery from 401.
 
-        Forwards the signed tenant context (multi-tenancy) like ``_get``.
+        Tenant headers are attached by the internal_httpx_client egress hook.
         """
         url = self._url(path)
-        headers = forward_tenant_headers()
         async with self._make_client() as client:
             try:
                 resp = await client.post(
-                    url, json=body, timeout=_DEFAULT_TIMEOUT, headers=headers
+                    url, json=body, timeout=_DEFAULT_TIMEOUT
                 )
                 resp.raise_for_status()
                 return resp.json()
@@ -156,7 +160,7 @@ class ControlCenterDataClient:
                     # Retry once after re-bootstrap
                     async with self._make_client() as retry_client:
                         retry_resp = await retry_client.post(
-                            url, json=body, timeout=_DEFAULT_TIMEOUT, headers=headers
+                            url, json=body, timeout=_DEFAULT_TIMEOUT
                         )
                         retry_resp.raise_for_status()
                         return retry_resp.json()
@@ -173,14 +177,13 @@ class ControlCenterDataClient:
     async def _patch(self, path: str, body: dict[str, Any]) -> dict[str, Any]:
         """PATCH request with error propagation and auto-recovery from 401.
 
-        Forwards the signed tenant context (multi-tenancy) like ``_get``.
+        Tenant headers are attached by the internal_httpx_client egress hook.
         """
         url = self._url(path)
-        headers = forward_tenant_headers()
         async with self._make_client() as client:
             try:
                 resp = await client.patch(
-                    url, json=body, timeout=_DEFAULT_TIMEOUT, headers=headers
+                    url, json=body, timeout=_DEFAULT_TIMEOUT
                 )
                 resp.raise_for_status()
                 return resp.json()
@@ -194,7 +197,9 @@ class ControlCenterDataClient:
                     await self._auto_recover_certificate()
                     # Retry once after re-bootstrap
                     async with self._make_client() as retry_client:
-                        retry_resp = await retry_client.patch(url, json=body, timeout=_DEFAULT_TIMEOUT)
+                        retry_resp = await retry_client.patch(
+                            url, json=body, timeout=_DEFAULT_TIMEOUT
+                        )
                         retry_resp.raise_for_status()
                         return retry_resp.json()
                 
@@ -292,11 +297,17 @@ class ControlCenterDataClient:
     async def _internal_post(
         self, path: str, body: dict[str, Any]
     ) -> dict[str, Any]:
-        """POST to an internal (non-data) endpoint with error handling."""
+        """POST to an internal (non-data) endpoint with error handling.
+
+        Tenant headers are attached by the internal_httpx_client egress hook
+        (typed-output validation and persistence are tenant-scoped resources).
+        """
         url = self._internal_url(path)
         async with self._make_client() as client:
             try:
-                resp = await client.post(url, json=body, timeout=_DEFAULT_TIMEOUT)
+                resp = await client.post(
+                    url, json=body, timeout=_DEFAULT_TIMEOUT
+                )
                 resp.raise_for_status()
                 return resp.json()
             except httpx.HTTPStatusError as exc:

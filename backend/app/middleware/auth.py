@@ -125,8 +125,7 @@ def _inject_tenant_claim(
     slug: Any,
 ) -> None:
     """Stamp the ``tenant`` claim on a token validated for the RESOLVED
-    login context (validation-time claim injection — FIX-20260929-043443,
-    shared-provider semantics FIX-20260929-221449).
+    login context (validation-time claim injection — FIX-20260929-043443).
 
     External / tenant-scoped OIDC providers (Azure EntraID, per-tenant
     Keycloak realms, …) issue tokens with standard identity claims only —
@@ -137,27 +136,17 @@ def _inject_tenant_claim(
 
     The backend therefore injects the claim post-validation instead of
     depending on provider-side claim-mapper configuration.  The injection
-    happens whenever a provider is resolvable for the resolved tenant —
-    the tenant's OWN registry slot, or the SHARED (tenant-less) slot
-    when the tenant has no own config (FIX-20260929-221449).
-
-    Why injecting from the RESOLVED CONTEXT is legitimate under the
-    shared-provider model (FIX-20260929-221449): the shared provider no
-    longer PROVES tenancy — the claim source is the resolved LOGIN
-    CONTEXT (the tenant whose registry slot validated the token; a
-    foreign token cannot validate against another tenant's own slot, and
-    the shared slot is shared by design).  Cross-tenant safety is
-    enforced where it belongs: membership gates (``authorize_identity``
-    denies ``no_access_to_workspace`` without an ACTIVE membership) plus
-    the row-level scoped data plane — a user without membership gets
-    403s, never data.
+    happens only when a provider is resolvable for the resolved tenant —
+    the tenant's OWN registry slot (there is no shared fallback; every
+    tenant uses only its own provider).
 
     Security semantics (preserved):
 
     - The claim source is the **provider registry slot that validated the
       token** — never the request's ``X-Tenant`` header (the header only
       selects WHICH login context resolves; without a resolvable provider
-      no claims and no injection are produced).
+      no claims and no injection are produced).  A foreign token cannot
+      validate against another tenant's own slot.
     - The existing ``_check_tenant_claim`` still runs afterwards and
       compares the (injected or native) claim against the
       request-resolved tenant — mismatch rejection is untouched.
@@ -166,8 +155,13 @@ def _inject_tenant_claim(
     """
     if tenant_id is None or slug is None or not str(slug).strip():
         return  # single-tenant mode / platform surface — unchanged
+    # Tenancy OFF is the explicit root-default world: no claim injection
+    # (the root default context is bound by the resolution middleware,
+    # and the claim check is inert there — see _check_tenant_claim).
+    if not getattr(registry, "multi_tenancy_enabled", True):
+        return
     # Inject ONLY when a provider is resolvable for the resolved tenant
-    # (own slot first, SHARED slot as fallback).  No resolvable provider
+    # (own slot only — no shared fallback).  No resolvable provider
     # → no validation happened for this context → no injection.
     if registry.get_provider(scope, tenant_id, False) is None:
         return
@@ -181,18 +175,15 @@ async def _try_oidc_token(
     """Tier 2 — validate the token against the OIDC registry / legacy client.
 
     When a resolved *tenant_context* is provided (multi-tenancy on), the
-    token is validated against the provider resolvable for THAT login
-    context: the tenant's OWN provider config when configured, ELSE the
-    SHARED (tenant-less) provider (FIX-20260929-221449) — a credential
-    that validates against no provider resolvable for the context fails.
-    A token validated against any provider resolvable for the resolved
-    tenant has the ``tenant`` claim (slug) injected from the RESOLVED
-    LOGIN CONTEXT (:func:`_inject_tenant_claim`), which
+    token is validated against the tenant's OWN provider config ONLY —
+    there is no shared or root fallback chain (every tenant uses only
+    its own identity provider).  A tenant with no own provider has no
+    candidates: validation fails.  A token validated against the tenant's
+    own provider has the ``tenant`` claim (slug) injected from the
+    RESOLVED LOGIN CONTEXT (:func:`_inject_tenant_claim`), which
     ``JWTAuthMiddleware._check_tenant_claim`` then enforces against the
     resolved tenant (tokens carrying a native claim are overridden — the
     authoritative binding is the login context that validated the token).
-    Cross-tenant safety under the shared-provider model comes from
-    membership gates + the scoped data plane, not from provider binding.
     """
     try:
         from app.main import _get_registry
@@ -208,13 +199,18 @@ async def _try_oidc_token(
     tenant_id = getattr(tenant_context, "tenant_id", None)
     is_system_tenant = bool(getattr(tenant_context, "is_system_tenant", False))
 
-    # Try user provider first, then agent provider.  Within a scope,
-    # iterate ALL candidate providers (own → shared → root slot —
-    # FIX-20261002-110000): the first provider whose JWKS validates the
-    # token wins; a root-slot (adopted platform realm) token must not be
-    # shadowed by a different provider in the shared slot.
+    # Try user provider first, then agent provider.  With a resolved
+    # tenant: that tenant's OWN slot only (no shared/root chain).  With
+    # NO tenant context yet (login bootstrap, e.g. /auth/tenant-memberships
+    # before a workspace is chosen): ALL tenants' providers — the issuer
+    # that validates identifies the realm; authorization still derives
+    # from the subject's memberships (see get_bootstrap_candidates).
     for scope in ("user", "agent"):
-        for provider in registry.get_provider_candidates(scope, tenant_id, is_system_tenant):
+        if tenant_id is not None:
+            candidates = registry.get_provider_candidates(scope, tenant_id, is_system_tenant)
+        else:
+            candidates = registry.get_bootstrap_candidates(scope)
+        for provider in candidates:
             try:
                 client = OIDCClient(
                     issuer_url=provider.issuer_url,
@@ -605,9 +601,9 @@ class JWTAuthMiddleware(BaseHTTPMiddleware):
           super-admin tokens NEVER JIT;
         - multi-tenancy is ON and a tenant context is RESOLVED for the
           request (single-tenant mode unchanged);
-        - the provider that validated the token — the slot resolvable for
-          the resolved tenant (own → shared → system-slot fallback) — has
-          ``default_tenant_role`` configured;
+        - the provider that validated the token — the tenant's OWN slot
+          resolvable for the resolved tenant (no shared/root fallback) —
+          has ``default_tenant_role`` configured;
         - the user holds NO active membership in the tenant (idempotent:
           an existing membership means nothing happens).
 

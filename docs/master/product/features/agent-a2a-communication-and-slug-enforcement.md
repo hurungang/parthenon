@@ -49,3 +49,7 @@ This feature strengthens cross-agent collaboration by enabling reliable agent-to
 ## Dependencies & Constraints
 - Recursion validation depends on a stable SOP and delegation step graph; configuration changes that would create cycles must be rejected at create/update and again at run initiation
 - All changes must align with enterprise segregation and audit requirements
+
+## Multi-Tenancy Note
+
+A2A delegation targets resolve strictly by tenant and name (see [Multi-Tenancy](multi-tenancy.md) and [Strict Tenant Isolation](strict-tenant-isolation.md)) — a name collision across tenants never routes to the wrong tenant's agent, and delegation names (including `agent____<slug>`-style names) are tenant-qualified at resolution time. Agent type and MCP server slugs are unique per tenant, not platform-wide. With multi-tenancy disabled (the default), behavior is unchanged — the deployment operates as the root tenant's workspace.

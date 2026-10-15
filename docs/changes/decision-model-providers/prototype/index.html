@@ -1,0 +1,849 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Parthenon — Decision Model Providers Prototype</title>
+<style>
+  :root {
+    --primary: #1976d2;
+    --primary-dark: #1565c0;
+    --primary-light: #e3f2fd;
+    --bg: #f5f6f8;
+    --surface: #ffffff;
+    --text: #1a2027;
+    --text2: #5f6b7a;
+    --border: #e0e4e8;
+    --success: #2e7d32;
+    --success-bg: #e8f5e9;
+    --warning: #ed6c02;
+    --warning-bg: #fff3e0;
+    --error: #d32f2f;
+    --error-bg: #ffebee;
+    --radius: 8px;
+    --shadow: 0 1px 3px rgba(0,0,0,.08), 0 1px 2px rgba(0,0,0,.06);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; background: var(--bg); color: var(--text); font-size: 14px; }
+
+  /* App bar */
+  .appbar { background: var(--primary); color: #fff; height: 56px; display: flex; align-items: center; padding: 0 24px; gap: 24px; position: sticky; top: 0; z-index: 50; box-shadow: var(--shadow); }
+  .appbar .logo { font-size: 18px; font-weight: 600; letter-spacing: .3px; display: flex; align-items: center; gap: 10px; }
+  .appbar .badge { background: rgba(255,255,255,.2); font-size: 11px; padding: 2px 8px; border-radius: 10px; font-weight: 500; }
+  .appbar .spacer { flex: 1; }
+  .appbar .tenant-chip { background: rgba(255,255,255,.18); border: 1px solid rgba(255,255,255,.35); font-size: 12px; padding: 4px 12px; border-radius: 14px; display: flex; align-items: center; gap: 6px; }
+  .avatar { width: 32px; height: 32px; border-radius: 50%; background: rgba(255,255,255,.3); display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 600; }
+
+  /* Layout */
+  .layout { display: flex; min-height: calc(100vh - 56px); }
+  .sidebar { width: 230px; background: var(--surface); border-right: 1px solid var(--border); padding: 12px 8px; flex-shrink: 0; }
+  .sidebar .section { font-size: 11px; text-transform: uppercase; color: var(--text2); padding: 12px 12px 4px; letter-spacing: .5px; }
+  .sidebar a { display: flex; align-items: center; gap: 10px; padding: 9px 12px; border-radius: 6px; color: var(--text); text-decoration: none; cursor: pointer; }
+  .sidebar a:hover { background: #f0f2f4; }
+  .sidebar a.active { background: var(--primary-light); color: var(--primary-dark); font-weight: 600; }
+  .sidebar .icon { width: 18px; text-align: center; opacity: .8; }
+  .main { flex: 1; padding: 24px 32px; max-width: 1200px; }
+
+  /* Typography & cards */
+  h1 { font-size: 22px; font-weight: 600; margin-bottom: 4px; }
+  .subtitle { color: var(--text2); margin-bottom: 20px; }
+  .card { background: var(--surface); border-radius: var(--radius); box-shadow: var(--shadow); padding: 20px 24px; margin-bottom: 20px; }
+  .card h2 { font-size: 16px; font-weight: 600; margin-bottom: 4px; }
+  .card .card-sub { color: var(--text2); font-size: 13px; margin-bottom: 16px; }
+  .row { display: flex; gap: 16px; flex-wrap: wrap; }
+  .row > * { flex: 1; min-width: 220px; }
+
+  /* Form controls */
+  label.field { display: block; font-size: 12px; font-weight: 600; color: var(--text2); margin-bottom: 6px; text-transform: uppercase; letter-spacing: .4px; }
+  input[type=text], input[type=password], select, textarea {
+    width: 100%; padding: 9px 12px; border: 1px solid var(--border); border-radius: 6px; font-size: 14px; font-family: inherit; background: #fff; color: var(--text);
+  }
+  input:focus, select:focus, textarea:focus { outline: 2px solid var(--primary-light); border-color: var(--primary); }
+  input.invalid { border-color: var(--error); }
+  input:disabled, select:disabled { background: #f4f6f8; color: var(--text2); cursor: not-allowed; }
+  textarea { resize: vertical; min-height: 60px; }
+  .hint { font-size: 12px; color: var(--text2); margin-top: 4px; }
+  .error-text { font-size: 12px; color: var(--error); margin-top: 4px; }
+
+  /* Buttons */
+  .btn { display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; border-radius: 6px; border: none; font-size: 14px; font-weight: 500; cursor: pointer; font-family: inherit; }
+  .btn-primary { background: var(--primary); color: #fff; }
+  .btn-primary:hover { background: var(--primary-dark); }
+  .btn-outline { background: transparent; color: var(--primary); border: 1px solid var(--primary); }
+  .btn-outline:hover { background: var(--primary-light); }
+  .btn-text { background: transparent; color: var(--primary); padding: 6px 10px; }
+  .btn-text:hover { background: var(--primary-light); }
+  .btn-danger-text { background: transparent; color: var(--error); padding: 6px 10px; }
+  .btn-danger-text:hover { background: var(--error-bg); }
+  .btn:disabled { opacity: .45; cursor: not-allowed; }
+  .btn-small { padding: 4px 10px; font-size: 12px; }
+
+  /* Chips / status */
+  .chip { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 12px; font-size: 12px; font-weight: 600; }
+  .chip .dot { width: 8px; height: 8px; border-radius: 50%; }
+  .chip.success { background: var(--success-bg); color: var(--success); } .chip.success .dot { background: var(--success); }
+  .chip.warning { background: var(--warning-bg); color: var(--warning); } .chip.warning .dot { background: var(--warning); }
+  .chip.error { background: var(--error-bg); color: var(--error); } .chip.error .dot { background: var(--error); }
+  .chip.info { background: var(--primary-light); color: var(--primary-dark); } .chip.info .dot { background: var(--primary); }
+  .chip.neutral { background: #eceff1; color: #455a64; } .chip.neutral .dot { background: #78909c; }
+  .chip.decision { background: #ede7f6; color: #4527a0; } .chip.decision .dot { background: #5e35b1; }
+
+  /* Enabled-models chips (multi-select) */
+  .chip-select { border: 1px solid var(--border); border-radius: 6px; padding: 6px 8px; background: #fff; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; min-height: 42px; }
+  .chip-select:focus-within { outline: 2px solid var(--primary-light); border-color: var(--primary); }
+  .chip-select .mchip { display: inline-flex; align-items: center; gap: 6px; background: var(--primary-light); color: var(--primary-dark); border-radius: 12px; padding: 3px 6px 3px 10px; font-size: 12.5px; font-weight: 600; }
+  .chip-select .mchip button { background: rgba(25,118,210,.15); border: none; border-radius: 50%; width: 18px; height: 18px; font-size: 11px; line-height: 1; cursor: pointer; color: var(--primary-dark); display: flex; align-items: center; justify-content: center; }
+  .chip-select .mchip button:hover { background: rgba(25,118,210,.3); }
+  .chip-select input { border: none !important; outline: none !important; flex: 1; min-width: 120px; padding: 4px !important; font-size: 13px; }
+
+  /* Toggle switch */
+  .switch { position: relative; display: inline-block; width: 40px; height: 22px; flex-shrink: 0; }
+  .switch input { opacity: 0; width: 0; height: 0; }
+  .slider { position: absolute; cursor: pointer; inset: 0; background: #b0bec5; border-radius: 22px; transition: .2s; }
+  .slider:before { content: ""; position: absolute; height: 16px; width: 16px; left: 3px; bottom: 3px; background: #fff; border-radius: 50%; transition: .2s; }
+  .switch input:checked + .slider { background: var(--primary); }
+  .switch input:checked + .slider:before { transform: translateX(18px); }
+
+  /* Alerts */
+  .alert { display: flex; gap: 10px; padding: 12px 16px; border-radius: 6px; font-size: 13px; margin-bottom: 16px; align-items: flex-start; line-height: 1.5; }
+  .alert.info { background: var(--primary-light); color: #0d47a1; }
+  .alert.warning { background: var(--warning-bg); color: #8a4b00; }
+  .alert.success { background: var(--success-bg); color: #1b5e20; }
+  .alert.error { background: var(--error-bg); color: #b71c1c; }
+
+  /* Table */
+  .table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+  .table th { text-align: left; color: var(--text2); font-size: 12px; text-transform: uppercase; padding: 8px 10px; border-bottom: 2px solid var(--border); white-space: nowrap; }
+  .table td { padding: 10px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+  .table tr:hover td { background: #fafbfc; }
+  .mono { font-family: 'JetBrains Mono', Consolas, monospace; }
+
+  /* Responsive decision tools table: fixed layout + sticky actions column */
+  .table-responsive-wrap { overflow-x: auto; }
+  .table-fixed { table-layout: fixed; min-width: 880px; }
+  .table-fixed th, .table-fixed td { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .table-fixed th.actions-col, .table-fixed td.actions-col { position: sticky; right: 0; background: var(--surface); z-index: 2; box-shadow: -6px 0 8px -6px rgba(0,0,0,.25); text-align: right; }
+  .table-fixed tr:hover td.actions-col { background: #fafbfc; }
+
+  /* Embedded guardrail section (collapsible) */
+  .guardrail-section { border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); margin-bottom: 16px; box-shadow: var(--shadow); }
+  .guardrail-toggle { display: flex; align-items: center; gap: 8px; padding: 14px 18px; cursor: pointer; user-select: none; }
+  .guardrail-toggle:hover { background: #fafbfc; }
+  .guardrail-toggle .caret { font-size: 11px; color: var(--text2); transition: transform .2s; }
+  .guardrail-section.open .guardrail-toggle .caret { transform: rotate(90deg); }
+  .guardrail-toggle .g-title { font-size: 14.5px; font-weight: 600; }
+  .guardrail-toggle .g-sub { font-size: 12px; color: var(--text2); }
+  .guardrail-body { display: none; padding: 4px 18px 18px; border-top: 1px solid var(--border); }
+  .guardrail-section.open .guardrail-body { display: block; }
+  .guardrail-row { display: flex; align-items: center; gap: 12px; padding: 10px 4px; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
+  .guardrail-row:last-child { border-bottom: none; }
+  .guardrail-row .g-model { font-family: 'JetBrains Mono', Consolas, monospace; font-size: 12.5px; font-weight: 600; }
+  .guardrail-meter { flex: 1; min-width: 160px; }
+  .guardrail-meter .meter { margin-top: 3px; }
+
+  /* Dialog */
+  .overlay { position: fixed; inset: 0; background: rgba(0,0,0,.45); display: none; align-items: flex-start; justify-content: center; z-index: 100; padding: 48px 16px; overflow-y: auto; }
+  .overlay.open { display: flex; }
+  .dialog { background: var(--surface); border-radius: 12px; width: 100%; max-width: 560px; box-shadow: 0 8px 30px rgba(0,0,0,.25); }
+  .dialog-header { padding: 18px 24px 4px; font-size: 18px; font-weight: 600; display: flex; justify-content: space-between; }
+  .dialog-body { padding: 12px 24px; }
+  .dialog-actions { padding: 12px 24px 20px; display: flex; justify-content: flex-end; gap: 8px; }
+  .dialog .close-x { cursor: pointer; color: var(--text2); font-size: 20px; line-height: 1; background: none; border: none; }
+
+  /* Toast */
+  .toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); background: #323232; color: #fff; padding: 12px 24px; border-radius: 6px; font-size: 14px; z-index: 200; display: none; box-shadow: 0 4px 12px rgba(0,0,0,.3); max-width: 90vw; }
+  .toast.show { display: block; animation: fadein .2s; }
+  @keyframes fadein { from { opacity: 0; transform: translate(-50%, 8px);} to { opacity: 1; transform: translate(-50%, 0);} }
+  .divider { height: 1px; background: var(--border); margin: 16px 0; }
+  code.inline { background: #eceff1; padding: 1px 6px; border-radius: 4px; font-family: 'JetBrains Mono', Consolas, monospace; font-size: 12.5px; color: #ad1457; }
+
+  /* Budget meter */
+  .meter { height: 10px; border-radius: 5px; background: #eceff1; overflow: hidden; }
+  .meter > div { height: 100%; border-radius: 5px; background: var(--success); }
+  .meter > div.warn { background: var(--warning); }
+  .meter > div.over { background: var(--error); }
+  .stat { background: var(--surface); border-radius: var(--radius); box-shadow: var(--shadow); padding: 16px 20px; flex: 1; min-width: 200px; }
+  .stat .label { font-size: 12px; text-transform: uppercase; color: var(--text2); letter-spacing: .4px; }
+  .stat .value { font-size: 24px; font-weight: 700; margin: 4px 0 2px; }
+  .stat .sub { font-size: 12px; color: var(--text2); }
+  .log-line { font-family: 'JetBrains Mono', Consolas, monospace; font-size: 12px; padding: 6px 0; border-bottom: 1px solid var(--border); line-height: 1.6; }
+  .log-line:last-child { border-bottom: none; }
+  .log-line .ts { color: var(--text2); }
+</style>
+</head>
+<body>
+
+<!-- ===== App bar ===== -->
+<div class="appbar">
+  <div class="logo">🏛 Parthenon <span class="badge">prototype · decision-model-providers</span></div>
+  <div class="spacer"></div>
+  <div class="tenant-chip" title="All providers and tools are scoped to this tenant">🏢 tenant: <strong>&nbsp;acme-corp</strong></div>
+  <div class="avatar">ML</div>
+</div>
+
+<div class="layout">
+  <!-- ===== Sidebar ===== -->
+  <nav class="sidebar">
+    <div class="section">Agents</div>
+    <a><span class="icon">🤖</span> Agent Types</a>
+    <a><span class="icon">🔐</span> Agent Roles</a>
+    <a><span class="icon">⚡</span> Skills</a>
+    <a data-nav="decisiontools"><span class="icon">🧩</span> Decision Tools</a>
+    <div class="section">Administration</div>
+    <a><span class="icon">📊</span> Dashboard</a>
+    <a data-nav="providers" class="active"><span class="icon">🧠</span> Decision Model Providers</a>
+    <a data-nav="usage"><span class="icon">💰</span> Usage &amp; Budget</a>
+    <a><span class="icon">🔌</span> MCP Hub</a>
+    <a><span class="icon">⚙️</span> System Config</a>
+  </nav>
+
+  <!-- ===== Main ===== -->
+  <main class="main">
+
+    <!-- ============ PAGE: PROVIDERS ============ -->
+    <section id="page-providers">
+      <h1>Decision Model Providers</h1>
+      <p class="subtitle">Register decision-skill vendors and manage their enabled models. Renamed from “System One Providers” — your existing configuration was migrated automatically.</p>
+
+      <div style="display:flex; align-items:center; gap:12px; margin-bottom:16px;">
+        <span class="chip success" id="prov-status-chip"><span class="dot"></span>Configured</span>
+        <span style="flex:1;"></span>
+        <button class="btn btn-primary" onclick="openProviderDialog()">＋ Add Provider</button>
+      </div>
+
+      <div class="alert info">
+        <span>ℹ️</span>
+        <div><strong>Multi-vendor support.</strong> Credentials are encrypted at rest and are <strong>write-only</strong> — never returned in read responses. Enabled models are managed inside the provider editor (chips + vendor sync). All decision model usage passes through the same guardrail and budget/spend controls as regular agent model usage.</div>
+      </div>
+
+      <!-- Embedded guardrail section (decision-scoped) -->
+      <div class="guardrail-section" id="guardrail-section">
+        <div class="guardrail-toggle" onclick="toggleGuardrails()" data-testid="guardrails-section-toggle">
+          <span class="caret">▶</span>
+          <span class="g-title">Decision Guardrails</span>
+          <span class="g-sub">Per-provider spend thresholds for decision model usage — evaluated before every decision vendor call</span>
+        </div>
+        <div class="guardrail-body" data-testid="guardrails-section">
+          <div style="margin-bottom:14px; max-width:340px;">
+            <label class="field">Provider</label>
+            <select id="guardrail-provider" onchange="renderGuardrails()"></select>
+          </div>
+          <div id="guardrail-list"></div>
+          <div class="alert info" style="margin:12px 0 0;">
+            <span>🛡️</span>
+            <div>Guardrails created here are <strong>decision-scoped</strong> — they are evaluated by the decision pre-call check and never affect LLM Model Configurations (and vice versa). Usage postures are rolled up from persisted decision executions.</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card" style="padding:8px 16px;">
+        <table class="table">
+          <thead><tr>
+            <th>Provider</th><th>Vendor</th><th>Endpoint</th><th>Default Model</th><th>API Key</th><th>Enabled</th><th style="width:190px;"></th>
+          </tr></thead>
+          <tbody id="prov-tbody"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ============ PAGE: DECISION TOOLS ============ -->
+    <section id="page-decisiontools" style="display:none;">
+      <h1>Decision Tools</h1>
+      <p class="subtitle">User-defined tools that route structured snap judgments to a decision model of your choice. Each tool selects one <strong>enabled</strong> decision model across all providers.</p>
+
+      <div style="display:flex; justify-content:flex-end; margin-bottom:16px;">
+        <button class="btn btn-primary" onclick="openToolDialog()">＋ Create Decision Tool</button>
+      </div>
+
+      <div class="card" style="padding:8px 16px;">
+        <div class="table-responsive-wrap">
+          <table class="table table-fixed">
+            <thead><tr>
+              <th style="width:220px;">Tool name</th>
+              <th>Purpose</th>
+              <th>Description</th>
+              <th style="width:200px;">Decision Model</th>
+              <th style="width:110px;">Status</th>
+              <th class="actions-col" style="width:110px;">Actions</th>
+            </tr></thead>
+            <tbody id="dt-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="alert warning" id="dt-disabled-warning" style="display:none;">
+        <span>⚠️</span>
+        <div><strong>Model unavailable.</strong> One or more tools reference a decision model that is no longer enabled. Evaluations are blocked until an enabled model is selected. <a onclick="openToolDialog('risk-approval')" style="cursor:pointer;text-decoration:underline;font-weight:600;">Re-configure now</a></div>
+      </div>
+    </section>
+
+    <!-- ============ PAGE: USAGE & BUDGET ============ -->
+    <section id="page-usage" style="display:none;">
+      <h1>Usage &amp; Budget</h1>
+      <p class="subtitle">Decision model usage is metered and counted against the <strong>same</strong> budget/spend limits and guardrail pipeline as regular agent model usage.</p>
+
+      <div class="row" style="margin-bottom:20px;">
+        <div class="stat">
+          <div class="label">Monthly Spend (all models)</div>
+          <div class="value">$742.10</div>
+          <div class="meter"><div class="warn" style="width:74%"></div></div>
+          <div class="sub">74% of $1,000.00 budget · decision models: $86.40</div>
+        </div>
+        <div class="stat">
+          <div class="label">Decision Model Calls (MTD)</div>
+          <div class="value">1,284</div>
+          <div class="sub">across 3 tools · 2 providers</div>
+        </div>
+        <div class="stat">
+          <div class="label">Guardrail Blocks (MTD)</div>
+          <div class="value">17</div>
+          <div class="sub">includes 4 decision evaluations</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Recent decision evaluations — audit trail</h2>
+        <p class="card-sub">Every decision evaluation records the provider and model used, spend, and guardrail outcome. Budget exhaustion or a guardrail trigger blocks the evaluation with the same outcomes as regular agent usage.</p>
+        <div id="usage-log"></div>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<!-- ===== Provider create/edit dialog ===== -->
+<div class="overlay" id="dlg-provider">
+  <div class="dialog">
+    <div class="dialog-header"><span id="pv-title">Add Decision Model Provider</span><button class="close-x" onclick="closeDialog('dlg-provider')">✕</button></div>
+    <div class="dialog-body">
+      <div id="pv-error" class="alert error" style="display:none;"><span>⛔</span><div id="pv-error-text"></div></div>
+      <div style="margin-bottom:14px;">
+        <label class="field">Vendor Type *</label>
+        <select id="pv-vendor">
+          <option value="typesafe">TypeSafe AI (Decision API)</option>
+          <option value="veridian">Veridian Decisions</option>
+          <option value="cortexa">Cortexa Judge</option>
+        </select>
+        <div class="hint" id="pv-vendor-hint">Vendors are release-managed; new integrations ship with the platform.</div>
+      </div>
+      <div style="margin-bottom:14px;">
+        <label class="field">Display Name *</label>
+        <input type="text" id="pv-name" placeholder="e.g. Production TypeSafe">
+        <div class="error-text" id="pv-name-err" style="display:none;">Display name is required and must be unique per vendor.</div>
+      </div>
+      <div style="margin-bottom:14px;">
+        <label class="field">Endpoint (Base URL) *</label>
+        <input type="text" id="pv-endpoint" placeholder="https://api.vendor.example/v1">
+        <div class="hint">Each tenant has its own deployment endpoint; editable at any time.</div>
+      </div>
+      <div style="margin-bottom:14px;">
+        <label class="field">Enabled Models</label>
+        <div class="chip-select" id="pv-models-box">
+          <input type="text" id="pv-model-input" list="pv-model-options" placeholder="Type or pick a model, press Enter…" onkeydown="modelInputKey(event)">
+          <datalist id="pv-model-options"></datalist>
+        </div>
+        <div class="hint">The chips above are the enabled models sent in the payload. Typed entries are also allowed; “Sync models from vendor” imports the discovered catalogue.</div>
+      </div>
+      <div style="margin-bottom:14px;">
+        <label class="field">Default Model *</label>
+        <select id="pv-default" disabled><option value="">— select or sync models first —</option></select>
+        <div class="hint" id="pv-default-hint">Select at least one enabled model above (or run vendor sync) to choose a default.</div>
+      </div>
+      <div style="display:flex; justify-content:flex-end; margin:-6px 0 12px;">
+        <button class="btn btn-outline btn-small" id="pv-sync-btn" style="display:none;" onclick="syncModels()">⟳ Sync models from vendor</button>
+      </div>
+      <div style="margin-bottom:14px;">
+        <label class="field">API Key / Secret *</label>
+        <input type="password" id="pv-key" placeholder="•••••••••••• (unchanged)" value="">
+        <div class="hint" id="pv-key-hint">Encrypted at rest and never displayed again. Leave the placeholder to keep the stored credential; clear the field to remove it.</div>
+      </div>
+      <div style="display:flex; align-items:center; gap:12px; margin-top:8px; flex-wrap:wrap;">
+        <button class="btn btn-outline btn-small" id="pv-test-btn" onclick="testConnection()">🔌 Test Connection</button>
+        <span id="pv-test-result"></span>
+        <span style="flex:1"></span>
+        <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-size:13px;">
+          <span class="switch" style="display:inline-block;"><input type="checkbox" id="pv-enabled" checked><span class="slider"></span></span>
+          Enabled
+        </label>
+      </div>
+      <div class="hint" style="margin-top:8px;">Disabling a provider cascades to all its models — referencing decision tools are blocked from evaluating until re-assigned.</div>
+    </div>
+    <div class="dialog-actions">
+      <button class="btn btn-text" onclick="closeDialog('dlg-provider')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveProvider()">Save Provider</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== Delete confirmation dialog ===== -->
+<div class="overlay" id="dlg-delete">
+  <div class="dialog" style="max-width:480px;">
+    <div class="dialog-header"><span>Delete Provider</span><button class="close-x" onclick="closeDialog('dlg-delete')">✕</button></div>
+    <div class="dialog-body">
+      <div id="del-error" class="alert error" style="display:none;"><span>⛔</span><div id="del-error-text"></div></div>
+      <p id="del-text" style="line-height:1.6;">Are you sure you want to delete <strong id="del-name"></strong>? Its enabled models will no longer be selectable.</p>
+    </div>
+    <div class="dialog-actions">
+      <button class="btn btn-text" onclick="closeDialog('dlg-delete')">Cancel</button>
+      <button class="btn btn-primary" style="background:var(--error);" id="del-confirm" onclick="confirmDelete()">Delete</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== Decision tool create/edit dialog ===== -->
+<div class="overlay" id="dlg-tool">
+  <div class="dialog">
+    <div class="dialog-header"><span id="tool-title">Create Decision Tool</span><button class="close-x" onclick="closeDialog('dlg-tool')">✕</button></div>
+    <div class="dialog-body">
+      <div style="margin-bottom:14px;">
+        <label class="field">Tool Name *</label>
+        <input type="text" id="tool-name" placeholder="e.g. refund-approval" value="refund-approval">
+        <div class="hint">Exposed over MCP as <code class="inline">decision____refund-approval</code>.</div>
+      </div>
+      <div style="margin-bottom:14px;">
+        <label class="field">Description / Purpose</label>
+        <textarea id="tool-desc" placeholder="What judgment does this tool make?">Approve or deny customer refund requests up to $500 based on policy and account history.</textarea>
+      </div>
+      <div style="margin-bottom:14px;">
+        <label class="field">Decision Model *</label>
+        <select id="tool-model"></select>
+        <div class="hint" id="tool-model-hint">Only <strong>enabled</strong> decision models across all providers are listed. A stored selection that has been disabled appears as an unavailable option — you must re-select before saving.</div>
+      </div>
+      <div class="alert info" style="margin-bottom:0;">
+        <span>💰</span>
+        <div>Each evaluation of this tool consumes tokens from the selected model and counts against the shared monthly budget of <strong>$1,000.00</strong> (currently at <strong>74%</strong>). Decision-scoped guardrails are evaluated before every vendor call.</div>
+      </div>
+    </div>
+    <div class="dialog-actions">
+      <button class="btn btn-text" onclick="closeDialog('dlg-tool')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveTool()">Save Tool</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+/* ================= State (placeholder data) =================
+   Mirrors the shipped implementation: enabled_models chips +
+   default_model live on the provider; per-model toggles no longer
+   exist on the page (enablement is managed via the editor chips and
+   vendor sync). */
+let providers = [
+  {
+    id: 'p1', vendor: 'typesafe', vendorLabel: 'TypeSafe AI', name: 'Production TypeSafe',
+    endpoint: 'https://api.typesafe.example/v1', keySet: true, enabled: true, conn: 'ok',
+    enabledModels: ['jev-latest', 'jev-pro'],
+    defaultModel: 'jev-latest',
+    catalogue: ['jev-latest', 'jev-pro', 'jev-lite'],
+    guardrails: [
+      { model: 'jev-latest', period: 'monthly', threshold: 80, spend: 62 },
+      { model: 'jev-pro', period: 'monthly', threshold: 80, spend: 94 },
+    ]
+  },
+  {
+    id: 'p2', vendor: 'veridian', vendorLabel: 'Veridian Decisions', name: 'Veridian EU',
+    endpoint: 'https://eu.veridian.example/api', keySet: true, enabled: true, conn: 'ok',
+    enabledModels: ['arbiter-2'],
+    defaultModel: 'arbiter-2',
+    catalogue: ['arbiter-2', 'arbiter-2-mini'],
+    guardrails: [
+      { model: 'arbiter-2', period: 'monthly', threshold: 80, spend: 31 },
+    ]
+  },
+  {
+    id: 'p3', vendor: 'cortexa', vendorLabel: 'Cortexa Judge', name: 'Cortexa Trial',
+    endpoint: 'https://trial.cortexa.example', keySet: false, enabled: false, conn: 'none',
+    enabledModels: [],
+    defaultModel: '',
+    catalogue: ['judge-v1'],
+    guardrails: []
+  },
+];
+
+/* Tools reference an availability selection (provider :: model). A stored
+   selection that is no longer enabled renders as an "unavailable — re-select"
+   option and blocks evaluation until re-assigned. */
+let tools = [
+  { name: 'refund-approval', desc: 'Approve or deny refund requests up to $500', provId: 'p1', modelId: 'jev-latest', enabled: true },
+  { name: 'risk-approval', desc: 'Tier incoming partner applications by risk', provId: 'p1', modelId: 'jev-pro', enabled: true },
+  { name: 'priority-triage', desc: 'Prioritise inbound support tickets', provId: 'p2', modelId: 'arbiter-2', enabled: true },
+];
+
+let nextId = 4;
+let deleteTargetId = null;
+let editingProviderId = null;
+let editingTool = null;
+
+/* ================= Helpers ================= */
+function $(id){ return document.getElementById(id); }
+function toast(msg){ const t = $('toast'); t.textContent = msg; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'), 3200); }
+function openDialog(id){ $(id).classList.add('open'); }
+function closeDialog(id){ $(id).classList.remove('open'); }
+function vendorLabel(v){ return { typesafe:'TypeSafe AI', veridian:'Veridian Decisions', cortexa:'Cortexa Judge' }[v] || v; }
+function modelAvailable(pid, mid){
+  const p = providers.find(x => x.id === pid);
+  return !!(p && p.enabled && p.enabledModels.includes(mid));
+}
+function modelLabel(pid, mid){
+  const p = providers.find(x => x.id === pid);
+  return (p ? p.vendorLabel : '?') + ' · ' + mid;
+}
+
+/* ================= Navigation ================= */
+document.querySelectorAll('[data-nav]').forEach(a => {
+  a.addEventListener('click', () => {
+    document.querySelectorAll('.sidebar a').forEach(x => x.classList.remove('active'));
+    a.classList.add('active');
+    ['providers','decisiontools','usage'].forEach(p => $('page-'+p).style.display = 'none');
+    $('page-'+a.dataset.nav).style.display = 'block';
+  });
+});
+
+/* ================= Providers page ================= */
+function renderProviders(){
+  const tb = $('prov-tbody');
+  tb.innerHTML = '';
+  providers.forEach(p => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td><strong>${p.name}</strong></td>
+      <td><span class="chip decision" style="background:transparent;border:1px solid #b39ddb;"><span class="dot"></span>${p.vendor}</span></td>
+      <td class="mono" style="font-size:12px; max-width:230px; overflow:hidden; text-overflow:ellipsis;" title="${p.endpoint}">${p.endpoint || '—'}</td>
+      <td><code class="inline">${p.defaultModel || '—'}</code></td>
+      <td>${p.keySet ? '<span class="chip neutral"><span class="dot"></span>Stored 🔒</span>' : '<span class="chip warning"><span class="dot"></span>Missing</span>'}</td>
+      <td>${p.enabled ? '<span class="chip success"><span class="dot"></span>Yes</span>' : '<span class="chip neutral"><span class="dot"></span>No</span>'}</td>
+      <td class="actions-col">
+        <button class="btn btn-outline btn-small" onclick="testConnectionRow('${p.id}')">Test</button>
+        <button class="btn btn-text btn-small" onclick="editProvider('${p.id}')">Edit</button>
+        <button class="btn btn-danger-text btn-small" onclick="askDelete('${p.id}')">Delete</button>
+      </td>`;
+    tb.appendChild(tr);
+  });
+  const anyEnabled = providers.some(p => p.enabled);
+  $('prov-status-chip').className = 'chip ' + (anyEnabled ? 'success' : 'neutral');
+  $('prov-status-chip').innerHTML = '<span class="dot"></span>' + (anyEnabled ? 'Configured' : 'Not configured');
+  renderGuardrailProviderSelect();
+}
+
+/* Connection test — result is surfaced as a page-level alert, like the
+   shipped implementation. */
+function testConnectionRow(id){
+  const p = providers.find(x => x.id === id);
+  toast('Testing connection to ' + p.name + '…');
+  setTimeout(() => {
+    p.conn = p.keySet ? 'ok' : 'fail';
+    renderProviders();
+    toast(p.keySet ? p.name + ': connection OK · ' + p.catalogue.length + ' models available' : p.name + ': connection failed — no API key set');
+  }, 900);
+}
+
+/* ================= Embedded guardrail section ================= */
+function toggleGuardrails(){
+  $('guardrail-section').classList.toggle('open');
+}
+function renderGuardrailProviderSelect(){
+  const sel = $('guardrail-provider');
+  if (!sel) return;
+  const current = sel.value;
+  sel.innerHTML = providers.map(p => '<option value="'+p.id+'"'+(p.id===current?' selected':'')+'>'+p.name+'</option>').join('');
+  renderGuardrails();
+}
+function renderGuardrails(){
+  const pid = $('guardrail-provider').value;
+  const p = providers.find(x => x.id === pid);
+  const list = $('guardrail-list');
+  if (!p) { list.innerHTML = '<div class="hint">No providers yet.</div>'; return; }
+  if (!p.guardrails.length){
+    list.innerHTML = '<div class="hint" style="padding:8px 0;">No decision guardrails configured for this provider yet.</div>';
+    return;
+  }
+  list.innerHTML = p.guardrails.map((g, i) => {
+    const cls = g.spend >= g.threshold ? 'over' : (g.spend >= g.threshold * 0.75 ? 'warn' : '');
+    return `<div class="guardrail-row">
+      <span class="g-model">${g.model}</span>
+      <span class="chip neutral">${g.period}</span>
+      <div class="guardrail-meter">
+        <div style="font-size:12px; color:var(--text2);">$${(g.spend*4.2).toFixed(2)} of $${(g.threshold*4.2).toFixed(2)} · threshold ${g.threshold}%</div>
+        <div class="meter"><div class="${cls}" style="width:${Math.min(100,g.spend)}%"></div></div>
+      </div>
+      <button class="btn btn-text btn-small" onclick="toast('Guardrail edit (period immutable) — demo','info')">Edit</button>
+      <button class="btn btn-danger-text btn-small" onclick="toast('Guardrail deleted — LLM guardrails on Model Configurations are untouched','success')">Delete</button>
+    </div>`;
+  }).join('');
+}
+
+/* ================= Provider dialog (create / edit) ================= */
+/* Form state for the enabled-models chips. Options = already-selected chips ∪
+   in-session dialogModels (from vendor sync) ∪ the provider's catalogue rows
+   (edit mode) — mirroring modelOptions in SystemOneProviderConfigPage. */
+let dialogChips = [];
+let dialogModels = []; // in-session vendor-synced models
+
+function openProviderDialog(){
+  editingProviderId = null;
+  $('pv-title').textContent = 'Add Decision Model Provider';
+  $('pv-vendor').value = 'typesafe';
+  $('pv-vendor').disabled = false;
+  $('pv-vendor-hint').textContent = 'Vendors are release-managed; new integrations ship with the platform.';
+  $('pv-name').value = ''; $('pv-endpoint').value = ''; $('pv-key').value = '';
+  $('pv-key').placeholder = 'sk-…';
+  $('pv-key-hint').textContent = 'Encrypted at rest and never displayed again. Required when creating a provider.';
+  $('pv-enabled').checked = true;
+  $('pv-error').style.display = 'none'; $('pv-name-err').style.display = 'none'; $('pv-test-result').textContent = '';
+  dialogChips = []; dialogModels = [];
+  $('pv-sync-btn').style.display = 'none';
+  renderModelChips();
+  openDialog('dlg-provider');
+}
+function editProvider(id){
+  const p = providers.find(x => x.id === id);
+  editingProviderId = id;
+  $('pv-title').textContent = 'Edit Provider — ' + p.name;
+  /* Vendor type is locked on edit: changing it would invalidate the
+     provider's models and credentials. */
+  $('pv-vendor').value = p.vendor;
+  $('pv-vendor').disabled = true;
+  $('pv-vendor-hint').innerHTML = '🔒 Vendor type is locked on edit — changing it would invalidate the stored models and credential.';
+  $('pv-name').value = p.name; $('pv-endpoint').value = p.endpoint; $('pv-key').value = '';
+  $('pv-key').placeholder = '•••••••••••• (unchanged)';
+  $('pv-key-hint').textContent = 'Write-only: never prefilled. Leave blank to keep the stored key; enter a new value to replace it.';
+  $('pv-enabled').checked = p.enabled;
+  $('pv-error').style.display = 'none'; $('pv-name-err').style.display = 'none'; $('pv-test-result').textContent = '';
+  dialogChips = [...p.enabledModels];
+  dialogModels = [...p.enabledModels]; // gate the default select on enabled models, not the full catalogue
+  $('pv-sync-btn').style.display = 'inline-flex';
+  renderModelChips();
+  openDialog('dlg-provider');
+}
+function renderModelChips(){
+  const box = $('pv-models-box');
+  box.querySelectorAll('.mchip').forEach(el => el.remove());
+  dialogChips.forEach(m => {
+    const chip = document.createElement('span');
+    chip.className = 'mchip';
+    chip.innerHTML = m + ' <button title="Remove" onclick="removeChip(\'' + m + '\')">✕</button>';
+    box.insertBefore(chip, $('pv-model-input'));
+  });
+  // Options = selected chips ∪ in-session synced models ∪ catalogue (edit mode)
+  const opts = new Set(dialogChips);
+  dialogModels.forEach(m => opts.add(m));
+  if (editingProviderId){
+    const p = providers.find(x => x.id === editingProviderId);
+    (p ? p.catalogue : []).forEach(m => opts.add(m));
+  }
+  $('pv-model-options').innerHTML = [...opts].map(m => '<option value="'+m+'">').join('');
+  renderDefaultModelSelect();
+}
+/* Default model renders directly below; its options are exactly the
+   currently-selected chips and it is disabled until ≥1 model is selected.
+   Removing the chip that was the default clears the default. */
+function renderDefaultModelSelect(){
+  const sel = $('pv-default');
+  const hasModels = dialogChips.length > 0;
+  sel.disabled = !hasModels;
+  const valid = hasModels && dialogChips.includes(currentDefault());
+  sel.innerHTML = (hasModels ? '' : '<option value="">— select or sync models first —</option>') +
+    (!valid && hasModels ? '<option value=""></option>' : '') +
+    dialogChips.map(m => '<option value="'+m+'"'+(valid && m===currentDefault()?' selected':'')+'>'+m+'</option>').join('');
+  $('pv-default-hint').textContent = hasModels
+    ? 'Options are exactly the enabled-model chips above; removing the default chip clears the selection.'
+    : 'Select at least one enabled model above (or run vendor sync) to choose a default.';
+}
+function currentDefault(){
+  if (editingProviderId){
+    const p = providers.find(x => x.id === editingProviderId);
+    if (p && dialogChips.includes(p.defaultModel)) return p.defaultModel;
+  }
+  return null;
+}
+function modelInputKey(e){
+  if (e.key !== 'Enter') return;
+  e.preventDefault();
+  const v = $('pv-model-input').value.trim();
+  if (!v) return;
+  if (!dialogChips.includes(v)) dialogChips.push(v);
+  $('pv-model-input').value = '';
+  renderModelChips();
+}
+function removeChip(m){
+  dialogChips = dialogChips.filter(x => x !== m);
+  renderModelChips();
+}
+/* Vendor sync: discovers the vendor model catalogue and pre-selects the
+   imported ids as chips so the default-model select stays in sync. */
+function syncModels(){
+  if (!editingProviderId) return;
+  const btn = $('pv-sync-btn');
+  btn.disabled = true; btn.textContent = '⟳ Syncing…';
+  setTimeout(() => {
+    btn.disabled = false; btn.textContent = '⟳ Sync models from vendor';
+    const p = providers.find(x => x.id === editingProviderId);
+    const imported = p.catalogue;
+    dialogModels = Array.from(new Set([...dialogModels, ...imported]));
+    dialogChips = Array.from(new Set([...dialogChips, ...imported]));
+    renderModelChips();
+    toast('Imported ' + imported.length + ' vendor models as enabled — chips and the default-model select refreshed.');
+  }, 800);
+}
+function testConnection(){
+  const btn = $('pv-test-btn'); const res = $('pv-test-result');
+  btn.disabled = true; res.innerHTML = '<span class="chip warning"><span class="dot"></span>Testing…</span>';
+  setTimeout(() => {
+    btn.disabled = false;
+    const fail = $('pv-name').value.includes('fail'); // demo hook: name containing "fail" simulates a bad key
+    res.innerHTML = fail
+      ? '<span class="chip error"><span class="dot"></span>401 Unauthorized — check API key</span>'
+      : '<span class="chip success"><span class="dot"></span>Connection OK · 4 models available</span>';
+  }, 900);
+}
+function saveProvider(){
+  const vendor = $('pv-vendor').value || (editingProviderId ? providers.find(x=>x.id===editingProviderId).vendor : ''), name = $('pv-name').value.trim();
+  $('pv-error').style.display = 'none'; $('pv-name-err').style.display = 'none';
+  if (!vendor){ showDlgError('pv-error','pv-error-text','Please select a vendor type.'); return; }
+  if (!name){ $('pv-name').classList.add('invalid'); $('pv-name-err').style.display = 'block'; return; }
+  if (!$('pv-endpoint').value.trim()){ showDlgError('pv-error','pv-error-text','Endpoint (base URL) is required.'); return; }
+  const dup = providers.find(x => x.vendor === vendor && x.name.toLowerCase() === name.toLowerCase() && x.id !== editingProviderId);
+  if (dup){ showDlgError('pv-error','pv-error-text','A provider with display name “'+name+'” already exists for this vendor. Display names must be unique per vendor.'); return; }
+  const keyVal = $('pv-key').value;
+  const enabled = $('pv-enabled').checked;
+  const enabledModels = dialogChips.length ? dialogChips : null; // empty chips → null payload
+  let defaultModel = $('pv-default').value;
+  if (!dialogChips.includes(defaultModel)) defaultModel = ''; // never send a stale default
+  if (editingProviderId){
+    const p = providers.find(x => x.id === editingProviderId);
+    p.name = name; p.endpoint = $('pv-endpoint').value.trim();
+    if (keyVal !== '') p.keySet = true;
+    p.enabled = enabled;
+    p.enabledModels = enabledModels || [];
+    p.defaultModel = defaultModel;
+    renderProviders(); renderTools(); checkToolWarnings(); closeDialog('dlg-provider');
+    toast('Provider “'+name+'” saved. Table refreshed automatically.');
+  } else {
+    providers.push({ id: 'p'+(nextId++), vendor, vendorLabel: vendorLabel(vendor), name, endpoint: $('pv-endpoint').value.trim(),
+      keySet: keyVal !== '', enabled, conn: 'none', enabledModels: enabledModels || [], defaultModel,
+      catalogue: defaultCatalogue(vendor), guardrails: [] });
+    renderProviders(); closeDialog('dlg-provider');
+    toast('Provider created — now visible in the table (no reload needed).');
+  }
+}
+function defaultCatalogue(v){
+  return { typesafe: ['jev-latest','jev-pro','jev-lite'], veridian: ['arbiter-2','arbiter-2-mini'], cortexa: ['judge-v1'] }[v] || [];
+}
+function showDlgError(dlgId, txtId, msg){ $(txtId).textContent = msg; $(dlgId).style.display = 'flex'; }
+
+/* ================= Delete flow ================= */
+function askDelete(id){
+  const p = providers.find(x => x.id === id);
+  deleteTargetId = id;
+  $('del-error').style.display = 'none';
+  $('del-name').textContent = p.name;
+  $('del-confirm').disabled = false;
+  openDialog('dlg-delete');
+}
+function confirmDelete(){
+  const p = providers.find(x => x.id === deleteTargetId);
+  const blockers = tools.filter(t => t.provId === p.id);
+  if (blockers.length){
+    $('del-error-text').innerHTML = 'Cannot delete <strong>'+p.name+'</strong> — it is still referenced by '+blockers.length+' decision tool(s): <strong>'+blockers.map(t=>t.name).join(', ')+'</strong>. Re-assign those tools to another enabled model first.';
+    $('del-error').style.display = 'flex';
+    return;
+  }
+  providers = providers.filter(x => x.id !== deleteTargetId);
+  renderProviders(); closeDialog('dlg-delete');
+  toast('Provider “'+p.name+'” deleted. The same name and vendor can now be re-created.');
+}
+
+/* ================= Decision tool dialog ================= */
+/* Selector lists only ENABLED models; a stored-but-disabled selection is
+   rendered as a visible disabled "unavailable — re-select" option instead
+   of the select silently rendering empty. Save stays blocked until a valid
+   model is chosen. */
+function openToolDialog(preset){
+  editingTool = preset || null;
+  const t = tools.find(x => x.name === preset) || tools[0];
+  $('tool-title').textContent = preset ? 'Edit Decision Tool — ' + t.name : 'Create Decision Tool';
+  $('tool-name').value = t.name; $('tool-desc').value = t.desc;
+  const sel = $('tool-model');
+  let html = '<option value="">— Select an enabled decision model —</option>';
+  providers.filter(p => p.enabled).forEach(p =>
+    p.enabledModels.forEach(m => {
+      const key = p.id + '::' + m;
+      html += '<option value="'+key+'">'+m+' — '+p.vendorLabel+'</option>';
+    }));
+  const storedKey = t.provId + '::' + t.modelId;
+  if (preset && !modelAvailable(t.provId, t.modelId)){
+    html += '<option value="'+storedKey+'" disabled>'+t.modelId+' — '+modelLabel(t.provId, t.modelId).split(' · ')[0]+' — unavailable — re-select</option>';
+  }
+  sel.innerHTML = html;
+  sel.value = (preset && !modelAvailable(t.provId, t.modelId)) ? '' : (preset ? storedKey : '');
+  const broken = preset && !modelAvailable(t.provId, t.modelId);
+  $('tool-model-hint').innerHTML = broken
+    ? '⚠️ The previously selected model (<strong>'+t.modelId+' — '+modelLabel(t.provId, t.modelId)+'</strong>) is disabled and shown as an unavailable option above. Choose a replacement to unblock evaluations.'
+    : 'Only <strong>enabled</strong> decision models across all providers are listed. Disabled models appear only as “unavailable — re-select” for stored selections.';
+  openDialog('dlg-tool');
+}
+function saveTool(){
+  const sel = $('tool-model');
+  const [pid, mid] = sel.value.split('::');
+  if (!sel.value || !modelAvailable(pid, mid)){
+    sel.classList.add('invalid');
+    toast('Validation blocked: please select an enabled decision model.');
+    return;
+  }
+  sel.classList.remove('invalid');
+  if (editingTool){
+    const t = tools.find(x => x.name === editingTool);
+    t.provId = pid; t.modelId = mid;
+  }
+  renderTools(); checkToolWarnings(); closeDialog('dlg-tool');
+  toast('Tool saved. Selected model: ' + modelLabel(pid, mid) + ' — takes effect on the next evaluation, no restart needed.');
+}
+function renderTools(){
+  const tb = $('dt-tbody'); tb.innerHTML = '';
+  tools.forEach(t => {
+    const ok = modelAvailable(t.provId, t.modelId);
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td class="mono" title="decision____${t.name}"><strong>decision____${t.name}</strong></td>
+      <td title="${t.desc}">${t.desc}</td>
+      <td style="color:var(--text2);" title="Auto-generated tool description for MCP exposure">Auto-generated from name, purpose, data types &amp; questions</td>
+      <td title="${t.modelId} — ${modelLabel(t.provId, t.modelId)}"><span class="chip decision"><span class="dot"></span>${t.modelId} — ${modelLabel(t.provId, t.modelId).split(' · ')[0]}</span></td>
+      <td>${ok
+        ? (t.enabled ? '<span class="chip success"><span class="dot"></span>Active</span>' : '<span class="chip neutral"><span class="dot"></span>Draft</span>')
+        : '<span class="chip warning" title="Not Ready: the selected decision model is disabled — evaluations are blocked until an enabled model is selected">Not Ready ⓘ</span>'}</td>
+      <td class="actions-col">
+        <button class="btn btn-text btn-small" onclick="openToolDialog('${t.name}')">Edit</button>
+        <button class="btn btn-danger-text btn-small" onclick="toast('Delete confirmation (demo)','info')">Delete</button>
+      </td>`;
+    tb.appendChild(tr);
+  });
+}
+function checkToolWarnings(){
+  renderTools();
+  const broken = tools.some(t => !modelAvailable(t.provId, t.modelId));
+  $('dt-disabled-warning').style.display = broken ? 'flex' : 'none';
+}
+
+/* ================= Usage page ================= */
+function renderUsage(){
+  const logs = [
+    ['12:04:18', 'decision____refund-approval', 'TypeSafe AI · jev-latest', '$0.021', '✅ passed decision guardrails', 'success'],
+    ['12:03:52', 'decision____priority-triage', 'Veridian Decisions · arbiter-2', '$0.008', '✅ passed decision guardrails', 'success'],
+    ['12:01:07', 'decision____risk-approval', 'TypeSafe AI · jev-pro', '—', '⛔ blocked — decision guardrail threshold breached (jev-pro)', 'error'],
+    ['11:58:44', 'decision____refund-approval', 'TypeSafe AI · jev-latest', '—', '⛔ blocked — monthly budget exhausted for sandbox workspace', 'error'],
+    ['11:55:30', 'agent____support-agent', 'OpenAI · gpt-4.1', '$0.134', '✅ passed guardrails', 'success'],
+  ];
+  $('usage-log').innerHTML = logs.map(l => `
+    <div class="log-line">
+      <span class="ts">${l[0]}</span> &nbsp; <strong>${l[1]}</strong> &nbsp;→&nbsp; ${l[2]} &nbsp;·&nbsp; ${l[3]} &nbsp;·&nbsp; <span class="chip ${l[5]}" style="padding:1px 8px;">${l[4]}</span>
+    </div>`).join('');
+}
+
+/* ================= Init ================= */
+renderProviders();
+renderTools();
+renderUsage();
+</script>
+</body>
+</html>

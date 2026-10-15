@@ -33,6 +33,15 @@ from app.schemas.identity_bootstrap import (
 from app.services.identity.keycloak_admin_client import KeycloakAdminClient, KeycloakAdminError
 from app.services.oidc_config_service import OIDCConfigService
 
+
+async def _setup_tenant_id(db: AsyncSession) -> Optional[uuid.UUID]:
+    """The ROOT tenant's id — setup writes the root tenant's provider
+    slot (the shared NULL-tenant slot is retired).  ``None`` only when
+    the root tenant is absent (empty DB pre-seed, tenancy off)."""
+    from app.services.tenancy.root_tenant import get_root_tenant_id
+
+    return await get_root_tenant_id(db)
+
 logger = logging.getLogger(__name__)
 
 
@@ -201,8 +210,10 @@ class IdentityBootstrapService:
             provider_type_mapped = _map_provider_type_to_db(request.provider_type)
             config_service = OIDCConfigService()
 
-            # Check if user provider already exists
-            existing = await config_service.get_by_scope(db, "user")
+            # Check if user provider already exists (ROOT tenant's slot)
+            existing = await config_service.get_by_scope(
+                db, "user", tenant_id=await _setup_tenant_id(db)
+            )
             if existing is not None:
                 # Update existing
                 config = await config_service.update_provider(
@@ -212,7 +223,9 @@ class IdentityBootstrapService:
                     issuer_url=oidc_provider_url,
                     client_id=client_id,
                     client_secret=api_secret_obj.value if api_secret_obj else None,
+                    public_client_id=f"{client_id}-ui",
                     changed_by="setup_wizard",
+                    tenant_id=await _setup_tenant_id(db),
                 )
             else:
                 config = await config_service.create_provider(
@@ -223,7 +236,9 @@ class IdentityBootstrapService:
                     issuer_url=oidc_provider_url,
                     client_id=client_id,
                     client_secret=api_secret_obj.value if api_secret_obj else None,
+                    public_client_id=f"{client_id}-ui",
                     changed_by="setup_wizard",
+                    tenant_id=await _setup_tenant_id(db),
                 )
 
             # Upsert the single-row state sentinel
@@ -333,7 +348,9 @@ class IdentityBootstrapService:
         try:
             config_service = OIDCConfigService()
 
-            existing = await config_service.get_by_scope(db, "user")
+            existing = await config_service.get_by_scope(
+                db, "user", tenant_id=await _setup_tenant_id(db)
+            )
             if existing is not None:
                 config = await config_service.update_provider(
                     db,
@@ -342,7 +359,9 @@ class IdentityBootstrapService:
                     issuer_url=oidc_provider_url,
                     client_id=request.client_id,
                     client_secret=request.client_secret,
+                    public_client_id=request.ui_client_id,
                     changed_by="setup_wizard",
+                    tenant_id=await _setup_tenant_id(db),
                 )
             else:
                 config = await config_service.create_provider(
@@ -353,7 +372,9 @@ class IdentityBootstrapService:
                     issuer_url=oidc_provider_url,
                     client_id=request.client_id,
                     client_secret=request.client_secret,
+                    public_client_id=request.ui_client_id,
                     changed_by="setup_wizard",
+                    tenant_id=await _setup_tenant_id(db),
                 )
 
             # 3. Update setup state

@@ -14,7 +14,7 @@ from typing import Any
 
 import httpx
 
-from app.core.tenant_signature import forward_tenant_headers
+from app.core.internal_http import internal_httpx_client
 
 logger = logging.getLogger(__name__)
 
@@ -63,27 +63,34 @@ class ControlCenterDataClient:
     # ── Private helpers ───────────────────────────────────────────────────────
 
     def _make_client(self) -> httpx.AsyncClient:
-        """Return an mTLS-configured HTTP client using the current service cert."""
+        """Return an mTLS-configured HTTP client using the current service cert.
+
+        Built via ``internal_httpx_client`` — the single egress mechanism
+        that attaches forwarded tenant headers (no per-call merging).
+        """
         if self._cert_manager is None:
             if _allow_insecure_internal_fallback():
                 logger.warning(
                     "CH data client using insecure HTTP fallback because "
                     "ALLOW_INSECURE_INTERNAL_CALL_FALLBACK is enabled in development"
                 )
-                return httpx.AsyncClient(timeout=_DEFAULT_TIMEOUT)
+                return internal_httpx_client(timeout=_DEFAULT_TIMEOUT)
             raise RuntimeError(
                 "Communication Hub certificate manager is unavailable; "
                 "internal Control Center calls fail closed"
             )
         try:
-            return self._cert_manager.configure_mtls_client()
+            return internal_httpx_client(
+                **self._cert_manager.mtls_client_kwargs(),
+                timeout=_DEFAULT_TIMEOUT,
+            )
         except Exception as exc:
             if _allow_insecure_internal_fallback():
                 logger.warning(
                     "CH certificate not loaded; using insecure HTTP fallback in development: %s",
                     exc,
                 )
-                return httpx.AsyncClient(timeout=_DEFAULT_TIMEOUT)
+                return internal_httpx_client(timeout=_DEFAULT_TIMEOUT)
             raise RuntimeError(
                 "Communication Hub service certificate is required for internal calls"
             ) from exc
@@ -92,12 +99,11 @@ class ControlCenterDataClient:
         return f"{self._control_center_url}/api/v1{path}"
 
     async def _get(self, path: str) -> dict[str, Any]:
-        """GET with signed tenant context forwarding (multi-tenancy)."""
+        """GET with automatic tenant-header forwarding (via the client hook)."""
         url = self._url(path)
-        headers = forward_tenant_headers()
         async with self._make_client() as client:
             try:
-                resp = await client.get(url, timeout=_DEFAULT_TIMEOUT, headers=headers)
+                resp = await client.get(url, timeout=_DEFAULT_TIMEOUT)
                 resp.raise_for_status()
                 return resp.json()
             except httpx.HTTPStatusError as exc:
@@ -113,8 +119,7 @@ class ControlCenterDataClient:
         headers: dict[str, str] = {}
         if user_jwt:
             headers["Authorization"] = f"Bearer {user_jwt}"
-        # Multi-tenancy: forward the signed tenant context received from CC.
-        headers.update(forward_tenant_headers())
+        # Tenant headers are attached by the internal_httpx_client egress hook.
         async with self._make_client() as client:
             try:
                 resp = await client.post(url, json=body, timeout=_DEFAULT_TIMEOUT, headers=headers)

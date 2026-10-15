@@ -61,4 +61,4 @@ The MCP Hub enables Parthenon to connect with external tool servers, synchronize
 
 ## Multi-Tenancy Note
 
-When multi-tenancy is enabled (see [Multi-Tenancy](multi-tenancy.md)), hubs, slugs, sessions, and credential bindings are tenant-owned; slug uniqueness is enforced per tenant and tool permissions are evaluated within the tenant. With multi-tenancy disabled (the default), behavior is unchanged — the deployment operates as the root tenant's workspace.
+When multi-tenancy is enabled (see [Multi-Tenancy](multi-tenancy.md) and [Strict Tenant Isolation](strict-tenant-isolation.md)), hubs, slugs, sessions, and credential bindings are tenant-owned; slug uniqueness is enforced per tenant — not platform-wide — tool names are resolved within the calling tenant's namespace, and tool permission grants are evaluated within the granting tenant only. With multi-tenancy disabled (the default), behavior is unchanged — the deployment operates as the root tenant's workspace.

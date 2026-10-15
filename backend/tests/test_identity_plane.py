@@ -52,7 +52,11 @@ os.environ.setdefault("SECRET_KEY", "test-secret-key")
 os.environ.setdefault("ENVIRONMENT", "test")
 
 from app.core.resource_types import RT_SYSTEM_PERMISSIONS  # noqa: E402
-from app.core.tenant_context import TenantContext, set_tenant_context  # noqa: E402
+from app.core.tenant_context import (  # noqa: E402
+    TenantContext,
+    get_tenant_context,
+    set_tenant_context,
+)
 from app.db.models.identity_provider_config import IdentityProviderConfig  # noqa: E402
 from app.db.models.platform_user import PlatformUser  # noqa: E402
 from app.db.models.tenant import Tenant  # noqa: E402
@@ -65,6 +69,9 @@ from app.db.tenant_scoping import (  # noqa: E402
 )
 from app.main import create_app  # noqa: E402
 from app.middleware.auth import JWTAuthMiddleware  # noqa: E402
+from app.middleware.tenant_resolution import (  # noqa: E402
+    TenantResolutionMiddleware,
+)
 from app.services.oidc_provider_registry import OIDCProviderRegistry  # noqa: E402
 from app.services.permissions.user_cache_service import UserCacheService  # noqa: E402
 
@@ -402,14 +409,10 @@ class TestSharedIdentityProvider:
             await registry.initialize(db)
         return registry
 
-    async def test_t3_shared_provider_validates_tenant_login_context_and_injects_claim(
-        self, shared_registry
-    ):
-        """T3 — tenant X has NO own config; the shared (NULL-tenant)
-        provider must validate the token for X's login context AND the
-        ``tenant`` claim must be injected from the RESOLVED CONTEXT.
-        Today: fail-closed None (shared slot not a fallback) → sign-in
-        impossible for any tenant without its own provider."""
+    async def test_t3_tenant_without_own_provider_fails_closed(self, shared_registry):
+        """T3 (reversed) — tenant X has NO own config; the shared
+        (NULL-tenant) slot is RETIRED, so validation fails (no OIDC login
+        for that tenant).  The legacy NULL-tenant row is inert."""
         import app.middleware.auth as auth_module
 
         claims_payload = _realistic_claims()  # no native tenant claim
@@ -418,23 +421,11 @@ class TestSharedIdentityProvider:
         ):
             claims = await auth_module._try_oidc_token("tok", CTX_X)
 
-        assert claims is not None, (
-            "SHARED PROVIDER NOT RESOLVED (FIX-20260929-221449 / T3): a "
-            "tenant whose login context resolves but that has no OWN provider "
-            "config must validate against the SHARED (NULL-tenant) provider"
+        assert claims is None, (
+            "SHARED SLOT RETIRED: a tenant with no OWN provider config has "
+            "no OIDC login — the legacy NULL-tenant row must never validate "
+            "its tokens"
         )
-        assert _FakeOIDCClientBase.captured["issuer"] == "https://shared.example.com"
-        assert claims["_provider_scope"] == "user"
-        # claim injected from the resolved login context
-        assert claims.get("tenant") == CTX_X.slug
-
-        # and the claim check accepts the injected claim for that tenant
-        from app.middleware.auth import JWTAuthMiddleware
-
-        error = await JWTAuthMiddleware(app=None)._check_tenant_claim(
-            _FakeRequest(CTX_X), claims, False
-        )
-        assert error is None
 
     async def test_t4_tenant_own_config_wins_over_shared(self, seeded_engine, shared_registry):
         """T4 (precedence pin) — when tenant X ALSO has its own provider,
@@ -461,14 +452,12 @@ class TestSharedIdentityProvider:
         )
         assert claims.get("tenant") == CTX_X.slug
 
-    async def test_registry_shared_slot_resolves_for_any_tenant(self, shared_registry):
-        assert shared_registry.get_provider("user", TENANT_X_ID) is not None
-        assert shared_registry.get_provider("user", TENANT_Y_ID) is not None
-
-    async def test_registry_platform_surface_resolves_shared_slot(self, shared_registry):
-        provider = shared_registry.get_provider("user", None)
-        assert provider is not None
-        assert provider.issuer_url == "https://shared.example.com"
+    async def test_registry_shared_slot_resolves_nothing(self, shared_registry):
+        """The NULL-tenant (shared) row is inert: it resolves for no
+        tenant and no tenant-less lookup."""
+        assert shared_registry.get_provider("user", TENANT_X_ID) is None
+        assert shared_registry.get_provider("user", TENANT_Y_ID) is None
+        assert shared_registry.get_provider("user", None) is None
 
     async def test_registry_no_provider_at_all_is_fail_closed_none(self, seeded_engine):
         """A tenant with neither an own config NOR a shared config still
@@ -487,10 +476,11 @@ class TestSharedIdentityProvider:
         assert registry.get_provider("user", TENANT_X_ID) is None
         assert registry.get_provider("user", None) is None
 
-    async def test_tenancy_off_everything_uses_root_provider(self, seeded_engine):
-        """Tenancy OFF: the ROOT tenant IS the default tenant — every
-        lookup resolves the ROOT tenant's slot; NULL-tenant (shared) and
-        other tenants' providers never resolve."""
+    async def test_tenancy_off_default_provider_is_explicit(self, seeded_engine):
+        """Tenancy OFF: the ROOT tenant IS the default tenant — the ONLY
+        lookup is the explicit ``get_default_provider``; a tenant-addressed
+        ``get_provider`` call is REJECTED (no hidden root fallback for
+        arbitrary tenant ids)."""
         SessionLocal = async_sessionmaker(
             bind=seeded_engine, class_=AsyncSession, expire_on_commit=False
         )
@@ -505,25 +495,83 @@ class TestSharedIdentityProvider:
             registry = OIDCProviderRegistry()
             await registry.initialize(db)
 
-        for tenant_id in (None, TENANT_X_ID, TENANT_Y_ID, TENANT_SYSTEM_ID):
-            provider = registry.get_provider("user", tenant_id)
-            assert provider is not None
-            assert provider.issuer_url == "https://root.example.com"
+        # the explicit tenancy-off lookup resolves the ROOT slot
+        default = registry.get_default_provider("user")
+        assert default is not None
+        assert default.issuer_url == "https://root.example.com"
+        # tenant-less get_provider also resolves the default slot
+        assert registry.get_provider("user", None).issuer_url == (
+            "https://root.example.com"
+        )
+        # NULL-tenant (shared) and other tenants' providers never win
+        # the default slot.
+        assert registry.get_default_provider("user").issuer_url != (
+            "https://legacy.example.com"
+        )
+        assert registry.get_default_provider("user").issuer_url != (
+            "https://stale-x.example.com"
+        )
+        # tenant-ADDRESSED tenancy-off lookups are explicit errors
+        for tenant_id in (TENANT_X_ID, TENANT_Y_ID, TENANT_SYSTEM_ID):
+            with pytest.raises(ValueError, match="get_default_provider"):
+                registry.get_provider("user", tenant_id)
+            with pytest.raises(ValueError, match="get_default_provider"):
+                registry.get_provider_candidates("user", tenant_id)
 
 
 # ── T5/T6: no-membership UX + member access (endpoint level) ─────────────────
 
 
 def _make_auth_patch(sub: str, ctx: TenantContext):
-    """Replace the JWT middleware: bind the tenant context + identity the
-    way a validated shared-provider token would arrive."""
+    """Replace BOTH middleware seams the way the real stack behaves:
 
-    async def patched_dispatch(self, request, call_next):
+    - the tenant-resolution double binds the tenant context EXACTLY ONCE
+      (that is TenantResolutionMiddleware's job — it runs first);
+    - the auth double READS the already-bound context via
+      ``get_tenant_context`` and stamps the identity (that is
+      JWTAuthMiddleware's job — it must NEVER set the context).
+
+    Setting the context from the auth double raises the "exactly once"
+    RuntimeError whenever the real resolution middleware has already
+    bound the (root default) context — which is the production order.
+    """
+
+    async def patched_resolution_dispatch(self, request, call_next):
         set_tenant_context(request, ctx)
-        request.state.identity = {"sub": sub, "tenant": ctx.slug, "roles": []}
+        # Simulate the tenancy-ON login context: the membership gate is
+        # keyed on the resolved tenant being a CUSTOMER tenant.
+        request.state.tenancy_enabled = True
         return await call_next(request)
 
-    return patch.object(JWTAuthMiddleware, "dispatch", patched_dispatch)
+    async def patched_auth_dispatch(self, request, call_next):
+        bound = get_tenant_context(request)
+        assert bound.is_set, (
+            "auth middleware contract violation in test: the tenant "
+            "context must already be resolved by the (tenant-resolution) "
+            "middleware before auth reads it"
+        )
+        request.state.identity = {
+            "sub": sub,
+            "tenant": bound.slug,
+            "roles": [],
+        }
+        return await call_next(request)
+
+    resolution_patch = patch.object(
+        TenantResolutionMiddleware, "dispatch", patched_resolution_dispatch
+    )
+    auth_patch = patch.object(JWTAuthMiddleware, "dispatch", patched_auth_dispatch)
+
+    class _CompositePatch:
+        def start(self) -> None:
+            resolution_patch.start()
+            auth_patch.start()
+
+        def stop(self) -> None:
+            auth_patch.stop()
+            resolution_patch.stop()
+
+    return _CompositePatch()
 
 
 class TestNoMembershipForbiddenShape:

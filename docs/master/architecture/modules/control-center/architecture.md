@@ -116,7 +116,7 @@ flowchart TB
 
 ## Auth Middleware & Tenant Context
 
-Every inbound request first passes **tenant resolution middleware**: in multi-tenant mode the tenant is resolved exactly once from a verified source (tenant address subdomain, or tenant header for API/MCP clients) and bound to an immutable per-request tenant context — fail-closed, so an unresolvable tenant is rejected before any feature logic. The public registration endpoint group is the only switch-gated exemption; when the tenancy switch is off, resolution is bypassed and requests bind to the root tenant. Signed tenant context headers propagate to Agent Runtime and Communication Hub over the existing mTLS channels.
+Every inbound request first passes **tenant resolution middleware**: in multi-tenant mode the tenant is resolved exactly once from a verified source (tenant address subdomain, or tenant header for API/MCP clients) and bound to an immutable per-request tenant context — fail-closed, so an unresolvable tenant is rejected before any feature logic. The public registration endpoint group is the only switch-gated exemption; when the tenancy switch is off, resolution is bypassed and requests bind to the root tenant. Signed tenant context headers propagate to Agent Runtime and Communication Hub over the existing mTLS channels. On `/api/v1/internal/*` **data-plane** endpoints, the signed `X-Internal-Tenant-*` headers are **mandatory**: a shared dependency verifies the binding and rejects missing, stale, or invalidly signed requests with 401 before any handler or DB access; DB sessions without a resolved tenant are rejected (or bound to root when tenancy is off) and every data-plane service adds explicit tenant predicates as defense in depth. CC is the **only signing origin** for internal tenant headers; internal paths that are not data-plane (certificates, bootstrap, API-key validation) keep certificate-only auth.
 
 Authentication is a three-tier pipeline shared across all inbound API calls; JWT validation is bound to the resolved tenant (a validated token's tenant claim must match, otherwise the request is rejected):
 
@@ -151,7 +151,7 @@ flowchart TD
 ### Per-Tenant OIDC Provider Registry
 
 - Registry keyed by tenant — the former global registry now resolves provider configurations per resolved tenant; each tenant's credentials are valid only inside that tenant
-- Provider sharing follows **own → shared → root slot**: a tenant's own configuration, a configuration shared across tenants, or the root slot (formerly "system slot") belonging to the root tenant — used when tenancy is off or for platform sign-in
+- Strict per-tenant resolution — each tenant validates only against its **own provider slot** (no shared/root fallback chain); the root slot serves platform sign-in and tenancy-off deployments
 - Hot-reload: invalidated and refreshed when OIDC Config Service updates a provider, no restart required
 - Caches JWKS keys per provider with TTL-based refresh
 - Resolves provider type (`user` vs `agent`) from token claims or request context

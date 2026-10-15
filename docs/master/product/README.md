@@ -7,7 +7,7 @@ Parthenon is self-serve SaaS-capable: a visitor can sign up with an email and pa
 
 ## Feature Index
 
-- **Multi-Tenancy** — Opt-in (default-off) multi-tenancy with the root tenant as the platform: self-serve registration creating a tenant root user, unified workspace-address sign-in, strict tenant-contained permissions (wildcards included), tenant admin module, per-tenant/shared identity providers with JIT default role, license tiers with user/agent-type/monthly-execution quotas, and tenant lifecycle with isolation guarantees
+- **Multi-Tenancy** — Opt-in (default-off) multi-tenancy with the root tenant as the platform: self-serve registration creating a tenant root user, unified workspace-address sign-in, strict tenant-contained permissions (wildcards included), tenant admin module, strictly per-tenant identity providers (no shared provider or fallback chain) with JIT default role, license tiers with user/agent-type/monthly-execution quotas, and tenant lifecycle with isolation guarantees. See [Strict Tenant Isolation](features/strict-tenant-isolation.md).
 - **Foundation Platform** — Roles, permissions, provider-agnostic OIDC integration (any OIDC-compliant provider), independent user and agent identity providers, built-in super admin with enable/disable lifecycle, database-backed identity configuration, OIDC provider testing, setup wizard, Web UI shell, and operational dashboard
 - **Dashboard Metrics** — Real-time stat cards, time-sensitive metrics with date range picker, and permission-aware widgets for platform health overview
 - **MCP Hub** — Server registration, tool sync, session management, credential binding, and proxy

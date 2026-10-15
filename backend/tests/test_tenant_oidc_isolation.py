@@ -150,17 +150,14 @@ class TestRegistryTenantKeying:
         # TENANT_A has its own row — that wins for the system tenant too.
         assert provider.issuer_url == "https://idp-a.example.com"
 
-    async def test_tenant_without_own_config_resolves_shared_provider(self, db, registry):
-        """SEMANTICS CHANGED by FIX-20260929-221449 (was
-        ``test_non_system_tenant_without_provider_is_none``): the NULL-tenant
-        row is the SHARED provider — a tenant WITHOUT its own config resolves
-        it for its login context (the login context decides the session
-        tenant; membership gates + scoped data plane keep cross-tenant
-        safety).  Per-tenant configs still take precedence (pinned by
-        ``test_tenant_gets_own_provider``)."""
+    async def test_tenant_without_own_config_resolves_none(self, db, registry):
+        """SEMANTICS CHANGED (shared-slot retirement): every tenant uses
+        ONLY its own provider — a tenant WITHOUT its own config resolves
+        None (no OIDC login).  The legacy NULL-tenant row is inert and
+        never resolves for anyone."""
         provider = registry.get_provider("user", uuid.uuid4())
-        assert provider is not None
-        assert provider.issuer_url == "https://legacy.example.com"
+        assert provider is None
+        assert registry.get_provider("user", TENANT_A) is not None  # own slot only
 
     async def test_no_provider_anywhere_is_fail_closed_none(self, db):
         """Fail-closed preserved: a tenant with NEITHER an own config NOR a
@@ -173,9 +170,10 @@ class TestRegistryTenantKeying:
         assert registry.get_provider("user", TENANT_A) is None
         assert registry.get_provider("user", uuid.uuid4()) is None
 
-    async def test_switch_off_registry_is_platform_wide(self, db):
-        """With the switch off every lookup resolves the global entry,
-        regardless of tenant ids (single-tenant behaviour unchanged)."""
+    async def test_switch_off_default_provider_is_explicit(self, db):
+        """With the switch off the ONLY lookup is the explicit
+        ``get_default_provider`` (the root slot); a tenant-addressed
+        lookup raises instead of silently resolving the default."""
         await _set_tenancy(db, False)
         db.add_all(
             [
@@ -187,9 +185,15 @@ class TestRegistryTenantKeying:
         registry = OIDCProviderRegistry()
         await registry.initialize(db)
         assert registry.multi_tenancy_enabled is False
-        # Tenant ids are ignored entirely in single-tenant mode.
-        assert registry.get_provider("user", TENANT_A).issuer_url == "https://legacy.example.com"
-        assert registry.get_provider("user", None).issuer_url == "https://legacy.example.com"
+        # explicit default lookup: the tenant-less pre-seed slot here
+        assert registry.get_default_provider("user").issuer_url == (
+            "https://legacy.example.com"
+        )
+        assert registry.get_provider("user", None).issuer_url == (
+            "https://legacy.example.com"
+        )
+        with pytest.raises(ValueError, match="get_default_provider"):
+            registry.get_provider("user", TENANT_A)
 
     async def test_reload_single_refreshes_all_tenants_of_scope(self, db, registry):
         row_a = (

@@ -18,13 +18,23 @@ from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 
 from app.core.config import get_settings
+from app.core.internal_http import internal_httpx_client
 from app.core.ssl_context import get_ssl_context
-from app.services.agents.tool_naming import is_system_tool as _is_system_tool, get_bare_tool_name
+from app.services.agents.tool_naming import (
+    TOOL_SEPARATOR,
+    is_system_tool as _is_system_tool,
+    get_bare_tool_name,
+)
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
 
 router = APIRouter(prefix="/internal/tools", tags=["Internal - Tool Routing"])
+
+#: Decision tools are virtual (no ``mcp_tools`` row) and surface as
+#: ``decision____<name>`` — same canonical prefix the MCP-protocol bridge
+#: (``tool_registry_bridge``) dispatches on.
+DECISION_TOOL_PREFIX = f"decision{TOOL_SEPARATOR}"
 
 # Session-level cache of user JWTs for dual-identity tool calls
 # Keyed by session_id, populated by WebSocket chat on user auth
@@ -134,6 +144,8 @@ async def route_tool_call(
         if body.user_jwt:
             logger.debug("Populated user_jwt from session cache for session %s", body.session_id[:8])
     route_type = "system" if _is_system_tool(body.tool_name) else "mcp"
+    if body.tool_name.startswith(DECISION_TOOL_PREFIX):
+        route_type = "decision"
     logger.info(
         "Tool call request: tool=%s, session=%s, route_type=%s",
         body.tool_name,
@@ -157,6 +169,13 @@ async def route_tool_call(
         # This will be handled by the certificate authorization middleware
         pass
 
+    # Decision tools MUST be checked before the system/``____`` and MCP
+    # fallbacks: their canonical name parses like an MCP tool (server slug
+    # ``decision``) but has no mcp_tools row, so the MCP proxy 502s with
+    # "MCP tool not found".
+    if route_type == "decision":
+        return await _route_to_decision_tool(body, request)
+
     # System tools are identified by the canonical system____ prefix.
     # Also accept legacy bare names for backward compatibility (is_system_tool handles both).
     if route_type == "system":
@@ -164,6 +183,124 @@ async def route_tool_call(
 
     # MCP tools route to Control Center MCP proxy
     return await _route_to_mcp_tool(body, request)
+
+
+async def _route_to_decision_tool(body: ToolCallRequest, request: Request) -> ToolCallResponse:
+    """Route a virtual decision tool (``decision____<name>``) to Control Center.
+
+    Mirrors the MCP-protocol bridge's ``_call_decision_tool``: the tool
+    resolves strictly within the request's tenant at Control Center
+    (signed tenant headers forwarded by the ``internal_httpx_client``
+    egress hook; single-tenant → headerless), which decrypts the System
+    One provider key and dispatches the decision engine.
+
+    Args:
+        body: Tool call request
+        request: FastAPI request (for accessing app state/certificate manager)
+
+    Returns:
+        Tool execution result (``{"result": {...}}`` contract, same shape
+        the AR ``CommHubToolClient.call_tool`` unwraps)
+
+    Raises:
+        HTTPException: 502 if the Control Center call fails
+    """
+    cc_base = settings.control_center_url or "http://localhost:8000"
+    bare_name = body.tool_name[len(DECISION_TOOL_PREFIX):]
+
+    # Accept either a bare tool name or "state"-wrapped arguments
+    # (same contract the MCP bridge accepts).
+    raw_state = body.tool_args.get("state") if isinstance(body.tool_args, dict) else None
+    input_state = raw_state if isinstance(raw_state, dict) else dict(body.tool_args or {})
+
+    payload: dict[str, Any] = {
+        "session_id": body.session_id,
+        "tool_name": bare_name,
+        "input_state": input_state,
+    }
+    if body.conv_session_id:
+        payload["conversation_session_id"] = body.conv_session_id
+
+    endpoint = f"{cc_base}/api/v1/internal/system-tools/decision/execute"
+
+    logger.info(
+        "Routing decision tool '%s' (bare: %s) to Control Center",
+        body.tool_name,
+        bare_name,
+        extra={
+            "data": {
+                "route_type": "decision",
+                "tool_name": body.tool_name,
+                "normalized_tool_name": bare_name,
+                "session_id": body.session_id,
+                "agent_type_id": body.agent_type_id,
+            }
+        },
+    )
+
+    try:
+        cc_client_kwargs, headers = _build_control_center_auth(request, cc_base)
+        # Tenant headers are attached by the internal_httpx_client egress
+        # hook (forwards the CC-signed set bound by ControlPlaneMiddleware;
+        # single-tenant → headerless, unchanged).
+
+        async with internal_httpx_client(**cc_client_kwargs) as client:
+            response = await client.post(endpoint, json=payload, headers=headers)
+            response.raise_for_status()
+            result = response.json()
+
+            logger.info(
+                "Decision tool '%s' completed successfully",
+                body.tool_name,
+                extra={
+                    "data": {
+                        "route_type": "decision",
+                        "tool_name": body.tool_name,
+                        "normalized_tool_name": bare_name,
+                        "session_id": body.session_id,
+                        "status_code": response.status_code,
+                    }
+                },
+            )
+            # CC wraps the structured decision result as {"result": {...}} —
+            # unwrap to the same contract the MCP proxy route uses.
+            return ToolCallResponse(result=result.get("result", {}))
+
+    except httpx.HTTPStatusError as exc:
+        status_code = exc.response.status_code
+        detail = exc.response.text[:200]
+        error_msg = f"Control Center decision tool call failed: HTTP {status_code} - {detail}"
+        logger.error(
+            "%s",
+            error_msg,
+            extra={
+                "data": {
+                    "route_type": "decision",
+                    "tool_name": body.tool_name,
+                    "normalized_tool_name": bare_name,
+                    "session_id": body.session_id,
+                    "status_code": status_code,
+                }
+            },
+        )
+        if 400 <= status_code < 500:
+            return ToolCallResponse(result={}, error=error_msg)
+        raise HTTPException(status_code=502, detail=error_msg)
+    except Exception as exc:
+        error_msg = f"Decision tool call error: {exc}"
+        logger.exception(
+            "Decision tool call failed for %s",
+            body.tool_name,
+            extra={
+                "data": {
+                    "route_type": "decision",
+                    "tool_name": body.tool_name,
+                    "normalized_tool_name": bare_name,
+                    "session_id": body.session_id,
+                }
+            },
+        )
+        raise HTTPException(status_code=502, detail=error_msg)
 
 
 async def _route_to_system_tool(body: ToolCallRequest, request: Request) -> ToolCallResponse:
@@ -253,7 +390,11 @@ async def _route_to_system_tool(body: ToolCallRequest, request: Request) -> Tool
 
     try:
         cc_client_kwargs, headers = _build_control_center_auth(request, cc_base)
-        async with httpx.AsyncClient(**cc_client_kwargs) as client:
+        # Tenant headers are attached by the internal_httpx_client egress
+        # hook (forwards the CC-signed set bound by ControlPlaneMiddleware;
+        # single-tenant → headerless, unchanged).
+
+        async with internal_httpx_client(**cc_client_kwargs) as client:
             response = await client.post(endpoint, json=payload, headers=headers)
             response.raise_for_status()
             result = response.json()
@@ -353,8 +494,11 @@ async def _route_to_mcp_tool(body: ToolCallRequest, request: Request) -> ToolCal
 
     try:
         cc_client_kwargs, headers = _build_control_center_auth(request, cc_base)
+        # Tenant headers are attached by the internal_httpx_client egress
+        # hook (forwards the CC-signed set bound by ControlPlaneMiddleware;
+        # single-tenant → headerless, unchanged).
 
-        async with httpx.AsyncClient(**cc_client_kwargs) as client:
+        async with internal_httpx_client(**cc_client_kwargs) as client:
             response = await client.post(proxy_endpoint, json=payload, headers=headers)
             response.raise_for_status()
             result = response.json()

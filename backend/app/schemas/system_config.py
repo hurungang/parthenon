@@ -33,7 +33,14 @@ class IdentityProviderConfigCreate(BaseModel):
     issuer_url: str = Field(..., description="OIDC issuer URL")
     client_id: str = Field(..., description="OIDC client ID (confidential API client)")
     client_secret: Optional[str] = Field(None, description="OIDC client secret")
-    public_client_id: Optional[str] = Field(None, description="Public OIDC client ID for browser PKCE login")
+    public_client_id: Optional[str] = Field(
+        None,
+        description=(
+            "UI/public OIDC client ID used by the frontend browser sign-in "
+            "(authorize + PKCE, no secret). Required for the 'user' scope; "
+            "ignored for the 'agent' scope."
+        ),
+    )
     scopes: str = Field("openid profile email", description="Space-delimited OIDC scopes")
     claim_mappings: Optional[dict] = Field(None, description="OIDC claim to platform field mappings")
     is_enabled: bool = Field(True, description="Whether the provider is active")
@@ -60,7 +67,14 @@ class IdentityProviderConfigUpdate(BaseModel):
     issuer_url: Optional[str] = Field(None, description="OIDC issuer URL")
     client_id: Optional[str] = Field(None, description="OIDC client ID (confidential API client)")
     client_secret: Optional[str] = Field(None, description="OIDC client secret")
-    public_client_id: Optional[str] = Field(None, description="Public OIDC client ID for browser PKCE login")
+    public_client_id: Optional[str] = Field(
+        None,
+        description=(
+            "UI/public OIDC client ID used by the frontend browser sign-in "
+            "(authorize + PKCE, no secret). Required (non-empty) for the "
+            "'user' scope; ignored for the 'agent' scope."
+        ),
+    )
     scopes: Optional[str] = Field(None, description="Space-delimited OIDC scopes")
     claim_mappings: Optional[dict] = Field(None, description="OIDC claim to platform field mappings")
     is_enabled: Optional[bool] = Field(None, description="Whether the provider is active")
@@ -138,6 +152,14 @@ class OIDCTestResponse(BaseModel):
     success: bool
     steps: list[OIDCTestStep]
     discovery_doc: Optional[dict] = None
+    client_id_status: Optional[dict] = Field(
+        None,
+        description=(
+            "Client validation result: {client_id, status, detail} with "
+            "status one of missing | invalid | ok | warning; null when "
+            "discovery failed before the client probe ran."
+        ),
+    )
 
 
 # ── Super Admin ─────────────────────────────────────────────────────────────

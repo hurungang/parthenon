@@ -124,3 +124,25 @@ Communication Hub is tenant-bound via signed headers since the multi-tenant supp
 | `ControlCenterDataClient` (CH) | class (modified) | Forwards signed tenant headers to CC (`_get`/`_post`) | `backend/app/communication_hub/data_client.py` |
 | internal execute/resume/terminate forwarders | routers (modified) | Re-emit CC's original signed headers to AR (`forward_tenant_headers`) so executions bind to the tenant | `backend/app/communication_hub/api/internal/agent_execute.py` (+ `agent_resume.py`, `agent_terminate.py`) |
 | session dispatch / A2A / MCP server & tool registry | modules (reference) | Unchanged — scoped by the middleware-bound session tenant and CC's tenant-scoped resolves | `backend/app/communication_hub/` |
+
+## Strict Tenant Isolation (as-built — strict-tenant-isolation change)
+
+The hub is tenant-bound end to end:
+
+- The control-plane middleware verifies and forwards the signed tenant context on `/internal/a2a` and MCP server hops; the API-key middleware binds MCP sessions to the key's tenant (CC signs the context in `validate_api_key` so the hub can forward `X-Internal-Tenant-*` on internal hops).
+- Tool routing is decision-tool aware and tenant-contained: `route_tool_call` dispatches `system____*` (system tools), decision tools (routed to CC's decision toolset for the session's tenant), and `<server>____*` MCP tools — all resolved/forwarded with the session's tenant binding.
+- The MCP protocol server's `tools/list` / `tools/call` are per-tenant for API-key-authenticated clients via `ToolRegistryBridge`.
+- The WebSocket chat endpoint authenticates both token kinds (user JWT and platform-account JWT), binds the connection's tenant, and signs the tenant context for the CC loopback call.
+
+### As-built Code Reference Map additions
+
+| Symbol | Type | Description | File |
+|--------|------|-------------|------|
+| CH control-plane middleware | middleware | Verifies/forwards the signed tenant context on `/internal/a2a` and MCP server hops | `backend/app/communication_hub/middleware/control_plane.py` |
+| `ApiKeyAuthMiddleware` | middleware | Binds MCP sessions to the API key's tenant (context signed by CC's `validate_api_key`) | `backend/app/communication_hub/middleware/api_key_auth.py` |
+| `route_tool_call` | endpoint | Unified tool-call router: system tools, decision tools (per-tenant CC decision toolset), and MCP tools; tenant-contained | `backend/app/communication_hub/api/internal/tool_routing.py` |
+| `_route_to_decision_tool` | function | Forwards decision tool calls to Control Center with the session's tenant binding | `backend/app/communication_hub/api/internal/tool_routing.py` |
+| `_route_to_system_tool` / `_route_to_mcp_tool` | functions | System/MCP tool dispatch; resolution within the bound tenant | `backend/app/communication_hub/api/internal/tool_routing.py` |
+| `ToolRegistryBridge.build_catalog` / `dispatch` | methods | Per-tenant `tools/list` filtering and tenant-contained `tools/call` dispatch for API-key MCP clients | `backend/app/communication_hub/mcp/tool_registry_bridge.py` |
+| `websocket_chat` / `_signed_tenant_forwarding` | endpoint + function | WS chat auth for both token kinds, tenant binding, and signed CC loopback | `backend/app/api/ws/chat.py` |
+| `ControlCenterDataClient` (CH) | class | CH→CC internal client; uses the global egress hook stamping forwarded tenant headers | `backend/app/communication_hub/data_client.py` |

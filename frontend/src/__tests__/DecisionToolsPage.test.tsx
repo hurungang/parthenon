@@ -21,6 +21,7 @@ vi.mock('../api/decisionToolsApi', () => apiMock)
 
 const statusMock = vi.hoisted(() => ({
   getSystemOneStatus: vi.fn(),
+  listEnabledDecisionModels: vi.fn(),
 }))
 
 vi.mock('../api/systemOneApi', () => statusMock)
@@ -39,6 +40,7 @@ const TOOL: Record<string, unknown> = {
   provider_model: 'jev-latest',
   status: 'active',
   enabled: true,
+  ready: true,
   is_system: false,
   created_at: '2026-01-01T00:00:00Z',
   updated_at: '2026-01-01T00:00:00Z',
@@ -86,6 +88,22 @@ describe('DecisionToolsPage', () => {
       provider_type: 'typesafe',
       model: 'jev-latest',
     })
+    statusMock.listEnabledDecisionModels.mockResolvedValue([])
+  })
+
+  it('shows a single "Not Ready" chip for an enabled-but-unready tool', async () => {
+    apiMock.listDecisionTools.mockResolvedValue([{ ...TOOL, ready: false }])
+    await renderPage()
+    const notReady = await screen.findAllByText('decisionTools.notReady')
+    expect(notReady).toHaveLength(1)
+    expect(screen.queryByText('decisionTools.statusActive')).not.toBeInTheDocument()
+  })
+
+  it('shows a single "Active" chip for a ready, enabled tool', async () => {
+    await renderPage()
+    const active = await screen.findAllByText('decisionTools.statusActive')
+    expect(active).toHaveLength(1)
+    expect(screen.queryByText('decisionTools.notReady')).not.toBeInTheDocument()
   })
 
   it('lists decision tools with the canonical decision____ prefix', async () => {
@@ -152,6 +170,10 @@ describe('DecisionToolsPage', () => {
     fireEvent.change(nameField, { target: { value: 'approve-loan' } })
     const purposeField = await screen.findByLabelText(/^decisionTools\.purpose/)
     fireEvent.change(purposeField, { target: { value: 'Decide loans' } })
+    // Create mode starts with zero questions (auto-derived) — add one.
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'decisionTools.addQuestion' }),
+    )
     const keyField = await screen.findByLabelText(/^decisionTools\.questionKey/)
     fireEvent.change(keyField, { target: { value: 'approve' } })
     const optionKey = await screen.findByLabelText(/^decisionTools\.optionKey$/)

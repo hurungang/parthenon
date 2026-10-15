@@ -77,29 +77,24 @@ class TestForwardedHeaderBinding:
     async def test_outbound_internal_call_stamps_forwarded_headers(self, monkeypatch):
         """AR's CommHubToolClient.call_tool forwards EXACTLY the verified
         header set (no re-signing, no widening) on its downstream internal
-        call to Communication Hub."""
+        call to Communication Hub — via the internal_http egress hook."""
         import httpx
 
         from app.agent_runtime import comm_hub_client as chc
 
         headers_a = build_tenant_signature_headers(_ctx(uuid.uuid4(), "tenant-a"))
-        captured: dict = {}
+        captured: list[httpx.Request] = []
 
-        class _FakeResponse:
-            status_code = 200
-            text = "{}"
+        def handler(request: httpx.Request) -> httpx.Response:
+            captured.append(request)
+            return httpx.Response(200, json={"result": {"output": "ok"}})
 
-            def json(self):
-                return {"result": {"output": "ok"}}
-
-            def raise_for_status(self):
-                return None
-
-        async def _fake_post(self, url, **kwargs):
-            captured["headers"] = kwargs.get("headers", {})
-            return _FakeResponse()
-
-        monkeypatch.setattr(httpx.AsyncClient, "post", _fake_post)
+        real_factory = chc.internal_httpx_client
+        monkeypatch.setattr(
+            chc,
+            "internal_httpx_client",
+            lambda **kwargs: real_factory(transport=httpx.MockTransport(handler), **kwargs),
+        )
 
         token = bind_forwarded_tenant_headers(headers_a)
         try:
@@ -114,8 +109,10 @@ class TestForwardedHeaderBinding:
         finally:
             reset_forwarded_tenant_headers(token)
 
+        assert captured, "expected one outbound internal call"
+        wire = captured[0].headers
         for header, value in headers_a.items():
-            assert captured["headers"].get(header) == value, (
+            assert wire.get(header) == value, (
                 f"downstream internal call missing forwarded header {header}"
             )
 

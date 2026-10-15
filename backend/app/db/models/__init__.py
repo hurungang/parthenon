@@ -47,6 +47,10 @@ from app.db.models.system_one_provider_config import (  # noqa: F401
     SystemOneProviderConfig,
     SystemOneProviderType,
 )
+from app.db.models.decision_model_availability import (  # noqa: F401
+    DecisionModelAvailability,
+    DecisionModelAvailabilityDisabledReason,
+)
 from app.db.models.decision_tools import (  # noqa: F401
     DecisionQuestionType,
     DecisionTool,

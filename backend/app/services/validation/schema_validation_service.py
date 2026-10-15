@@ -188,8 +188,16 @@ class SchemaValidationService:
     def _validate_enum(
         self, field_name: str, value: Any, field_def: dict[str, Any]
     ) -> FieldError | None:
-        """Validate that a value is in the allowed enum values list."""
-        enum_values = field_def.get("enum_values") or []
+        """Validate that a value is in the allowed enum values list.
+
+        Tolerates both storage shapes: legacy plain-string values and the
+        extended ``{value, description}`` objects.
+        """
+        raw_enum = field_def.get("enum_values") or []
+        enum_values = [
+            entry if isinstance(entry, str) else str(entry.get("value"))
+            for entry in raw_enum
+        ]
         str_value = str(value) if not isinstance(value, str) else value
         if str_value not in enum_values:
             return FieldError(

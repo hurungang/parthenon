@@ -2,7 +2,16 @@
 
 ## Tenant-Bound Execution
 
-Agent Runtime receives a **signed, immutable tenant context** from Control Center over the existing mTLS channels; the context cannot be widened, and Agent Runtime holds no identity tokens or credentials. Every execution uses only the owning tenant's skills, tools, model configurations, identities, and permissions. Agent Runtime is database-free and runs **no quota logic** — quota decisions are made entirely in Control Center, which dispatches only quota-cleared executions over the existing signed-header contract. All execution logs and traces carry tenant attribution. See [Multi-Tenancy Architecture](multi-tenancy.md).
+Agent Runtime receives a **signed, immutable tenant context** from Control Center over the existing mTLS channels; the context cannot be widened, and Agent Runtime holds no identity tokens or credentials. The signed `X-Internal-Tenant-*` headers are **mandatory** on execution requests — an unverifiable binding is rejected before the run starts (fail-closed). Every execution uses only the owning tenant's skills, tools, model configurations, identities, and permissions. Agent Runtime is database-free and runs **no quota logic** — quota decisions are made entirely in Control Center, which dispatches only quota-cleared executions over the existing signed-header contract. All execution logs and traces carry tenant attribution. See [Multi-Tenancy Architecture](multi-tenancy.md).
+
+### Virtual Tenant Awareness
+
+Agent Runtime resolves the calling tenant **once** from the signed context carried on the execution request (never from ambient or global state) and applies it to **all** resolution and downstream calls during the agent run:
+
+- **Tool name resolution** — `server____tool` and `agent____<slug>` names are resolved against the calling tenant's MCP servers and agent types (tenant-aware resolver); unresolved names fail closed rather than falling back to a platform-wide registry.
+- **MCP resolution** — tool lookups are tenant-filtered; a same-slug server in another tenant is invisible.
+- **A2A delegation** — `agent____<slug>` targets resolve only within the tenant.
+- **Downstream internal calls** — every AR → CH/CC call stamps the run's forwarded signed tenant headers (via the AR `comm_hub_client` and the shared `internal_httpx_client` egress choke point). AR is a **forward-only receiver**: it verifies and forwards tenant headers, never signs new ones.
 
 ## System Tool Binding & Routing
 

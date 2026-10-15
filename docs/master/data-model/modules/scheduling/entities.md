@@ -4,7 +4,8 @@
 erDiagram
     ScheduledJob {
         uuid id
-        string name
+        uuid tenant_id "mandatory at creation; job executes under its owning tenant's context"
+        string name "unique per tenant"
         string description
         string cron_expression
         enum target_type "agent"
@@ -46,6 +47,7 @@ erDiagram
 
 ## Business Rules
 
+- **Mandatory tenant binding**: `tenant_id` is set at creation (when multi-tenancy is disabled, everything binds to the root tenant — never tenant-less). Dispatch never falls back through `job → agent type` chains to a NULL tenant; each job executes under its owning tenant's context (quotas, scoping, tool resolution). Job names are unique per tenant only. `JobExecution` inherits scope via its parent job.
 - **Soft-delete**: Scheduled jobs are never hard-deleted. The `deleted` status hides them from active lists while preserving execution history.
 - **Immutable execution history**: `JobExecution` records are append-only. Once created, they are never modified — status and results are set at completion and remain stable.
 - **UTC only**: All schedule expressions (`cron_expression`) and timestamps are in UTC.

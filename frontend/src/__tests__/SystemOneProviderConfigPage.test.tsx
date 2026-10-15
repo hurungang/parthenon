@@ -43,7 +43,15 @@ const apiMock = vi.hoisted(() => ({
   updateSystemOneProvider: vi.fn(),
   deleteSystemOneProvider: vi.fn(),
   testSystemOneProviderConnection: vi.fn(),
-  SYSTEM_ONE_PRESET_BASE_URL: 'https://api.typesafe.ai/v1',
+  listDecisionModelHierarchy: vi.fn(),
+  setProviderAvailability: vi.fn(),
+  setDecisionModelAvailability: vi.fn(),
+  listEnabledDecisionModels: vi.fn(),
+  getSystemOneStatus: vi.fn(),
+  listSystemOneProviderTypes: vi.fn(),
+  listVendorModels: vi.fn(),
+  importVendorModels: vi.fn(),
+  SYSTEM_ONE_PRESET_BASE_URL: 'https://api.typesafe.ai/v1/systemone',
 }))
 
 vi.mock('../api/systemOneApi', () => apiMock)
@@ -70,11 +78,20 @@ describe('SystemOneProviderConfigPage', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     apiMock.listSystemOneProviders.mockResolvedValue(MOCK_PROVIDERS)
+    apiMock.listDecisionModelHierarchy.mockResolvedValue([])
+    apiMock.listEnabledDecisionModels.mockResolvedValue([])
+    apiMock.setProviderAvailability.mockResolvedValue({})
+    apiMock.setDecisionModelAvailability.mockResolvedValue(undefined)
     apiMock.createSystemOneProvider.mockResolvedValue(MOCK_PROVIDERS[0])
     apiMock.updateSystemOneProvider.mockResolvedValue(MOCK_PROVIDERS[0])
     apiMock.deleteSystemOneProvider.mockResolvedValue(undefined)
     apiMock.createSystemOneProvider.mockResolvedValue(MOCK_PROVIDERS[0])
     apiMock.updateSystemOneProvider.mockResolvedValue(MOCK_PROVIDERS[0])
+    apiMock.listSystemOneProviderTypes.mockResolvedValue([
+      { value: 'typesafe', label: 'typesafe' },
+    ])
+    apiMock.listVendorModels.mockResolvedValue({ models: [] })
+    apiMock.importVendorModels.mockResolvedValue(MOCK_PROVIDERS[0])
   })
 
   it('renders providers with key-status chips and no key material', async () => {
@@ -186,6 +203,9 @@ describe('SystemOneProviderConfigPage', () => {
     await screen.findByText('TypeSafe Jev')
     // Delete icon buttons have no aria-label; click via the icon.
     fireEvent.click(screen.getAllByTestId('DeleteIcon')[0].closest('button')!)
+    // Confirm-on-delete dialog: the API call happens after confirmation.
+    const confirmButton = await screen.findByRole('button', { name: 'app.delete' })
+    fireEvent.click(confirmButton)
     await waitFor(() =>
       expect(apiMock.deleteSystemOneProvider).toHaveBeenCalledWith('p-1'),
     )
@@ -200,26 +220,26 @@ describe('SystemOneProviderConfigPage', () => {
 
   // ── Round 2: preset base URL + Test connection ──────────────────────────
 
-  it('presets the base URL read-only in the create dialog', async () => {
+  it('presets the base URL as an editable default in the create dialog', async () => {
     await renderPage()
     fireEvent.click(await screen.findByText('systemOne.addProvider'))
     const baseUrl = screen.getByLabelText(
       /systemOne\.baseUrl/,
     ) as HTMLInputElement
-    expect(baseUrl.value).toBe('https://api.typesafe.ai/v1')
-    expect(baseUrl).toBeDisabled()
+    expect(baseUrl.value).toBe('https://api.typesafe.ai/v1/systemone')
+    // Editable per tenant — NOT disabled.
+    expect(baseUrl).not.toBeDisabled()
     expect(
-      screen.getByText('systemOne.baseUrlPresetHint'),
+      screen.getByText('systemOne.baseUrlHint'),
     ).toBeInTheDocument()
   })
 
-  it('sends the preset base_url on create', async () => {
+  it('sends the typed base_url on create', async () => {
     await renderPage()
     fireEvent.click(await screen.findByText('systemOne.addProvider'))
-    // base URL field is preset and read-only
     const baseUrl = screen.getByLabelText(/systemOne\.baseUrl/) as HTMLInputElement
-    expect(baseUrl.value).toBe('https://api.typesafe.ai/v1')
-    expect(baseUrl).toBeDisabled()
+    expect(baseUrl.value).toBe('https://api.typesafe.ai/v1/systemone')
+    fireEvent.change(baseUrl, { target: { value: 'https://tenant.example/v1/systemone' } })
     fireEvent.change(screen.getByLabelText(/systemOne\.displayName/), {
       target: { value: 'Preset Provider' },
     })
@@ -231,13 +251,16 @@ describe('SystemOneProviderConfigPage', () => {
       expect(apiMock.createSystemOneProvider).toHaveBeenCalledTimes(1),
     )
     const createBody = apiMock.createSystemOneProvider.mock.calls[0][0]
-    expect(createBody.base_url).toBe('https://api.typesafe.ai/v1')
+    expect(createBody.base_url).toBe('https://tenant.example/v1/systemone')
   })
 
-  it('never sends base_url on update (preset, non-editable)', async () => {
+  it('sends base_url on update (editable per tenant)', async () => {
     await renderPage()
     await screen.findByText('TypeSafe Jev')
     fireEvent.click(screen.getAllByRole('button', { name: 'app.edit' })[0])
+    fireEvent.change(screen.getByLabelText(/systemOne\.baseUrl/), {
+      target: { value: 'https://updated.example/v1' },
+    })
     fireEvent.change(screen.getByLabelText(/systemOne\.displayName/), {
       target: { value: 'Renamed Again' },
     })
@@ -246,7 +269,48 @@ describe('SystemOneProviderConfigPage', () => {
       expect(apiMock.updateSystemOneProvider).toHaveBeenCalledTimes(1),
     )
     const [, updateBody] = apiMock.updateSystemOneProvider.mock.calls[0]
-    expect(updateBody).not.toHaveProperty('base_url')
+    expect(updateBody.base_url).toBe('https://updated.example/v1')
+  })
+
+  it('validates that base_url is required', async () => {
+    await renderPage()
+    fireEvent.click(await screen.findByText('systemOne.addProvider'))
+    fireEvent.change(screen.getByLabelText(/systemOne\.displayName/), {
+      target: { value: 'No URL Provider' },
+    })
+    fireEvent.change(screen.getByLabelText(/systemOne\.baseUrl/), {
+      target: { value: '' },
+    })
+    fireEvent.change(screen.getByLabelText(/systemOne\.apiKey/), {
+      target: { value: 'sk-x' },
+    })
+    fireEvent.click(screen.getByText('app.save'))
+    expect(
+      await screen.findByText('systemOne.validation.baseUrlRequired'),
+    ).toBeInTheDocument()
+    expect(apiMock.createSystemOneProvider).not.toHaveBeenCalled()
+  })
+
+  it('shows the saved-key placeholder on edit when has_api_key, not on create', async () => {
+    await renderPage()
+    await screen.findByText('TypeSafe Jev')
+    // Edit dialog for the provider with has_api_key=true.
+    fireEvent.click(screen.getAllByRole('button', { name: 'app.edit' })[0])
+    const keyField = screen.getByLabelText(/systemOne\.apiKey/) as HTMLInputElement
+    expect(keyField.getAttribute('placeholder')).toBe(
+      'systemOne.apiKeySavedPlaceholder',
+    )
+    expect(screen.getByText('systemOne.apiKeyConfigured')).toBeInTheDocument()
+    // Close and open create — no saved placeholder / configured indicator.
+    fireEvent.click(screen.getByText('app.cancel'))
+    fireEvent.click(await screen.findByText('systemOne.addProvider'))
+    const createKeyField = screen.getByLabelText(
+      /systemOne\.apiKey/,
+    ) as HTMLInputElement
+    expect(createKeyField.getAttribute('placeholder')).not.toBe(
+      'systemOne.apiKeySavedPlaceholder',
+    )
+    expect(screen.queryByText('systemOne.apiKeyConfigured')).not.toBeInTheDocument()
   })
 
   it('Test connection button shows success state (status-only)', async () => {

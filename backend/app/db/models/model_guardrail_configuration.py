@@ -13,6 +13,17 @@ per-model row with four period-limit columns is replaced by:
 
 A unique constraint on (model_id, period) prevents two guardrails on the same
 (model, period) pair.
+
+Decision-scope extension (FIX-20261014-003000): the same table also stores
+guardrails for Decision Model Provider models. Rows are discriminated by
+``config_source``:
+
+- ``model_config`` — LLM vendor guardrails; ``model_id`` → ``model_configs.id``.
+- ``decision_provider`` — decision guardrails; ``model_id`` is NULL and
+  ``decision_provider_id`` → ``system_one_provider_configs.id``. The decision
+  pre-call check (``DecisionModelCatalogueService.check_pre_call``) reads
+  only ``decision_provider`` rows; LLM guardrail evaluation reads only
+  ``model_config`` rows.
 """
 import enum
 import uuid
@@ -28,6 +39,7 @@ from sqlalchemy import (
     String,
     UniqueConstraint,
     func,
+    text,
 )
 from sqlalchemy.dialects.postgresql import JSON, UUID
 from sqlalchemy.orm import Mapped, mapped_column
@@ -73,19 +85,42 @@ class ModelGuardrailConfiguration(Base):
     __tablename__ = "model_guardrail_configurations"
     __table_args__ = (
         UniqueConstraint("model_id", "model_name", "period", name="uq_guardrail_vendor_model_period"),
+        # Decision-scope uniqueness: one guardrail per (provider, model, period).
+        Index(
+            "uq_guardrail_decision_model_period",
+            "decision_provider_id",
+            "model_name",
+            "period",
+            unique=True,
+            postgresql_where=text("decision_provider_id IS NOT NULL"),
+        ),
         Index("ix_model_guardrail_configurations_tenant_id", "tenant_id"),
+        Index("ix_model_guardrail_configurations_decision_provider", "decision_provider_id"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
     )
+    # Scope discriminator: 'model_config' (LLM vendors) or 'decision_provider'
+    # (Decision Model Providers). Kept as a plain string (not a DB enum) so
+    # new sources can be added without an enum migration.
+    config_source: Mapped[str] = mapped_column(
+        String(32), nullable=False, default="model_config", server_default="model_config"
+    )
     tenant_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("tenants.id", ondelete="SET NULL"), nullable=True
     )
-    model_id: Mapped[uuid.UUID] = mapped_column(
+    # Nullable for decision-provider rows (which key via decision_provider_id).
+    model_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("model_configs.id", ondelete="CASCADE"),
-        nullable=False,
+        nullable=True,
+    )
+    # Set only when config_source == 'decision_provider'.
+    decision_provider_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("system_one_provider_configs.id", ondelete="CASCADE"),
+        nullable=True,
     )
     model_name: Mapped[str] = mapped_column(String(500), nullable=False)
     period: Mapped[ModelGuardrailPeriod] = mapped_column(

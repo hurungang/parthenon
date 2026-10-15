@@ -59,3 +59,7 @@ The Agent Data Type Registry provides a centralized catalogue where platform adm
 - The Agent Type form (agent-types feature) depends on the registry to populate its output data type selector.
 - Must comply with existing service segregation rules: Control Center owns the registry; Agent Runtime consumes it read-only.
 - Data type names must be unique within the registry; the uniqueness constraint is enforced at the API layer.
+
+## Multi-Tenancy Note
+
+Data types are strictly tenant-owned (see [Multi-Tenancy](multi-tenancy.md) and [Strict Tenant Isolation](strict-tenant-isolation.md)): names are unique per tenant, lookups match the exact session tenant only, and a tenant user can never see or reference another tenant's (or the root tenant's) data types. The legacy tenant-less shared slot was retired — a one-time, idempotent migration adopted existing tenant-less data types into the root tenant. With multi-tenancy disabled (the default), behavior is unchanged — the deployment operates as the root tenant's workspace.

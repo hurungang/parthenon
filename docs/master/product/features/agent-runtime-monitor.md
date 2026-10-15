@@ -128,3 +128,7 @@ The Agent Runtime Monitor replaces the runtime control dashboard's static "agent
 - The map reuses the existing terminate action, human-intervention dialog, and agent detail presentation
 - Follows existing UI component and internationalisation conventions
 - The view remains read-only with respect to agent configuration; permitted actions are terminate and human-intervention response only
+
+## Multi-Tenancy Note
+
+The monitor shows only the viewer's own tenant's runtime population (see [Multi-Tenancy](multi-tenancy.md) and [Strict Tenant Isolation](strict-tenant-isolation.md)): every agent, execution, trigger, and tool-call route on the map belongs to the session's tenant, and cross-tenant entities are never visible. With multi-tenancy disabled (the default), behavior is unchanged — the deployment operates as the root tenant's workspace.

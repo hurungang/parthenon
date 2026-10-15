@@ -75,7 +75,74 @@ describe('IdentityProviderConfigForm', () => {
 
   it('renders client ID text field', () => {
     render(React.createElement(IdentityProviderConfigForm, { scope: 'user', onSave: mockOnSave }))
-    expect(screen.getByRole('textbox', { name: /clientId/i })).toBeDefined()
+    expect(screen.getByLabelText('systemConfig.identityProviders.clientId')).toBeDefined()
+  })
+
+  // USER scope: two visually distinct client sections
+
+  it('renders the public client section with required UI Client ID for user scope', () => {
+    render(React.createElement(IdentityProviderConfigForm, { scope: 'user', onSave: mockOnSave }))
+    expect(screen.getByText('systemConfig.identityProviders.publicClientSection')).toBeDefined()
+    const uiField = screen.getByLabelText('systemConfig.identityProviders.uiClientId', { exact: false })
+    expect(uiField).toHaveProperty('required', true)
+    expect(screen.getByText('systemConfig.identityProviders.uiClientIdHint')).toBeDefined()
+  })
+
+  it('renders the confidential client section for user scope', () => {
+    render(React.createElement(IdentityProviderConfigForm, { scope: 'user', onSave: mockOnSave }))
+    expect(screen.getByText('systemConfig.identityProviders.confidentialSection')).toBeDefined()
+    expect(screen.getByText('systemConfig.identityProviders.confidentialClientHint')).toBeDefined()
+    expect(screen.getByLabelText('systemConfig.identityProviders.clientId')).toBeDefined()
+    expect(screen.getByLabelText('systemConfig.identityProviders.clientSecret')).toBeDefined()
+  })
+
+  it('blocks save and shows an error when UI Client ID is empty for user scope', async () => {
+    render(React.createElement(IdentityProviderConfigForm, { scope: 'user', onSave: mockOnSave }))
+    fireEvent.click(screen.getByRole('button', { name: 'systemConfig.identityProviders.save' }))
+    await waitFor(() => {
+      expect(mockOnSave).not.toHaveBeenCalled()
+    })
+    expect(screen.getByText('systemConfig.identityProviders.uiClientIdRequired')).toBeDefined()
+  })
+
+  it('sends public_client_id when saving the user scope', async () => {
+    render(React.createElement(IdentityProviderConfigForm, { scope: 'user', onSave: mockOnSave }))
+    fireEvent.change(screen.getByLabelText('systemConfig.identityProviders.uiClientId', { exact: false }), {
+      target: { value: 'parthenon-api-ui' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'systemConfig.identityProviders.save' }))
+    await waitFor(() => {
+      expect(mockOnSave).toHaveBeenCalled()
+    })
+    const savedData = mockOnSave.mock.calls[mockOnSave.mock.calls.length - 1][0]
+    expect(savedData.public_client_id).toBe('parthenon-api-ui')
+  })
+
+  // AGENT scope: single client section, ui_client_id hidden
+
+  it('renders a single agent client section for agent scope', () => {
+    render(React.createElement(IdentityProviderConfigForm, { scope: 'agent', onSave: mockOnSave }))
+    expect(screen.getByText('systemConfig.identityProviders.agentClientSection')).toBeDefined()
+    expect(screen.getByText('systemConfig.identityProviders.agentClientHint')).toBeDefined()
+    expect(screen.getByLabelText('systemConfig.identityProviders.clientIdAgent')).toBeDefined()
+    expect(screen.getByLabelText('systemConfig.identityProviders.clientSecretAgent')).toBeDefined()
+  })
+
+  it('hides the UI Client ID field entirely for agent scope', () => {
+    render(React.createElement(IdentityProviderConfigForm, { scope: 'agent', onSave: mockOnSave }))
+    expect(screen.queryByLabelText('systemConfig.identityProviders.uiClientId', { exact: false })).toBeNull()
+    expect(screen.queryByText('systemConfig.identityProviders.publicClientSection')).toBeNull()
+    expect(screen.queryByText('systemConfig.identityProviders.confidentialSection')).toBeNull()
+  })
+
+  it('does not send public_client_id for agent scope', async () => {
+    render(React.createElement(IdentityProviderConfigForm, { scope: 'agent', onSave: mockOnSave }))
+    fireEvent.click(screen.getByRole('button', { name: 'systemConfig.identityProviders.save' }))
+    await waitFor(() => {
+      expect(mockOnSave).toHaveBeenCalled()
+    })
+    const savedData = mockOnSave.mock.calls[mockOnSave.mock.calls.length - 1][0]
+    expect(savedData.public_client_id).toBeUndefined()
   })
 
   it('renders client secret text field by label', () => {
@@ -116,12 +183,15 @@ describe('IdentityProviderConfigForm', () => {
 
   it('calls onSave with form data when Save is clicked', async () => {
     render(React.createElement(IdentityProviderConfigForm, { scope: 'user', onSave: mockOnSave }))
+    fireEvent.change(screen.getByLabelText('systemConfig.identityProviders.uiClientId', { exact: false }), {
+      target: { value: 'parthenon-api-ui' },
+    })
     const saveBtn = screen.getByRole('button', { name: 'systemConfig.identityProviders.save' })
     fireEvent.click(saveBtn)
     await waitFor(() => {
-      expect(mockOnSave).toHaveBeenCalledTimes(1)
+      expect(mockOnSave).toHaveBeenCalled()
     })
-    const savedData = mockOnSave.mock.calls[0][0]
+    const savedData = mockOnSave.mock.calls[mockOnSave.mock.calls.length - 1][0]
     expect(savedData.provider_type).toBe('oidc_generic')
     expect(savedData.client_id).toBe('')
     expect(savedData.scopes).toBe('openid profile email')
@@ -219,6 +289,9 @@ describe('IdentityProviderConfigForm', () => {
 
   it('persists default_tenant_role: null when no role is selected', async () => {
     render(React.createElement(IdentityProviderConfigForm, { scope: 'user', onSave: mockOnSave }))
+    fireEvent.change(screen.getByLabelText('systemConfig.identityProviders.uiClientId', { exact: false }), {
+      target: { value: 'parthenon-api-ui' },
+    })
     fireEvent.click(screen.getByRole('button', { name: 'systemConfig.identityProviders.save' }))
     await waitFor(() => {
       expect(mockOnSave).toHaveBeenCalled()

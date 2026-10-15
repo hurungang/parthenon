@@ -28,11 +28,15 @@ from app.schemas.decision_tools import (
     DecisionToolRead,
     DecisionToolUpdate,
 )
+from app.schemas.system_one import DecisionEnabledModelRead
 from app.services.agents.workflow_authoring_service import WorkflowAuthoringError
 from app.services.agents.workflow_generation_settings import (
     get_workflow_generation_model_id,
 )
 from app.services.system_one.decision_authoring_service import generate_decision_draft
+from app.services.system_one.decision_model_availability_service import (
+    DecisionModelCatalogueService,
+)
 from app.services.system_one.decision_tool_service import (
     DecisionToolNameConflictError,
     DecisionToolService,
@@ -48,6 +52,7 @@ DecisionToolsRouter = APIRouter(prefix="/decision-tools", tags=["Decision Tools"
 
 _service = DecisionToolService()
 _provider_service = SystemOneProviderConfigService()
+_catalogue = DecisionModelCatalogueService(_provider_service)
 
 
 def _tenant_id(request: Request) -> uuid.UUID | None:
@@ -69,10 +74,65 @@ async def _require_system_one_configured(
         raise HTTPException(
             status_code=422,
             detail=(
-                "No System One model is configured. Configure a System One "
-                "provider before creating decision tools."
+                "No Decision Model provider is configured. Configure a "
+                "Decision Model provider before creating decision tools."
             ),
         )
+
+
+async def _model_identity_map(
+    db: DbSession, tools: list
+) -> dict[uuid.UUID, dict]:
+    """Provider/model identity per availability id for Read enrichment
+    (identity only — never credential material)."""
+    from app.db.models.decision_model_availability import DecisionModelAvailability
+    from app.db.models.system_one_provider_config import SystemOneProviderConfig
+
+    ids = {
+        t.decision_model_availability_id
+        for t in tools
+        if t.decision_model_availability_id is not None
+    }
+    if not ids:
+        return {}
+    rows = await db.execute(
+        select(DecisionModelAvailability).where(
+            DecisionModelAvailability.id.in_(ids)
+        )
+    )
+    by_id = {row.id: row for row in rows.scalars().all()}
+    provider_ids = {row.decision_model_provider_id for row in by_id.values()}
+    prow = await db.execute(
+        select(SystemOneProviderConfig).where(
+            SystemOneProviderConfig.id.in_(provider_ids)
+        )
+    )
+    providers = {p.id: p for p in prow.scalars().all()}
+    identity: dict[uuid.UUID, dict] = {}
+    for availability_id, row in by_id.items():
+        provider = providers.get(row.decision_model_provider_id)
+        if provider is None:
+            continue
+        identity[availability_id] = {
+            "provider_type": provider.provider_type.value,
+            "provider_display_name": provider.display_name,
+            "model_name": row.model_name,
+        }
+    return identity
+
+
+def _apply_model_identity(
+    read: "DecisionToolRead", identity: dict
+) -> "DecisionToolRead":
+    if read.decision_model_availability_id is not None:
+        info = identity.get(read.decision_model_availability_id) or {}
+        read.provider_type = info.get("provider_type")
+        read.provider_display_name = info.get("provider_display_name")
+        read.model_name = info.get("model_name")
+    else:
+        # Legacy tools (pre-migration) carry the free-text provider model.
+        read.model_name = read.provider_model
+    return read
 
 
 @DecisionToolsRouter.get("", response_model=list[DecisionToolRead])
@@ -84,7 +144,32 @@ async def list_decision_tools(
 ) -> list[DecisionToolRead]:
     """List decision tools within the caller's tenant, filterable by status."""
     tools = await _service.list(db, _tenant_id(request), status=status_filter)
-    return [DecisionToolRead.model_validate(t) for t in tools]
+    identity = await _model_identity_map(db, tools)
+    return [
+        _apply_model_identity(DecisionToolRead.model_validate(t), identity)
+        for t in tools
+    ]
+
+
+@DecisionToolsRouter.get("/enabled-models", response_model=list[DecisionEnabledModelRead])
+async def list_enabled_decision_models(
+    request: Request,
+    db: DbSession,
+    _: dict = Depends(require_permission(RT_SYSTEM_DECISION_TOOLS, "read")),
+) -> list[DecisionEnabledModelRead]:
+    """Enabled decision models for the authoring selector (provider enabled
+    AND model enabled within the caller's tenant)."""
+    enabled = await _catalogue.list_enabled_models(db, _tenant_id(request))
+    return [
+        DecisionEnabledModelRead(
+            availability_id=m.availability_id,
+            provider_id=m.provider_id,
+            provider_type=m.provider_type,
+            provider_display_name=m.provider_display_name,
+            model_name=m.model_name,
+        )
+        for m in enabled
+    ]
 
 
 @DecisionToolsRouter.post(
@@ -110,7 +195,8 @@ async def create_decision_tool(
         raise HTTPException(status_code=409, detail=exc.errors)
     except DecisionToolValidationError as exc:
         raise HTTPException(status_code=422, detail=exc.errors)
-    return DecisionToolRead.model_validate(tool)
+    identity = await _model_identity_map(db, [tool])
+    return _apply_model_identity(DecisionToolRead.model_validate(tool), identity)
 
 
 @DecisionToolsRouter.post(
@@ -186,7 +272,8 @@ async def get_decision_tool(
     tool = await _service.get(db, tool_id, _tenant_id(request))
     if not tool:
         raise HTTPException(status_code=404, detail="Decision tool not found")
-    return DecisionToolRead.model_validate(tool)
+    identity = await _model_identity_map(db, [tool])
+    return _apply_model_identity(DecisionToolRead.model_validate(tool), identity)
 
 
 @DecisionToolsRouter.put("/{tool_id}", response_model=DecisionToolRead)
@@ -203,7 +290,8 @@ async def update_decision_tool(
         tool = await _service.update(db, tool_id, body, _tenant_id(request))
     except DecisionToolValidationError as exc:
         raise HTTPException(status_code=422, detail=exc.errors)
-    return DecisionToolRead.model_validate(tool)
+    identity = await _model_identity_map(db, [tool])
+    return _apply_model_identity(DecisionToolRead.model_validate(tool), identity)
 
 
 @DecisionToolsRouter.delete("/{tool_id}", status_code=status.HTTP_204_NO_CONTENT)

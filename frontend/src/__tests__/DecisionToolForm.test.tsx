@@ -16,6 +16,7 @@ vi.mock('../api/decisionToolsApi', () => apiMock)
 
 const statusMock = vi.hoisted(() => ({
   getSystemOneStatus: vi.fn(),
+  listEnabledDecisionModels: vi.fn(),
 }))
 vi.mock('../api/systemOneApi', () => statusMock)
 
@@ -43,7 +44,7 @@ const BASE_TOOL = {
   purpose: 'Approve loans',
   description: 'generated',
   input_data_type_id: 'dt-1',
-  output_data_type_id: null,
+  output_data_type_id: 'dt-1',
   input_data_type: null,
   output_data_type: null,
   state_preset: { amount: { source: 'input', key: 'amount' } },
@@ -90,6 +91,7 @@ describe('DecisionToolForm', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     statusMock.getSystemOneStatus.mockResolvedValue(CONFIGURED)
+    statusMock.listEnabledDecisionModels.mockResolvedValue([])
     apiMock.createDecisionTool.mockResolvedValue(BASE_TOOL)
     apiMock.updateDecisionTool.mockResolvedValue(BASE_TOOL)
   })
@@ -213,14 +215,6 @@ describe('DecisionToolForm', () => {
     await renderForm()
     await waitReady()
     await fillMinimumValid()
-    // add a state preset mapping
-    fireEvent.click(screen.getByRole('button', { name: 'decisionTools.addStateMapping' }))
-    fireEvent.change(screen.getByLabelText(/^decisionTools\.stateKey$/), {
-      target: { value: 'risk' },
-    })
-    fireEvent.change(screen.getByLabelText(/^decisionTools\.dataKey$/), {
-      target: { value: 'risk_level' },
-    })
     fireEvent.click(screen.getByRole('button', { name: 'app.save' }))
     await vi.waitFor(() => {
       expect(apiMock.createDecisionTool).toHaveBeenCalledTimes(1)
@@ -229,9 +223,8 @@ describe('DecisionToolForm', () => {
     expect(payload.name).toBe('approve-loan')
     expect(payload.questions[0].question_type).toBe('choice')
     expect(payload.questions[0].criteria_options).toEqual({ yes: 'approve' })
-    expect(payload.state_preset).toEqual({
-      risk: { source: 'input', key: 'risk_level' },
-    })
+    // No explicit mappings authored — state auto-matches (empty preset).
+    expect(payload.state_preset).toBeNull()
     expect(payload.act_threshold).toBe(0.9)
     expect(payload.confirm_threshold).toBe(0.7)
   })
@@ -269,6 +262,7 @@ describe('DecisionToolForm', () => {
   })
 
   async function pickQuestionType(value: string) {
+    await ensureQuestionEditor()
     const select = screen.getByLabelText(/^decisionTools\.questionType$/)
     fireEvent.mouseDown(select, { button: 0 })
     fireEvent.click(await screen.findByRole('option', {
@@ -276,9 +270,30 @@ describe('DecisionToolForm', () => {
     }))
   }
 
+  /** Create mode starts with ZERO questions (auto-derived from the output
+      data type unless overridden) — tests needing an editor add one. */
+  async function ensureQuestionEditor() {
+    if (!screen.queryByLabelText(/^decisionTools\.questionKey/)) {
+      fireEvent.click(
+        screen.getByRole('button', { name: 'decisionTools.addQuestion' }),
+      )
+    }
+  }
+
+  /** The state-preset section is an ADVANCED accordion, collapsed by
+      default — expand it before interacting with mapping controls. */
+  async function expandStatePreset() {
+    const heading = screen.getByText('decisionTools.statePreset')
+    const summary = heading.closest('.MuiAccordionSummary-root')
+    if (summary?.getAttribute('aria-expanded') !== 'true') {
+      fireEvent.click(heading)
+    }
+  }
+
   async function fillMinimumValid() {
     fireEvent.change(label(/^decisionTools\.name/), { target: { value: 'approve-loan' } })
     fireEvent.change(label(/^decisionTools\.purpose/), { target: { value: 'Decide loans' } })
+    await ensureQuestionEditor()
     fireEvent.change(screen.getByLabelText(/^decisionTools\.questionKey/), {
       target: { value: 'approve' },
     })
@@ -353,6 +368,7 @@ describe('DecisionToolForm', () => {
     fireEvent.mouseDown(inputSelect, { button: 0 })
     fireEvent.click(await screen.findByRole('option', { name: /Loan Application/ }))
 
+    await expandStatePreset()
     fireEvent.click(screen.getByRole('button', { name: 'decisionTools.addStateMapping' }))
     // With an input type chosen (source=input), dataKey is a select whose
     // options are the input type's fields.
@@ -366,6 +382,7 @@ describe('DecisionToolForm', () => {
     fireEvent.change(screen.getByLabelText(/^decisionTools\.stateKey$/), {
       target: { value: 'amount' },
     })
+    await ensureQuestionEditor()
     fireEvent.change(screen.getByLabelText(/^decisionTools\.questionKey/), {
       target: { value: 'q1' },
     })
@@ -384,25 +401,132 @@ describe('DecisionToolForm', () => {
     })
   })
 
+  it('renders mapper rows for unmatched placeholders and saves only explicit mappings', async () => {
+    await renderForm()
+    await waitReady()
+    await fillMinimumValid()
+    // select the input type (fields: amount)
+    const inputSelect = screen.getByLabelText(/^decisionTools\.inputDataType/)
+    fireEvent.mouseDown(inputSelect, { button: 0 })
+    fireEvent.click(await screen.findByRole('option', { name: /Loan Application/ }))
+
+    // reference two placeholders in instructions: `amount` matches the
+    // input property 1:1 (silent), `aaa` has no same-named property.
+    await ensureQuestionEditor()
+    fireEvent.change(screen.getByLabelText(/^decisionTools\.instructions/), {
+      target: { value: 'Check `amount` and `aaa`' },
+    })
+    await expandStatePreset()
+    // matched: silent chip, no mapper row for `amount`
+    expect(await screen.findByText('amount → amount')).toBeInTheDocument()
+    // unmatched: exactly one mapper row asking to map `aaa` (the mocked t()
+    // returns the raw key, so both mapper rows share the same label text)
+    expect(screen.getAllByText('decisionTools.mapPlaceholder')).toHaveLength(1)
+
+    // map aaa → amount, then save: payload includes ONLY the explicit
+    // mapping (the 1:1 `amount` key is not sent).
+    const aaaSelect = screen.getAllByLabelText(/^decisionTools\.dataKey$/)[0]
+    fireEvent.mouseDown(aaaSelect, { button: 0 })
+    fireEvent.click(await screen.findByRole('option', { name: 'amount' }))
+    fireEvent.click(screen.getByRole('button', { name: 'app.save' }))
+    await vi.waitFor(() => {
+      expect(apiMock.createDecisionTool).toHaveBeenCalledTimes(1)
+    })
+    expect(apiMock.createDecisionTool.mock.calls[0][0].state_preset).toEqual({
+      aaa: { source: 'input', key: 'amount' },
+    })
+  })
+
+  it('shows the select-input-type hint and no mapper rows before an input type is chosen', async () => {
+    await renderForm()
+    await waitReady()
+    await fillMinimumValid()
+    await ensureQuestionEditor()
+    fireEvent.change(screen.getByLabelText(/^decisionTools\.instructions/), {
+      target: { value: 'Check `aaa`' },
+    })
+    await expandStatePreset()
+    expect(
+      await screen.findByText(
+        'decisionTools.selectInputTypeFirst',
+      ),
+    ).toBeInTheDocument()
+    expect(screen.queryByLabelText(/^decisionTools\.dataKey$/)).toBeNull()
+    expect(screen.queryByRole('button', { name: 'decisionTools.addStateMapping' })).toBeNull()
+  })
+
+  it('disables Save with an inline hint when enabled without both data types; disabled drafts save cleanly', async () => {
+    await renderForm()
+    await waitReady()
+    await fillMinimumValid()
+    const save = screen.getByRole('button', { name: 'app.save' })
+    const toggleEnabled = () => {
+      const input = document.querySelector('.MuiSwitch-input') as HTMLInputElement
+      fireEvent.click(input)
+    }
+    // new tools start as disabled drafts → Save is available immediately
+    expect(save).toBeEnabled()
+
+    // enabling without both data types pre-validates: hint + Save disabled
+    toggleEnabled()
+    expect(await screen.findByText(
+      'decisionTools.validation.readinessRequiresTypes',
+    )).toBeInTheDocument()
+    expect(save).toBeDisabled()
+    expect(apiMock.createDecisionTool).not.toHaveBeenCalled()
+
+    // disabling again clears the block — the draft saves cleanly
+    toggleEnabled()
+    await vi.waitFor(() => {
+      expect(save).toBeEnabled()
+    })
+    fireEvent.click(save)
+    await vi.waitFor(() => {
+      expect(apiMock.createDecisionTool).toHaveBeenCalledTimes(1)
+    })
+    const payload = apiMock.createDecisionTool.mock.calls[0][0]
+    expect(payload.enabled).toBe(false)
+    expect(payload.input_data_type_id).toBeNull()
+    expect(payload.output_data_type_id).toBeNull()
+  })
+
+  it('drops legacy agent_data state rows on load (dropped on next save)', async () => {
+    const legacy = {
+      ...BASE_TOOL,
+      state_preset: {
+        amount: { source: 'input', key: 'amount' },
+        history: { source: 'agent_data', key: 'customer_history' },
+      },
+    }
+    await renderForm({ editing: legacy })
+    await waitReady()
+    await expandStatePreset()
+    // only the input row survives; the agent_data row is not rendered
+    const stateKeys = screen.queryAllByLabelText(/^decisionTools\.stateKey$/)
+    expect(stateKeys.map((k) => (k as HTMLInputElement).value)).toEqual(['amount'])
+    await screen.findByText(/^Decision tool 'approve-loan'/)
+  })
+
   it('auto-detects backtick state-path placeholders from question instructions', async () => {
     await renderForm()
     await waitReady()
-    expect(screen.queryByText(/decisionTools\.detectedPaths/)).not.toBeInTheDocument()
+    await fillMinimumValid()
+    const inputSelect = screen.getByLabelText(/^decisionTools\.inputDataType/)
+    fireEvent.mouseDown(inputSelect, { button: 0 })
+    fireEvent.click(await screen.findByRole('option', { name: /Loan Application/ }))
 
+    await ensureQuestionEditor()
     fireEvent.change(screen.getByLabelText(/^decisionTools\.instructions/), {
       target: { value: 'Check `input.tier` and `input.amount`, then `input.tier` again' },
     })
-    // Deduped, detected paths surface in the state-preset section.
-    expect(await screen.findByText(/decisionTools\.detectedPaths/)).toBeInTheDocument()
-    expect(screen.getByText('`input.tier` `input.amount`')).toBeInTheDocument()
-
-    // Auto-detect adds suggested mappings (paths become state keys).
-    fireEvent.click(screen.getByRole('button', { name: 'decisionTools.autoDetect' }))
-    const stateKeys = screen.getAllByLabelText(/^decisionTools\.stateKey$/)
-    expect(stateKeys.map((k) => (k as HTMLInputElement).value)).toEqual([
-      'input.tier',
-      'input.amount',
-    ])
+    // Deduped placeholders surface as mapper rows (neither matches the
+    // input property 'amount' verbatim) — no manual auto-detect step.
+    await expandStatePreset()
+    const mapperRows = await screen.findAllByText('decisionTools.mapPlaceholder')
+    expect(mapperRows).toHaveLength(2)
+    expect(
+      screen.queryByRole('button', { name: 'decisionTools.autoDetect' }),
+    ).toBeNull()
   })
 
   it('AI generate fills questions and state preset from the mocked draft', async () => {
@@ -437,7 +561,12 @@ describe('DecisionToolForm', () => {
     })
     // Drafted question replaces the blank one.
     expect(await screen.findByDisplayValue('risk')).toBeInTheDocument()
-    // Drafted state preset row mapped.
+    // Drafted state preset row mapped (visible once an input type is
+    // chosen — mappings come from its properties).
+    const inputSelect = screen.getByLabelText(/^decisionTools\.inputDataType/)
+    fireEvent.mouseDown(inputSelect, { button: 0 })
+    fireEvent.click(await screen.findByRole('option', { name: /Loan Application/ }))
+    await expandStatePreset()
     expect(
       (screen.getByLabelText(/^decisionTools\.stateKey$/) as HTMLInputElement).value,
     ).toBe('amount')
@@ -458,5 +587,138 @@ describe('DecisionToolForm', () => {
     })
     // dialog stays open (error via PermissionDeniedAlert)
     expect(screen.getByRole('dialog')).toBeInTheDocument()
+  })
+})
+
+// ── Enabled-model selector (multi-provider model selection) ────────────────
+
+const ENABLED_MODELS = [
+  {
+    availability_id: 'av-1',
+    provider_id: 'p-1',
+    provider_type: 'typesafe',
+    provider_display_name: 'Primary Vendor',
+    model_name: 'jev-latest',
+  },
+  {
+    availability_id: 'av-2',
+    provider_id: 'p-1',
+    provider_type: 'typesafe',
+    provider_display_name: 'Primary Vendor',
+    model_name: 'jev-mini',
+  },
+]
+
+const EDITING_WITH_MODEL = {
+  ...BASE_TOOL,
+  decision_model_availability_id: 'av-1',
+  model_name: 'jev-latest',
+  provider_display_name: 'Primary Vendor',
+}
+
+describe('DecisionToolForm enabled-model selector', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    statusMock.getSystemOneStatus.mockResolvedValue(CONFIGURED)
+    statusMock.listEnabledDecisionModels.mockResolvedValue(ENABLED_MODELS)
+    apiMock.createDecisionTool.mockResolvedValue(BASE_TOOL)
+    apiMock.updateDecisionTool.mockResolvedValue(BASE_TOOL)
+  })
+
+  const openModelMenu = async () => {
+    await screen.findAllByText(
+      (_, el) => el?.textContent?.includes('decisionTools.configuredHint') ?? false,
+      {},
+      { timeout: 4000 },
+    )
+    fireEvent.mouseDown(screen.getByLabelText(/^decisionTools\.modelSelection/), {
+      button: 0,
+    })
+  }
+
+  it('lists ONLY enabled models across providers in the selector', async () => {
+    await renderForm()
+    await openModelMenu()
+    expect(await screen.findByRole('option', { name: /jev-latest — Primary Vendor/ }))
+    expect(screen.getByRole('option', { name: /jev-mini — Primary Vendor/ }))
+    // no phantom options (placeholder + the two enabled models)
+    expect(screen.getAllByRole('option')).toHaveLength(3)
+  })
+
+  it('submits the selected availability id as decision_model_availability_id', async () => {
+    await renderForm()
+    await openModelMenu()
+    fireEvent.click(
+      await screen.findByRole('option', { name: /jev-mini — Primary Vendor/ }),
+    )
+    fireEvent.change(label(/^decisionTools\.name/), { target: { value: 'selector-tool' } })
+    fireEvent.change(label(/^decisionTools\.purpose/), { target: { value: 'p' } })
+    fireEvent.click(screen.getByRole('button', { name: 'app.save' }))
+    await vi.waitFor(() => {
+      expect(apiMock.createDecisionTool).toHaveBeenCalled()
+    })
+    expect(apiMock.createDecisionTool.mock.calls[0][0]).toMatchObject({
+      decision_model_availability_id: 'av-2',
+    })
+  })
+
+  it('pre-selects the saved model when editing a tool', async () => {
+    await renderForm({ editing: EDITING_WITH_MODEL })
+    await openModelMenu()
+    const selected = await screen.findByRole('option', {
+      name: /jev-latest — Primary Vendor/,
+      selected: true,
+    })
+    expect(selected).toBeInTheDocument()
+  })
+
+  // ── FIX-20261014-004500: the model select must never be silently empty ────
+
+  it('shows the stored selection as a disabled unavailable option when editing a tool whose model is no longer enabled', async () => {
+    await renderForm({
+      editing: {
+        ...EDITING_WITH_MODEL,
+        decision_model_availability_id: 'av-gone',
+        model_name: 'jev-legacy',
+      },
+    })
+    await openModelMenu()
+    // The stored model renders as a DISABLED option (not silently missing),
+    // labelled with the enriched tool identity.
+    const unavailable = await screen.findByRole('option', {
+      name: /jev-legacy — Primary Vendor/,
+    })
+    expect(unavailable).toHaveAttribute('aria-disabled', 'true')
+    expect(
+      screen.getAllByText((_, el) =>
+        el?.textContent?.includes('decisionTools.modelUnavailableOption') ?? false,
+      ).length,
+    ).toBeGreaterThan(0)
+  })
+
+  it('shows a placeholder option instead of a blank select when no model is selected', async () => {
+    await renderForm()
+    await openModelMenu()
+    const placeholder = await screen.findByRole('option', {
+      name: 'decisionTools.modelNone',
+    })
+    expect(placeholder).toBeInTheDocument()
+  })
+
+  it('flags a stale selection (since-disabled model) as invalid on submit', async () => {
+    // Editing a tool whose saved model is no longer in the enabled list.
+    await renderForm({ editing: { ...EDITING_WITH_MODEL, decision_model_availability_id: 'av-gone' } })
+    await screen.findAllByText(
+      (_, el) => el?.textContent?.includes('decisionTools.configuredHint') ?? false,
+      {},
+      { timeout: 4000 },
+    )
+    fireEvent.change(label(/^decisionTools\.purpose/), { target: { value: 'trigger submit' } })
+    fireEvent.click(screen.getByRole('button', { name: 'app.save' }))
+    // the stale selection is NOT silently submitted
+    await vi.waitFor(() => {
+      expect(screen.getByRole('dialog')).toBeInTheDocument()
+    })
+    expect(apiMock.updateDecisionTool).not.toHaveBeenCalled()
   })
 })

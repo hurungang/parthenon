@@ -63,10 +63,17 @@ export interface OIDCTestStep {
   detail: string
 }
 
+export interface OIDCTestClientIdStatus {
+  client_id: string | null
+  status: 'missing' | 'invalid' | 'ok' | 'warning'
+  detail: string
+}
+
 export interface OIDCTestResponse {
   success: boolean
   steps: OIDCTestStep[]
   discovery_doc: Record<string, unknown> | null
+  client_id_status?: OIDCTestClientIdStatus | null
 }
 
 export interface OIDCTestRequest {

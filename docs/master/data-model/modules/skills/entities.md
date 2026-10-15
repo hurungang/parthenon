@@ -4,6 +4,7 @@
 erDiagram
     Skill {
         uuid id
+        uuid tenant_id "mandatory; name unique per tenant"
         string name
         string description
         string instructions
@@ -14,11 +15,12 @@ erDiagram
     SkillToolBinding {
         uuid id
         uuid skill_id
-        uuid tool_id
+        uuid tool_id "same-tenant tool only"
         int order
     }
     Sop {
         uuid id
+        uuid tenant_id "mandatory; name unique per tenant"
         string name
         string description
         string instructions
@@ -59,6 +61,8 @@ erDiagram
 ```
 
 **Source**: `backend/app/db/models/skills.py`
+
+**Tenant containment:** `Skill` and `Sop` carry a **mandatory** tenant reference; names are unique **per tenant only** (the NULL-tenant global uniqueness variant is retired). All bindings resolve within the tenant: a skill may only bind tools of its own tenant (including virtual/system tools resolved within that tenant); agent type → skill/SOP bindings and role grants on skills/SOPs are same-tenant only; SOP delegation steps resolve the target agent type by **(tenant, name)**.
 
 | Entity | Description |
 |--------|-------------|

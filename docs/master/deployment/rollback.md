@@ -627,3 +627,44 @@ Run `alembic downgrade` from `31c0e0bc9990` to its `down_revision`. Verify with 
 - Do NOT remove `TENANT_CONTEXT_SIGNING_KEY` from only some services — the three services are version-rolled together or not at all.
 - Do NOT downgrade the tenancy migration chain while any tenant data still needs to be preserved.
 - Do NOT grant direct database access to Agent Runtime or Communication Hub during rollback.
+
+---
+
+## Change-Specific Rollback: Strict Tenant Isolation
+
+Use this section when rolling back the **strict-tenant-isolation** deployment. Execute Steps 1–2 of the general procedure above first.
+
+### Trigger Conditions
+
+Initiate this rollback if any of the following occur after deploying this change:
+
+- Sustained 401s on `/api/v1/internal/*` data-plane routes from legitimate internal traffic that cannot be traced to missing/stale headers (see operational-runbooks troubleshooting)
+- Tenant lookups fail at scale after migration (rows expected but not visible — possible un-adopted NULL rows if migrations were skipped)
+- Per-tenant MCP slug or identity-provider `provider_scope` constraint violations block legitimate registrations
+
+### Step S1 — Roll Back Services in Order: CH → AR → CC
+
+Reverse of the deploy order: stop forwarding traffic on the newest behaviors first — Communication Hub, then Agent Runtime, then Control Center. Restart via `parthenon.ps1` in reverse order so certificates bootstrap with CC up.
+
+**Completion condition:** All services healthy at previous image versions.
+
+### Step S2 — Code Rollback (schema kept — the common case)
+
+If only code rollback is needed, **no `alembic downgrade` is required**: the pre-change code tolerates the NOT NULL tenant columns and treats all rows as root-owned, which matches the adopted state.
+
+**Completion condition:** Internal calls succeed; single-tenant smoke checks pass.
+
+### Step S3 — Database Downgrade (only with a full code rollback)
+
+> **Warning — adopted rows keep their root-tenant binding.** The `b8c9d0e1f2a3` downgrade restores the schema only (platform-wide slug unique, global partial indexes, nullable `tenant_id`); it does **not** re-NULL adopted rows. Once any code performing strict `(tenant_id = own)` matching has served traffic, those rows are invisible to strict predicates if re-NULLed — the NULL-shared slot is retired.
+
+Run `alembic downgrade` back through `c9d0e1f2a3b4` and `b8c9d0e1f2a3` **only if** you are also rolling the application code back to a build that still understands the NULL-shared slot. Verify NULL-tenant row counts match the pre-flight baseline afterwards.
+
+**Completion condition:** `alembic current` reports the pre-deployment revision; NULL counts match the pre-flight baseline.
+
+### Rollback Guardrails
+
+- Do NOT re-NULL adopted rows (do not treat the downgrade as a data reversal) once strict matching has served traffic.
+- Do NOT roll back service images one at a time — the signed-header contract spans CC, AR, and CH; roll them together in CH → AR → CC order.
+- Do NOT run the downgrade without the pre-deployment PostgreSQL backup and the pre-flight NULL-row counts.
+- Do NOT grant direct database access to Agent Runtime or Communication Hub during rollback.

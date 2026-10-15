@@ -55,4 +55,4 @@ The Agent Gateway provides a centralized, secure, and observable entry point for
 
 ## Multi-Tenancy Note
 
-When multi-tenancy is enabled (see [Multi-Tenancy](multi-tenancy.md)), tenant context travels with every verified request, and an external agent's access is confined to its owning tenant's resources. With multi-tenancy disabled (the default), behavior is unchanged — the deployment operates as the root tenant's workspace.
+When multi-tenancy is enabled (see [Multi-Tenancy](multi-tenancy.md) and [Strict Tenant Isolation](strict-tenant-isolation.md)), tenant context travels with every verified request, agent sessions are tenant-bound, and an external agent's access is confined to its owning tenant's resources and decision tools. Internal service calls require a valid signed tenant context and fail closed when it is missing. With multi-tenancy disabled (the default), behavior is unchanged — the deployment operates as the root tenant's workspace.

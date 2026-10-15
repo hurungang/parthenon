@@ -15,7 +15,7 @@ export function useModelUsageLimits() {
   })
 }
 
-export function useModelUsagePosture() {
+export function useModelUsagePosture(enabled = true) {
   return useQuery<ModelUsagePosture[]>({
     queryKey: ['agents', 'guardrails', 'model-usage-posture'],
     queryFn: async () => {
@@ -25,5 +25,6 @@ export function useModelUsagePosture() {
       return data
     },
     refetchInterval: 15000,
+    enabled,
   })
 }

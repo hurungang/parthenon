@@ -21,6 +21,20 @@ class IdentityProviderConfig(Base):
 
     __tablename__ = "identity_provider_configs"
     __table_args__ = (
+        # One provider per (tenant, scope): every tenant uses ONLY its own
+        # provider (strict containment; the SHARED NULL-tenant slot is
+        # retired).  NULLs-distinct leaves tenant-less rows unconstrained
+        # by this constraint; the partial index below covers them.
+        sa.UniqueConstraint(
+            "tenant_id", "provider_scope", name="uq_idp_tenant_scope"
+        ),
+        sa.Index(
+            "uq_idp_legacy_shared_scope",
+            "provider_scope",
+            unique=True,
+            postgresql_where=sa.text("tenant_id IS NULL"),
+            sqlite_where=sa.text("tenant_id IS NULL"),
+        ),
         sa.Index("ix_identity_provider_configs_tenant_id", "tenant_id"),
     )
 
@@ -46,7 +60,11 @@ class IdentityProviderConfig(Base):
     client_id: Mapped[str] = mapped_column(String(500), nullable=False)
     ui_client_id: Mapped[str | None] = mapped_column(
         String(500), nullable=True,
-        comment="Public OIDC client ID for frontend PKCE login (no secret). Only used for user scope."
+        comment=(
+            "Public OIDC client ID used by the frontend browser sign-in "
+            "(PKCE, no secret). Required for user-scope configs; never used "
+            "for agent-scope configs (ignored)."
+        )
     )
     encrypted_client_secret: Mapped[str | None] = mapped_column(
         String(2048), nullable=True, comment="AES-256-GCM encrypted client secret"

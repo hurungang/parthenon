@@ -15,6 +15,8 @@ from datetime import datetime, timezone
 from typing import Any
 
 import httpx
+
+from app.core.internal_http import internal_httpx_client
 from fastapi import APIRouter, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 
@@ -134,7 +136,7 @@ async def load_skills(
         if since_dt:
             payload["since"] = since_dt
 
-        async with httpx.AsyncClient(**cc_client_kwargs) as client:
+        async with internal_httpx_client(**cc_client_kwargs) as client:
             response = await client.post(
                 f"{cc_base}/api/v1/internal/system-tools/skills/resolve",
                 json=payload,

@@ -5,7 +5,7 @@ Parthenon's data model is organised into the following domains. Each section bel
 For entity descriptions, see the module docs in `docs/master/data-model/modules/`.
 Schema source files live in `backend/app/db/models/`.
 
-> **Multi-tenancy (default off):** the `multi_tenancy_enabled` switch lives in `PlatformSetting`. When enabled, nearly every business entity carries a tenant reference (direct on primary business entities; join tables and child records inherit scope via their parent). The former system tenant is the **root tenant** (workspace name/address `root`, `is_root_tenant = true`): it adopts all pre-existing data at migration, hosts platform staff as ordinary members holding platform roles, and is the exclusive home of `platform::` grants — **legacy global (tenant-less) roles are migrated into it**, retiring the global role variant. The **permission containment invariant** holds everywhere: role/policy grants apply only within their owning tenant; wildcard grants never cross tenant boundaries. See the Tenancy and Licensing & Quota sections below.
+> **Multi-tenancy (default off):** the `multi_tenancy_enabled` switch lives in `PlatformSetting`. When enabled, nearly every business entity carries a tenant reference (direct on primary business entities; join tables and child records inherit scope via their parent). **Strict tenant containment** holds on the data plane: every business entity belongs to **exactly one tenant** — there is no NULL-tenant "shared/global" slot; the `tenant IS NULL OR tenant = own` lookup pattern is removed everywhere and only exact tenant matching remains. Legacy NULL-tenant rows are **adopted once into the root tenant** (idempotent one-time migration), and fail-open tenant resolution is gone — an unbound context is a hard error. The former system tenant is the **root tenant** (workspace name/address `root`, `is_root_tenant = true`): it adopts all pre-existing data at migration, hosts platform staff as ordinary members holding platform roles, and is the exclusive home of `platform::` grants — **legacy global (tenant-less) roles are migrated into it**, retiring the global role variant. The **permission containment invariant** holds everywhere: role/policy grants apply only within their owning tenant; wildcard grants never cross tenant boundaries. See the Tenancy and Licensing & Quota sections below.
 
 ---
 
@@ -173,15 +173,17 @@ erDiagram
     }
     IdentityProviderConfig {
         uuid id
-        uuid tenant_id "per-tenant OIDC binding"
-        enum provider_scope
+        uuid tenant_id "per-tenant OIDC binding; shared NULL-tenant slot retired"
+        enum provider_scope "user | agent — unique per (tenant, scope)"
         enum provider_type
         string display_name
         string issuer_url
         string client_id
+        string ui_client_id "public PKCE client for browser sign-in (user scope)"
         string encrypted_client_secret
         string scopes
         json claim_mappings
+        enum default_tenant_role "JIT tenant role preset for first OIDC sign-in, nullable"
         boolean is_enabled
     }
     IdentityProviderConfigAudit {
@@ -216,7 +218,7 @@ erDiagram
     IdentityProviderSetupState ||--o| Identity : "completed_by"
 ```
 
-> **Tenancy notes:** `Permission` remains a **global catalogue** (not tenant-scoped) — grants are tenant-local via roles. `IdentityProviderConfig` gains a tenant reference for **per-tenant OIDC**: sign-in credentials are tenant-bound, and a credential issued by tenant A's provider is rejected outside tenant A. All roles (including migrated legacy global roles) are **tenant-owned**, with grants contained within their owning tenant.
+> **Tenancy notes:** `Permission` remains a **global catalogue** (not tenant-scoped) — grants are tenant-local via roles. `IdentityProviderConfig` is **strictly per-tenant**: each (tenant, scope) slot holds at most one provider (`UNIQUE (tenant_id, provider_scope)`; NULLs-distinct, so the retired legacy shared NULL-tenant slot is covered by a separate partial unique index on `provider_scope WHERE tenant_id IS NULL` pending adoption into the root tenant). There is **no shared dispatch slot**: token validation matches the exact session tenant only — a credential issued by tenant A's provider is rejected outside tenant A. All roles (including migrated legacy global roles) are **tenant-owned**, with grants contained within their owning tenant.
 
 **Sources**: `backend/app/db/models/identity.py`, `backend/app/db/models/identity_provider_config.py`, `backend/app/db/models/identity_provider_config_audit.py`, `backend/app/db/models/identity_provider_setup_state.py`, `backend/app/db/models/super_admin_credentials.py`
 
@@ -342,7 +344,7 @@ erDiagram
 
 **Sources**: `backend/app/db/models/tag_definition.py`, `backend/app/db/models/tag_value.py`, `backend/app/db/models/role.py`, `backend/app/db/models/policy_statement.py`, `backend/app/db/models/policy_action.py`, `backend/app/db/models/policy_resource.py`, `backend/app/db/models/policy_tag_condition.py`, `backend/app/db/models/platform_user.py`, `backend/app/db/models/user_role.py`, `backend/app/db/models/group.py`, `backend/app/db/models/group_role.py`, `backend/app/db/models/user_group.py`, `backend/app/db/models/access_request_batch.py`, `backend/app/db/models/access_request.py`
 
-> **Tenant scoping:** `Role`, `PolicyStatement`, `PolicyAction`, `PolicyResource`, `Group`, `AccessRequest`, `AccessRequestBatch`, and `TagDefinition` carry a direct tenant reference; `UserRole`, `GroupRole`, `UserGroup`, and `PolicyTagCondition` inherit scope via their parents. **Legacy global roles are migrated to the root tenant**: pre-tenancy tenant-less `Role` rows (e.g. the wildcard-grant `system_admin` global role) are re-homed in the root tenant's role space at adoption, so no global (tenant-less) roles remain and the role tenant reference is effectively mandatory for all business roles. The containment invariant applies: no grant crosses tenant boundaries; `platform::` grants exist only in the root tenant's role space.
+> **Tenant scoping:** `Role`, `PolicyStatement`, `PolicyAction`, `PolicyResource`, `Group`, `AccessRequest`, `AccessRequestBatch`, and `TagDefinition` carry a **mandatory** tenant reference (no NULL rows after adoption); `UserRole`, `GroupRole`, `UserGroup`, and `PolicyTagCondition` inherit scope via their parents. **Legacy global roles are migrated to the root tenant**: pre-tenancy tenant-less `Role` rows (e.g. the wildcard-grant `system_admin` global role) are re-homed in the root tenant's role space at adoption, so no global (tenant-less) roles remain and the role tenant reference is mandatory for all business roles. The containment invariant applies to every grant, including wildcards: no grant crosses tenant boundaries; tag keys resolve only within their owning tenant; `platform::` grants exist only in the root tenant's role space.
 
 ---
 
@@ -352,8 +354,9 @@ erDiagram
 erDiagram
     McpServer {
         uuid id
+        uuid tenant_id "mandatory; every server belongs to exactly one tenant"
         string name
-        string slug
+        string slug "unique per tenant (business identity is (tenant, slug))"
         string display_name
         string base_url
         enum status
@@ -379,14 +382,15 @@ erDiagram
     McpTool {
         uuid id
         uuid server_id
-        string name
+        uuid tenant_id "mandatory denormalized FK; always equals its server's tenant"
+        string name "namespaced, unique per tenant"
         string original_name
         boolean is_active
     }
     ToolPermission {
         uuid id
         uuid tool_id
-        uuid role_id
+        uuid role_id "same-tenant grant only"
     }
 
     McpServer ||--o{ McpSession : "has"
@@ -396,8 +400,10 @@ erDiagram
 
 **Business rules:**
 - `passthrough` sessions forward the executing agent's identity to the MCP server at call time; no credentials are stored or required.
-- `slug` is the canonical routing namespace for MCP tools and must be globally unique.
-- At most one `McpSession` per `McpServer` may be marked `is_default = true`; a sole session is automatically treated as default.
+- `slug` is the tool namespace **within its tenant only** — two tenants may each register a server with slug `supabase`; business identity of a server is **(tenant, slug)** (platform-wide slug uniqueness is retired). Tool namespaced names (`slug/tool`) are likewise unique per tenant.
+- `McpTool.tenant_id` is a denormalized, mandatory tenant stamp (defense in depth for hot-path lookups); it must always equal its server's tenant and is kept consistent by tool sync.
+- Tool **permission grants** resolve within the granting tenant: a grant in tenant A never authorizes a tool in tenant B (roles and tools share the same tenant scope).
+- At most one `McpSession` per `McpServer` may be marked `is_default = true`; a sole session is automatically treated as default. Sessions inherit tenant scope through their server.
 
 **Source**: `backend/app/db/models/mcp_hub.py`
 
@@ -409,6 +415,7 @@ erDiagram
 erDiagram
     Skill {
         uuid id
+        uuid tenant_id "mandatory; name unique per tenant"
         string name
         string description
         string instructions
@@ -419,11 +426,12 @@ erDiagram
     SkillToolBinding {
         uuid id
         uuid skill_id
-        uuid tool_id
+        uuid tool_id "same-tenant tool only"
         int order
     }
     Sop {
         uuid id
+        uuid tenant_id "mandatory; name unique per tenant"
         string name
         string description
         string instructions
@@ -465,6 +473,8 @@ erDiagram
 
 **Source**: `backend/app/db/models/skills.py`
 
+**Tenant containment:** `Skill` and `Sop` names are unique **per tenant only** (the NULL-tenant global uniqueness variant is retired). Bindings resolve within the tenant: a skill may only bind tools of its own tenant; SOP delegation steps resolve the target agent type by **(tenant, name)**.
+
 > **Skill versioning**: The `Skill.updated_at` timestamp is surfaced to MCP clients via the `load_skills` response. External agents use this to cache skill definitions locally and only re-download skills whose `updated_at` is newer than their cached copy.
 
 ---
@@ -475,6 +485,7 @@ erDiagram
 erDiagram
     ModelConfig {
         uuid id
+        uuid tenant_id "mandatory; display_name unique per tenant"
         string name
         enum provider_type "12 providers — 4 incumbent (openai, anthropic, litellm_proxy, azure_openai) + 8 new (gemini, mistral, cohere, groq, together, fireworks, perplexity, deepseek). Adding a new value is a release-led activity."
         string api_endpoint
@@ -486,6 +497,7 @@ erDiagram
     }
     AgentRole {
         uuid id
+        uuid tenant_id "mandatory; name unique per tenant"
         string name
         string description
         string slug
@@ -522,6 +534,7 @@ erDiagram
     }
     AgentIdentity {
         uuid id
+        uuid tenant_id "mandatory; name unique per tenant"
         string name
         enum identity_type
         string auth_provider
@@ -538,12 +551,13 @@ erDiagram
     }
     AgentType {
         uuid id
+        uuid tenant_id "mandatory; name unique per tenant"
         string name
         string slug
         string display_name
         string description
-        uuid identity_id
-        uuid role_id
+        uuid identity_id "same tenant"
+        uuid role_id "same tenant"
         string model_id
         string system_instruction
         enum input_type
@@ -595,6 +609,7 @@ erDiagram
     }
     AgentData {
         uuid id
+        uuid tenant_id "mandatory; retrieval matches the calling tenant only"
         uuid agent_type_id
         uuid session_id
         string data_name
@@ -605,6 +620,7 @@ erDiagram
     }
     AgentOutput {
         uuid id
+        uuid tenant_id "mandatory; typed queries match the calling tenant only"
         uuid data_type_id
         uuid agent_type_id
         uuid execution_session_id
@@ -615,10 +631,11 @@ erDiagram
     }
     AgentDataType {
         uuid id
-        string name
-        string slug
+        uuid tenant_id "mandatory; no platform-shared types"
+        string name "unique per tenant"
+        string slug "unique per tenant; canonical query_result identifier"
         string description
-        json fields "array of typed field definitions"
+        json fields "typed field definitions; enum fields carry {value, description} entries"
         datetime created_at
         datetime updated_at
     }
@@ -663,6 +680,8 @@ erDiagram
 ```
 
 **Sources**: `backend/app/db/models/agents.py`, `backend/app/db/models/agent_data.py`, `backend/app/db/models/agent_output.py`, `backend/app/db/models/agent_data_type.py`, `backend/app/db/models/agent_security.py`
+
+**Tenant containment:** `AgentRole`, `AgentIdentity`, `AgentType`, `ModelConfig`, `AgentData`, `AgentOutput`, and `AgentDataType` carry a **mandatory** tenant reference; names and slugs are unique per tenant only (NULL-tenant global variants retired). Bindings resolve within the tenant: agent type → skill/SOP bindings and role grants on tools/skills/SOPs are same-tenant only; SOP delegation steps and A2A delegation **by name** resolve the target agent type by **(tenant, name)** — a name collision across tenants never routes to the wrong tenant's agent. Agent data saves and typed output queries (`get_data`, `get_output`, `query_result`) match the calling tenant only.
 
 ### Agent Execution Data Flow
 
@@ -710,10 +729,11 @@ erDiagram
     }
     AgentDataType {
         uuid id
-        string name
-        string slug
+        uuid tenant_id "mandatory; no platform-shared types"
+        string name "unique per tenant"
+        string slug "unique per tenant; canonical query_result identifier"
         string description
-        json fields "array of typed field definitions"
+        json fields "typed field definitions; enum fields carry {value, description} entries"
         datetime created_at
         datetime updated_at
     }
@@ -728,6 +748,97 @@ erDiagram
 ```
 
 **Source**: `backend/app/db/models/agent_data.py`, `backend/app/db/models/agent_output.py`, `backend/app/db/models/agent_data_type.py`
+
+---
+
+## Decision Tools
+
+Tenant-authored decision tools — the decision-making counterpart of built-in system tools. They mirror system-tool conventions (name, description, tenant scoping, `decision____<name>` prefix applied only at the tool surface) so skills, agents, SOPs, roles/permissions, and MCP exposure work with the existing tool consumption model. Tool names are unique **within a tenant only**; resolution is strictly per-tenant.
+
+Each tool selects an **enabled decision model** from a multi-vendor **Decision Model Provider** registry (formerly the single "System One Provider"); the selection resolves at evaluation time to a provider + model pair. Guardrail configuration on decision models reuses the LLM guardrail tables via a `config_source` scope discriminator.
+
+```mermaid
+erDiagram
+    DecisionModelProvider {
+        uuid id
+        uuid tenant_id "owning tenant, optional, survives tenant deletion"
+        enum vendor_type "decision vendor type, extensible (e.g. typesafe)"
+        string display_name "unique per vendor type within tenant"
+        string base_url "vendor endpoint"
+        string default_model "fallback for migrated tools"
+        string encrypted_credential "AES-256 encrypted, never returned"
+        boolean enabled "vendor-level switch, cascades to all models"
+        datetime created_at
+        datetime updated_at
+    }
+    DecisionModelAvailability {
+        uuid id
+        uuid tenant_id
+        uuid decision_model_provider_id "FK to parent provider"
+        string model_name "vendor model identifier, unique per provider"
+        boolean is_disabled "per-model toggle"
+        enum disabled_reason "manual | vendor_cascaded"
+        datetime created_at
+        datetime updated_at
+    }
+    DecisionTool {
+        uuid id
+        uuid tenant_id "mandatory; name unique per tenant"
+        string name "stored plain; 'decision____' prefix applied at tool surface"
+        string purpose "author-provided intent; drives description generation"
+        string description "auto-generated from the definition, stored"
+        uuid input_data_type_id "FK to AgentDataType, nullable (state-only tools)"
+        uuid output_data_type_id "FK to AgentDataType, nullable"
+        json state_preset "input-only mappings: input/agent data to decision state fields"
+        float act_threshold "default 0.9"
+        float confirm_threshold "default 0.7"
+        uuid decision_model_availability_id "FK to selected enabled decision model"
+        string provider_model "legacy free-text, superseded by availability FK"
+        enum status "draft | active | disabled"
+        boolean enabled
+    }
+    DecisionToolQuestion {
+        uuid id
+        uuid decision_tool_id
+        int ordering
+        string question_key "unique per tool"
+        enum question_type "choice | score | noul"
+        string instructions
+        json criteria_options
+        boolean is_required
+    }
+    ModelGuardrailConfiguration {
+        uuid id
+        uuid tenant_id
+        string config_source "model_config | decision_provider"
+        uuid decision_provider_id "nullable FK; set only for decision rows"
+        string model_name "denormalised; decision rows keep model_id NULL"
+        enum period "hour | day | week | month"
+        int limit_value
+        enum enforcement_posture "terminate | observe_only"
+        boolean is_active
+    }
+
+    Tenant ||--o{ DecisionTool : "scopes (name unique per tenant)"
+    DecisionModelProvider ||--o{ DecisionModelAvailability : "offers models"
+    DecisionModelAvailability |o--o{ DecisionTool : "selected by"
+    AgentDataType |o--o{ DecisionTool : "types input of"
+    AgentDataType |o--o{ DecisionTool : "types output of"
+    DecisionTool ||--o{ DecisionToolQuestion : "contains"
+    DecisionModelProvider ||--o{ ModelGuardrailConfiguration : "guardrails scoped to (config_source=decision_provider)"
+```
+
+**Business rules:**
+- **Model selection is structured**: a tool references a `DecisionModelAvailability` row and only enabled models (provider enabled + row not disabled) are selectable; a vendor-level disable cascades to all its model rows while preserving manually-disabled state. Disabled/unavailable selections surface an actionable error at evaluation time. The free-text `provider_model` field is legacy only.
+- Deletion of a provider is blocked while any decision tool still references one of its models.
+- **Guardrail scoping**: `ModelGuardrailConfiguration` and `ModelUsagePosture` rows carry `config_source` (`model_config` for LLM vendors, `decision_provider` for decision providers); decision rows keep `model_id` NULL and set the nullable `decision_provider_id` FK, with a partial unique index on `(decision_provider_id, model_name, period)`. The LLM and decision scopes never mix in either direction.
+- `state_preset` holds **input-only mappings** — it maps input/agent data into the decision state; output data types are never mapped into the preset.
+- **Questions are auto-derivable** from the tool's output data type (each schema field yields a typed question); `DecisionToolQuestion` rows persist the authored/ordered form, unique per tool by `question_key`.
+- **Readiness**: a decision tool is `ready` when **both** input and output data types are configured (`input_data_type_id` + `output_data_type_id` non-null).
+- Input/output schemas are **not stored inline** — they reference the shared `AgentDataType` registry, which protects referenced types from deletion.
+- Referenced data types must belong to the same tenant; execution results (`DecisionExecutionResult`, see Results) are tenant-filtered append-only history.
+
+**Sources**: `backend/app/db/models/decision_tools.py`, `backend/app/db/models/system_one_provider_config.py`, `backend/app/db/models/decision_model_availability.py`, `backend/app/db/models/agent_data_type.py`, `backend/app/db/models/model_guardrail_configuration.py`
 
 ---
 
@@ -998,11 +1109,12 @@ erDiagram
     }
     ScheduledJob {
         uuid id
-        string name
+        uuid tenant_id "mandatory at creation; dispatch never falls back cross-tenant"
+        string name "unique per tenant"
         string description
         string cron_expression
         enum target_type "agent"
-        uuid target_id
+        uuid target_id "same tenant"
         json payload
         enum status "active|paused|deleted"
         string scheduler_job_id
@@ -1026,6 +1138,7 @@ erDiagram
     }
     NotificationChannel {
         uuid id
+        uuid tenant_id "mandatory; name unique per tenant"
         string name
         string description
         enum channel_type "SMTP, EMAIL_API, WEBHOOK, MESSENGER"
@@ -1044,6 +1157,7 @@ erDiagram
     }
     RecipientGroup {
         uuid id
+        uuid tenant_id "mandatory; name and slug unique per tenant"
         string name
         string slug
         string description
@@ -1089,11 +1203,15 @@ erDiagram
 - `GroupChannelMapping` — many-to-many association between recipient groups and channels.
 - `NotificationLog` — immutable delivery record per channel attempt. Records source (`SOP`, `AGENT`, or `MANUAL`), delivery status, and any error detail.
 
+**Dispatch tenant binding:** recipient groups, channels, and their mappings are tenant-bound; dispatch resolves the group and its channel mappings within the calling tenant only. The global NULL-tenant "shared slot" is no longer a dispatch target, and channel lookup by id also verifies tenant containment.
+
 **Sources**: `backend/app/db/models/results.py`, `backend/app/db/models/scheduling.py`, `backend/app/db/models/notifications.py`, `backend/app/db/models/identity.py`
 
 ---
 
 ## Cross-Domain Relationship Map
+
+> **Cross-domain tenant isolation:** everything below resolves within the exact session tenant only — no cross-tenant fallback, sharing, or visibility. Tool names (`slug/tool`), A2A and SOP delegation **by name**, data type slug/name resolution (`query_result`), notification dispatch (recipient group → channels), skill/SOP/agent-type binding validation, and role permission grants (including wildcards) are all **tenant-scoped**. When multi-tenancy is disabled, everything binds to the root tenant — behavior is identical, never tenant-less.
 
 ```mermaid
 erDiagram

@@ -99,4 +99,4 @@ Agent Outputs introduces schema-validated, typed agent results as first-class pl
 
 ## Multi-Tenancy Note
 
-When multi-tenancy is enabled (see [Multi-Tenancy](multi-tenancy.md)), agent outputs are tenant-owned; only the owning tenant's members and agents can view, search, or export them. With multi-tenancy disabled (the default), behavior is unchanged — the deployment operates as the root tenant's workspace.
+When multi-tenancy is enabled (see [Multi-Tenancy](multi-tenancy.md) and [Strict Tenant Isolation](strict-tenant-isolation.md)), agent outputs are tenant-owned: only the owning tenant's members and agents can view, search, or export them, and the `query_result` system tool resolves the data type and queries outputs strictly within the calling tenant — a data type name that exists in two tenants yields only the calling tenant's results. With multi-tenancy disabled (the default), behavior is unchanged — the deployment operates as the root tenant's workspace.

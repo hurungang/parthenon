@@ -20,6 +20,10 @@ import {
   useUpdateModelUsageLimit,
   type ModelUsageGuardrailCreatePayload,
 } from '../../hooks/useModelUsageGuardrailMutations'
+import {
+  useCreateDecisionGuardrail,
+  useUpdateDecisionGuardrail,
+} from '../../hooks/useDecisionGuardrails'
 import type {
   ModelAvailabilityEntry,
   ModelGuardrailEnforcementPosture,
@@ -40,6 +44,13 @@ interface GuardrailFormProps {
   vendorDisplayName: string
   /** Available models, used to resolve the (config_id, model_name) pair. */
   availableModels: AvailableModel[]
+  /**
+   * When set, the form operates in DECISION scope (FIX-20261014-003000):
+   * create/update go through the decision-scoped `/system-one/guardrails`
+   * endpoints (same guardrail tables, `config_source='decision_provider'`)
+   * instead of the LLM `/agents/guardrails` endpoints.
+   */
+  decisionProviderId?: string
   /**
    * When provided, the form operates in *edit* mode: the fields are
    * pre-populated from this guardrail and the submit button calls
@@ -74,14 +85,29 @@ export function AddGuardrailForm({
   vendorConfigId,
   vendorDisplayName,
   availableModels,
+  decisionProviderId,
   existing,
   onSaved,
   onCancel,
 }: GuardrailFormProps): ReactNode {
   const { t } = useTranslation()
-  const createMutation = useCreateModelUsageLimit()
-  const updateMutation = useUpdateModelUsageLimit()
+  const llmCreateMutation = useCreateModelUsageLimit()
+  const llmUpdateMutation = useUpdateModelUsageLimit()
+  const decisionProviderIdStr = decisionProviderId ?? null
+  // Hooks must be unconditional; decision mutations are inert in LLM scope.
+  const decisionCreateMutation = useCreateDecisionGuardrail(
+    decisionProviderIdStr ?? '',
+  )
+  const decisionUpdateMutation = useUpdateDecisionGuardrail()
+  const isDecision = decisionProviderIdStr != null
   const isEdit = existing != null
+  const isPending = isDecision
+    ? isEdit
+      ? decisionUpdateMutation.isPending
+      : decisionCreateMutation.isPending
+    : isEdit
+      ? llmUpdateMutation.isPending
+      : llmCreateMutation.isPending
   const [dialogError, setDialogError] = useState<unknown>(null)
   const [period, setPeriod] = useState<ModelGuardrailPeriod | ''>(
     existing?.period ?? '',
@@ -138,15 +164,41 @@ export function AddGuardrailForm({
 
     try {
       if (isEdit && existing != null) {
-        await updateMutation.mutateAsync({
-          limitId: existing.id,
-          payload: {
-            limit_value: Number(limitValue),
-            unit,
-            enforcement_posture: posture,
-            is_active: isActive,
-          },
+        if (isDecision) {
+          await decisionUpdateMutation.mutateAsync({
+            guardrailId: existing.id,
+            payload: {
+              limit_value: Number(limitValue),
+              unit,
+              enforcement_posture: posture,
+              is_active: isActive,
+            },
+          })
+        } else {
+          await llmUpdateMutation.mutateAsync({
+            limitId: existing.id,
+            payload: {
+              limit_value: Number(limitValue),
+              unit,
+              enforcement_posture: posture,
+              is_active: isActive,
+            },
+          })
+        }
+      } else if (isDecision) {
+        await decisionCreateMutation.mutateAsync({
+          model_name: model.model_name,
+          period,
+          limit_value: Number(limitValue),
+          unit,
+          enforcement_posture: posture,
+          is_active: isActive,
         })
+        setPeriod('')
+        setLimitValue('')
+        setUnit('k')
+        setPosture('terminate')
+        setIsActive(true)
       } else {
         const payload: ModelUsageGuardrailCreatePayload = {
           model_id: model.model_name,
@@ -158,7 +210,7 @@ export function AddGuardrailForm({
           enforcement_posture: posture,
           is_active: isActive,
         }
-        await createMutation.mutateAsync(payload)
+        await llmCreateMutation.mutateAsync(payload)
         setPeriod('')
         setLimitValue('')
         setUnit('k')
@@ -182,7 +234,6 @@ export function AddGuardrailForm({
     onCancel?.()
   }
 
-  const isPending = isEdit ? updateMutation.isPending : createMutation.isPending
   const dataTestId = isEdit ? 'edit-guardrail-form' : 'add-guardrail-form'
 
   return (

@@ -1,0 +1,446 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Parthenon — strict-tenant-isolation UX Prototype (as-built)</title>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{--primary:#2563EB;--primary-dark:#1D4ED8;--bg:#F5F7FA;--surface:#FFF;--border:#E0E0E0;
+--text:#212121;--text2:#757575;--success:#4CAF50;--warning:#FF9800;--error:#F44336;--info:#2196F3;
+--shadow:0 1px 3px rgba(0,0,0,.12);--radius:8px}
+body{font-family:'Inter','Roboto',system-ui,sans-serif;background:var(--bg);color:var(--text);font-size:14px;line-height:1.5}
+button{cursor:pointer;font-family:inherit;font-size:14px}
+input,select{font-family:inherit;font-size:14px}
+
+/* demo chrome */
+.demo-nav{position:fixed;top:0;left:0;right:0;height:44px;background:#1E293B;color:#fff;display:flex;align-items:center;gap:6px;padding:0 14px;z-index:500;overflow-x:auto}
+.demo-nav strong{font-size:12px;margin-right:8px;white-space:nowrap}
+.demo-nav button{background:#334155;color:#E2E8F0;border:none;border-radius:6px;padding:5px 10px;font-size:12px;white-space:nowrap}
+.demo-nav button:hover{background:#475569}
+.demo-nav button.active{background:var(--primary);color:#fff}
+.screen{display:none;max-width:880px;margin:64px auto 48px}
+.screen.active{display:block}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow)}
+.asbuilt{font-size:11px;color:var(--text2);font-style:italic;margin:4px 0 14px}
+
+/* auth screens */
+.auth-wrap{max-width:400px;margin:0 auto}
+.auth-card{padding:36px 32px;text-align:center}
+.auth-card .lock{font-size:44px}
+.auth-card h1{font-size:22px;margin:8px 0 2px}
+.muted{color:var(--text2)}
+.field{text-align:left;margin:12px 0}
+.field label{display:block;font-size:12px;font-weight:600;color:var(--text2);margin-bottom:4px}
+.field input[type=text],.field input[type=email],.field input[type=password],.field select,.field textarea{width:100%;padding:9px 10px;border:1px solid var(--border);border-radius:6px}
+.hint{font-size:11px;color:var(--text2);margin-top:3px}
+.btn{display:inline-flex;align-items:center;gap:6px;padding:9px 16px;border-radius:6px;border:none;font-weight:500}
+.btn-block{width:100%;justify-content:center}
+.btn-primary{background:var(--primary);color:#fff}
+.btn-primary:hover{background:var(--primary-dark)}
+.btn-primary:disabled{background:#93C5FD;cursor:not-allowed}
+.btn-secondary{background:var(--surface);color:var(--text);border:1px solid var(--border)}
+.btn-ghost{background:none;color:var(--text2);font-size:12.5px;padding:6px}
+.btn-ghost:hover{background:#EDF2F7;border-radius:6px}
+.alert{padding:10px 12px;border-radius:6px;font-size:13px;text-align:left;margin:10px 0;display:flex;gap:8px}
+.alert-warning{background:#FEF3C7;color:#92400E}
+.alert-error{background:#FEE2E2;color:#B91C1C}
+.alert-info{background:#DBEAFE;color:#1D4ED8}
+.alert-success{background:#DCFCE7;color:#15803D}
+.divider{display:flex;align-items:center;gap:10px;color:var(--text2);font-size:11px;text-transform:uppercase;margin:16px 0}
+.divider::before,.divider::after{content:'';flex:1;height:1px;background:var(--border)}
+.check{display:flex;align-items:center;gap:8px;font-size:13px;text-align:left;margin:8px 0;cursor:pointer}
+.addr{display:flex}
+.addr span{padding:9px 10px;background:#F1F5F9;border:1px solid var(--border);font-family:monospace;font-size:13px;color:var(--text2);white-space:nowrap}
+.addr span:first-child{border-right:none;border-radius:6px 0 0 6px}
+.addr input{border-radius:0;border-left:none;border-right:none;font-family:monospace}
+.addr span:last-child{border-left:none;border-radius:0 6px 6px 0}
+
+/* modal */
+.overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:400;align-items:center;justify-content:center}
+.overlay.open{display:flex}
+.modal{background:var(--surface);border-radius:12px;width:92%;max-width:440px;max-height:86vh;overflow-y:auto}
+.modal-lg{max-width:760px}
+.modal-head{padding:22px 24px 6px;text-align:center;font-weight:600;font-size:16px}
+.modal-body{padding:8px 24px 20px}
+.modal-foot{padding:12px 24px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:8px}
+.x{position:float}
+
+/* tenant picker */
+.picker-item{display:flex;align-items:center;gap:12px;padding:11px 12px;border-radius:8px;cursor:pointer}
+.picker-item:hover{background:#F1F5F9}
+.picker-item.selected{background:#EFF6FF;outline:1px solid #BFDBFE}
+.picker-item .biz{font-size:22px}
+.picker-item .nm{font-weight:500}
+.picker-item .role{font-size:12px;color:var(--text2)}
+.chip{display:inline-flex;align-items:center;font-size:11px;padding:2px 8px;border-radius:999px;background:#E5E7EB;color:#374151;margin-left:6px}
+.chip-default{background:#DBEAFE;color:#1D4ED8}
+
+/* tables */
+.table-wrap{overflow-x:auto}
+table{width:100%;border-collapse:collapse}
+th,td{text-align:left;padding:10px 14px;border-bottom:1px solid var(--border);font-size:13px;vertical-align:top}
+th{font-size:11px;text-transform:uppercase;letter-spacing:.4px;color:var(--text2);background:#FAFAFA}
+code,.mono{font-family:ui-monospace,Menlo,monospace;font-size:12.5px}
+.chip-status{display:inline-block;font-size:11px;font-weight:600;padding:3px 10px;border-radius:999px;cursor:default}
+.st-active{background:#DCFCE7;color:#15803D}
+.st-off{background:#F3F4F6;color:#6B7280}
+.st-notready{background:#FEF3C7;color:#92400E;border-bottom:1px dotted #92400E}
+.chip-configured{background:#DCFCE7;color:#15803D}
+.view-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
+.view-head h2{font-size:20px}
+.icon-btn{background:none;border:none;padding:4px 6px;border-radius:4px}
+.icon-btn:hover{background:#F1F5F9}
+
+/* data type dialog */
+.field-row{border:1px solid var(--border);border-radius:8px;padding:10px;margin:8px 0;display:flex;gap:8px;flex-wrap:wrap;align-items:flex-start}
+.field-row input,.field-row select{padding:7px 8px;border:1px solid var(--border);border-radius:6px}
+.enum-editor{width:100%;margin-left:18px;padding:8px 10px;background:#F8FAFC;border-left:3px solid #CBD5E1;border-radius:6px}
+.enum-row{display:flex;gap:8px;align-items:center;margin:5px 0}
+.enum-row input{padding:6px 8px;border:1px solid var(--border);border-radius:6px}
+.enum-row input.ev{flex:1;min-width:100px}
+.enum-row input.ed{flex:2;min-width:170px}
+
+/* decision tool form */
+.adv-toggle{display:flex;align-items:center;gap:8px;padding:10px 0;cursor:pointer;font-weight:600}
+.adv-toggle .chev{transition:transform .2s;font-size:11px;color:var(--text2)}
+.adv-body{display:none;border-top:1px solid var(--border);padding-top:10px}
+.adv-body.open{display:block}
+.adv-body.open + .chev-open{display:inline}
+.auto-chip{display:inline-block;font-size:11px;padding:3px 9px;border-radius:999px;border:1px solid #86EFAC;color:#15803D;background:#F0FDF4;margin:2px}
+.mapper-row{display:flex;gap:8px;align-items:center;margin:6px 0}
+.mapper-row .sk{min-width:190px;font-size:13px}
+.preview{background:#FAFAFA;border:1px solid var(--border);border-radius:6px;padding:12px;font-size:12px;white-space:pre-wrap;color:#374151}
+.row2{display:flex;gap:10px;flex-wrap:wrap}
+.row2 .field{flex:1;min-width:130px}
+</style>
+</head>
+<body>
+
+<nav class="demo-nav">
+  <strong>strict-tenant-isolation · as-built UX prototype</strong>
+  <button data-s="s-finder" class="active" onclick="go(this,'s-finder')">1 · Workspace finder</button>
+  <button data-s="s-card" onclick="go(this,'s-card')">2 · Tenant sign-in card</button>
+  <button data-s="s-picker" onclick="go(this,'s-picker')">3 · Tenant picker</button>
+  <button data-s="s-decision" onclick="go(this,'s-decision')">4 · Decision tools</button>
+  <button data-s="s-datatype" onclick="go(this,'s-datatype')">5 · Data types / enum</button>
+  <button data-s="s-sysone" onclick="go(this,'s-sysone')">6 · System One provider</button>
+</nav>
+
+<!-- ═══ 1. WORKSPACE FINDER ═══ -->
+<div class="screen active" id="s-finder">
+  <div class="auth-wrap"><div class="card auth-card">
+    <div class="lock">🔒</div>
+    <h1>Parthenon</h1>
+    <p class="muted" style="font-size:13px;margin-bottom:14px">Sign in to your workspace</p>
+    <div class="alert alert-error" id="findErr" style="display:none">No workspace found at this address. Check the address or contact your administrator.</div>
+    <div class="field">
+      <label>Workspace address</label>
+      <div class="addr">
+        <span>https://</span>
+        <input type="text" id="wsInput" placeholder="acme" style="flex:1" oninput="slugHint()" onkeydown="if(event.key==='Enter')findWs()">
+        <span>.parthenon.app</span>
+      </div>
+      <div class="hint" id="slugHint" style="display:none"></div>
+    </div>
+    <label class="check"><input type="checkbox" id="rememberWs" checked> Remember this workspace</label>
+    <button class="btn btn-primary btn-block" id="findBtn" onclick="findWs()">Continue</button>
+    <div class="divider">or</div>
+    <p class="muted" style="font-size:12.5px">No workspace yet? <a href="#" onclick="alert('Routes to /signup — organization registration flow');return false" style="color:var(--primary)">Create your organization</a></p>
+    <div style="margin-top:18px">
+      <button class="btn btn-ghost" onclick="alert('Break-glass super-admin entry — available ONLY at the root workspace (slug = root or tenancy off). Hidden on customer workspace cards.')">Platform admin sign-in</button>
+    </div>
+  </div></div>
+  <p class="asbuilt" style="text-align:center">Source: LoginPage.tsx — extractSlugCandidate tolerates pasted hosts/URLs; unknown slugs are indistinguishable from deleted tenants (uniform neutral error, no enumeration). Remembered workspace auto-skips the finder after public discovery re-verification.</p>
+</div>
+
+<!-- ═══ 2. TENANT SIGN-IN CARD ═══ -->
+<div class="screen" id="s-card">
+  <div class="auth-wrap"><div class="card auth-card">
+    <div class="lock">🔒</div>
+    <p class="muted" style="font-size:13px">Workspace of</p>
+    <h1>Acme Corporation</h1>
+    <p class="muted" style="font-size:12px;margin-bottom:16px">acme.parthenon.app</p>
+    <div class="field"><label>Email</label><input type="email" placeholder="you@acme.com"></div>
+    <div class="field"><label>Password</label><input type="password" placeholder="••••••••"></div>
+    <button class="btn btn-primary btn-block">Sign In</button>
+    <div class="divider">or</div>
+    <button class="btn btn-secondary btn-block">🔐 Continue with Acme SSO&nbsp;<span class="chip">Keycloak — tenant-scoped</span></button>
+    <div style="margin-top:18px">
+      <button class="btn btn-ghost" onclick="go(document.querySelector('[data-s=s-finder]'),'s-finder')">Not your workspace?</button>
+    </div>
+  </div></div>
+  <p class="asbuilt" style="text-align:center">Source: LoginPage.tsx — the SSO provider is resolved per bound tenant (provider discovery keyed by the X-Tenant-bound context, refreshed via refreshProviders() after binding). Password sign-in is always available on tenant workspaces; the address-resolved card never gates on sign_in_ready (fresh tenants have no OIDC yet). "Not your workspace?" clears the remembered slug, the per-tab session binding AND the host-derived store tenant.</p>
+</div>
+
+<!-- ═══ 3. TENANT PICKER ═══ -->
+<div class="screen" id="s-picker">
+  <div class="card" style="padding:24px">
+    <h2 style="font-size:18px;margin-bottom:4px">TenantSessionGate → TenantPicker</h2>
+    <p class="muted" style="font-size:13px;margin-bottom:14px">Rendered inside the authenticated shell when a multi-org user's token is not yet bound to a tenant. Skipped entirely when the session is tenant-bound (bound workspace slug matches an active membership, or the token carries a tenant claim).</p>
+    <button class="btn btn-primary" onclick="openM('mPicker')">Show tenant picker</button>
+    <button class="btn btn-secondary" onclick="alert('Session tenant-bound → gate inert. No picker, no prompt — straight into the workspace.')">Simulate tenant-bound session (gate skipped)</button>
+  </div>
+  <p class="asbuilt">Source: TenantSessionGate.tsx + TenantPicker.tsx — selecting a DIFFERENT organization re-runs OIDC sign-in against that org's provider (one session = one tenant; a fresh token with the matching tenant claim is required). Selecting the current tenant just continues. Stale bindings that don't match the current token's memberships are cleared so the picker can decide fresh. Inert for super admins and single-org users.</p>
+</div>
+
+<!-- ═══ 4. DECISION TOOLS ═══ -->
+<div class="screen" id="s-decision">
+  <div class="view-head">
+    <div><h2>Decision Tools</h2><div class="muted" style="font-size:13px">Tenant-scoped decision tools exposed as decision____&lt;name&gt; MCP tools with auto-generated descriptions</div></div>
+    <button class="btn btn-primary" onclick="dtOpenCreate()">+ Add Tool</button>
+  </div>
+  <div class="card table-wrap">
+    <table>
+      <thead><tr><th>Tool Name</th><th>Purpose</th><th>Generated Description</th><th>Status</th><th>Actions</th></tr></thead>
+      <tbody>
+        <tr>
+          <td><code>decision____contract-risk-review</code></td>
+          <td>Review supplier contracts for risk</td>
+          <td class="muted" title="Decision tool 'contract-risk-review': evaluates predefined System One questions…">Decision tool 'contract-risk-review': evaluates predefined System One…</td>
+          <td><span class="chip-status st-active">Active</span></td>
+          <td><button class="icon-btn" onclick="dtOpenEdit(true)" title="Edit">✏️</button><button class="icon-btn" onclick="alert('Delete confirmation dialog')" title="Delete">🗑️</button></td>
+        </tr>
+        <tr>
+          <td><code>decision____incident-triage</code></td>
+          <td>Triage incoming incident reports</td>
+          <td class="muted">Decision tool 'incident-triage': evaluates predefined System One…</td>
+          <td><span class="chip-status st-notready" title="Not Ready: tool is enabled but has no input data type. Assign an input data type and an output data type to make it executable.">Not Ready ⓘ</span></td>
+          <td><button class="icon-btn" onclick="dtOpenEdit(false)" title="Edit">✏️</button><button class="icon-btn" onclick="alert('Delete confirmation dialog')" title="Delete">🗑️</button></td>
+        </tr>
+        <tr>
+          <td><code>decision____expense-approval</code></td>
+          <td>Approve or escalate expense requests</td>
+          <td class="muted">Decision tool 'expense-approval': evaluates predefined System One…</td>
+          <td><span class="chip-status st-off">Disabled</span></td>
+          <td><button class="icon-btn" onclick="dtOpenEdit(true)" title="Edit">✏️</button><button class="icon-btn" onclick="alert('Delete confirmation dialog')" title="Delete">🗑️</button></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="asbuilt">Source: DecisionToolsPage.tsx — a SINGLE status chip per row: warning "Not Ready" (with tooltip detail) when ready === false (enabled but missing input/output data types), green "Active" when ready and enabled, grey "Disabled" otherwise. Tool names are unique within the caller's tenant.</p>
+</div>
+
+<!-- ═══ 5. DATA TYPES (enum editor entry point) ═══ -->
+<div class="screen" id="s-datatype">
+  <div class="view-head">
+    <div><h2>Agent Data Types</h2><div class="muted" style="font-size:13px">Define reusable typed schemas — string, number, boolean, date, enum (enum values with per-value descriptions)</div></div>
+    <button class="btn btn-primary" onclick="openM('mDataType')">+ Create Data Type</button>
+  </div>
+  <div class="card table-wrap">
+    <table>
+      <thead><tr><th>Name</th><th>Slug</th><th>Fields</th><th>Actions</th></tr></thead>
+      <tbody>
+        <tr><td>Contract Record</td><td class="mono">contract-record</td><td class="muted">supplier (string), risk_level (enum: low/medium/high), reviewed (boolean)</td><td><button class="icon-btn" onclick="openM('mDataType')">✏️</button></td></tr>
+        <tr><td>Incident Report</td><td class="mono">incident-report</td><td class="muted">title (string), severity (enum), occurred (date)</td><td><button class="icon-btn" onclick="openM('mDataType')">✏️</button></td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="asbuilt">Source: DataTypeFormDialog.tsx + EnumValuesEditor.tsx — the enum values editor renders as an indented nested sub-block under the enum field row (left border + hover background), with one row per value: value + optional description. Rows are owned locally so empty in-progress rows stay visible; only non-empty values are committed. Slug auto-generates from name on create.</p>
+</div>
+
+<!-- ═══ 6. SYSTEM ONE PROVIDER CONFIG ═══ -->
+<div class="screen" id="s-sysone">
+  <div class="view-head">
+    <div><h2>System One Providers</h2><div class="muted" style="font-size:13px">Configured-model providers for decision tools — per-tenant deployment, editable base URL</div></div>
+    <button class="btn btn-primary" onclick="soOpenCreate()">+ Add Provider</button>
+  </div>
+  <div class="card table-wrap">
+    <table>
+      <thead><tr><th>Display Name</th><th>Base URL</th><th>Default Model</th><th>API Key</th><th>Enabled</th><th>Actions</th></tr></thead>
+      <tbody>
+        <tr>
+          <td>Production System One</td>
+          <td class="mono">https://systemone.acme.internal/api</td>
+          <td class="mono">jev-latest</td>
+          <td><span class="chip-status chip-configured">Configured ✓</span></td>
+          <td><span class="chip-status st-active">On</span></td>
+          <td><button class="icon-btn" onclick="soOpenEdit()">✏️</button> <button class="icon-btn" onclick="alert('Connection test: POST /test-connection → ✓ reachable, model list OK')">🔌</button> <button class="icon-btn" onclick="alert('Delete confirmation')">🗑️</button></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="asbuilt">Source: SystemOneProviderConfigPage.tsx — base URL is editable per tenant (each tenant has its own deployment) with a full-endpoint hint; the API key is WRITE-ONLY: never prefilled from fetched data, on edit an empty value means "unchanged", the table shows a "Configured" chip instead of ever displaying the key. Save succeeds without touching the key; a Snackbar confirms.</p>
+</div>
+
+<!-- ═══════════ MODALS ═══════════ -->
+
+<!-- Tenant picker modal -->
+<div class="overlay" id="mPicker" onclick="if(event.target===this)closeM('mPicker')">
+  <div class="modal">
+    <div class="modal-head">🏢<br>Choose an organization</div>
+    <div class="modal-body">
+      <p class="muted" style="text-align:center;font-size:13px;margin-bottom:12px">You are a member of multiple organizations. Pick one to continue — each organization signs in with its own identity provider.</p>
+      <div class="picker-item selected" onclick="pickTenant(this,'Acme Corporation')">
+        <span class="biz">🏢</span><div style="flex:1"><div class="nm">Acme Corporation<span class="chip chip-default">Default</span></div><div class="role">Tenant admin</div></div><span class="muted">current</span>
+      </div>
+      <div class="picker-item" onclick="pickTenant(this,'Globex Industries')">
+        <span class="biz">🏭</span><div style="flex:1"><div class="nm">Globex Industries</div><div class="role">Member</div></div>
+      </div>
+      <p class="muted" style="text-align:center;font-size:11.5px;margin-top:12px">Signed in as a member of Acme Corporation — selecting it continues into the workspace.</p>
+    </div>
+  </div>
+</div>
+
+<!-- Data type modal with nested enum editor -->
+<div class="overlay" id="mDataType" onclick="if(event.target===this)closeM('mDataType')">
+  <div class="modal modal-lg">
+    <div class="modal-head" style="text-align:left">Create Data Type</div>
+    <div class="modal-body">
+      <div class="row2">
+        <div class="field" style="flex:1"><label>Name</label><input type="text" id="dtName" placeholder="e.g. Contract Record" oninput="dtSyncSlug()"></div>
+        <div class="field" style="flex:1"><label>Slug</label><input type="text" id="dtSlug" placeholder="contract-record"><div class="hint">Auto-generated from name, editable</div></div>
+      </div>
+      <div class="field"><label>Description</label><textarea rows="2" placeholder="Describe the purpose of this data type"></textarea></div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin:10px 0 4px">
+        <strong style="font-size:13px">Fields</strong>
+        <button class="btn btn-secondary" style="padding:5px 10px;font-size:12px" onclick="dtAddField()">+ Add Field</button>
+      </div>
+      <div id="dtFields">
+        <div class="field-row">
+          <input type="text" placeholder="Field name" style="flex:1;min-width:140px" value="risk_level">
+          <select onchange="dtTypeChange(this)"><option>string</option><option>number</option><option>boolean</option><option>date</option><option selected>enum</option></select>
+          <input type="text" placeholder="Field description (hint for the model)" style="flex:2;min-width:190px">
+          <label class="check" style="margin:6px 0 0"><input type="checkbox"> Required</label>
+          <button class="icon-btn" onclick="this.closest('.field-row').remove()">🗑️</button>
+          <div class="enum-editor" style="display:block">
+            <div class="hint" style="margin-bottom:4px">Enum values — each value may carry a description passed to the model</div>
+            <div class="enum-row"><input class="ev" type="text" placeholder="value" value="low"><input class="ed" type="text" placeholder="Description (e.g. no remediation needed)"><button class="icon-btn">🗑️</button></div>
+            <div class="enum-row"><input class="ev" type="text" placeholder="value" value="medium"><input class="ed" type="text" placeholder="Description (e.g. review within 30 days)"><button class="icon-btn">🗑️</button></div>
+            <div class="enum-row"><input class="ev" type="text" placeholder="value" value="high"><input class="ed" type="text" placeholder="Description"><button class="icon-btn">🗑️</button></div>
+            <button class="btn btn-secondary" style="padding:4px 10px;font-size:12px;margin-top:4px" onclick="dtAddEnum(this)">+ Add Value</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="modal-foot"><button class="btn btn-secondary" onclick="closeM('mDataType')">Cancel</button><button class="btn btn-primary" onclick="alert('Saved — enum rows with a non-empty value are committed (bare strings when no description)')">Save</button></div>
+  </div>
+</div>
+
+<!-- Decision tool form modal -->
+<div class="overlay" id="mTool" onclick="if(event.target===this)closeM('mTool')">
+  <div class="modal modal-lg">
+    <div class="modal-head" style="text-align:left" id="toolDlgTitle">Add Decision Tool</div>
+    <div class="modal-body">
+      <div class="alert alert-warning" id="toolReadiness" style="display:none">⚠️ Enabling requires an input data type and an output data type. Assign both to make the tool executable — the Save button stays disabled until then (inline pre-validation instead of a raw 422).</div>
+      <div class="alert alert-info">✅ System One provider configured — model <strong>jev-latest</strong> (system-one). AI draft generation available.</div>
+      <div class="row2">
+        <div class="field" style="flex:1"><label>Name *</label><input type="text" placeholder="contract-risk-review" class="mono"><div class="hint">Unique within your tenant · lowercase [a-z0-9-]</div></div>
+        <div class="field" style="flex:1"><label>Provider model</label><input type="text" value="jev-latest" class="mono"></div>
+      </div>
+      <div class="field"><label>Purpose *</label><textarea rows="2" placeholder="What decision does this tool make?"></textarea></div>
+      <div class="row2">
+        <div class="field" style="flex:1"><label>Input data type</label><select id="inType" onchange="dtReadiness()"><option value="">— none —</option><option selected>Contract Record (contract-record)</option></select></div>
+        <div class="field" style="flex:1"><label>Output data type</label><select id="outType" onchange="dtReadiness()"><option value="">— none —</option><option>Contract Record (contract-record)</option></select><div class="hint">Question answers are typed against this schema</div></div>
+      </div>
+      <button class="btn btn-secondary" style="font-size:13px">✨ Generate with AI</button>
+
+      <div class="divider">Questions</div>
+      <div class="alert alert-info">💡 No questions authored — they are auto-generated from the output data type at execution time. Manual questions here override the generated ones.</div>
+      <button class="btn btn-secondary" style="font-size:13px">+ Add Question</button>
+
+      <!-- Advanced: state preset, collapsed by default -->
+      <div class="adv-toggle" onclick="advToggle(this)"><span class="chev">▶</span> State Preset <span class="chip">Advanced</span></div>
+      <div class="adv-body" id="advState">
+        <div class="hint" style="margin-bottom:6px">By default the tool's state is built from the input data type automatically. Map backtick-quoted state paths in question instructions to input properties here only when the names differ.</div>
+        <div class="hint" style="margin-bottom:6px"><strong>Auto-matched</strong> (1:1 with input properties — no action needed):</div>
+        <div>
+          <span class="auto-chip">contract_id → contract_id</span>
+          <span class="auto-chip">supplier → supplier</span>
+          <span class="hint"> keys equal to an input data type field resolve silently</span>
+        </div>
+        <div class="hint" style="margin:10px 0 4px"><strong>Needs mapping</strong>:</div>
+        <div class="mapper-row"><span class="sk mono">risk_score_override</span><select style="flex:1;padding:7px 8px;border:1px solid var(--border);border-radius:6px"><option>— select input property —</option><option>score</option><option>reviewed</option></select></div>
+        <button class="btn btn-secondary" style="padding:4px 10px;font-size:12px;margin-top:6px">+ Add Mapping</button>
+      </div>
+
+      <div class="divider">Thresholds &amp; Flags</div>
+      <div class="row2">
+        <div class="field"><label>Act threshold</label><input type="text" value="0.9"></div>
+        <div class="field"><label>Confirm threshold</label><input type="text" value="0.7"></div>
+        <div class="field"><label>Status</label><select><option>draft</option><option selected>active</option><option>disabled</option></select></div>
+        <div class="field" style="align-self:end"><label class="check" style="margin:0 0 8px"><input type="checkbox" id="toolEnabled" onchange="dtReadiness()"> Enabled</label></div>
+      </div>
+      <div class="hint">act ≥ confirm. Below confirm the tool escalates; between confirm and act it recommends review.</div>
+      <div class="divider">Generated Description</div>
+      <div class="preview">Decision tool 'contract-risk-review': Review supplier contracts for risk.
+
+Input data type: Contract Record (contract-record). Fields: supplier, risk_level, reviewed.
+Output data type: Contract Record (contract-record).
+
+Returns per-question typed answers with probabilities and an overall gate outcome (act >= 0.9, confirm >= 0.7, else escalate).</div>
+      <div style="margin-top:6px"><span class="chip mono">decision____contract-risk-review</span></div>
+    </div>
+    <div class="modal-foot"><button class="btn btn-secondary" onclick="closeM('mTool')">Cancel</button><button class="btn btn-primary" id="toolSave" onclick="alert('Saved — new tools start as DISABLED drafts; enabling required both data types, pre-validated inline')">Save</button></div>
+  </div>
+</div>
+
+<!-- System One provider modal -->
+<div class="overlay" id="mSysOne" onclick="if(event.target===this)closeM('mSysOne')">
+  <div class="modal modal-lg">
+    <div class="modal-head" style="text-align:left" id="soTitle">Edit Provider</div>
+    <div class="modal-body">
+      <div class="field"><label>Display name *</label><input type="text" value="Production System One"></div>
+      <div class="field"><label>Base URL *</label><input type="text" value="https://systemone.acme.internal/api" class="mono"><div class="hint">Per-tenant deployment endpoint. Full endpoint hint: connections are tested against <span class="mono">{base_url}/test-connection</span>; completion calls target <span class="mono">{base_url}/completions</span>. Preset: <span class="mono">https://systemone.parthenon.local/api</span></div></div>
+      <div class="row2">
+        <div class="field" style="flex:1"><label>Default model *</label><input type="text" value="jev-latest" class="mono"></div>
+        <div class="field" style="flex:1"><label>Enabled models</label><input type="text" value="jev-latest, jev-mini" class="mono"><div class="hint">Comma-separated; empty = all</div></div>
+      </div>
+      <div class="field"><label>API key <span class="chip-status chip-configured">Configured ✓</span></label><input type="password" placeholder="•••••••••••• (unchanged)" id="soKey"><div class="hint">Write-only: never displayed or prefilled. Leave blank to keep the saved key; type a new value to replace it. Required when creating a provider.</div></div>
+      <label class="check"><input type="checkbox" checked> Enabled</label>
+    </div>
+    <div class="modal-foot"><button class="btn btn-secondary" onclick="closeM('mSysOne')">Cancel</button><button class="btn btn-secondary" onclick="alert('Test connection → ✓ Reachable · 4 models available')">Test Connection</button><button class="btn btn-primary" onclick="alert('Saved (api_key omitted when blank) — Snackbar: Provider saved')">Save</button></div>
+  </div>
+</div>
+
+<script>
+function go(btn,id){document.querySelectorAll('.demo-nav button').forEach(function(b){b.classList.remove('active')});btn.classList.add('active');document.querySelectorAll('.screen').forEach(function(s){s.classList.remove('active')});document.getElementById(id).classList.add('active')}
+function openM(id){document.getElementById(id).classList.add('open')}
+function closeM(id){document.getElementById(id).classList.remove('open')}
+
+/* 1. workspace finder */
+function slugHint(){var v=document.getElementById('wsInput').value.trim().toLowerCase();var h=document.getElementById('slugHint');
+ if(v.indexOf('.')>-1){var slug=v.replace(/^https?:\/\//,'').split('/')[0].split('?')[0].split(':')[0].split('.')[0];h.style.display='';h.textContent='Workspace slug: '+slug}else{h.style.display='none'}}
+function findWs(){var v=document.getElementById('wsInput').value.trim();
+ if(!v)return;var btn=document.getElementById('findBtn');btn.textContent='Looking up…';btn.disabled=true;
+ setTimeout(function(){btn.textContent='Continue';btn.disabled=false;
+  if(v.replace(/^https?:\/\//,'').split('.')[0].split('/')[0]==='acme'){go(document.querySelector('[data-s=s-card]'),'s-card')}
+  else{document.getElementById('findErr').style.display=''}},600)}
+
+/* 3. tenant picker */
+function pickTenant(el,name){
+ if(el.classList.contains('selected')){closeM('mPicker');alert('Continue with current tenant — session bound, straight into '+name+'.');return}
+ closeM('mPicker');alert('One session = one tenant: re-running OIDC sign-in against '+name+'\'s identity provider (a fresh token with the matching tenant claim is required).')}
+
+/* 4. decision tools */
+function dtOpenCreate(){document.getElementById('toolDlgTitle').textContent='Add Decision Tool';openM('mTool');dtReadiness()}
+function dtOpenEdit(ready){
+ document.getElementById('toolDlgTitle').textContent='Edit Decision Tool';
+ document.getElementById('outType').selectedIndex=ready?1:0;dtReadiness();openM('mTool')}
+function dtReadiness(){
+ var on=document.getElementById('toolEnabled').checked;
+ var missing=!document.getElementById('inType').value||!document.getElementById('outType').value;
+ document.getElementById('toolReadiness').style.display=(on&&missing)?'':'none';
+ document.getElementById('toolSave').disabled=(on&&missing)}
+function advToggle(t){var b=t.nextElementSibling;b.classList.toggle('open');t.querySelector('.chev').textContent=b.classList.contains('open')?'▼':'▶'}
+
+/* 5. data type dialog */
+function dtSyncSlug(){var n=document.getElementById('dtName'),s=document.getElementById('dtSlug');
+ if(!s.dataset.touched){s.value=n.value.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'')}}
+document.getElementById&&document.addEventListener('input',function(e){if(e.target.id==='dtSlug')e.target.dataset.touched='1'});
+function dtTypeChange(sel){var row=sel.closest('.field-row');var ex=row.querySelector('.enum-editor');
+ if(sel.value==='enum'&&!ex){var d=document.createElement('div');d.className='enum-editor';d.style.display='block';
+  d.innerHTML='<div class="hint" style="margin-bottom:4px">Enum values — each value may carry a description passed to the model</div><button class="btn btn-secondary" style="padding:4px 10px;font-size:12px" onclick="dtAddEnum(this)">+ Add Value</button>';row.appendChild(d)}
+ else if(sel.value!=='enum'&&ex){ex.remove()}}
+function dtAddEnum(btn){var r=document.createElement('div');r.className='enum-row';
+ r.innerHTML='<input class="ev" type="text" placeholder="value"><input class="ed" type="text" placeholder="Description"><button class="icon-btn" onclick="this.parentNode.remove()">🗑️</button>';
+ btn.parentNode.insertBefore(r,btn)}
+
+/* 6. system one */
+function soOpenCreate(){document.getElementById('soTitle').textContent='Add Provider';openM('mSysOne')}
+function soOpenEdit(){document.getElementById('soTitle').textContent='Edit Provider';openM('mSysOne')}
+
+document.addEventListener('keydown',function(e){if(e.key==='Escape')document.querySelectorAll('.overlay.open').forEach(function(o){o.classList.remove('open')})});
+</script>
+</body>
+</html>

@@ -46,8 +46,9 @@ Skill Management allows administrators to define, organize, and govern Skills as
 ## Out of Scope
 - SOP composition and sequencing (covered by SOP Management)
 - MCP server registration and tool sync (covered by MCP Hub)
+- Decision model vendor configuration and per-decision-tool model selection (covered by [Decision Model Providers](decision-model-providers.md))
 - Low-level execution runtime implementation details
 
 ## Multi-Tenancy Note
 
-When multi-tenancy is enabled (see [Multi-Tenancy](multi-tenancy.md)), skills are tenant-owned and skill permissions are grantable only within the owning tenant. With multi-tenancy disabled (the default), behavior is unchanged — the deployment operates as the root tenant's workspace.
+When multi-tenancy is enabled (see [Multi-Tenancy](multi-tenancy.md) and [Strict Tenant Isolation](strict-tenant-isolation.md)), skills, skill bindings, and seeding are tenant-scoped: skills are tenant-owned, skill permissions are grantable only within the owning tenant, and seeded skills are planted into a target tenant (the root tenant for platform defaults) rather than a global slot. With multi-tenancy disabled (the default), behavior is unchanged — the deployment operates as the root tenant's workspace.

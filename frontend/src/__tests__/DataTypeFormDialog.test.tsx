@@ -111,6 +111,130 @@ describe('DataTypeFormDialog', () => {
     expect(fieldNameInputs.length).toBe(1)
   })
 
+  it('adds a new empty enum value row when Add Value is clicked', async () => {
+    const { DataTypeFormDialog } = await import('../components/agents/DataTypeFormDialog')
+    render(
+      <DataTypeFormDialog open={true} editDataType={null} onClose={onClose} onSaved={onSaved} />,
+      { wrapper },
+    )
+    // Switch the first field to enum type
+    await waitFor(() => {
+      const typeSelects = screen.getAllByLabelText('admin.dataTypes.fieldType')
+      fireEvent.mouseDown(typeSelects[0])
+    })
+    fireEvent.click(screen.getByRole('option', { name: 'enum' }))
+
+    // Initially no enum value rows
+    expect(screen.queryByTestId('enum-value-row-0')).toBeNull()
+
+    await waitFor(() => {
+      fireEvent.click(screen.getByText('admin.dataTypes.addEnumValue'))
+    })
+    // A new empty row appears
+    expect(screen.getByTestId('enum-value-row-0')).toBeDefined()
+    const valueInput = screen.getByLabelText('admin.dataTypes.enumValue') as HTMLInputElement
+    expect(valueInput.value).toBe('')
+
+    // Clicking again adds a second row
+    fireEvent.click(screen.getByText('admin.dataTypes.addEnumValue'))
+    expect(screen.getByTestId('enum-value-row-1')).toBeDefined()
+  })
+
+  it('persists typed enum value and description, producing the object shape on save', async () => {
+    const { DataTypeFormDialog } = await import('../components/agents/DataTypeFormDialog')
+    render(
+      <DataTypeFormDialog open={true} editDataType={null} onClose={onClose} onSaved={onSaved} />,
+      { wrapper },
+    )
+    await waitFor(() => {
+      fireEvent.change(screen.getAllByLabelText('admin.dataTypes.fieldName')[0], {
+        target: { value: 'severity' },
+      })
+      const typeSelects = screen.getAllByLabelText('admin.dataTypes.fieldType')
+      fireEvent.mouseDown(typeSelects[0])
+    })
+    fireEvent.click(screen.getByRole('option', { name: 'enum' }))
+
+    fireEvent.click(screen.getByText('admin.dataTypes.addEnumValue'))
+    fireEvent.change(screen.getByLabelText('admin.dataTypes.enumValue'), {
+      target: { value: 'high' },
+    })
+    fireEvent.change(screen.getByLabelText('admin.dataTypes.enumValueDescription'), {
+      target: { value: 'Critical severity' },
+    })
+    // Value and description persist after typing
+    expect(screen.getByDisplayValue('high')).toBeDefined()
+    expect(screen.getByDisplayValue('Critical severity')).toBeDefined()
+
+    // Save and inspect the payload shape
+    fireEvent.change(screen.getAllByRole('textbox')[0], { target: { value: 'Test DT' } })
+    await waitFor(() => {
+      fireEvent.click(screen.getByText('app.save'))
+    })
+    await waitFor(() => {
+      expect(apiClientMock.post).toHaveBeenCalled()
+    })
+    const payload = apiClientMock.post.mock.calls[0][1] ?? apiClientMock.post.mock.calls[0][0]
+    const body = payload.fields ? payload : payload.data
+    const enumField = body.fields.find((f: { type: string }) => f.type === 'enum')
+    expect(enumField.enum_values).toEqual([{ value: 'high', description: 'Critical severity' }])
+  })
+
+  it('removes an enum value row when its remove button is clicked', async () => {
+    const { DataTypeFormDialog } = await import('../components/agents/DataTypeFormDialog')
+    render(
+      <DataTypeFormDialog
+        open={true}
+        editDataType={{
+          ...MOCK_DATA_TYPE,
+          fields: [
+            {
+              name: 'severity',
+              type: 'enum' as const,
+              enum_values: ['low', { value: 'high', description: 'Critical' }],
+              required: true,
+            },
+          ],
+        }}
+        onClose={onClose}
+        onSaved={onSaved}
+      />,
+      { wrapper },
+    )
+    // Legacy string and object values both render
+    await waitFor(() => {
+      expect(screen.getByDisplayValue('low')).toBeDefined()
+      expect(screen.getByDisplayValue('high')).toBeDefined()
+      expect(screen.getByDisplayValue('Critical')).toBeDefined()
+    })
+    const removeButtons = screen.getAllByLabelText('admin.dataTypes.removeEnumValue')
+    expect(removeButtons.length).toBe(2)
+
+    // Remove the second row (the object value)
+    fireEvent.click(removeButtons[1])
+    await waitFor(() => {
+      expect(screen.queryByDisplayValue('high')).toBeNull()
+      expect(screen.getByDisplayValue('low')).toBeDefined()
+    })
+  })
+
+  it('renders and edits legacy string enum values correctly', async () => {
+    const { DataTypeFormDialog } = await import('../components/agents/DataTypeFormDialog')
+    render(
+      <DataTypeFormDialog open={true} editDataType={MOCK_DATA_TYPE} onClose={onClose} onSaved={onSaved} />,
+      { wrapper },
+    )
+    await waitFor(() => {
+      expect(screen.getByDisplayValue('low')).toBeDefined()
+      expect(screen.getByDisplayValue('medium')).toBeDefined()
+      expect(screen.getByDisplayValue('high')).toBeDefined()
+    })
+    // Editing a legacy string keeps it editable and persists
+    const valueInput = screen.getByDisplayValue('low') as HTMLInputElement
+    fireEvent.change(valueInput, { target: { value: 'lowest' } })
+    expect(screen.getByDisplayValue('lowest')).toBeDefined()
+  })
+
   it('calls onClose when cancel is clicked', async () => {
     const { DataTypeFormDialog } = await import('../components/agents/DataTypeFormDialog')
     render(

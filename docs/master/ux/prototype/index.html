@@ -489,8 +489,7 @@ select.form-control{appearance:none;background-image:url("data:image/svg+xml,%3C
 .field-row-new .field-act-col{flex:0 0 40px;text-align:right}
 
 /* Enum values input inline */
-.enum-values-inline{margin-top:4px}
-.enum-values-inline input{font-size:12px;padding:5px 8px}
+.enum-editor{margin-top:6px;margin-left:18px;padding:8px 10px;background:#F8FAFC;border-left:3px solid #CBD5E1;border-radius:6px}
 
 /* Field editor empty state */
 .fields-empty-state{padding:16px;text-align:center;font-size:13px;color:var(--text-secondary);border:1px dashed var(--border);border-radius:var(--radius-sm);margin-top:4px}
@@ -1144,6 +1143,27 @@ tr.revoked-row td{color:#9CA3AF}
 
 #amp-modal-overlay{z-index:1200}
 
+/* ═══ DECISION MODEL PROVIDERS (decision-model-providers change) ═══ */
+/* Responsive decision tools table: sticky actions column on horizontal scroll */
+.dct-sticky-actions{position:sticky;right:0;background:var(--surface);z-index:2;box-shadow:-6px 0 8px -6px rgba(0,0,0,.25)}
+thead .dct-sticky-actions{background:#F8FAFC}
+/* Enabled-models chip multi-select (provider editor dialog) */
+.so-chip-select{border:1px solid var(--border);border-radius:var(--radius-sm);padding:6px 8px;background:#fff;display:flex;flex-wrap:wrap;gap:6px;align-items:center;min-height:42px}
+.so-chip-select:focus-within{border-color:var(--primary);box-shadow:0 0 0 3px var(--primary-light)}
+.so-mchip{display:inline-flex;align-items:center;gap:6px;background:var(--primary-light);color:var(--primary-dark);border-radius:12px;padding:3px 6px 3px 10px;font-size:12px;font-weight:600}
+.so-mchip button{background:rgba(37,99,235,.15);border:none;border-radius:50%;width:18px;height:18px;font-size:11px;line-height:1;cursor:pointer;color:var(--primary-dark);display:flex;align-items:center;justify-content:center}
+.so-mchip button:hover{background:rgba(37,99,235,.3)}
+.so-chip-select input{border:none;outline:none;flex:1;min-width:120px;font-size:13px;padding:4px}
+/* Guardrail rows */
+.so-guard-row{display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--border);flex-wrap:wrap}
+.so-guard-row:last-child{border-bottom:none}
+.so-guard-model{font-family:ui-monospace,monospace;font-size:12.5px;font-weight:600}
+.so-guard-meter{flex:1;min-width:160px}
+.so-guard-meter .meter{height:8px;border-radius:4px;background:#F1F5F9;overflow:hidden;margin-top:4px}
+.so-guard-meter .meter>div{height:100%;background:var(--success)}
+.so-guard-meter .meter>div.warn{background:var(--warning)}
+.so-guard-meter .meter>div.over{background:var(--error)}
+
 </style>
 </head>
 <body>
@@ -1246,6 +1266,7 @@ tr.revoked-row td{color:#9CA3AF}
     <div class="lsd-title">Demo: Login State</div>
     <button style="background:#F1F5F9;color:#475569" onclick="oidcSetState('loading')">Loading</button>
     <button style="background:#EDE9FE;color:#6D28D9" onclick="oidcSetState('findws')">Find Workspace</button>
+    <button style="background:#FCE7F3;color:#9D174D" onclick="tpOpen()" title="TenantSessionGate → TenantPicker: multi-org user whose token is not yet tenant-bound">Tenant Picker</button>
     <button style="background:#FEF3C7;color:#92400E" onclick="oidcSetState('setup')">Setup</button>
     <button style="background:#DBEAFE;color:#1D4ED8" onclick="oidcSetState('saonly')">SA Only</button>
     <button style="background:#DCFCE7;color:#15803D" onclick="oidcSetState('both')">Both</button>
@@ -1293,6 +1314,7 @@ tr.revoked-row td{color:#9CA3AF}
       <div class="nav-item sub-item" data-view="conversational-intervention" data-group="agents" onclick="nav(this,'conversational-intervention')"><span class="nav-icon">💬</span>Conversational Intervention</div>
       <div class="nav-item sub-item" data-view="intervene-requests" data-group="agents" onclick="nav(this,'intervene-requests')"><span class="nav-icon">🛑</span>Intervene Requests</div>
       <div class="nav-item sub-item" data-view="data-types" data-group="agents" onclick="nav(this,'data-types')"><span class="nav-icon">📐</span>Data Types</div>
+      <div class="nav-item sub-item" data-view="decision-tools" data-group="agents" onclick="nav(this,'decision-tools')"><span class="nav-icon">⚖️</span>Decision Tools</div>
     </div>
   </div>
 
@@ -1330,6 +1352,7 @@ tr.revoked-row td{color:#9CA3AF}
       <div class="nav-item sub-item" data-view="observability" data-group="system" onclick="nav(this,'observability')">  <span class="nav-icon">📊</span>Observability</div>
       <div class="nav-item sub-item" data-view="permissions"   data-group="system" onclick="nav(this,'permissions')">    <span class="nav-icon">🔐</span>Permissions</div>
       <div class="nav-item sub-item" data-view="system-config" data-group="system" onclick="nav(this,'system-config')">  <span class="nav-icon">⚙️</span>System Config</div>
+      <div class="nav-item sub-item" data-view="sysone-providers" data-group="system" onclick="nav(this,'sysone-providers')"><span class="nav-icon">🧠</span>Decision Model Providers</div>
     </div>
   </div>
 
@@ -4640,6 +4663,56 @@ Returns: { request_id, status }</div>
   </div>
 </div>
 
+<!-- ═══════════════════════════════ VIEW: DECISION TOOLS (strict-tenant-isolation as-built) ═══════════════ -->
+<div id="view-decision-tools" class="view">
+  <div class="view-header">
+    <div><h2>Decision Tools</h2><div class="view-desc">Tenant-scoped decision tools exposed as decision____&lt;name&gt; MCP tools with auto-generated descriptions — each tool selects one enabled decision model</div></div>
+    <button class="btn btn-primary" onclick="dctOpenCreate()">+ Add Tool</button>
+  </div>
+  <div class="table-wrap">
+    <div style="overflow-x:auto">
+      <table style="min-width:900px;table-layout:fixed">
+        <thead><tr><th style="width:200px">Tool Name</th><th>Purpose</th><th>Generated Description</th><th style="width:180px">Decision Model</th><th style="width:100px">Status</th><th class="dct-sticky-actions" style="width:110px;text-align:right">Actions</th></tr></thead>
+        <tbody id="dctTableBody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════ VIEW: DECISION MODEL PROVIDERS (decision-model-providers as-built) ═══════════════ -->
+<div id="view-sysone-providers" class="view">
+  <div class="view-header">
+    <div><h2>Decision Model Providers</h2><div class="view-desc">Multi-vendor decision providers — encrypted write-only credentials, enabled-model chips + vendor sync, embedded decision guardrails</div></div>
+    <div style="display:flex;align-items:center;gap:12px">
+      <span class="chip" id="soStatusChip" style="background:#DCFCE7;color:#15803D">Configured</span>
+      <button class="btn btn-primary" onclick="soOpenCreate()">+ Add Provider</button>
+    </div>
+  </div>
+  <div class="alert alert-info">ℹ️ <div><strong>Multi-vendor support.</strong> Credentials are encrypted at rest and <strong>write-only</strong> — never returned in read responses. Enabled models are managed inside the provider editor (chips + vendor sync). All decision model usage passes through the same guardrail and budget/spend controls as regular agent model usage.</div></div>
+  <!-- Embedded guardrail section (decision-scoped) -->
+  <div class="card" style="margin-bottom:16px">
+    <div style="display:flex;align-items:center;gap:8px;padding:14px 20px;cursor:pointer;user-select:none" onclick="soGuardToggle()" data-testid="guardrails-section-toggle">
+      <span id="soGuardCaret" style="font-size:11px;color:var(--text-secondary);transition:transform .2s">▶</span>
+      <span style="font-size:14.5px;font-weight:600">Decision Guardrails</span>
+      <span style="font-size:12px;color:var(--text-secondary)">Per-provider spend thresholds for decision model usage — evaluated before every decision vendor call</span>
+    </div>
+    <div id="soGuardBody" style="display:none;padding:4px 20px 18px;border-top:1px solid var(--border)" data-testid="guardrails-section">
+      <div class="form-group" style="max-width:340px;margin-top:12px">
+        <label>Provider</label>
+        <select class="form-control" id="soGuardProvider" onchange="soGuardRender()"></select>
+      </div>
+      <div id="soGuardList"></div>
+      <div class="alert alert-info" style="margin:12px 0 0">🛡️ <div>Guardrails created here are <strong>decision-scoped</strong> — evaluated by the decision pre-call check; LLM guardrails on Model Configurations are never mixed (and vice versa).</div></div>
+    </div>
+  </div>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Display Name</th><th>Vendor</th><th>Base URL</th><th>Default Model</th><th>API Key</th><th>Enabled</th><th style="text-align:right">Actions</th></tr></thead>
+      <tbody id="soTableBody"></tbody>
+    </table>
+  </div>
+</div>
+
 <!-- ═══════════════════════════════ VIEW: AGENT OUTPUTS (NEW — enhance-agent-output-system) ═══════════════ -->
 <div id="view-agent-outputs" class="view">
   <div class="view-header">
@@ -6086,9 +6159,11 @@ const viewTitles = {
   'runtime-monitor': 'Agent Runtime Monitor',
   'agent-trails': 'Agent Trails',
   'system-config': 'System Config',
+  'sysone-providers': 'System One Providers',
   'conversational-intervention': 'Conversational Agent Intervention',
   'intervene-requests': 'Intervene Requests',
   'data-types': 'Agent Data Types',
+  'decision-tools': 'Decision Tools',
   'agent-outputs': 'Agent Outputs',
   'project-showcase': 'Project Showcase',
   'api-keys': 'API Key Management',
@@ -9413,7 +9488,7 @@ mcRenderCascade('mcCascadeModalTree');
     container.innerHTML = f.map(function(ff, idx){
       var topts = fieldTypes.map(function(t){ return '<option value="'+t+'"'+(ff.type===t?' selected':'')+'>'+t.charAt(0).toUpperCase()+t.slice(1)+'</option>'; }).join('');
       var chk = ff.required ? ' checked' : '';
-      var en = ff.type==='enum'? '<div class="enum-values-inline"><input type="text" class="form-control" placeholder="high,medium,low" value="'+((ff.enumValues||[]).join(', '))+'" oninput="dtSetEnum('+idx+',this.value)" style="font-size:12px;padding:5px 8px"><div class="form-hint">Comma-separated</div></div>' : '';
+      var en = ff.type==='enum'? '<div class="enum-editor">' + dtEnumRowsHtml(idx, ff.enumValues) + '</div>' : '';
       return '<div class="field-row-new" data-fi="'+idx+'"><div class="field-name-col"><input type="text" class="form-control" value="'+(ff.name||'')+'" placeholder="Field name" style="font-size:13px;padding:6px 8px">'+en+'</div>'+
         '<div class="field-type-col"><select class="form-control" onchange="dtFieldTypeChange('+idx+',this.value)" style="font-size:13px;padding:6px 8px">'+topts+'</select></div>'+
         '<div class="field-req-col"><label class="toggle"><input type="checkbox"'+(ff.required?' checked':'')+' style="margin:0 auto"><span class="toggle-slider"></span></label></div>'+
@@ -9435,16 +9510,38 @@ mcRenderCascade('mcCascadeModalTree');
   function dtRemoveField(idx) { var r = document.querySelector('#dtFieldsContainer .field-row-new[data-fi="'+idx+'"]'); if(r) r.remove(); if(!document.querySelectorAll('#dtFieldsContainer .field-row-new').length) document.getElementById('dtFieldsEmpty').style.display = ''; }
   function dtFieldTypeChange(idx, val) {
     var rows = document.querySelectorAll('#dtFieldsContainer .field-row-new'); var row = rows[idx]; if(!row) return;
-    var nc = row.querySelector('.field-name-col'), ex = nc.querySelector('.enum-values-inline'); if(ex) ex.remove();
-    if(val==='enum'){ var d=document.createElement('div');d.className='enum-values-inline';d.innerHTML='<input type="text" class="form-control" placeholder="high,medium,low" oninput="dtSetEnum('+idx+',this.value)" style="font-size:12px;padding:5px 8px"><div class="form-hint">Comma-separated</div>'; nc.appendChild(d); }
+    var nc = row.querySelector('.field-name-col'), ex = nc.querySelector('.enum-editor'); if(ex) ex.remove();
+    if(val==='enum'){ var d=document.createElement('div');d.className='enum-editor';d.innerHTML=dtEnumRowsHtml(idx, null); nc.appendChild(d); }
   }
-  function dtSetEnum(idx, val) { /* stored at save time */ }
+  /* Nested enum values editor (strict-tenant-isolation as-built — EnumValuesEditor.tsx):
+     one row per value, each with an optional description passed to the model. */
+  function dtEnumRowsHtml(idx, values){
+    var vs = (values||[]).map(function(v){ return typeof v==='string' ? {value:v,description:''} : {value:(v&&v.value)||'',description:(v&&v.description)||''}; });
+    var rows = vs.map(function(v){ return dtEnumRowHtml(v.value, v.description); }).join('');
+    return '<div class="form-hint" style="margin-bottom:4px">Enum values — each value may carry a description passed to the model</div>' + rows +
+      '<button class="btn btn-xs btn-secondary" style="margin-top:4px" onclick="dtAddEnumRow(this)">+ Add Value</button>';
+  }
+  function dtEnumRowHtml(value, description){
+    return '<div class="enum-row" style="display:flex;gap:8px;align-items:center;margin:5px 0">' +
+      '<input type="text" class="form-control dt-enum-val" placeholder="value" value="'+(value||'')+'" style="font-size:12px;padding:5px 8px;flex:1;min-width:100px">' +
+      '<input type="text" class="form-control dt-enum-desc" placeholder="Description (e.g. review within 30 days)" value="'+(description||'')+'" style="font-size:12px;padding:5px 8px;flex:2;min-width:160px">' +
+      '<button class="btn-icon-sm" onclick="this.parentNode.remove()" title="Remove value">🗑️</button></div>';
+  }
+  function dtAddEnumRow(btn){ btn.insertAdjacentHTML('beforebegin', dtEnumRowHtml('','')); }
+  function dtSetEnum(idx, val) { /* committed at save time from rows */ }
   function dtGetFields() {
     var fields = []; var rows = document.querySelectorAll('#dtFieldsContainer .field-row-new');
     rows.forEach(function(row, idx){
-      var n = row.querySelector('.field-name-col input[type="text"]'), t = row.querySelector('.field-type-col select'), r = row.querySelector('.field-req-col input[type="checkbox"]'), e = row.querySelector('.field-name-col .enum-values-inline input');
+      var n = row.querySelector('.field-name-col input[type="text"]'), t = row.querySelector('.field-type-col select'), r = row.querySelector('.field-req-col input[type="checkbox"]');
       var f = { name: n?n.value:'', type: t?t.value:'string', required: r?r.checked:true };
-      if (f.type==='enum' && e) f.enumValues = e.value.split(',').map(function(s){return s.trim()}).filter(Boolean);
+      if (f.type==='enum') {
+        var evs = []; row.querySelectorAll('.enum-editor .enum-row').forEach(function(er){
+          var v = (er.querySelector('.dt-enum-val')||{value:''}).value.trim();
+          if(!v) return; var d = (er.querySelector('.dt-enum-desc')||{value:''}).value.trim();
+          evs.push(d ? {value:v, description:d} : v);
+        });
+        f.enumValues = evs;
+      }
       if (f.name) fields.push(f);
     });
     return fields;
@@ -12993,5 +13090,378 @@ function mtAssignLicense(slug) {
 }
 </script>
 
+<!-- ═══════════════════════════════ STRICT-TENANT-ISOLATION: MODALS ═══════════════════════════════ -->
+
+<!-- Tenant Picker (TenantSessionGate → TenantPicker) -->
+<div class="modal-overlay" id="tenantPickerModal" onclick="if(event.target===this)tpClose()">
+  <div class="modal" style="max-width:400px">
+    <div class="modal-header" style="text-align:center;display:block"><h3>🏢<br>Choose an organization</h3><button class="modal-close" onclick="tpClose()">×</button></div>
+    <div class="modal-body">
+      <p style="font-size:12px;color:var(--text-secondary);text-align:center;margin-bottom:14px">You are a member of multiple organizations. Pick one to continue — each organization signs in with its own identity provider.</p>
+      <div id="tpList"></div>
+      <p style="font-size:11px;color:var(--text-secondary);text-align:center;margin-top:12px" id="tpCurrent"></p>
+    </div>
+  </div>
+</div>
+
+<!-- Decision Tool Create / Edit Dialog -->
+<div class="modal-overlay" id="dctDialog" onclick="if(event.target===this)dctClose()">
+  <div class="modal modal-lg" style="max-width:720px;max-height:88vh;overflow-y:auto">
+    <div class="modal-header"><h3 id="dctTitle">Add Decision Tool</h3><button class="modal-close" onclick="dctClose()">×</button></div>
+    <div class="modal-body">
+      <div class="alert alert-warning" id="dctReadiness" style="display:none">⚠️ Enabling requires an input data type and an output data type. Assign both to make the tool executable — Save stays disabled until then (inline pre-validation instead of a raw 422).</div>
+      <div class="alert alert-info">✅ System One provider configured — model <strong>jev-latest</strong>. AI draft generation available.</div>
+      <div class="form-row">
+        <div class="form-group"><label>Name *</label><input class="form-control" id="dctName" placeholder="contract-risk-review" style="font-family:monospace"><div class="form-hint">Unique within your tenant · lowercase [a-z0-9-]</div></div>
+        <div class="form-group">
+          <label>Decision model *</label>
+          <select class="form-control" id="dctModel">
+            <option value="">— Select an enabled decision model —</option>
+            <option value="ts::jev-latest">jev-latest — Production TypeSafe</option>
+            <option value="ts::jev-pro">jev-pro — Production TypeSafe</option>
+            <option value="vd::arbiter-2">arbiter-2 — Veridian EU</option>
+          </select>
+          <div class="form-hint" id="dctModelHint">Only <strong>enabled</strong> decision models across all providers are listed; a stored-but-disabled selection renders as an unavailable option — re-select before saving.</div>
+        </div>
+      </div>
+      <div class="form-group"><label>Purpose *</label><textarea class="form-control" id="dctPurpose" rows="2"></textarea></div>
+      <div class="form-row">
+        <div class="form-group"><label>Input data type</label><select class="form-control" id="dctIn" onchange="dctReadiness()"><option value="">— none —</option><option>Contract Record (contract-record)</option><option>Incident Report (incident-report)</option></select></div>
+        <div class="form-group"><label>Output data type</label><select class="form-control" id="dctOut" onchange="dctReadiness()"><option value="">— none —</option><option>Contract Record (contract-record)</option><option>Incident Report (incident-report)</option></select><div class="form-hint">Question answers are typed against this schema</div></div>
+      </div>
+      <button class="btn btn-secondary btn-sm">✨ Generate with AI</button>
+      <div style="border-top:1px solid var(--border);margin:14px 0 8px;padding-top:10px;font-weight:600;font-size:13px">Questions</div>
+      <div class="alert alert-info">💡 No questions authored — they are auto-generated from the output data type at execution time. Manual questions here override the generated ones.</div>
+      <button class="btn btn-secondary btn-sm">+ Add Question</button>
+      <div id="dctAdvToggle" style="display:flex;align-items:center;gap:8px;padding:12px 0 6px;cursor:pointer;font-weight:600;font-size:13px" onclick="dctAdv()"><span id="dctChev">▶</span> State Preset <span class="chip">Advanced</span></div>
+      <div id="dctAdvBody" style="display:none;border-top:1px solid var(--border);padding-top:10px">
+        <div class="form-hint" style="margin-bottom:8px">State is built from the input data type automatically. Map backtick-quoted state paths in question instructions here only when names differ. Keys equal to an input property auto-match silently.</div>
+        <div style="margin-bottom:8px"><span class="chip" style="border:1px solid #86EFAC;color:#15803D;background:#F0FDF4">contract_id → contract_id</span> <span class="chip" style="border:1px solid #86EFAC;color:#15803D;background:#F0FDF4">supplier → supplier</span> <span class="form-hint" style="display:inline">auto-matched</span></div>
+        <div style="display:flex;gap:8px;align-items:center;margin-bottom:6px"><span style="min-width:170px;font-family:monospace;font-size:12px">risk_score_override</span><select class="form-control" style="flex:1"><option>— select input property —</option><option>score</option><option>reviewed</option></select></div>
+        <button class="btn btn-secondary btn-xs">+ Add Mapping</button>
+      </div>
+      <div style="border-top:1px solid var(--border);margin:14px 0 8px;padding-top:10px;font-weight:600;font-size:13px">Thresholds &amp; Flags</div>
+      <div class="form-row">
+        <div class="form-group"><label>Act threshold</label><input class="form-control" value="0.9"></div>
+        <div class="form-group"><label>Confirm threshold</label><input class="form-control" value="0.7"></div>
+        <div class="form-group"><label>Status</label><select class="form-control" id="dctStatus"><option>draft</option><option selected>active</option><option>disabled</option></select></div>
+        <div class="form-group" style="align-self:end"><label style="display:flex;gap:6px;align-items:center;cursor:pointer"><input type="checkbox" id="dctEnabled" onchange="dctReadiness()"> Enabled</label></div>
+      </div>
+      <div class="form-hint">act ≥ confirm. Below confirm the tool escalates; between confirm and act it recommends review.</div>
+      <div style="border-top:1px solid var(--border);margin:14px 0 8px;padding-top:10px;font-weight:600;font-size:13px">Generated Description</div>
+      <div id="dctPreview" style="background:#FAFAFA;border:1px solid var(--border);border-radius:6px;padding:10px;font-size:12px;white-space:pre-wrap;color:#374151"></div>
+      <div style="margin-top:8px"><span class="chip" id="dctToolChip" style="font-family:monospace">decision____…</span></div>
+    </div>
+    <div class="modal-footer"><button class="btn btn-secondary" onclick="dctClose()">Cancel</button><button class="btn btn-primary" id="dctSave" onclick="dctSaveTool()">Save</button></div>
+  </div>
+</div>
+
+<!-- Decision Model Provider Create / Edit Dialog (decision-model-providers as-built) -->
+<div class="modal-overlay" id="soDialog" onclick="if(event.target===this)soClose()">
+  <div class="modal modal-lg" style="max-width:620px">
+    <div class="modal-header"><h3 id="soTitle">Add Decision Model Provider</h3><button class="modal-close" onclick="soClose()">×</button></div>
+    <div class="modal-body">
+      <div class="alert alert-error" id="soDialogError" style="display:none">⛔ <div id="soDialogErrorText"></div></div>
+      <div class="form-group"><label>Vendor type *</label><select class="form-control" id="soVendor" onchange="soVendorChanged()"><option value="typesafe">TypeSafe AI (Decision API)</option><option value="veridian">Veridian Decisions</option><option value="cortexa">Cortexa Judge</option></select><div class="form-hint" id="soVendorHint">Vendors are release-managed; new integrations ship with the platform.</div></div>
+      <div class="form-group"><label>Display name *</label><input class="form-control" id="soName" placeholder="e.g. Production TypeSafe"><div class="form-hint">Must be unique per vendor type.</div></div>
+      <div class="form-group"><label>Base URL *</label><input class="form-control" id="soBase" placeholder="https://api.typesafe.example/v1" style="font-family:monospace"><div class="form-hint">Per-tenant deployment endpoint; editable at any time. Preset: <span style="font-family:monospace">https://systemone.parthenon.local/api</span></div></div>
+      <div class="form-group">
+        <label>Enabled models</label>
+        <div class="so-chip-select" id="soChips">
+          <input type="text" id="soChipInput" list="soChipOptions" placeholder="Type or pick a model, press Enter…" onkeydown="if(event.key==='Enter'){event.preventDefault();soAddChip()}">
+          <datalist id="soChipOptions"></datalist>
+        </div>
+        <div class="form-hint">The chips are the enabled models sent in the payload; typed entries are also allowed. “Sync models from vendor” imports the discovered catalogue as chips.</div>
+      </div>
+      <div class="form-group">
+        <label>Default model *</label>
+        <select class="form-control" id="soDefault" disabled><option value="">— select or sync models first —</option></select>
+        <div class="form-hint" id="soDefaultHint">Options are exactly the enabled-model chips; disabled until at least one model is selected. Removing the default chip clears the selection — a stale default is never sent.</div>
+      </div>
+      <div style="display:flex;justify-content:flex-end;margin:-6px 0 12px">
+        <button class="btn btn-secondary btn-sm" id="soSyncBtn" style="display:none" onclick="soSyncModels()">⟳ Sync models from vendor</button>
+      </div>
+      <div class="form-group"><label>API key <span class="chip" id="soKeyChip" style="background:#DCFCE7;color:#15803D">Configured ✓</span></label><input class="form-control" type="password" id="soKey" placeholder="•••••••••••• (unchanged)"><div class="form-hint" id="soKeyHint">Write-only: never displayed or prefilled. Leave blank to keep the saved key; required when creating a provider.</div></div>
+      <label style="display:flex;gap:6px;align-items:center;cursor:pointer"><input type="checkbox" id="soEnabled" checked> Enabled <span class="form-hint" style="margin:0">— disabling cascades to all its models; referencing tools are blocked from evaluating</span></label>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="soClose()">Cancel</button>
+      <button class="btn btn-secondary" onclick="toast('Connection test → ✓ Reachable · 4 models available (demo)','success')">Test Connection</button>
+      <button class="btn btn-primary" onclick="soSave()">Save</button>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ═══ STRICT-TENANT-ISOLATION: Decision Tools + System One + Tenant Picker (as-built) ═══ */
+var DCT_TOOLS=[
+  {name:'contract-risk-review',purpose:'Review supplier contracts for risk',desc:"Decision tool 'contract-risk-review': evaluates predefined questions against a constructed state and returns structured typed answers with confidence.",enabled:true,ready:true,provId:'p1',modelId:'jev-latest'},
+  {name:'incident-triage',purpose:'Triage incoming incident reports',desc:"Decision tool 'incident-triage': evaluates predefined questions…",enabled:true,ready:false,provId:'p1',modelId:'jev-pro'},
+  {name:'expense-approval',purpose:'Approve or escalate expense requests',desc:"Decision tool 'expense-approval': evaluates predefined questions…",enabled:false,ready:true,provId:'p2',modelId:'arbiter-2'},
+  {name:'refund-approval',purpose:'Approve or deny customer refund requests',desc:"Decision tool 'refund-approval': evaluates predefined questions…",enabled:true,ready:true,provId:'pX',modelId:'arbiter-2-mini'}
+];
+/* decision-model-providers as-built: multi-provider state — enabled_models
+   chips + default_model on the provider; availability rows are authoritative. */
+var SO_PROVIDERS=[
+  {id:'p1',vendor:'typesafe',name:'Production TypeSafe',base:'https://api.typesafe.example/v1',keyConfigured:true,enabled:true,enabledModels:['jev-latest','jev-pro'],defaultModel:'jev-latest',catalogue:['jev-latest','jev-pro','jev-lite'],guardrails:[{model:'jev-latest',period:'monthly',threshold:80,spend:62},{model:'jev-pro',period:'monthly',threshold:80,spend:94}]},
+  {id:'p2',vendor:'veridian',name:'Veridian EU',base:'https://eu.veridian.example/api',keyConfigured:true,enabled:true,enabledModels:['arbiter-2'],defaultModel:'arbiter-2',catalogue:['arbiter-2','arbiter-2-mini'],guardrails:[{model:'arbiter-2',period:'monthly',threshold:80,spend:31}]},
+  {id:'p3',vendor:'cortexa',name:'Cortexa Trial',base:'https://trial.cortexa.example',keyConfigured:false,enabled:false,enabledModels:[],defaultModel:'',catalogue:['judge-v1'],guardrails:[]}
+];
+var soEditing=null,soChips=[],soDialogModels=[];
+
+function soModelAvailable(pid,mid){
+  var p=SO_PROVIDERS.find(function(x){return x.id===pid;});
+  return !!(p&&p.enabled&&p.enabledModels.indexOf(mid)>=0);
+}
+function soModelLabel(pid,mid){
+  var p=SO_PROVIDERS.find(function(x){return x.id===pid;});
+  return mid+' — '+(p?p.name:'?');
+}
+function dctRender(){
+  var b=document.getElementById('dctTableBody'); if(!b) return;
+  b.innerHTML=DCT_TOOLS.map(function(t,i){
+    var chip=t.ready===false?'<span class="chip" title="Not Ready: tool is enabled but has no input data type. Assign an input data type and an output data type to make it executable." style="background:#FEF3C7;color:#92400E;border-bottom:1px dotted #92400E">Not Ready ⓘ</span>'
+      :(t.enabled?'<span class="chip" style="background:#DCFCE7;color:#15803D">Active</span>':'<span class="chip" style="background:#F3F4F6;color:#6B7280">Draft</span>');
+    var modelOk=soModelAvailable(t.provId,t.modelId);
+    if(!modelOk) chip='<span class="chip" title="Not Ready: the selected decision model is disabled — evaluations are blocked until an enabled model is selected" style="background:#FEF3C7;color:#92400E;border-bottom:1px dotted #92400E">Not Ready ⓘ</span>';
+    var modelChip=modelOk?'<span class="chip chip-border" style="background:#EDE9FE;color:#4527A0">'+soModelLabel(t.provId,t.modelId)+'</span>':'<span class="chip" style="background:#FEE2E2;color:#B91C1C">'+t.modelId+' — unavailable</span>';
+    return '<tr><td style="font-family:monospace;font-size:12.5px;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="decision____'+t.name+'">decision____'+t.name+'</td>'+
+      '<td style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+(t.purpose||'')+'">'+(t.purpose||'—')+'</td>'+
+      '<td style="max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text-secondary)" title="'+t.desc+'">'+t.desc+'</td>'+
+      '<td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+modelChip+'</td>'+
+      '<td>'+chip+'</td>'+
+      '<td class="dct-sticky-actions" style="text-align:right"><div style="display:flex;gap:4px;justify-content:flex-end"><button class="btn-icon-sm" onclick="dctOpenEdit('+i+')">✏️</button><button class="btn-icon-sm" onclick="toast(\'Delete confirmation (demo)\',\'info\')">🗑️</button></div></td></tr>';
+  }).join('');
+}
+function dctOpenCreate(){
+  document.getElementById('dctTitle').textContent='Add Decision Tool';
+  document.getElementById('dctIn').selectedIndex=0;document.getElementById('dctOut').selectedIndex=0;
+  document.getElementById('dctEnabled').checked=false;
+  document.getElementById('dctModel').value='';
+  dctReadiness();dctSyncPreview();document.getElementById('dctDialog').style.display='flex';
+}
+function dctOpenEdit(i){
+  var t=DCT_TOOLS[i];document.getElementById('dctTitle').textContent='Edit Decision Tool';
+  document.getElementById('dctName').value=t.name;document.getElementById('dctPurpose').value=t.purpose;
+  document.getElementById('dctEnabled').checked=t.enabled;
+  document.getElementById('dctOut').selectedIndex=t.ready?1:0;
+  /* Stored-but-disabled selection: render as a visible disabled
+     "unavailable — re-select" option instead of a silently empty select. */
+  var sel=document.getElementById('dctModel');
+  var key=t.provId+'::'+t.modelId;
+  var ok=soModelAvailable(t.provId,t.modelId);
+  if(!ok){
+    sel.insertAdjacentHTML('beforeend','<option value="'+key+'" disabled>'+soModelLabel(t.provId,t.modelId)+' — unavailable — re-select</option>');
+    sel.value='';
+    document.getElementById('dctModelHint').innerHTML='⚠️ The previously selected model (<strong>'+soModelLabel(t.provId,t.modelId)+'</strong>) is disabled. Choose a replacement to unblock evaluations — saving stays blocked (modelUnavailable) until a valid model is selected.';
+  }else{
+    sel.value=key;
+    document.getElementById('dctModelHint').innerHTML='Only <strong>enabled</strong> decision models across all providers are listed; a stored-but-disabled selection renders as an unavailable option — re-select before saving.';
+  }
+  dctReadiness();dctSyncPreview();document.getElementById('dctDialog').style.display='flex';
+}
+function dctClose(){document.getElementById('dctDialog').style.display='none';}
+function dctReadiness(){
+  var en=document.getElementById('dctEnabled').checked;
+  var missing=!document.getElementById('dctIn').value||!document.getElementById('dctOut').value;
+  document.getElementById('dctReadiness').style.display=(en&&missing)?'':'none';
+  document.getElementById('dctSave').disabled=(en&&missing);
+}
+function dctAdv(){
+  var b=document.getElementById('dctAdvBody'),open=b.style.display!=='none';
+  b.style.display=open?'none':'';document.getElementById('dctChev').textContent=open?'▶':'▼';
+}
+function dctSyncPreview(){
+  var n=document.getElementById('dctName').value||'…',p=document.getElementById('dctPurpose').value.trim();
+  var inp=document.getElementById('dctIn'),out=document.getElementById('dctOut');
+  var s="Decision tool '"+n+"': "+(p||'evaluates predefined System One questions against a constructed state and returns structured typed answers with confidence.');
+  if(inp.value)s+="\n\nInput data type: "+inp.value+".";
+  if(out.value)s+="\nOutput data type: "+out.value+".";
+  s+="\n\nReturns per-question typed answers with probabilities and an overall gate outcome (act >= 0.9, confirm >= 0.7, else escalate).";
+  document.getElementById('dctPreview').textContent=s;
+  document.getElementById('dctToolChip').textContent='decision____'+(n==='…'?'…':n);
+}
+function dctSaveTool(){toast('Saved — new tools start as DISABLED drafts; enabling required both data types (pre-validated inline)','success');dctClose();dctRender();}
+['dctName','dctPurpose'].forEach(function(id){document.addEventListener('input',function(e){if(e.target.id===id)dctSyncPreview();});});
+
+function soRender(){
+  var b=document.getElementById('soTableBody'); if(!b) return;
+  b.innerHTML=SO_PROVIDERS.map(function(p,i){
+    return '<tr><td>'+p.name+'</td>'+
+      '<td><span class="chip chip-border" style="background:#EDE9FE;color:#4527A0">'+p.vendor+'</span></td>'+
+      '<td style="font-family:monospace;font-size:12.5px">'+p.base+'</td>'+
+      '<td><span class="chip" style="background:#F1F5F9;color:#475569;font-family:monospace">'+(p.defaultModel||'—')+'</span></td>'+
+      '<td>'+(p.keyConfigured?'<span class="chip" style="background:#DCFCE7;color:#15803D">Stored 🔒</span>':'<span class="chip" style="background:#FEF3C7;color:#92400E">Missing</span>')+'</td>'+
+      '<td>'+(p.enabled?'<span class="chip" style="background:#DCFCE7;color:#15803D">Yes</span>':'<span class="chip" style="background:#F3F4F6;color:#6B7280">No</span>')+'</td>'+
+      '<td><div style="display:flex;gap:4px;justify-content:flex-end"><button class="btn-icon-sm" title="Edit" onclick="soOpenEdit('+i+')">✏️</button><button class="btn-icon-sm" title="Test connection" onclick="toast(\'Connection test → ✓ Reachable · '+p.catalogue.length+' models available (demo)\',\'success\')">🔌</button><button class="btn-icon-sm" title="Delete" onclick="soAskDelete('+i+')">🗑️</button></div></td></tr>';
+  }).join('');
+  var anyEnabled=SO_PROVIDERS.some(function(p){return p.enabled;});
+  var sc=document.getElementById('soStatusChip');
+  if(sc){sc.textContent=anyEnabled?'Configured':'Not configured';sc.style.cssText=anyEnabled?'background:#DCFCE7;color:#15803D':'background:#F1F5F9;color:#475569';}
+  soGuardFill();
+}
+/* Vendor type is locked on edit (would invalidate models + credential). */
+function soOpenCreate(){
+  soEditing=null;soChips=[];soDialogModels=[];
+  document.getElementById('soTitle').textContent='Add Decision Model Provider';
+  document.getElementById('soVendor').disabled=false;
+  document.getElementById('soVendorHint').textContent='Vendors are release-managed; new integrations ship with the platform.';
+  document.getElementById('soName').value='';document.getElementById('soBase').value='';document.getElementById('soKey').value='';
+  document.getElementById('soKey').placeholder='sk-…';
+  document.getElementById('soKeyHint').textContent='Write-only: never displayed or prefilled. Required when creating a provider.';
+  document.getElementById('soKeyChip').style.display='none';
+  document.getElementById('soEnabled').checked=true;
+  document.getElementById('soSyncBtn').style.display='none';
+  document.getElementById('soDialogError').style.display='none';
+  soRenderChips();document.getElementById('soDialog').style.display='flex';
+}
+function soOpenEdit(i){
+  var p=SO_PROVIDERS[i];soEditing=i;soChips=p.enabledModels.slice();soDialogModels=p.enabledModels.slice();
+  document.getElementById('soTitle').textContent='Edit Provider — '+p.name;
+  document.getElementById('soVendor').value=p.vendor;
+  document.getElementById('soVendor').disabled=true;
+  document.getElementById('soVendorHint').innerHTML='🔒 Vendor type is locked on edit — changing it would invalidate the stored models and credential.';
+  document.getElementById('soName').value=p.name;document.getElementById('soBase').value=p.base;document.getElementById('soKey').value='';
+  document.getElementById('soKey').placeholder='•••••••••••• (unchanged)';
+  document.getElementById('soKeyHint').textContent='Write-only: never prefilled. Leave blank to keep the stored key; enter a new value to replace it.';
+  document.getElementById('soKeyChip').style.display=p.keyConfigured?'':'none';
+  document.getElementById('soEnabled').checked=p.enabled;
+  document.getElementById('soSyncBtn').style.display='inline-flex';
+  document.getElementById('soDialogError').style.display='none';
+  soRenderChips();document.getElementById('soDialog').style.display='flex';
+}
+function soClose(){document.getElementById('soDialog').style.display='none';}
+/* Enabled-models chip multi-select: options = selected chips ∪ in-session
+   vendor-synced models ∪ catalogue rows (edit mode). */
+function soRenderChips(){
+  var box=document.getElementById('soChips');
+  box.querySelectorAll('.so-mchip').forEach(function(el){el.remove();});
+  soChips.forEach(function(m){
+    var chip=document.createElement('span');chip.className='so-mchip';
+    chip.innerHTML=m+' <button title="Remove" onclick="soRemoveChip(\''+m+'\')">✕</button>';
+    box.insertBefore(chip,document.getElementById('soChipInput'));
+  });
+  var opts=[];soChips.concat(soDialogModels).forEach(function(m){if(opts.indexOf(m)<0)opts.push(m);});
+  if(soEditing!==null){SO_PROVIDERS[soEditing].catalogue.forEach(function(m){if(opts.indexOf(m)<0)opts.push(m);});}
+  document.getElementById('soChipOptions').innerHTML=opts.map(function(m){return '<option value="'+m+'">';}).join('');
+  soRenderDefault();
+}
+/* Default model: directly below the chips; options = exactly the selected
+   chips; disabled until ≥1 chip; removing the default chip clears it. */
+function soRenderDefault(){
+  var sel=document.getElementById('soDefault');
+  var has=soChips.length>0;
+  var keep=null;
+  if(soEditing!==null){var p=SO_PROVIDERS[soEditing];if(p&&soChips.indexOf(p.defaultModel)>=0)keep=p.defaultModel;}
+  sel.disabled=!has;
+  var html=has?'':'<option value="">— select or sync models first —</option>';
+  if(has&&soChips.indexOf(sel.value)<0&&sel.value!=='')html+='<option value=""></option>';
+  html+=soChips.map(function(m){return '<option value="'+m+'"'+(m===(keep!==null?keep:sel.value)?' selected':'')+'>'+m+'</option>';}).join('');
+  sel.innerHTML=html;
+  document.getElementById('soDefaultHint').textContent=has
+    ?'Options are exactly the enabled-model chips above; removing the default chip clears the selection — a stale default is never sent.'
+    :'Select at least one enabled model above (or run vendor sync) to choose a default.';
+}
+function soAddChip(){
+  var inp=document.getElementById('soChipInput');var v=inp.value.trim();if(!v)return;
+  if(soChips.indexOf(v)<0)soChips.push(v);
+  inp.value='';soRenderChips();
+}
+function soRemoveChip(m){soChips=soChips.filter(function(x){return x!==m;});soRenderChips();}
+function soVendorChanged(){}
+/* Vendor sync: discover + import vendor models as chips (enabled), keeping
+   the default-model select in sync. */
+function soSyncModels(){
+  if(soEditing===null)return;
+  var btn=document.getElementById('soSyncBtn');btn.disabled=true;btn.textContent='⟳ Syncing…';
+  setTimeout(function(){
+    btn.disabled=false;btn.textContent='⟳ Sync models from vendor';
+    var p=SO_PROVIDERS[soEditing];
+    p.catalogue.forEach(function(m){if(soDialogModels.indexOf(m)<0)soDialogModels.push(m);if(soChips.indexOf(m)<0)soChips.push(m);});
+    soRenderChips();
+    toast('Imported '+p.catalogue.length+' vendor models as enabled — chips and the default-model select refreshed.','success');
+  },700);
+}
+function soSave(){
+  var err=document.getElementById('soDialogError');
+  var name=document.getElementById('soName').value.trim();
+  var base=document.getElementById('soBase').value.trim();
+  var vendor=soEditing!==null?SO_PROVIDERS[soEditing].vendor:document.getElementById('soVendor').value;
+  if(!name||!base){err.style.display='flex';document.getElementById('soDialogErrorText').textContent='Display name and base URL are required.';return;}
+  var dup=SO_PROVIDERS.find(function(p,i){return i!==soEditing&&p.vendor===vendor&&p.name.toLowerCase()===name.toLowerCase();});
+  if(dup){err.style.display='flex';document.getElementById('soDialogErrorText').textContent='A provider with display name “'+name+'” already exists for this vendor. Display names must be unique per vendor.';return;}
+  var def=document.getElementById('soDefault').value;
+  if(soChips.indexOf(def)<0)def='';
+  var keyVal=document.getElementById('soKey').value;
+  if(soEditing!==null){
+    var p=SO_PROVIDERS[soEditing];
+    p.name=name;p.base=base;p.enabled=document.getElementById('soEnabled').checked;
+    p.enabledModels=soChips.slice();p.defaultModel=def;
+    if(keyVal!=='')p.keyConfigured=true;
+  }else{
+    SO_PROVIDERS.push({id:'p'+(SO_PROVIDERS.length+1),vendor:vendor,name:name,base:base,keyConfigured:keyVal!=='',enabled:document.getElementById('soEnabled').checked,enabledModels:soChips.slice(),defaultModel:def,catalogue:soChips.slice(),guardrails:[]});
+  }
+  soRender();soClose();
+  toast('Provider “'+name+'” saved — table refreshed automatically (api_key omitted when blank).','success');
+}
+function soAskDelete(i){
+  var p=SO_PROVIDERS[i];
+  /* Delete-blocking: referenced tools are named in the error. */
+  var blockers=DCT_TOOLS.filter(function(t){return t.provId===p.id;});
+  if(blockers.length){
+    toast('Cannot delete “'+p.name+'” — still referenced by '+blockers.length+' decision tool(s): '+blockers.map(function(t){return t.name;}).join(', ')+'.','error');
+    return;
+  }
+  SO_PROVIDERS.splice(i,1);soRender();
+  toast('Provider “'+p.name+'” deleted — the same name and vendor can now be re-created.','success');
+}
+/* Embedded decision-scoped guardrail section */
+function soGuardToggle(){
+  var b=document.getElementById('soGuardBody'),open=b.style.display!=='none';
+  b.style.display=open?'none':'block';
+  document.getElementById('soGuardCaret').style.transform=open?'':'rotate(90deg)';
+}
+function soGuardFill(){
+  var sel=document.getElementById('soGuardProvider');if(!sel)return;
+  var cur=sel.value;
+  sel.innerHTML=SO_PROVIDERS.map(function(p){return '<option value="'+p.id+'"'+(p.id===cur?' selected':'')+'>'+p.name+'</option>';}).join('');
+  soGuardRender();
+}
+function soGuardRender(){
+  var pid=document.getElementById('soGuardProvider').value;
+  var p=SO_PROVIDERS.find(function(x){return x.id===pid;});
+  var list=document.getElementById('soGuardList');
+  if(!p||!p.guardrails.length){list.innerHTML='<div style="font-size:12px;color:var(--text-secondary);padding:8px 0">No decision guardrails configured for this provider yet.</div>';return;}
+  list.innerHTML=p.guardrails.map(function(g){
+    var cls=g.spend>=g.threshold?'over':(g.spend>=g.threshold*0.75?'warn':'');
+    return '<div class="so-guard-row"><span class="so-guard-model">'+g.model+'</span><span class="chip chip-gray">'+g.period+'</span>'+
+      '<div class="so-guard-meter"><div style="font-size:12px;color:var(--text-secondary)">$'+(g.spend*4.2).toFixed(2)+' of $'+(g.threshold*4.2).toFixed(2)+' · threshold '+g.threshold+'%</div><div class="meter"><div class="'+cls+'" style="width:'+Math.min(100,g.spend)+'%"></div></div></div>'+
+      '<button class="btn-icon-sm" onclick="toast(\'Guardrail edit (period immutable) — demo\',\'info\')">✏️</button><button class="btn-icon-sm" onclick="toast(\'Guardrail deleted — LLM guardrails on Model Configurations are untouched\',\'success\')">🗑️</button></div>';
+  }).join('');
+}
+
+/* Tenant picker — TenantSessionGate → TenantPicker (one session = one tenant) */
+var TP_MEMBERSHIPS=[{id:'t1',name:'Acme Corporation',slug:'acme',role:'Tenant admin',isDefault:true,current:true},{id:'t2',name:'Globex Industries',slug:'globex',role:'Member',isDefault:false,current:false}];
+function tpOpen(){
+  var l=document.getElementById('tpList');
+  l.innerHTML=TP_MEMBERSHIPS.map(function(m){
+    return '<div class="picker-item'+(m.current?' selected':'')+'" style="display:flex;align-items:center;gap:12px;padding:11px 12px;border-radius:8px;cursor:pointer'+(m.current?';background:#EFF6FF;outline:1px solid #BFDBFE':'')+'" onclick="tpPick(\''+m.id+'\')">'+
+      '<span style="font-size:22px">🏢</span><div style="flex:1"><div style="font-weight:500">'+m.name+(m.isDefault?' <span class="chip" style="background:#DBEAFE;color:#1D4ED8">Default</span>':'')+'</div><div style="font-size:12px;color:var(--text-secondary)">'+m.role+'</div></div>'+(m.current?'<span style="font-size:12px;color:var(--text-secondary)">current</span>':'')+'</div>';
+  }).join('');
+  var cur=TP_MEMBERSHIPS.find(function(m){return m.current;});
+  document.getElementById('tpCurrent').textContent=cur?('Signed in as a member of '+cur.name+' — selecting it continues into the workspace.'):'';
+  document.getElementById('tenantPickerModal').style.display='flex';
+}
+function tpPick(id){
+  var m=TP_MEMBERSHIPS.find(function(x){return x.id===id;});tpClose();
+  if(m.current){toast('Continue with current tenant — session bound, straight into '+m.name+'.','info');}
+  else{toast('One session = one tenant: re-running OIDC sign-in against '+m.name+"'s identity provider (fresh token with matching tenant claim required).",'info');}
+}
+function tpClose(){document.getElementById('tenantPickerModal').style.display='none';}
+document.addEventListener('keydown',function(e){
+  if(e.key==='Escape'){['tenantPickerModal','dctDialog','soDialog'].forEach(function(id){var el=document.getElementById(id);if(el)el.style.display='none';});}
+});
+dctRender();soRender();
+</script>
 </body>
 </html>

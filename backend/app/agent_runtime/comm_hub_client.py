@@ -9,6 +9,7 @@ from typing import Any
 import httpx
 
 from app.core.config import get_settings
+from app.core.internal_http import internal_httpx_client
 from app.core.ssl_context import get_ssl_context
 
 logger = logging.getLogger(__name__)
@@ -101,14 +102,9 @@ class CommHubToolClient:
                 "verify": get_ssl_context(),
             }
             
-            # Prepare headers
+            # Prepare headers (cert header added below when on HTTP);
+            # tenant headers are attached by the internal_httpx_client hook.
             headers: dict[str, str] = {}
-            # Multi-tenancy: forward the run's CC-signed tenant header set
-            # verbatim (AR never re-signs) so CH can re-verify the context
-            # and propagate it to Control Center's fail-closed endpoints.
-            from app.core.tenant_signature import forward_tenant_headers
-
-            headers.update(forward_tenant_headers())
 
             # For HTTP (localhost dev), send certificate as header
             # For HTTPS (production), use actual TLS client cert
@@ -133,7 +129,7 @@ class CommHubToolClient:
                     "mTLS certificate NOT configured - tool call will fail authentication"
                 )
 
-            async with httpx.AsyncClient(**client_kwargs) as client:
+            async with internal_httpx_client(**client_kwargs) as client:
                 response = await client.post(endpoint, json=payload, headers=headers)
 
                 # Log response for debugging
@@ -232,12 +228,8 @@ class CommHubToolClient:
                 "verify": get_ssl_context(),
             }
             headers: dict[str, str] = {}
-            # Multi-tenancy: forward the run's CC-signed tenant header
-            # set verbatim — the A2A target resolves within the
-            # calling tenant on the CC side (task 1.6 hop).
-            from app.core.tenant_signature import forward_tenant_headers as _fth
-
-            headers.update(_fth())
+            # Tenant headers are attached by the internal_httpx_client hook —
+            # the A2A target resolves within the calling tenant on CC.
 
             if self._cert_path and self._key_path:
                 if self._comm_hub_url.startswith("https://"):
@@ -248,7 +240,7 @@ class CommHubToolClient:
                     cert_content = Path(self._cert_path).read_text()
                     headers["X-Client-Certificate"] = cert_content.replace("\n", "\\n")
 
-            async with httpx.AsyncClient(**client_kwargs) as client:
+            async with internal_httpx_client(**client_kwargs) as client:
                 response = await client.post(endpoint, json=payload, headers=headers)
                 response.raise_for_status()
                 return response.json()
@@ -314,10 +306,7 @@ class CommHubToolClient:
                 "verify": get_ssl_context(),
             }
             headers: dict[str, str] = {}
-            # Multi-tenancy: forward the run's CC-signed tenant headers.
-            from app.core.tenant_signature import forward_tenant_headers as _fth
-
-            headers.update(_fth())
+            # Tenant headers are attached by the internal_httpx_client hook.
 
             if self._cert_path and self._key_path:
                 if self._comm_hub_url.startswith("https://"):
@@ -328,7 +317,7 @@ class CommHubToolClient:
                     cert_content = Path(self._cert_path).read_text()
                     headers["X-Client-Certificate"] = cert_content.replace("\n", "\\n")
 
-            async with httpx.AsyncClient(**client_kwargs) as client:
+            async with internal_httpx_client(**client_kwargs) as client:
                 response = await client.post(endpoint, json=payload, headers=headers)
                 response.raise_for_status()
                 result_data = response.json()
@@ -391,10 +380,7 @@ class CommHubToolClient:
                 "verify": get_ssl_context(),
             }
             headers: dict[str, str] = {}
-            # Multi-tenancy: forward the run's CC-signed tenant headers.
-            from app.core.tenant_signature import forward_tenant_headers as _fth
-
-            headers.update(_fth())
+            # Tenant headers are attached by the internal_httpx_client hook.
 
             if self._cert_path and self._key_path:
                 if self._comm_hub_url.startswith("https://"):
@@ -405,7 +391,7 @@ class CommHubToolClient:
                     cert_content = Path(self._cert_path).read_text()
                     headers["X-Client-Certificate"] = cert_content.replace("\n", "\\n")
 
-            async with httpx.AsyncClient(**client_kwargs) as client:
+            async with internal_httpx_client(**client_kwargs) as client:
                 response = await client.get(
                     endpoint,
                     params={"timeout_seconds": capped_timeout},

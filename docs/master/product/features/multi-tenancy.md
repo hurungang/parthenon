@@ -43,8 +43,11 @@ A visitor registers with a personal email + password; their tenant workspace is 
 ### Tenant Admin Module
 Every tenant workspace includes a tenant admin module covering the tenant display name/alias, identity-provider configuration, and member management — alongside the standard workspace modules. Tenant users (including tenant root and admins) see only tenant modules; platform modules are visible only to root-tenant members with platform roles after signing into the root workspace.
 
-### Per-Tenant Identity Providers & JIT Default Role
-Each tenant configures its own OIDC provider independently; one provider configuration may also be shared, serving the root workspace and multiple tenants — the workspace address decides the session's tenant. Each provider configuration carries an optional **default tenant role** (from the seeded presets: Tenant System Admin / Agent Manager / Agent Executor / Agent Viewer). A first-time OIDC sign-in to a tenant with a default role configured is automatically onboarded with that role; if unset, the tenant stays invitation-only. Existing memberships are never changed by sign-in.
+### Strict Per-Tenant Identity Providers & JIT Default Role
+Each tenant uses **only its own identity provider** — there is no shared provider and no fallback chain. A sign-in to a workspace validates exclusively against that workspace's own configured provider. Each provider configuration carries an optional **default tenant role** (from the seeded presets: Tenant System Admin / Agent Manager / Agent Executor / Agent Viewer). A first-time OIDC sign-in to a tenant with a default role configured is automatically onboarded with that role; if unset, the tenant stays invitation-only. Existing memberships are never changed by sign-in.
+
+### No Workspace Switching
+One session is bound to exactly one tenant, and the root tenant is the default workspace. There is no in-session workspace switching: reaching another workspace always requires a fresh sign-in with an active membership there. With multi-tenancy disabled, only the root tenant's identity providers are used and sign-in to any non-root tenant workspace is rejected.
 
 ### License Tiers & Quotas
 Platform admins assign each tenant a license defining a tier — free / team / enterprise — with limits on maximum users, maximum agent types, and monthly agent executions (counted per calendar month, reset monthly). A tenant without a license automatically runs on the free tier. Reaching a quota blocks the corresponding action (inviting users, creating agent types, submitting executions) with feedback naming the tier, limit, current usage, and upgrade path; one exhausted quota does not block unrelated actions. Tenants and platform admins see tier, limits, and current usage at a glance.
@@ -54,13 +57,18 @@ Tenants have a unique name and unique web address. Platform admins can create, e
 
 ## Isolation Guarantees
 
-- **Everything is tenant-owned**: roles, agents, agent identities, MCP hubs and sessions, skills, SOPs, schedules, model configurations, conversations, execution logs, outputs, saved data, notifications, and API keys each belong to exactly one tenant and are filtered automatically in every list, search, and action.
+Isolation is **strict**: every tenant is fully independent — no cross-tenant fallback, sharing, or visibility of business data, ever (see [Strict Tenant Isolation](strict-tenant-isolation.md)).
+
+- **Everything is tenant-owned**: roles, agents, agent identities, MCP hubs and sessions, skills, SOPs, schedules, model configurations, conversations, execution logs, outputs, saved data, notifications, and API keys each belong to exactly one tenant and are filtered automatically in every list, search, and action. Lookups match the exact session tenant only — never shared or tenant-less rows.
 - **Strict permission containment**: any grant, including wildcards, applies only within the session's tenant — verified by automated containment tests.
 - **Tenant-bound sessions**: a session created at one tenant's address is invalid everywhere outside that tenant.
 - **Agent isolation**: agents execute only with their tenant's skills, tools, credentials, and identities; agent-to-agent messages cannot cross tenants.
 - **API keys are tenant-bound**: a tenant's API key cannot access another tenant's resources.
 - **Operator limits**: platform admins manage tenant metadata and licenses but cannot browse tenant business data or alter a tenant root.
 - **Auditable boundaries**: cross-tenant access attempts, root-protection violations, and quota events are recorded with tenant attribution and visible to the platform admin.
+- **Fail-closed internal services**: internal endpoints between Control Center, Communication Hub, and Agent Runtime require a valid signed tenant context on every call; requests without one are rejected, never defaulted.
+- **Per-tenant naming**: entity names and slugs — including MCP server slugs — are unique per tenant, not platform-wide.
+- **No tenant-less data**: a one-time, idempotent migration adopted all legacy tenant-less (NULL-tenant) shared rows (data types, seeded skills, scheduled jobs, shared recipient groups) into the root tenant; re-running it makes no further changes, and the shared slot no longer exists as a concept.
 
 ## Acceptance Criteria
 

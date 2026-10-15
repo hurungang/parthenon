@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 import {
   detectStatePlaceholders,
   detectStatePlaceholdersFromQuestions,
+  resolveStateMapping,
 } from '../utils/decisionStatePaths'
 import {
   RESERVED_SERVER_NAMES,
@@ -44,6 +45,48 @@ describe('detectStatePlaceholders', () => {
         'and `state.tier` then `state.risk` again',
       ]),
     ).toEqual(['state.risk', 'state.tier'])
+  })
+})
+
+describe('resolveStateMapping (state maps from the input only)', () => {
+  it('auto-matches same-named keys silently', () => {
+    expect(resolveStateMapping(['amount', 'tier'], [], ['amount', 'tier', 'x'])).toEqual({
+      matched: { amount: 'amount', tier: 'tier' },
+      unmatched: [],
+    })
+  })
+
+  it('reports unmatched keys for the UI mapper', () => {
+    expect(resolveStateMapping(['aaa'], [], ['bbb'])).toEqual({
+      matched: {},
+      unmatched: ['aaa'],
+    })
+  })
+
+  it('explicit rename mappings win over 1:1', () => {
+    expect(
+      resolveStateMapping(['aaa'], [{ state_key: 'aaa', key: 'bbb' }], ['bbb']),
+    ).toEqual({ matched: { aaa: 'bbb' }, unmatched: [] })
+  })
+
+  it('explicit mappings to unknown fields stay unmatched', () => {
+    expect(
+      resolveStateMapping(['aaa'], [{ state_key: 'aaa', key: 'nope' }], ['bbb']),
+    ).toEqual({ matched: {}, unmatched: ['aaa'] })
+  })
+
+  it('dedupes preset keys and placeholders in first-seen order', () => {
+    const result = resolveStateMapping(
+      ['risk', 'amount'],
+      [{ state_key: 'risk', key: 'risk' }],
+      ['risk', 'amount'],
+    )
+    expect(Object.keys(result.matched)).toEqual(['risk', 'amount'])
+    expect(result.unmatched).toEqual([])
+  })
+
+  it('handles empty inputs', () => {
+    expect(resolveStateMapping([], [], [])).toEqual({ matched: {}, unmatched: [] })
   })
 })
 

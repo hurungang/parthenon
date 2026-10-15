@@ -441,6 +441,7 @@ class ModelAvailabilityService:
         # Find active terminate-posture guardrails for this vendor+model
         guards_result = await db.execute(
             select(ModelGuardrailConfiguration).where(
+                ModelGuardrailConfiguration.config_source == "model_config",
                 ModelGuardrailConfiguration.model_id == vendor_config_id,
                 ModelGuardrailConfiguration.model_name == model_name,
                 ModelGuardrailConfiguration.is_active.is_(True),

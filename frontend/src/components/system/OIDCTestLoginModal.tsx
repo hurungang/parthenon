@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import {
+  Alert,
   Box,
   Button,
   CircularProgress,
@@ -157,6 +158,12 @@ export function OIDCTestLoginModal({
                   : t('systemConfig.oidcTest.failed')}
               </Typography>
             </Box>
+
+            {result.status === 'failed' && result.error ? (
+              <Alert severity="error" sx={{ mb: 2 }}>
+                {String(result.error)}
+              </Alert>
+            ) : null}
 
             {result.status === 'completed' && (
               <>

@@ -23,6 +23,8 @@ from pathlib import Path
 from typing import Any
 
 import httpx
+
+from app.core.internal_http import internal_httpx_client
 from fastapi import Request, Response
 from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
@@ -115,7 +117,7 @@ async def _validate_api_key_with_cc(
 
     try:
         client_kwargs, headers = _build_mtls_client(request)
-        async with httpx.AsyncClient(**client_kwargs) as client:
+        async with internal_httpx_client(**client_kwargs) as client:
             response = await client.post(
                 f"{control_center_url}/api/v1/internal/auth/validate-api-key",
                 json={"key_hash": key_hash},

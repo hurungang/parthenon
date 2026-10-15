@@ -278,3 +278,27 @@ Multi-tenancy is implemented as an opt-in platform mode controlled by a `multi_t
 | Platform OIDC configuration (11.7) | behaviour (retarget) | NO retarget needed: per-tenant provider CRUD binds to the resolved workspace context, so the EXISTING `/system/identity-providers` page manages the ROOT tenant's config when signed into `root` (resolved by the registry as the root slot) | `frontend/src/pages/system/IdentityProvidersConfigPage.tsx` |
 | `test_platform_permission_gating.py` | test (rewritten) | Containment semantics (supersedes FIX-235927 pins; every changed assertion called out in the docstring): T1 role-containment denial, T2 root-workspace effectiveness (+T2b customer-tenant denial), T3 root Platform Admin ROLE, T3b roleless membership denied, T3c rogue tenant platform wildcard cannot cross, T4 OFF root-world pin, T5 super-admin pin | `backend/tests/test_platform_permission_gating.py` |
 | conftest root-cache reset | fixture (new) | Autouse per-test `invalidate_root_tenant_cache()` — tests seed different root tenants; the production TTL cache must not leak ids across tests | `backend/tests/conftest.py` |
+
+## Strict Tenant Isolation (as-built — strict-tenant-isolation change)
+
+Tenant isolation is strict and fail-closed on the data plane:
+
+- **Mandatory signed tenant context on internal data-plane traffic** — `require_internal_tenant_context` (shared FastAPI dependency in `backend/app/api/deps.py`) wraps `verify_request_tenant_context` and returns 401 on missing/stale/invalidly-signed `X-Internal-Tenant-*` headers; applied to the internal data-plane routers in `backend/app/api/v1/internal/` (`system_tools`, `session_data`, `outputs`, `agent_data`, `mcp_proxy`, `authorization`). Non-data-plane internal routers (certificates, bootstrap, validate_api_key) keep certificate-only auth. With multi-tenancy off, headers bind the root tenant instead of 401ing.
+- **No NULL-tenant slot** — migration `b8c9d0e1f2a3` adopts legacy NULL-tenant rows into the root tenant (idempotent) and makes `tenant_id` NOT NULL on data-plane tables, dropping NULL-variant partial unique indexes; `McpServer.slug` uniqueness becomes per-tenant. All `tenant_id IS NULL OR tenant_id = own` fallbacks were removed in favour of exact tenant matching.
+- **Global egress hook** — `internal_httpx_client` / `attach_forwarded_tenant_headers` (`backend/app/core/internal_http.py`) is the standard httpx client factory for CH/AR→CC internal calls; it stamps the run's forwarded signed headers on every request.
+- **WS chat loopback** — the CH WebSocket chat endpoint accepts both token kinds (user JWT and platform-account JWT), binds the connection's tenant, and signs the tenant context for the CC loopback call via `sign_context_for_authenticated_session` (`backend/app/core/tenant_signature.py`).
+- **Strict per-tenant identity providers** — OIDC provider resolution is strictly per-tenant (own slot → shared → root, no tenant-less fallback widening); `get_default_provider` resolves within the bound tenant; migration `c9d0e1f2a3b4` enforces per-tenant scope uniqueness on `identity_provider_configs`.
+
+### As-built Code Reference Map additions
+
+| Symbol | Type | Description | File |
+|--------|------|-------------|------|
+| `require_internal_tenant_context` | function | Shared dependency enforcing a mandatory signed tenant context on internal data-plane routers; 401 on missing/invalid headers, root-default when multi-tenancy off | `backend/app/api/deps.py` |
+| `internal_httpx_client` | function | Global egress httpx client factory for CH/AR→CC internal calls | `backend/app/core/internal_http.py` |
+| `attach_forwarded_tenant_headers` | function | Egress hook stamping forwarded signed `X-Internal-Tenant-*` headers on every request | `backend/app/core/internal_http.py` |
+| `sign_context_for_authenticated_session` | function | Signs a tenant context for an authenticated (non-anonymous) session — WS chat loopback | `backend/app/core/tenant_signature.py` |
+| `extract_tenant_signature_headers` | function | Reads the signed header set from incoming headers | `backend/app/core/tenant_signature.py` |
+| `reset_forwarded_tenant_headers` | function | Resets the forwarding contextvar from a token | `backend/app/core/tenant_signature.py` |
+| websocket chat auth + tenant binding | endpoint behaviour | WS chat authenticates both token kinds, binds the tenant, and signs the CC loopback context | `backend/app/api/ws/chat.py` (`_signed_tenant_forwarding`, `websocket_chat`) |
+| Adoption migration | migration | NULL-tenant → root adoption + NOT NULL `tenant_id` + per-tenant MCP slug scoping; idempotent | `backend/alembic/versions/b8c9d0e1f2a3_per_tenant_entity_adoption_and_mcp_slug_scoping.py` |
+| Per-tenant IdP scope uniqueness | migration | Unique tenant scope on `identity_provider_configs` | `backend/alembic/versions/c9d0e1f2a3b4_unique_tenant_scope_on_identity_provider_configs.py` |

@@ -1194,12 +1194,16 @@ class AgentRuntimeExecutor:
         # Filter out system/agent tools from MCP query.
         tool_names = []
         agent_target_slugs: list[str] = []
+        decision_tool_names: list[str] = []
         for t in allowed_tools:
             if is_system_tool(t):
                 continue
             try:
                 server_slug, bare_tool = parse_tool_name(t)
                 if server_slug == "system":
+                    continue
+                if server_slug == "decision":
+                    decision_tool_names.append(bare_tool)
                     continue
                 if server_slug == "agent":
                     agent_target_slugs.append(bare_tool)
@@ -1245,6 +1249,75 @@ class AgentRuntimeExecutor:
                     )
                 )
         
+        # ── Decision tools (virtual — no mcp_tools row) ──────────────────────
+        # ``decision____<name>`` resolves strictly within the calling
+        # tenant's enabled decision tools; the definition is built from the
+        # System One definition instead of the mcp_tools table.
+        if decision_tool_names:
+            from sqlalchemy import select as _select
+            from sqlalchemy.orm import selectinload
+
+            from app.db.models.decision_tools import DecisionTool
+            from app.db.tenant_scoping import scope_for_session
+            from app.services.system_one.decision_tool_service import (
+                UNAVAILABLE_TOOL_NOTE,
+                build_input_schema,
+                generate_tool_description,
+                is_decision_tool_ready,
+            )
+
+            decision_predicates: list[Any] = [
+                DecisionTool.name.in_(decision_tool_names),
+                DecisionTool.enabled.is_(True),
+            ]
+            _tenant_id = scope_for_session(db)
+            if _tenant_id is not None:
+                decision_predicates.append(DecisionTool.tenant_id == _tenant_id)
+            decision_rows = await db.execute(
+                _select(DecisionTool)
+                .where(*decision_predicates)
+                .options(selectinload(DecisionTool.questions))
+            )
+            found_decision_names: set[str] = set()
+            for decision_tool in decision_rows.scalars().all():
+                unready = not is_decision_tool_ready(decision_tool)
+                if unready:
+                    # Enabled-but-unready: register a STUB so the LLM knows
+                    # the tool exists but is unavailable — the model should
+                    # REPORT that instead of emitting raw tool-call syntax.
+                    logger.warning(
+                        "decision tool '%s' is enabled but not ready: "
+                        "missing input/output data type — registered "
+                        "as an unavailable stub in the toolset",
+                        decision_tool.name,
+                    )
+                found_decision_names.add(decision_tool.name)
+                canonical_name = build_tool_name("decision", decision_tool.name)
+                sanitized_name = _sanitize_tool_name_for_openai(canonical_name)
+                tool_name_map[sanitized_name] = canonical_name
+                description = generate_tool_description(decision_tool)
+                if unready:
+                    description = (
+                        f"{description}\n\n{UNAVAILABLE_TOOL_NOTE}"
+                    )
+                defs.append(
+                    {
+                        "type": "function",
+                        "function": {
+                            "name": sanitized_name,
+                            "description": description,
+                            "parameters": build_input_schema(decision_tool)
+                            or {"type": "object", "properties": {}},
+                        },
+                    }
+                )
+            missing_decision = set(decision_tool_names) - found_decision_names
+            if missing_decision:
+                logger.warning(
+                    "Some decision tools not found (or disabled) in caller tenant: %s",
+                    ", ".join(sorted(missing_decision)),
+                )
+
         if not tool_names:
             logger.debug("No MCP tools to load (only system/agent tools)")
             return defs, tool_name_map

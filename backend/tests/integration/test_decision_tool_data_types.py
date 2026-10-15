@@ -352,9 +352,19 @@ class TestDataTypeReferences:
             None,
             LOAN_FIELDS,
         )
+        output_type = await make_data_type(
+            f"protected-out-{uuid.uuid4().hex[:8]}",
+            f"protected-out-{uuid.uuid4().hex[:8]}",
+            None,
+            RESULT_FIELDS,
+        )
         created = await client.post(
             TOOLS_URL,
-            json=_tool_body("blocking_tool", input_id=input_type["id"]),
+            json=_tool_body(
+                "blocking_tool",
+                input_id=input_type["id"],
+                output_id=output_type["id"],
+            ),
         )
         assert created.status_code == 201
 
@@ -415,11 +425,18 @@ class TestStatePresetAgainstInputFields:
             None,
             LOAN_FIELDS,
         )
+        output_type = await make_data_type(
+            f"preset-ok-out-{uuid.uuid4().hex[:8]}",
+            f"preset-ok-out-{uuid.uuid4().hex[:8]}",
+            None,
+            RESULT_FIELDS,
+        )
         resp = await client.post(
             TOOLS_URL,
             json=_tool_body(
                 "good_preset",
                 input_id=input_type["id"],
+                output_id=output_type["id"],
                 state_preset={"amt": {"source": "input", "key": "amount"}},
             ),
         )
@@ -428,23 +445,35 @@ class TestStatePresetAgainstInputFields:
             "amt": {"source": "input", "key": "amount"}
         }
 
-    async def test_agent_data_mapping_free_form(
+    async def test_agent_data_mapping_rejected_with_clear_error(
         self, client, provider_configured, make_data_type
     ):
+        """``agent_data`` is retired — state maps FROM THE INPUT ONLY.
+        The schema rejects legacy payloads with a clear 422 naming both
+        the offending source and the only allowed value."""
         input_type = await make_data_type(
             f"preset-ad-{uuid.uuid4().hex[:8]}",
             f"preset-ad-{uuid.uuid4().hex[:8]}",
             None,
             LOAN_FIELDS,
         )
+        output_type = await make_data_type(
+            f"preset-ad-out-{uuid.uuid4().hex[:8]}",
+            f"preset-ad-out-{uuid.uuid4().hex[:8]}",
+            None,
+            RESULT_FIELDS,
+        )
         resp = await client.post(
             TOOLS_URL,
             json=_tool_body(
                 "agent_data_preset",
                 input_id=input_type["id"],
+                output_id=output_type["id"],
                 state_preset={
                     "history": {"source": "agent_data", "key": "anything_goes"}
                 },
             ),
         )
-        assert resp.status_code == 201, resp.text
+        assert resp.status_code == 422, resp.text
+        assert "agent_data" in resp.text
+        assert "input" in resp.text

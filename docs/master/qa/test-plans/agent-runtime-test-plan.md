@@ -422,3 +422,17 @@ This module has `has_db_changes: true`. Before running any tests:
 - `e2e/tests/service-segregation-security-audit.spec.ts` — Real backend deny-path checks for internal authorize/system-tools endpoints and revocation contract endpoint wiring
 - `backend/tests/unit/services/test_plan_generation_service.py` — AgentRuntimeLoader plan injection unit tests (loaded via agent-plan-mode change)
 - `backend/tests/integration/api/test_agent_types_plan.py` — plan injection integration coverage
+
+---
+
+## strict-tenant-isolation Update (2026-10)
+
+Agent Runtime is virtual-tenant aware: the run tenant is resolved once from the signed internal context (fail-closed) and stamped on every downstream internal call; A2A delegation resolves strictly by `(tenant, name)`; scheduler jobs dispatch only under their owning tenant.
+
+Test files added (verified present):
+
+- `backend/tests/agent_runtime/test_ar_virtual_tenant_run.py` — forwarded-header binding, no contextvar bleed between concurrent runs, `CommHubToolClient.call_tool` stamps forwarded `X-Internal-Tenant-*` verbatim, scheduler NULL-tenant hard skip / owning-tenant dispatch / missing-tenant-row skip
+- `backend/tests/integration/test_a2a_tenant_delegation.py` — `agent____<slug>` (tenant, name) resolution, cross-tenant name-collision containment, delegated-job tenant stamping, fail-closed 404 miss
+- `backend/tests/integration/test_internal_http_egress.py` — internal HTTP egress carries signed tenant headers
+
+E2E: N/A — backend-only change.

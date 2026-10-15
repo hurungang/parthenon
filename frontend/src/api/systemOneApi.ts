@@ -9,10 +9,11 @@ import apiClient from './apiClient'
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
-export type SystemOneProviderType = 'typesafe'
+/** Vendor type — extensible backend enum (GET /system-one/provider-types). */
+export type SystemOneProviderType = 'typesafe' | (string & {})
 
-/** Preset provider base URL (non-editable for this release). */
-export const SYSTEM_ONE_PRESET_BASE_URL = 'https://api.typesafe.ai/v1'
+/** Preset FULL endpoint URL (create-form default), used verbatim. */
+export const SYSTEM_ONE_PRESET_BASE_URL = 'https://api.typesafe.ai/v1/systemone'
 
 export interface SystemOneProvider {
   id: string
@@ -28,7 +29,7 @@ export interface SystemOneProvider {
 export interface SystemOneProviderCreate {
   provider_type?: SystemOneProviderType
   display_name: string
-  /** Defaults to the preset base URL server-side; sent read-only. */
+  /** Editable per tenant; defaults to the preset base URL server-side. */
   base_url?: string
   default_model?: string
   api_key: string
@@ -38,7 +39,8 @@ export interface SystemOneProviderCreate {
 
 export interface SystemOneProviderUpdate {
   display_name?: string
-  /** Preset — not editable. */
+  /** Editable per tenant — required by the form on update. */
+  base_url?: string
   default_model?: string
   /** Omit to keep the existing key — never sent empty. */
   api_key?: string
@@ -53,11 +55,54 @@ export interface SystemOneTestConnectionResult {
   latency_ms?: number | null
 }
 
+/** One selectable vendor type served by GET /system-one/provider-types. */
+export interface SystemOneProviderTypeOption {
+  value: string
+  label: string
+}
+
+/** Model ids discovered from the vendor's OpenAI-compatible /models endpoint. */
+export interface VendorModelSyncResult {
+  models: string[]
+}
+
 export interface SystemOneStatus {
   configured: boolean
   provider_type?: SystemOneProviderType | null
   provider_id?: string | null
   model?: string | null
+  provider_count?: number
+}
+
+// ── Decision model catalogue (provider/model hierarchy + toggles) ──────────
+
+export type DecisionModelDisabledReason = 'manual' | 'vendor_cascaded'
+
+/** Per-model availability entry within the provider hierarchy. */
+export interface DecisionModelAvailabilityEntry {
+  availability_id: string | null
+  model_name: string
+  effective_is_disabled: boolean
+  disabled_reason: DecisionModelDisabledReason | null
+}
+
+/** One provider with its model catalogue in the hierarchy listing. */
+export interface DecisionModelHierarchyEntry {
+  provider_id: string
+  display_name: string
+  provider_type: SystemOneProviderType
+  default_model: string
+  is_disabled: boolean
+  models: DecisionModelAvailabilityEntry[]
+}
+
+/** Flat enabled-models entry feeding the authoring selector. */
+export interface DecisionEnabledModel {
+  availability_id: string
+  provider_id: string
+  provider_type: SystemOneProviderType
+  provider_display_name: string
+  model_name: string
 }
 
 export type DecisionOutcome = 'act' | 'confirm' | 'escalate'
@@ -88,6 +133,14 @@ export interface DecisionExecutionResult {
   answers: {
     answers?: Record<string, DecisionAnswer>
     gate_confidence?: number
+    /** Provider/model identity recorded by the decision engine (audit). */
+    provider?: {
+      provider_id: string
+      provider_type: string
+      provider_display_name: string
+      model_name: string
+      usage?: Record<string, unknown>
+    } | null
   } | null
   outcome: DecisionOutcome
   status: DecisionExecutionStatus
@@ -156,6 +209,175 @@ export async function testSystemOneProviderConnection(
 ): Promise<SystemOneTestConnectionResult> {
   const { data } = await apiClient.post<SystemOneTestConnectionResult>(
     `/system-one/providers/${providerId}/test`,
+  )
+  return data
+}
+
+/**
+ * Selectable vendor (provider) types — served by the backend enum, never
+ * hardcoded client-side.
+ */
+export async function listSystemOneProviderTypes(): Promise<
+  SystemOneProviderTypeOption[]
+> {
+  const { data } = await apiClient.get<SystemOneProviderTypeOption[]>(
+    '/system-one/provider-types',
+  )
+  return data
+}
+
+/**
+ * Discover the vendor's model catalogue via its OpenAI-compatible
+ * /models endpoint (with the stored key). Returns model ids only.
+ */
+export async function listVendorModels(
+  providerId: string,
+): Promise<VendorModelSyncResult> {
+  const { data } = await apiClient.get<VendorModelSyncResult>(
+    `/system-one/providers/${providerId}/vendor-models`,
+  )
+  return data
+}
+
+/** Import vendor model ids as availability rows (enabled by default). */
+export async function importVendorModels(
+  providerId: string,
+  models: string[],
+): Promise<SystemOneProvider> {
+  const { data } = await apiClient.post<SystemOneProvider>(
+    `/system-one/providers/${providerId}/import-models`,
+    { models },
+  )
+  return data
+}
+
+// ── Decision model catalogue API ───────────────────────────────────────────
+
+/** Provider → model hierarchy with effective availability state. */
+export async function listDecisionModelHierarchy(): Promise<
+  DecisionModelHierarchyEntry[]
+> {
+  const { data } = await apiClient.get<DecisionModelHierarchyEntry[]>(
+    '/system-one/models',
+  )
+  return data
+}
+
+/** Vendor-level enable/disable — cascades to the provider's models. */
+export async function setProviderAvailability(
+  providerId: string,
+  isDisabled: boolean,
+): Promise<SystemOneProvider> {
+  const { data } = await apiClient.put<SystemOneProvider>(
+    `/system-one/providers/${providerId}/availability`,
+    { is_disabled: isDisabled },
+  )
+  return data
+}
+
+/** Per-model manual disable/enable. */
+export async function setDecisionModelAvailability(
+  availabilityId: string,
+  isDisabled: boolean,
+): Promise<void> {
+  await apiClient.put(`/system-one/models/${availabilityId}/availability`, {
+    is_disabled: isDisabled,
+  })
+}
+
+/** Flat enabled-models list (provider enabled + model enabled). */
+export async function listEnabledDecisionModels(): Promise<
+  DecisionEnabledModel[]
+> {
+  const { data } = await apiClient.get<DecisionEnabledModel[]>(
+    '/system-one/enabled-models',
+  )
+  return data
+}
+
+// ── Decision guardrails (FIX-20261014-003000) ──────────────────────────────
+// Guardrail management embedded in the Decision Model Providers module.
+// Reuses the model-usage guardrail stack (same tables); rows are keyed via
+// decision_provider_id and NEVER mixed with LLM model-config guardrails.
+
+export interface DecisionGuardrail {
+  id: string
+  decision_provider_id: string | null
+  model_id: string | null
+  model_name: string
+  period: 'hour' | 'day' | 'week' | 'month'
+  limit_value: number
+  unit: 'k' | 'tokens'
+  enforcement_posture: 'terminate' | 'observe_only'
+  is_active: boolean
+  details: Record<string, unknown>
+  created_at: string
+  updated_at: string
+}
+
+export interface DecisionGuardrailCreatePayload {
+  model_name: string
+  period: DecisionGuardrail['period']
+  limit_value: number
+  unit: DecisionGuardrail['unit']
+  enforcement_posture: DecisionGuardrail['enforcement_posture']
+  is_active: boolean
+}
+
+export interface DecisionGuardrailUpdatePayload {
+  limit_value?: number
+  unit?: DecisionGuardrail['unit']
+  enforcement_posture?: DecisionGuardrail['enforcement_posture']
+  is_active?: boolean
+}
+
+/** Guardrails configured for one decision provider's models. */
+export async function listDecisionGuardrails(
+  providerId: string,
+): Promise<DecisionGuardrail[]> {
+  const { data } = await apiClient.get<DecisionGuardrail[]>(
+    `/system-one/providers/${providerId}/guardrails`,
+  )
+  return data
+}
+
+/** Create one per-period guardrail for a decision provider model. */
+export async function createDecisionGuardrail(
+  providerId: string,
+  payload: DecisionGuardrailCreatePayload,
+): Promise<DecisionGuardrail> {
+  const { data } = await apiClient.post<DecisionGuardrail>(
+    `/system-one/providers/${providerId}/guardrails`,
+    payload,
+  )
+  return data
+}
+
+/** Partially update one decision guardrail (period is immutable). */
+export async function updateDecisionGuardrail(
+  guardrailId: string,
+  payload: DecisionGuardrailUpdatePayload,
+): Promise<DecisionGuardrail> {
+  const { data } = await apiClient.put<DecisionGuardrail>(
+    `/system-one/guardrails/${guardrailId}`,
+    payload,
+  )
+  return data
+}
+
+/** Hard-delete one decision guardrail (LLM rows are not reachable). */
+export async function deleteDecisionGuardrail(guardrailId: string): Promise<void> {
+  await apiClient.delete(`/system-one/guardrails/${guardrailId}`)
+}
+
+/** Usage posture snapshots for one decision provider's guardrails. */
+export async function getDecisionGuardrailPosture(
+  providerId: string,
+  refresh = true,
+): Promise<import('../types').ModelUsagePosture[]> {
+  const { data } = await apiClient.get<import('../types').ModelUsagePosture[]>(
+    `/system-one/providers/${providerId}/guardrails/posture`,
+    { params: { refresh } },
   )
   return data
 }

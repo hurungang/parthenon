@@ -1,5 +1,5 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen, fireEvent } from '@testing-library/react'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { render, screen, fireEvent, cleanup } from '@testing-library/react'
 import React from 'react'
 
 // Mock i18next
@@ -24,7 +24,7 @@ vi.mock('../permissions/PermissionDeniedAlert', () => ({
 
 // Mock systemConfigApi
 const mockTestConnection = vi.fn()
-vi.mock('../../api/systemConfigApi', () => ({
+vi.mock('../api/systemConfigApi', () => ({
   testOidcConnection: (...args: any[]) => mockTestConnection(...args),
 }))
 
@@ -33,10 +33,11 @@ import { OIDCTestConfigModal } from '../components/system/OIDCTestConfigModal'
 describe('OIDCTestConfigModal', () => {
   const mockOnClose = vi.fn()
 
+  afterEach(cleanup)
+
   beforeEach(() => {
     vi.clearAllMocks()
-    mockTestConnection.mockResolvedValue({
-      success: true,
+    mockTestConnection.mockResolvedValue({      success: true,
       steps: [
         { step: 'discovery', status: 'passed', detail: 'Discovery OK' },
         { step: 'jwks', status: 'passed', detail: 'JWKS OK' },
@@ -130,5 +131,45 @@ describe('OIDCTestConfigModal', () => {
       issuerUrl: 'https://example.com', clientId: 'test-client',
     }))
     expect(screen.getByText('app.close')).toBeDefined()
+  })
+
+  it('shows client_id status line after a successful test', async () => {
+    mockTestConnection.mockResolvedValue({
+      success: true,
+      steps: [{ step: 'discovery', status: 'passed', detail: 'Discovery OK' }],
+      discovery_doc: { issuer: 'https://example.com' },
+      client_id_status: {
+        client_id: 'parthenon-api',
+        status: 'ok',
+        detail: 'accepted',
+      },
+    })
+    render(React.createElement(OIDCTestConfigModal, {
+      open: true, onClose: mockOnClose,
+      issuerUrl: 'https://example.com', clientId: 'parthenon-api',
+    }))
+    fireEvent.click(screen.getByText('systemConfig.oidcTest.runTest'))
+    expect(await screen.findByText((_, el) =>
+      el?.textContent === 'parthenon-api — systemConfig.oidcTest.clientVerified'
+    )).toBeDefined()
+  })
+
+  it('shows a warning line for a missing client_id', async () => {
+    mockTestConnection.mockResolvedValue({
+      success: true,
+      steps: [{ step: 'discovery', status: 'passed', detail: 'Discovery OK' }],
+      discovery_doc: { issuer: 'https://example.com' },
+      client_id_status: {
+        client_id: null,
+        status: 'missing',
+        detail: 'client_id is empty',
+      },
+    })
+    render(React.createElement(OIDCTestConfigModal, {
+      open: true, onClose: mockOnClose,
+      issuerUrl: 'https://example.com', clientId: '',
+    }))
+    fireEvent.click(screen.getByText('systemConfig.oidcTest.runTest'))
+    expect(await screen.findByText('systemConfig.oidcTest.clientMissing')).toBeDefined()
   })
 })

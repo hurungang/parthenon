@@ -15,6 +15,7 @@ import DeleteIcon from '@mui/icons-material/Delete'
 import EditIcon from '@mui/icons-material/Edit'
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore'
 import { type ReactNode, useMemo, useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import PermissionDeniedAlert from '../permissions/PermissionDeniedAlert'
 import { useDialogErrorHandler } from '../../hooks/useDialogErrorHandler'
@@ -29,6 +30,13 @@ import {
 } from '../../hooks/useModelUsageGuardrailMutations'
 import { useModelUsagePosture } from '../../hooks/useModelUsagePosture'
 import { useAvailableModels } from '../../hooks/useAvailableModels'
+import {
+  useDecisionGuardrails,
+  useDecisionGuardrailPosture,
+  useUpdateDecisionGuardrail,
+  useDeleteDecisionGuardrail,
+} from '../../hooks/useDecisionGuardrails'
+import { listDecisionModelHierarchy } from '../../api/systemOneApi'
 import type {
   ModelAvailabilityEntry,
   ModelAvailabilityHierarchy,
@@ -39,6 +47,21 @@ import type {
 } from '../../types'
 import { AddGuardrailForm } from './AddGuardrailForm'
 
+/** Mutation surface the guardrail rows consume (LLM or decision adapter). */
+export interface GuardrailUpdateMutation {
+  mutateAsync: (args: {
+    limitId: string
+    payload: {
+      limit_value?: number
+      unit?: ModelUsageGuardrailLimit['unit']
+      enforcement_posture?: ModelUsageGuardrailLimit['enforcement_posture']
+      is_active?: boolean
+      details?: Record<string, unknown>
+    }
+  }) => Promise<unknown>
+  isPending: boolean
+}
+
 interface VendorModelGuardrailPanelProps {
   /** Optional override: the hierarchy payload (for tests). */
   hierarchy?: ModelAvailabilityHierarchy
@@ -46,6 +69,16 @@ interface VendorModelGuardrailPanelProps {
   posture?: ModelUsagePosture[]
   /** Optional override: refetch interval for the availability query. */
   refetchInterval?: number
+  /**
+   * When set, the panel renders DECISION scope (FIX-20261014-003000):
+   * data comes from the decision-scoped `/system-one` endpoints (provider
+   * hierarchy + `config_source='decision_provider'` guardrails on the SAME
+   * tables) and guardrail create/update/delete go through the decision
+   * endpoints. LLM model-config endpoints are never called. Availability
+   * enable/disable switches are hidden — provider/model enablement lives in
+   * the Decision Model Providers page and its editor dialog.
+   */
+  decisionProviderId?: string
   /**
    * When true, the panel renders as a read-only dashboard:
    * - all enable/disable switches, edit buttons, and remove buttons
@@ -98,6 +131,7 @@ export function VendorModelGuardrailPanel({
   hierarchy: hierarchyOverride,
   posture: postureOverride,
   readonly = false,
+  decisionProviderId,
 }: VendorModelGuardrailPanelProps): ReactNode {
   const { t } = useTranslation()
   const {
@@ -121,17 +155,108 @@ export function VendorModelGuardrailPanel({
     clearDialogError: clearGuardrailError,
   } = useDialogErrorHandler()
 
-  const availabilityQuery = useModelAvailability()
-  const postureQuery = useModelUsagePosture()
+  const isDecision = decisionProviderId != null
+
+  // LLM-scoped queries are disabled in decision scope so the panel never
+  // calls the /agents endpoints there.
+  const availabilityQuery = useModelAvailability(!isDecision)
+  const postureQuery = useModelUsagePosture(!isDecision)
   const setVendorMutation = useSetVendorDisabled()
   const setModelMutation = useSetModelDisabled()
-  const updateGuardrail = useUpdateModelUsageLimit()
-  const deleteGuardrail = useDeleteModelUsageLimit()
-  const { data: availableModels = [] } = useAvailableModels()
+  const llmUpdateGuardrail = useUpdateModelUsageLimit()
+  const llmDeleteGuardrail = useDeleteModelUsageLimit()
+  const { data: availableModels = [] } = useAvailableModels(!isDecision)
 
-  const hierarchy = hierarchyOverride ?? availabilityQuery.data ?? []
-  const posture = postureOverride ?? postureQuery.data ?? []
-  const isLoading = availabilityQuery.isLoading && !hierarchyOverride
+  // Decision-scope data sources (FIX-20261014-003000).
+  const decisionGuardrailsQuery = useDecisionGuardrails(decisionProviderId ?? null)
+  const decisionPostureQuery = useDecisionGuardrailPosture(decisionProviderId ?? null)
+  const decisionUpdateGuardrail = useUpdateDecisionGuardrail()
+  const decisionDeleteGuardrail = useDeleteDecisionGuardrail()
+  const decisionHierarchyQuery = useQuery<
+    Awaited<ReturnType<typeof listDecisionModelHierarchy>>,
+    Error
+  >({
+    queryKey: ['system-one', 'models'],
+    queryFn: listDecisionModelHierarchy,
+    enabled: isDecision,
+  })
+
+  const updateGuardrail: GuardrailUpdateMutation = isDecision
+    ? {
+        mutateAsync: ({ limitId, payload }) =>
+          decisionUpdateGuardrail.mutateAsync({ guardrailId: limitId, payload }),
+        isPending: decisionUpdateGuardrail.isPending,
+      }
+    : llmUpdateGuardrail
+  const deleteGuardrail = isDecision ? decisionDeleteGuardrail : llmDeleteGuardrail
+
+  // Decision hierarchy: project provider → model (+ grouped guardrails)
+  // into the same VendorAvailabilityNode shape the LLM scope renders.
+  const decisionHierarchy: ModelAvailabilityHierarchy = useMemo(() => {
+    if (!isDecision) return []
+    const guardrails = decisionGuardrailsQuery.data ?? []
+    return (decisionHierarchyQuery.data ?? []).map((provider) => ({
+      vendor_config_id: provider.provider_id,
+      vendor_display_name: provider.display_name,
+      is_disabled: provider.is_disabled,
+      models: provider.models.map(
+        (m): ModelAvailabilityEntry => ({
+          model_name: m.model_name,
+          is_disabled: m.effective_is_disabled,
+          disabled_reason: m.disabled_reason,
+          guardrails: guardrails
+            .filter((g) => g.model_name === m.model_name)
+            .map(
+              (g): ModelUsageGuardrailLimit => ({
+                id: g.id,
+                model_config_id: provider.provider_id,
+                model_id: g.model_id ?? provider.provider_id,
+                model_name: g.model_name,
+                period: g.period,
+                limit_value: g.limit_value,
+                enforcement_posture: g.enforcement_posture,
+                unit: g.unit,
+                is_active: g.is_active,
+                details: g.details,
+                created_at: g.created_at,
+                updated_at: g.updated_at,
+              }),
+            ),
+        }),
+      ),
+    }))
+  }, [isDecision, decisionHierarchyQuery.data, decisionGuardrailsQuery.data])
+
+  const decisionAvailableModels = useMemo(() => {
+    if (!isDecision) return []
+    return (decisionHierarchyQuery.data ?? []).flatMap((provider) =>
+      provider.models.map((m) => ({
+        model_id: m.model_name,
+        model_name: m.model_name,
+        model_config_id: provider.provider_id,
+        config_id: provider.provider_id,
+        config_display_name: provider.display_name,
+        provider_type: provider.provider_type,
+      })),
+    )
+  }, [isDecision, decisionHierarchyQuery.data])
+
+  const hierarchy =
+    hierarchyOverride ??
+    (isDecision
+      ? decisionHierarchy
+      : (availabilityQuery.data ?? []))
+  const posture =
+    postureOverride ??
+    (isDecision
+      ? (decisionPostureQuery.data ?? [])
+      : (postureQuery.data ?? []))
+  const isLoading = isDecision
+    ? decisionHierarchyQuery.isLoading
+    : availabilityQuery.isLoading && !hierarchyOverride
+  const effectiveAvailableModels = isDecision
+    ? decisionAvailableModels
+    : availableModels
 
   const postureByGuardrailId = useMemo(() => {
     const m = new Map<string, ModelUsagePosture>()
@@ -274,7 +399,7 @@ export function VendorModelGuardrailPanel({
               key={vendor.vendor_config_id}
               vendor={vendor}
               postureByGuardrailId={postureByGuardrailId}
-              availableModels={availableModels}
+              availableModels={effectiveAvailableModels}
               vendorError={vendorError}
               onVendorError={setVendorError}
               clearVendorError={clearVendorError}
@@ -292,6 +417,8 @@ export function VendorModelGuardrailPanel({
               clearHierarchyError={clearHierarchyError}
               readonly={readonly}
               defaultExpanded={readonly}
+              showAvailabilityControls={!isDecision}
+              decisionProviderId={decisionProviderId}
             />
           ))}
         </Stack>
@@ -347,12 +474,16 @@ interface VendorRowProps {
   guardrailError: unknown
   onGuardrailError: (err: unknown) => void
   clearGuardrailError: () => void
-  updateGuardrail: ReturnType<typeof useUpdateModelUsageLimit>
+  updateGuardrail: GuardrailUpdateMutation
   deleteGuardrail: ReturnType<typeof useDeleteModelUsageLimit>
   onHierarchyError: (err: unknown) => void
   clearHierarchyError: () => void
   readonly: boolean
   defaultExpanded: boolean
+  /** Decision scope hides availability switches (managed on the providers page). */
+  showAvailabilityControls?: boolean
+  /** Decision provider id forwarded to the inline guardrail form. */
+  decisionProviderId?: string
 }
 
 function VendorRow({
@@ -374,6 +505,8 @@ function VendorRow({
   deleteGuardrail,
   readonly,
   defaultExpanded,
+  showAvailabilityControls = true,
+  decisionProviderId,
 }: VendorRowProps): ReactNode {
   const { t } = useTranslation()
   const [expanded, setExpanded] = useState<boolean>(defaultExpanded)
@@ -427,7 +560,7 @@ function VendorRow({
             color={vendor.is_disabled ? 'warning' : 'success'}
             variant="outlined"
           />
-          {!readonly && (
+          {!readonly && showAvailabilityControls && (
             <FormControlLabelSwitch
               checked={!vendor.is_disabled}
               disabled={setVendorMutation.isPending}
@@ -471,6 +604,8 @@ function VendorRow({
                 deleteGuardrail={deleteGuardrail}
                 readonly={readonly}
                 defaultExpanded={defaultExpanded}
+                showAvailabilityControls={showAvailabilityControls}
+                decisionProviderId={decisionProviderId}
               />
             ))}
           </Stack>
@@ -492,10 +627,12 @@ interface ModelRowProps {
   guardrailError: unknown
   onGuardrailError: (err: unknown) => void
   clearGuardrailError: () => void
-  updateGuardrail: ReturnType<typeof useUpdateModelUsageLimit>
+  updateGuardrail: GuardrailUpdateMutation
   deleteGuardrail: ReturnType<typeof useDeleteModelUsageLimit>
   readonly: boolean
   defaultExpanded: boolean
+  showAvailabilityControls?: boolean
+  decisionProviderId?: string
 }
 
 function ModelRow({
@@ -514,6 +651,8 @@ function ModelRow({
   deleteGuardrail,
   readonly,
   defaultExpanded,
+  showAvailabilityControls = true,
+  decisionProviderId,
 }: ModelRowProps): ReactNode {
   const { t } = useTranslation()
   const [expanded, setExpanded] = useState<boolean>(defaultExpanded)
@@ -578,7 +717,7 @@ function ModelRow({
             </Typography>
           </Stack>
         </Box>
-        {!readonly && (
+        {!readonly && showAvailabilityControls && (
           <FormControlLabelSwitch
             checked={!model.is_disabled}
             disabled={
@@ -628,6 +767,7 @@ function ModelRow({
                       vendorConfigId={vendor.vendor_config_id}
                       vendorDisplayName={vendor.vendor_display_name}
                       availableModels={availableModels}
+                      decisionProviderId={decisionProviderId}
                       existing={g}
                       onSaved={() => setEditingGuardrailId(null)}
                       onCancel={() => setEditingGuardrailId(null)}
@@ -654,6 +794,7 @@ function ModelRow({
                 vendorConfigId={vendor.vendor_config_id}
                 vendorDisplayName={vendor.vendor_display_name}
                 availableModels={availableModels}
+                decisionProviderId={decisionProviderId}
                 onSaved={() => setShowAddForm(false)}
                 onCancel={() => setShowAddForm(false)}
               />
@@ -671,7 +812,7 @@ interface GuardrailRowProps {
   guardrailError: unknown
   onGuardrailError: (err: unknown) => void
   clearGuardrailError: () => void
-  updateGuardrail: ReturnType<typeof useUpdateModelUsageLimit>
+  updateGuardrail: GuardrailUpdateMutation
   deleteGuardrail: ReturnType<typeof useDeleteModelUsageLimit>
   isEditing: boolean
   onEdit: () => void

@@ -520,6 +520,50 @@ class TestLoginPassword:
         assert response.status_code == 401
         assert response.json()["detail"] == "Invalid email or password"
 
+    async def test_tenancy_off_login_to_non_root_tenant_rejected(
+        self, client, test_engine
+    ):
+        """LOGIN ADMISSION (tenancy OFF): the root workspace is THE default
+        tenant and users cannot switch — an account owning a NON-ROOT
+        tenant cannot sign in once the switch is off, even with VALID
+        credentials: structured 403 ``no_access_to_workspace``, no token."""
+        await _enable_tenancy(test_engine)
+        registered = await client.post("/api/v1/auth/register", json=_payload())
+        assert registered.status_code == 200
+        slug = f"acme-{_ts()}"
+
+        # Flip the switch back OFF (the deployment returned to root-default)
+        SessionLocal = async_sessionmaker(
+            bind=test_engine, class_=AsyncSession, expire_on_commit=False
+        )
+        async with SessionLocal() as db:
+            row = (
+                await db.execute(
+                    select(PlatformSetting).where(
+                        PlatformSetting.key == "multi_tenancy_enabled"
+                    )
+                )
+            ).scalar_one()
+            row.value = {"enabled": False}
+            await db.commit()
+        import app.services.tenancy.platform_settings_service as settings_module
+
+        settings_module._service = None  # drop the cached read
+
+        response = await client.post(
+            "/api/v1/auth/login-password",
+            json={
+                "email": f"owner-{_ts()}@test.dev",
+                "password": "Sup3rSecret",
+            },
+        )
+        assert response.status_code == 403, response.text
+        body = response.json()
+        assert body["detail"] == "no_access_to_workspace"
+        assert body.get("tenant_slug") == slug
+        # no session was issued
+        assert "access_token" not in body
+
 
 # ── E-18: same-email registrations ──────────────────────────────────────────
 

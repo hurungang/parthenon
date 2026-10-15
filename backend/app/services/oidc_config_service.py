@@ -65,11 +65,11 @@ class OIDCConfigService:
     ) -> list[IdentityProviderConfig]:
         """Return configured identity providers, newest first.
 
-        With multi-tenancy on and *tenant_id* set, only that tenant's
-        configs (plus the shared global one) are returned; without a
-        tenant the SHARED (NULL-tenant) configs only — the public
-        login-page listing must never expose other tenants' provider
-        metadata (FIX-20261001-010107).
+        With multi-tenancy on and *tenant_id* set, ONLY that tenant's
+        configs are returned.  Without a resolved tenant the result is
+        EMPTY — the public login probe is tenant-resolved only; a
+        request with no tenant context resolves no providers (the
+        retired NULL-tenant shared slot is never read).
 
         With the switch OFF, the deployment IS the root tenant: ONLY
         the ROOT tenant's configs are returned — never the legacy
@@ -81,15 +81,11 @@ class OIDCConfigService:
         )
         if await _multi_tenancy_on(db):
             if tenant_id is not None:
-                query = query.where(
-                    (IdentityProviderConfig.tenant_id == tenant_id)
-                    | (IdentityProviderConfig.tenant_id.is_(None))
-                )
+                query = query.where(IdentityProviderConfig.tenant_id == tenant_id)
             else:
-                # No resolved tenant context (public login-page probe /
-                # platform surface): shared slot only — fail-closed
-                # privacy, never a cross-tenant metadata dump.
-                query = query.where(IdentityProviderConfig.tenant_id.is_(None))
+                # No resolved tenant context (public login-page probe):
+                # fail-closed — no tenant resolved = no providers.
+                return []
         else:
             # Tenancy OFF: the ROOT tenant IS the default tenant — its
             # slots are the only ones that exist for identity resolution.
@@ -113,24 +109,22 @@ class OIDCConfigService:
         """Return the config for *scope* (``user`` or ``agent``), or ``None``.
 
         With multi-tenancy on, the exact ``(tenant_id, scope)`` slot is
-        addressed (``tenant_id=None`` → the global config).  With the
-        switch off, the ROOT tenant's ``(root_id, scope)`` slot is
-        addressed — never a legacy unfiltered/global lookup (tenancy
-        off = root only).  ``None`` when the root tenant is absent
-        (empty DB pre-seed).
+        addressed — ``tenant_id=None`` resolves NOTHING (the retired
+        NULL-tenant shared slot is never read; callers must resolve a
+        tenant first).  With the switch off, the ROOT tenant's
+        ``(root_id, scope)`` slot is addressed — never a legacy
+        unfiltered/global lookup (tenancy off = root only).  ``None``
+        when the root tenant is absent (empty DB pre-seed).
         """
         _validate_scope(scope)
         query = select(IdentityProviderConfig).where(
             IdentityProviderConfig.provider_scope == scope
         )
         if await _multi_tenancy_on(db):
-            # ``tenant_id == None`` compiles to ``tenant_id = NULL`` which
-            # matches NOTHING in SQL — the shared slot must be addressed
-            # with ``IS NULL`` (FIX-20261001-010107).
             if tenant_id is None:
-                query = query.where(IdentityProviderConfig.tenant_id.is_(None))
-            else:
-                query = query.where(IdentityProviderConfig.tenant_id == tenant_id)
+                # No tenant resolved → no slot addressed → no provider.
+                return None
+            query = query.where(IdentityProviderConfig.tenant_id == tenant_id)
         else:
             root_id = await _root_tenant_id(db)
             if root_id is None:
@@ -176,10 +170,12 @@ class OIDCConfigService:
         Validates OIDC Discovery at the issuer URL before persisting.
         Rejects duplicate *provider_scope* entries — platform-wide when
         the tenancy switch is off, per ``(tenant_id, scope)`` slot when
-        on.  With the switch off, *tenant_id* is ignored and the config
-        is written to the ROOT tenant's slot (the root tenant IS the
-        default tenant); when the root tenant is absent (empty DB
-        pre-seed), the row is stored tenant-less.
+        on.  With the switch on, *tenant_id* MUST be resolved — the
+        retired NULL-tenant shared slot is never written.  With the
+        switch off, *tenant_id* is ignored and the config is written to
+        the ROOT tenant's slot (the root tenant IS the default tenant);
+        when the root tenant is absent (empty DB pre-seed), the row is
+        stored tenant-less.
         *default_tenant_role* — the JIT role preset key for first OIDC
         sign-ins (FIX-20260930-075014); validated against the seeded
         presets.
@@ -187,8 +183,33 @@ class OIDCConfigService:
         _validate_scope(provider_scope)
         _validate_provider_type(provider_type)
         _validate_default_tenant_role(default_tenant_role)
+        if not (client_id or "").strip():
+            # Discovery succeeds without a client — but authorize/token
+            # calls would fail at the IdP with an opaque error.
+            raise OIDCConfigError(
+                "client_id is required: discovery alone does not prove the "
+                "OIDC client exists in the realm."
+            )
+        if provider_scope == "user":
+            # The frontend browser sign-in (authorize + PKCE token exchange
+            # against the IdP) is driven by the PUBLIC client — required.
+            if not (public_client_id or "").strip():
+                raise OIDCConfigError(
+                    "public_client_id (ui_client_id) is required for the "
+                    "user scope: it is the PUBLIC client the frontend uses "
+                    "for browser sign-in (PKCE, no secret)."
+                )
+        else:
+            # Agent scope never uses ui_client_id — drop any value passed.
+            public_client_id = None
 
         tenancy_on = await _multi_tenancy_on(db)
+
+        if tenancy_on and tenant_id is None:
+            # Shared slot retired: writes require a resolved tenant.
+            raise OIDCConfigError(
+                "A resolved tenant is required to create a provider config."
+            )
 
         # Reject duplicates occupying the same slot
         if tenancy_on:
@@ -254,9 +275,14 @@ class OIDCConfigService:
             previous_values=None,
         )
 
-        # Update setup state sentinel (platform scope only)
-        if tenant_id is None or not tenancy_on:
+        # Update setup state sentinel (root / tenancy-off scope only —
+        # the sentinel tracks the platform's own (root) provider).
+        if not tenancy_on:
             await _update_setup_state(db, provider_scope, configured=True)
+        else:
+            root_id = await _root_tenant_id(db)
+            if root_id is not None and tenant_id == root_id:
+                await _update_setup_state(db, provider_scope, configured=True)
 
         await db.flush()
         await db.refresh(config)
@@ -298,6 +324,19 @@ class OIDCConfigService:
             _validate_provider_type(provider_type)
         if default_tenant_role is not None:
             _validate_default_tenant_role(default_tenant_role)
+        if client_id is not None and not client_id.strip():
+            raise OIDCConfigError(
+                "client_id cannot be empty: discovery alone does not prove "
+                "the OIDC client exists in the realm."
+            )
+        if scope == "user" and public_client_id is not None and not public_client_id.strip():
+            # The PUBLIC client drives the frontend browser sign-in — it
+            # cannot be cleared once configured.
+            raise OIDCConfigError(
+                "public_client_id (ui_client_id) cannot be empty for the "
+                "user scope: it is the PUBLIC client the frontend uses for "
+                "browser sign-in (PKCE, no secret)."
+            )
 
         config = await self.get_by_scope(db, scope, tenant_id=tenant_id)
         if config is None:
@@ -328,7 +367,10 @@ class OIDCConfigService:
         if client_secret is not None:
             changed.append("encrypted_client_secret")
             config.encrypted_client_secret = get_vault().encrypt(client_secret)
-        if public_client_id is not None:
+        if scope == "agent":
+            # Agent scope never uses ui_client_id — ignore any value passed.
+            pass
+        elif public_client_id is not None:
             changed.append("ui_client_id")
             config.ui_client_id = public_client_id
         if scopes is not None and scopes != config.scopes:
@@ -461,7 +503,9 @@ class OIDCConfigService:
         -------
         dict
             With keys ``success`` (bool), ``steps`` (list of step dicts),
-            ``discovery_doc`` (dict or None).
+            ``discovery_doc`` (dict or None), and ``client_id_status``
+            (dict with ``client_id`` / ``status`` / ``detail``, or None
+            when discovery failed before the client probe ran).
         """
         issuer_url = issuer_url.rstrip("/")
         steps: list[dict] = []
@@ -480,7 +524,12 @@ class OIDCConfigService:
                 "status": "failed",
                 "detail": str(exc),
             })
-            return {"success": False, "steps": steps, "discovery_doc": None}
+            return {
+                "success": False,
+                "steps": steps,
+                "discovery_doc": None,
+                "client_id_status": None,
+            }
 
         # Step 2: Validate issuer match
         discovered_issuer = discovery.get("issuer", "")
@@ -490,14 +539,22 @@ class OIDCConfigService:
                 "status": "failed",
                 "detail": f"Issuer mismatch: expected={issuer_url}, got={discovered_issuer}",
             })
-            return {"success": False, "steps": steps, "discovery_doc": discovery}
+            return {
+                "success": False,
+                "steps": steps,
+                "discovery_doc": discovery,
+                "client_id_status": None,
+            }
         steps.append({
             "step": "issuer_validation",
             "status": "passed",
             "detail": f"Issuer matches: {discovered_issuer}",
         })
 
-        # Step 3: Verify JWKS endpoint
+        # Step 3: Validate the client (lightweight probe, no SDK)
+        client_id_status = await _probe_client(discovery, client_id, steps)
+
+        # Step 4: Verify JWKS endpoint
         jwks_uri = discovery.get("jwks_uri", "")
         if jwks_uri:
             try:
@@ -526,7 +583,7 @@ class OIDCConfigService:
                 "detail": "No jwks_uri in discovery document",
             })
 
-        # Step 4: Check token endpoint
+        # Step 5: Check token endpoint
         token_endpoint = discovery.get("token_endpoint", "")
         if token_endpoint:
             try:
@@ -558,6 +615,7 @@ class OIDCConfigService:
             "success": all_passed,
             "steps": steps,
             "discovery_doc": discovery,
+            "client_id_status": client_id_status,
         }
 
     # ── Encryption helpers ────────────────────────────────────────────────
@@ -614,6 +672,120 @@ def _validate_default_tenant_role(role_key: Optional[str]) -> None:
 async def _validate_oidc_discovery(issuer_url: str) -> dict:
     """Fetch OIDC Discovery and return it. Raises on any error."""
     return await _fetch_discovery(issuer_url)
+
+
+# Definitive "this client does not exist" markers seen in IdP error
+# responses (Keycloak renders "Client not found." in the HTML error
+# page; others return invalid_client / unauthorized_client).  Only a
+# match on one of these is treated as a definitive failure — anything
+# else (login page HTML, redirects, 404s on unknown layouts) passes
+# with a warning-level note, because IdPs respond very differently.
+_INVALID_CLIENT_MARKERS = (
+    "client not found",
+    "unknown client",
+    "invalid_client",
+    "unauthorized_client",
+    "client does not exist",
+    "client_id not found",
+    "unregistered client",
+    "invalid oauth client",
+)
+
+
+async def _probe_client(
+    discovery: dict,
+    client_id: Optional[str],
+    steps: list[dict],
+) -> Optional[dict]:
+    """Validate the client against the authorization endpoint.
+
+    Appends a ``client_validation`` step and returns the
+    ``client_id_status`` payload: ``{"client_id", "status", "detail"}``
+    where status is ``missing`` | ``invalid`` | ``ok`` | ``warning``
+    (or ``None`` if the step could not run).  A missing client_id is a
+    WARNING, not a failure — discovery-only connectivity is still
+    meaningful, but authorize/token calls will fail at the IdP.
+    """
+    if not (client_id or "").strip():
+        step = {
+            "step": "client_validation",
+            "status": "warning",
+            "detail": (
+                "client_id is empty — discovery succeeded, but "
+                "authorization/token calls will fail without a client."
+            ),
+        }
+        steps.append(step)
+        return {
+            "client_id": None,
+            "status": "missing",
+            "detail": step["detail"],
+        }
+
+    auth_endpoint = discovery.get("authorization_endpoint", "")
+    if not auth_endpoint:
+        detail = (
+            f"client_id='{client_id}' — no authorization_endpoint in "
+            "discovery document; client existence not verified."
+        )
+        steps.append({
+            "step": "client_validation",
+            "status": "skipped",
+            "detail": detail,
+        })
+        return {"client_id": client_id, "status": "warning", "detail": detail}
+
+    import urllib.parse
+
+    probe_url = (
+        f"{auth_endpoint}?client_id={urllib.parse.quote(client_id, safe='')}"
+        f"&response_type=code"
+    )
+    try:
+        async with httpx.AsyncClient(
+            timeout=10.0, verify=get_ssl_context(), follow_redirects=False
+        ) as http_client:
+            resp = await http_client.get(probe_url)
+    except Exception as exc:
+        detail = (
+            f"client_id='{client_id}' — authorization endpoint probe "
+            f"failed ({exc}); client existence not verified."
+        )
+        steps.append({
+            "step": "client_validation",
+            "status": "warning",
+            "detail": detail,
+        })
+        return {"client_id": client_id, "status": "warning", "detail": detail}
+
+    body = (resp.text or "")[:8192].lower()
+    if resp.status_code in (400, 401) and any(
+        marker in body for marker in _INVALID_CLIENT_MARKERS
+    ):
+        detail = (
+            f"client_id='{client_id}' was rejected by the identity "
+            f"provider (HTTP {resp.status_code}) — the client does not "
+            "exist in this realm."
+        )
+        steps.append({
+            "step": "client_validation",
+            "status": "failed",
+            "detail": detail,
+        })
+        return {"client_id": client_id, "status": "invalid", "detail": detail}
+
+    # Not definitive: IdPs show their login page, redirect, or an
+    # opaque error page even for valid clients. Pass with a note.
+    detail = (
+        f"client_id='{client_id}' accepted (no definitive invalid-client "
+        "error from the authorization endpoint)."
+    )
+    steps.append({
+        "step": "client_validation",
+        "status": "passed",
+        "detail": detail,
+    })
+    return {"client_id": client_id, "status": "ok", "detail": detail}
 
 
 async def _fetch_discovery(issuer_url: str) -> dict:

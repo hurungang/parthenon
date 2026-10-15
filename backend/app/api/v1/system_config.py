@@ -4,6 +4,7 @@ All endpoints require super admin or admin authentication.
 """
 
 import logging
+import time
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
@@ -112,15 +113,16 @@ def _get_changed_by(request: Request) -> str:
 
 
 def _resolved_tenant_id(request: Request):
-    """Tenant id from the RESOLVED tenant context, or None (shared slot).
+    """Tenant id from the RESOLVED tenant context, or None.
 
-    Provider CRUD is slot-addressed (FIX-20261001-010107): a workspace
-    request (``X-Tenant`` resolved by TenantResolutionMiddleware)
-    addresses that tenant's ``(tenant_id, scope)`` slot; a request
-    WITHOUT a tenant context addresses the SHARED NULL-tenant slot (the
-    platform surface manages the shared slot via ``/platform/*`` —
-    ``/system/*`` writes without a context stay fail-closed 403 at the
-    resolution middleware).
+    Provider CRUD is slot-addressed: a workspace request (``X-Tenant``
+    resolved by TenantResolutionMiddleware) addresses that tenant's own
+    ``(tenant_id, scope)`` slot ONLY.  A request WITHOUT a tenant
+    context passes ``None`` — with multi-tenancy on that resolves NO
+    provider (the shared NULL-tenant slot is retired); the ROOT
+    tenant's providers are managed via the platform surface
+    ``/platform/identity-providers`` instead.  ``/system/*`` writes
+    without a context stay fail-closed 403 at the resolution middleware.
     """
     return tenant_id_or_none(get_tenant_context(request))
 
@@ -360,6 +362,16 @@ async def initiate_test_login(
     Requires super admin or admin auth.
     """
     _require_auth(request)
+    if not (body.client_id or "").strip():
+        # A test login without a client would just render the IdP's
+        # "client not found" error page — fail fast with a clear error.
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "client_id is required for a test login: the authorization "
+                "request cannot identify the OIDC client without it."
+            ),
+        )
     # Generate a test session ID and store in-memory or Redis for callback
     test_id = str(uuid4())
 
@@ -383,13 +395,24 @@ async def initiate_test_login(
     if not auth_endpoint:
         raise HTTPException(status_code=400, detail="No authorization_endpoint in discovery document")
 
+    client_status = (result.get("client_id_status") or {}).get("status")
+    if client_status == "invalid":
+        raise HTTPException(
+            status_code=400,
+            detail=(result.get("client_id_status") or {}).get(
+                "detail", "The OIDC client was rejected by the identity provider."
+            ),
+        )
+
     # Store test session (simple in-process dict for now)
+    _prune_test_sessions()
     _test_sessions[test_id] = {
         "issuer_url": issuer_url,
         "client_id": body.client_id,
         "client_secret": body.client_secret,
         "redirect_uri": body.redirect_uri or _get_test_callback_url(request),
         "status": "initiated",
+        "created_ts": time.monotonic(),
         "created_at": str(__import__("datetime").datetime.now()),
     }
 
@@ -493,11 +516,35 @@ async def test_login_status(
     request: Request,
     db: DbSession,
 ) -> dict:
-    """Poll the status of a running test-login session."""
+    """Poll the status of a running test-login session.
+
+    Returns a sanitized session view — secrets are never echoed back —
+    and marks sessions abandoned past the TTL as failed so client-side
+    polling always terminates.
+    """
     session = _test_sessions.get(test_id)
     if session is None:
         raise HTTPException(status_code=404, detail="Test session not found")
-    return session
+
+    _prune_test_sessions()
+
+    created_at = session.get("created_ts", 0.0)
+    if (
+        session.get("status") not in ("completed", "failed")
+        and time.monotonic() - created_at > _TEST_SESSION_TTL_SECONDS
+    ):
+        session["status"] = "failed"
+        session["error"] = "Test session expired (no callback received)"
+
+    # Sanitized view: never return stored secrets to the poller.
+    return {
+        "test_id": test_id,
+        "status": session.get("status"),
+        "error": session.get("error"),
+        "claims": session.get("claims"),
+        "created_at": session.get("created_at"),
+        "issuer_url": session.get("issuer_url"),
+    }
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -536,6 +583,23 @@ async def get_super_admin_status(
 
 # In-memory test session store for OIDC test-login flow
 _test_sessions: dict[str, dict] = {}
+
+# Test sessions live 30 minutes; abandoned sessions are marked failed on
+# the next status poll and pruned afterwards so the in-process store and
+# the client-side polling loop always terminate.
+_TEST_SESSION_TTL_SECONDS = 30 * 60
+
+
+def _prune_test_sessions() -> None:
+    """Drop finished/expired test sessions from the in-process store."""
+    now = time.monotonic()
+    expired = [
+        test_id
+        for test_id, session in _test_sessions.items()
+        if now - session.get("created_ts", 0.0) > _TEST_SESSION_TTL_SECONDS
+    ]
+    for test_id in expired:
+        _test_sessions.pop(test_id, None)
 
 
 def _get_test_callback_url(request: Request) -> str:

@@ -35,6 +35,23 @@ def _get_delegation_lock(sid: str) -> asyncio.Lock:
     return _delegation_locks[sid]
 
 
+class _TolerantArgsTool(StructuredTool):
+    """StructuredTool whose tool-call validation schema is the tolerant
+    args model itself.
+
+    LangChain's derived ``tool_call_schema`` (child of ``args_schema``)
+    loses ``extra="allow"``, so for models with NO declared fields (e.g. a
+    decision tool without an input data type) the LLM's flat arguments are
+    silently dropped at the ToolNode validation boundary before they ever
+    reach ``_arun``.  Validating against the tolerant model keeps every
+    key (declared or extra) in the dispatched kwargs.
+    """
+
+    @property
+    def tool_call_schema(self) -> type:  # type: ignore[override]
+        return self.args_schema  # type: ignore[return-value]
+
+
 def _sanitize_tool_name(name: str) -> str:
     """Sanitize a tool name for LangChain (replace invalid chars with '_')."""
     sanitized = name.replace("/", "_").replace(":", "_").replace("-", "_").replace(".", "_")
@@ -113,7 +130,7 @@ def build_langchain_tools_from_definitions(
 
         sync_fn, async_fn = _make_tool_func(original_name, sanitized_name, args_schema)
 
-        tool = StructuredTool.from_function(
+        tool = _TolerantArgsTool.from_function(
             func=sync_fn,
             coroutine=async_fn,
             name=sanitized_name,
@@ -198,7 +215,28 @@ def _schema_to_pydantic(tool_name: str, parameters: dict[str, Any]) -> Any:
             )
 
         if not field_definitions:
-            return None  # StructuredTool accepts None → no args schema
+            # Permissive catch-all instead of None: with ``args_schema=None``
+            # (or any FIELDLESS pydantic model — LangChain's
+            # ``_to_args_and_kwargs`` short-circuits BaseModel schemas with no
+            # declared fields to "StructuredTool with no args") the LLM's flat
+            # arguments are SILENTLY DROPPED before the call ever reaches
+            # CommHub (e.g. a decision tool without an input data type loses
+            # ``{"situation": ...}``).  One synthetic passthrough field keeps
+            # the model out of the no-args short-circuit while ``extra="allow"``
+            # preserves every real key in ``__pydantic_extra__``; the synthetic
+            # field is stripped at dispatch (``_restore_schema_keys``).
+            model_class = create_model(
+                f"{tool_name}_Args",
+                __base__=_TolerantBase,
+                **{
+                    "passthrough": (
+                        dict[str, Any] | None,
+                        FieldInfo(default=None),
+                    ),
+                },
+            )
+            model_class.__synthetic_fields__ = {"passthrough"}  # type: ignore[attr-defined]
+            return model_class
 
         model_class = create_model(
             f"{tool_name}_Args",
@@ -220,11 +258,20 @@ def _restore_schema_keys(args_schema: Any, kwargs: dict[str, Any]) -> dict[str, 
     LangChain hands tools the validated ``model_dump()`` which uses field names
     (safe identifiers).  Downstream consumers — A2A request payloads, MCP tool
     args — expect the exact keys from the tool's JSON schema (e.g. ``project-id``).
+
+    Synthetic catch-all schema fields (see ``_schema_to_pydantic``'s empty-
+    parameters branch, marked via ``__synthetic_fields__``) are stripped so
+    they never leak into wire payloads.
     """
+    synthetic: set[str] = getattr(args_schema, "__synthetic_fields__", None) or set()
     alias_map = getattr(args_schema, "__schema_alias_map__", None)
-    if not alias_map:
+    if not alias_map and not synthetic:
         return kwargs
-    return {alias_map.get(key, key): value for key, value in kwargs.items()}
+    return {
+        (alias_map.get(key, key) if alias_map else key): value
+        for key, value in kwargs.items()
+        if key not in synthetic
+    }
 
 
 def _json_type_to_python(json_type: str) -> type:
@@ -591,7 +638,7 @@ def build_langchain_tools_for_ar_path(
 
             delegation_schema = _schema_to_pydantic(sanitized_name, parameters)
             sync_fn, async_fn = _make_delegation_tool(target_slug, original_name, delegation_schema)
-            tool = StructuredTool.from_function(
+            tool = _TolerantArgsTool.from_function(
                 func=sync_fn,
                 coroutine=async_fn,
                 name=sanitized_name,
@@ -678,7 +725,7 @@ def build_langchain_tools_for_ar_path(
 
         commhub_schema = _schema_to_pydantic(sanitized_name, parameters)
         sync_fn, async_fn = _make_commhub_tool(original_name, canonical_comm_name, commhub_schema)
-        tool = StructuredTool.from_function(
+        tool = _TolerantArgsTool.from_function(
             func=sync_fn,
             coroutine=async_fn,
             name=sanitized_name,

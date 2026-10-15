@@ -544,4 +544,88 @@ describe('AuthContext', () => {
     expect(result.current.claims).toBeNull()
     expect(result.current.isAuthenticated).toBe(false)
   })
+
+  // -- Multi-tenant workspace binding / authority resolution tests --
+
+  function tenantFetchMock(opts: { tenantIssuer?: string; calls?: Array<{ url: string; tenant: string | null }> }) {
+    const mockFetch = vi.fn()
+    mockFetch.mockImplementation((url: string, init?: { headers?: Record<string, string> }) => {
+      opts.calls?.push({ url, tenant: init?.headers?.['X-Tenant'] ?? null })
+      if (url.includes('/system/identity-providers')) {
+        const items = opts.tenantIssuer
+          ? [{ provider_scope: 'user', provider_type: 'oidc_generic', display_name: 'Tenant OIDC', is_enabled: true, issuer_url: opts.tenantIssuer, public_client_id: 'tenant-ui-client' }]
+          : []
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ items, total: items.length }) })
+      }
+      if (url.includes('/system/super-admin/status')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ is_enabled: false }) })
+      }
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({}) })
+    })
+    globalThis.fetch = mockFetch as any
+    return mockFetch
+  }
+
+  it('re-runs provider discovery with X-Tenant when a workspace slug is bound', async () => {
+    const calls: Array<{ url: string; tenant: string | null }> = []
+    tenantFetchMock({ tenantIssuer: 'http://localhost:8082/realms/acme', calls })
+
+    const wrapper = ({ children }: { children: React.ReactNode }) =>
+      React.createElement(AuthProvider, null, children)
+    const { result } = renderHook(() => useAuthStore(), { wrapper })
+
+    await waitFor(() => {
+      expect(result.current.availableProviders).not.toBeNull()
+    })
+    const ipCallsBefore = calls.filter((c) => c.url.includes('identity-providers')).length
+
+    act(() => {
+      result.current.bindTenantSlug('acme')
+    })
+
+    await waitFor(() => {
+      const ipCalls = calls.filter((c) => c.url.includes('identity-providers'))
+      expect(ipCalls.length).toBeGreaterThan(ipCallsBefore)
+      expect(ipCalls[ipCalls.length - 1].tenant).toBe('acme')
+    })
+  })
+
+  it('login() refuses to redirect when a slug is bound but no provider resolves for it', async () => {
+    tenantFetchMock({ tenantIssuer: undefined })
+    sessionStorage.setItem('parthenon_tenant_slug', 'acme')
+
+    const wrapper = ({ children }: { children: React.ReactNode }) =>
+      React.createElement(AuthProvider, null, children)
+    const { result } = renderHook(() => useAuthStore(), { wrapper })
+
+    let started: boolean | undefined
+    await act(async () => {
+      started = await result.current.login()
+    })
+
+    expect(started).toBe(false)
+    // No authorize redirect was started and no start config persisted.
+    expect(mockLocation.href).toBe('')
+    expect(sessionStorage.getItem('oidc_authority')).toBeNull()
+  })
+
+  it('login() redirects to the tenant issuer resolved for the bound slug', async () => {
+    tenantFetchMock({ tenantIssuer: 'http://localhost:8082/realms/acme' })
+    sessionStorage.setItem('parthenon_tenant_slug', 'acme')
+
+    const wrapper = ({ children }: { children: React.ReactNode }) =>
+      React.createElement(AuthProvider, null, children)
+    const { result } = renderHook(() => useAuthStore(), { wrapper })
+
+    let started: boolean | undefined
+    await act(async () => {
+      started = await result.current.login()
+    })
+
+    expect(started).toBe(true)
+    expect(mockLocation.href).toContain('/realms/acme/protocol/openid-connect/auth')
+    // The callback exchange config matches the tenant-resolved provider.
+    expect(sessionStorage.getItem('oidc_authority')).toBe('http://localhost:8082/realms/acme')
+    expect(sessionStorage.getItem('oidc_client_id')).toBe('tenant-ui-client')
+  })
 })

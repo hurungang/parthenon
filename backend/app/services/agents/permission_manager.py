@@ -331,6 +331,27 @@ class AgentPermissionManager:
                         else:
                             allowed.add(tool.name)
 
+        # ── Decision tools (virtual bindings — no mcp_tools row) ────────────
+        # SkillToolBinding rows for decision tools store a deterministic
+        # uuid5 virtual id that never matches mcp_tools.  Resolve those
+        # leftovers strictly within the session's tenant and surface them
+        # as ``decision____<name>`` so check_tool_allowed does not deny.
+        from app.db.tenant_scoping import scope_for_session as _scope_for_session
+        from app.services.system_one.decision_tool_service import (
+            resolve_virtual_tool_id,
+        )
+
+        mcp_tool_ids = {tool.id for tool in tools}
+        unmatched_ids = [tid for tid in tool_ids_in_bindings if tid not in mcp_tool_ids]
+        if unmatched_ids:
+            _decision_tenant_id = _scope_for_session(db)
+            for virtual_id in unmatched_ids:
+                decision_tool = await resolve_virtual_tool_id(
+                    db, virtual_id, _decision_tenant_id
+                )
+                if decision_tool is not None:
+                    allowed.add(build_tool_name("decision", decision_tool.name))
+
         return allowed
 
     def _canonicalize_tool_identifier(self, tool_identifier: str) -> str:

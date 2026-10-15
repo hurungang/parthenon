@@ -91,6 +91,7 @@ export function IdentityProviderConfigForm({
   const [showSecret, setShowSecret] = useState(false)
   const [advancedOpen, setAdvancedOpen] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [publicClientIdError, setPublicClientIdError] = useState(false)
 
   // Test modals
   const [testConfigOpen, setTestConfigOpen] = useState(false)
@@ -99,6 +100,13 @@ export function IdentityProviderConfigForm({
   const handleSave = async () => {
     try {
       clearDialogError()
+      if (scope === 'user' && !publicClientId.trim()) {
+        // USER scope requires the PUBLIC client (browser PKCE sign-in).
+        setPublicClientIdError(true)
+        setSaving(false)
+        return
+      }
+      setPublicClientIdError(false)
       setSaving(true)
 
       const claimMappings: Record<string, string> | undefined = claimsMapping.trim()
@@ -121,7 +129,9 @@ export function IdentityProviderConfigForm({
         issuer_url: issuerUrl,
         client_id: clientId,
         client_secret: clientSecret || undefined,
-        public_client_id: publicClientId || undefined,
+        // ui_client_id is only meaningful for the USER scope (frontend PKCE
+        // sign-in) — never sent for agents.
+        public_client_id: scope === 'user' ? publicClientId || undefined : undefined,
         scopes,
         claim_mappings: claimMappings,
         is_enabled: isEnabled,
@@ -234,16 +244,6 @@ export function IdentityProviderConfigForm({
         />
 
         <TextField
-          label={t('systemConfig.identityProviders.uiClientId')}
-          value={publicClientId}
-          onChange={(e) => setPublicClientId(e.target.value)}
-          disabled={disabled}
-          required
-          helperText={t('systemConfig.identityProviders.uiClientIdHint')}
-          placeholder="parthenon-api-ui"
-        />
-
-        <TextField
           label={t('systemConfig.identityProviders.scopes')}
           value={scopes}
           disabled
@@ -251,6 +251,110 @@ export function IdentityProviderConfigForm({
           sx={{ gridColumn: { xs: '1', sm: 'span 2' } }}
         />
       </Box>
+
+      {scope === 'user' ? (
+        <>
+          {/* Public client — used by the browser sign-in (PKCE, no secret) */}
+          <Box mt={2} p={2} border={1} borderColor="divider" borderRadius={1}>
+            <Typography variant="subtitle2" gutterBottom>
+              {t('systemConfig.identityProviders.publicClientSection')}
+            </Typography>
+            <Typography variant="caption" color="text.secondary" display="block" mb={2}>
+              {t('systemConfig.identityProviders.publicClientHint')}
+            </Typography>
+            <TextField
+              label={t('systemConfig.identityProviders.uiClientId')}
+              value={publicClientId}
+              onChange={(e) => {
+                setPublicClientId(e.target.value)
+                if (e.target.value.trim()) setPublicClientIdError(false)
+              }}
+              disabled={disabled}
+              required
+              error={publicClientIdError}
+              helperText={
+                publicClientIdError
+                  ? t('systemConfig.identityProviders.uiClientIdRequired')
+                  : t('systemConfig.identityProviders.uiClientIdHint')
+              }
+              placeholder="parthenon-api-ui"
+              fullWidth
+            />
+          </Box>
+
+          {/* Confidential client — used by backend services */}
+          <Box mt={2} p={2} border={1} borderColor="divider" borderRadius={1}>
+            <Typography variant="subtitle2" gutterBottom>
+              {t('systemConfig.identityProviders.confidentialSection')}
+            </Typography>
+            <Typography variant="caption" color="text.secondary" display="block" mb={2}>
+              {t('systemConfig.identityProviders.confidentialClientHint')}
+            </Typography>
+            <Box display="grid" gridTemplateColumns={{ xs: '1fr', sm: '1fr 1fr' }} gap={2}>
+              <TextField
+                label={t('systemConfig.identityProviders.clientId')}
+                value={clientId}
+                onChange={(e) => setClientId(e.target.value)}
+                disabled={disabled}
+                helperText={t('systemConfig.identityProviders.clientIdHint')}
+              />
+              <TextField
+                label={t('systemConfig.identityProviders.clientSecret')}
+                value={clientSecret}
+                onChange={(e) => setClientSecret(e.target.value)}
+                disabled={disabled}
+                type={showSecret ? 'text' : 'password'}
+                placeholder={currentConfig?.encrypted_client_secret ? '(configured)' : ''}
+                helperText={t('systemConfig.identityProviders.clientSecretHint')}
+                InputProps={{
+                  endAdornment: (
+                    <InputAdornment position="end">
+                      <IconButton onClick={() => setShowSecret(!showSecret)} edge="end" size="small">
+                        {showSecret ? <VisibilityOff /> : <Visibility />}
+                      </IconButton>
+                    </InputAdornment>
+                  ),
+                }}
+              />
+            </Box>
+          </Box>
+        </>
+      ) : (
+        /* Agent scope: single client — ui_client_id is never used for agents */
+        <Box mt={2} p={2} border={1} borderColor="divider" borderRadius={1}>
+          <Typography variant="subtitle2" gutterBottom>
+            {t('systemConfig.identityProviders.agentClientSection')}
+          </Typography>
+          <Typography variant="caption" color="text.secondary" display="block" mb={2}>
+            {t('systemConfig.identityProviders.agentClientHint')}
+          </Typography>
+          <Box display="grid" gridTemplateColumns={{ xs: '1fr', sm: '1fr 1fr' }} gap={2}>
+            <TextField
+              label={t('systemConfig.identityProviders.clientIdAgent')}
+              value={clientId}
+              onChange={(e) => setClientId(e.target.value)}
+              disabled={disabled}
+            />
+            <TextField
+              label={t('systemConfig.identityProviders.clientSecretAgent')}
+              value={clientSecret}
+              onChange={(e) => setClientSecret(e.target.value)}
+              disabled={disabled}
+              type={showSecret ? 'text' : 'password'}
+              placeholder={currentConfig?.encrypted_client_secret ? '(configured)' : ''}
+              InputProps={{
+                endAdornment: (
+                  <InputAdornment position="end">
+                    <IconButton onClick={() => setShowSecret(!showSecret)} edge="end" size="small">
+                      {showSecret ? <VisibilityOff /> : <Visibility />}
+                    </IconButton>
+                  </InputAdornment>
+                ),
+              }}
+            />
+          </Box>
+        </Box>
+      )}
 
       {/* Advanced options */}
       <Box mt={2}>
@@ -263,43 +367,6 @@ export function IdentityProviderConfigForm({
         </Button>
         <Collapse in={advancedOpen}>
           <Box mt={1} p={2} bgcolor="grey.50" borderRadius={1}>
-            <Typography variant="subtitle2" gutterBottom>
-              {t('systemConfig.identityProviders.confidentialSection')}
-            </Typography>
-
-            <TextField
-              label={t('systemConfig.identityProviders.clientId')}
-              value={clientId}
-              onChange={(e) => setClientId(e.target.value)}
-              disabled={disabled}
-              size="small"
-              fullWidth
-              helperText={t('systemConfig.identityProviders.clientIdHint')}
-              sx={{ mb: 2 }}
-            />
-
-            <TextField
-              label={t('systemConfig.identityProviders.clientSecret')}
-              value={clientSecret}
-              onChange={(e) => setClientSecret(e.target.value)}
-              disabled={disabled}
-              size="small"
-              fullWidth
-              type={showSecret ? 'text' : 'password'}
-              placeholder={currentConfig?.encrypted_client_secret ? '(configured)' : ''}
-              helperText={t('systemConfig.identityProviders.clientSecretHint')}
-              InputProps={{
-                endAdornment: (
-                  <InputAdornment position="end">
-                    <IconButton onClick={() => setShowSecret(!showSecret)} edge="end" size="small">
-                      {showSecret ? <VisibilityOff /> : <Visibility />}
-                    </IconButton>
-                  </InputAdornment>
-                ),
-              }}
-              sx={{ mb: 2 }}
-            />
-
             <TextField
               label={t('systemConfig.identityProviders.claimsMapping')}
               value={claimsMapping}

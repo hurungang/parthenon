@@ -54,6 +54,7 @@ class TestCreateProvider:
                     issuer_url="https://auth.example.com",
                     client_id="my-client-id",
                     client_secret="my-secret",
+                    public_client_id="parthenon-api-ui",
                     scopes="openid profile",
                     changed_by="test_user",
                 )
@@ -62,8 +63,46 @@ class TestCreateProvider:
         assert config.provider_type == "oidc_generic"
         assert config.issuer_url == "https://auth.example.com"
         assert config.client_id == "my-client-id"
+        assert config.ui_client_id == "parthenon-api-ui"
         assert config.encrypted_client_secret == "encrypted-secret-value"
         assert mock_db.add.call_count >= 2  # config row + audit + setup state
+
+    async def test_create_user_provider_requires_public_client(self, service, mock_db):
+        """USER scope requires the PUBLIC client (frontend PKCE sign-in)."""
+        mock_db.execute = AsyncMock(return_value=MagicMock(scalar_one_or_none=MagicMock(return_value=None)))
+
+        with pytest.raises(OIDCConfigError, match="public_client_id"):
+            await service.create_provider(
+                mock_db,
+                provider_scope="user",
+                provider_type="oidc_generic",
+                display_name="Test OIDC",
+                issuer_url="https://auth.example.com",
+                client_id="my-client-id",
+            )
+
+    async def test_create_agent_provider_ignores_public_client(self, service, mock_db):
+        """AGENT scope never uses ui_client_id — passed values are dropped."""
+        mock_db.execute = AsyncMock(return_value=MagicMock(scalar_one_or_none=MagicMock(return_value=None)))
+
+        with patch("app.services.oidc_config_service._fetch_discovery",
+                   AsyncMock(return_value=_mock_discovery_response())):
+            with patch("app.services.oidc_config_service.get_vault") as mock_vault:
+                mock_vault.return_value.encrypt.return_value = "enc"
+
+                config = await service.create_provider(
+                    mock_db,
+                    provider_scope="agent",
+                    provider_type="oidc_generic",
+                    display_name="Agent OIDC",
+                    issuer_url="https://auth.example.com",
+                    client_id="agent-client",
+                    public_client_id="should-be-ignored",
+                    scopes="openid profile offline_access",
+                    changed_by="test_user",
+                )
+
+        assert config.ui_client_id is None
 
     async def test_reject_duplicate_scope(self, service, mock_db):
         """Should reject creating a provider for an already-configured scope."""
@@ -81,6 +120,7 @@ class TestCreateProvider:
                 display_name="Test",
                 issuer_url="https://auth.example.com",
                 client_id="id",
+                public_client_id="parthenon-api-ui",
             )
 
     async def test_reject_invalid_scope(self, service, mock_db):
@@ -134,6 +174,38 @@ class TestUpdateProvider:
 
         with pytest.raises(OIDCConfigError, match="No provider config exists"):
             await service.update_provider(mock_db, "agent", display_name="Test")
+
+    async def test_update_user_rejects_empty_public_client(self, service, mock_db):
+        """USER scope cannot clear the PUBLIC client (ui_client_id)."""
+        existing = MagicMock(spec=IdentityProviderConfig)
+        existing.id = uuid.uuid4()
+        existing.provider_scope = "user"
+        existing.ui_client_id = "parthenon-api-ui"
+
+        mock_db.execute = AsyncMock(return_value=MagicMock(
+            scalar_one_or_none=MagicMock(return_value=existing)
+        ))
+
+        with pytest.raises(OIDCConfigError, match="public_client_id"):
+            await service.update_provider(mock_db, "user", public_client_id="  ")
+
+    async def test_update_agent_ignores_public_client(self, service, mock_db):
+        """AGENT scope must not touch ui_client_id on update."""
+        existing = MagicMock(spec=IdentityProviderConfig)
+        existing.id = uuid.uuid4()
+        existing.provider_scope = "agent"
+        existing.display_name = "Agent"
+        existing.ui_client_id = None
+
+        mock_db.execute = AsyncMock(return_value=MagicMock(
+            scalar_one_or_none=MagicMock(return_value=existing)
+        ))
+
+        config = await service.update_provider(
+            mock_db, "agent", public_client_id="should-be-ignored"
+        )
+
+        assert config.ui_client_id is None
 
 
 @pytest.mark.asyncio

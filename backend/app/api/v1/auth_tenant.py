@@ -95,14 +95,19 @@ class TenantMembershipsResponse(BaseModel):
 async def _resolve_sign_in_ready(db, tenant: Tenant) -> bool:
     """Whether the tenant has an enabled user-scope identity provider.
 
-    Uses the per-tenant OIDC registry (global rows are a valid fallback
-    for the system tenant).  Never loads provider secrets.
+    Uses the per-tenant OIDC registry — ONLY the tenant's own slot (the
+    shared NULL-tenant slot is retired).  Never loads provider secrets.
     """
     from app.main import _get_registry
 
     registry = _get_registry()
     if not registry.initialized:
         return False
+    # Tenancy OFF: the ONLY lookup is the explicit DEFAULT (root)
+    # provider — a tenant-addressed lookup is not valid with the switch
+    # off (the root workspace is THE default tenant).
+    if not registry.multi_tenancy_enabled:
+        return registry.get_default_provider("user") is not None
     return registry.has_user_provider(
         tenant_id=tenant.id,
         is_system_tenant=bool(tenant.is_system_tenant),
@@ -351,10 +356,14 @@ async def login_password(
     the existing tenant-claim middleware check).  Failures are generic —
     no user enumeration.
     """
+    from app.api.deps import NoWorkspaceAccessError
     from app.services.tenancy.platform_account_auth_service import (
         PlatformAccountAuthError,
         authenticate_platform_account,
         create_platform_account_token,
+    )
+    from app.services.tenancy.platform_settings_service import (
+        get_platform_settings_service,
     )
 
     account = await authenticate_platform_account(
@@ -365,6 +374,22 @@ async def login_password(
             status_code=401, detail="Invalid email or password"
         )
     user, tenant, role = account
+
+    # ── LOGIN ADMISSION (tenancy OFF): the root workspace is THE default
+    # tenant and users cannot switch — signing in to any non-root tenant
+    # is rejected even though the credentials are valid (Rule A).  The
+    # structured no_access_to_workspace 403 is a permission denial, never
+    # an auth failure — and no token is issued.
+    multi_tenancy_enabled = await get_platform_settings_service(
+    ).is_multi_tenancy_enabled(db)
+    if not multi_tenancy_enabled and not bool(tenant.is_system_tenant):
+        logger.warning(
+            "login-password rejected under tenancy OFF: account belongs "
+            "to non-root tenant slug=%s — the root workspace is the only "
+            "tenant when multi-tenancy is disabled",
+            tenant.slug,
+        )
+        raise NoWorkspaceAccessError(tenant_slug=tenant.slug)
     token = create_platform_account_token(user=user, tenant=tenant, tenant_role=role)
     return LoginPasswordResponse(
         access_token=token,

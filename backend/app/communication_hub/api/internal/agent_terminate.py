@@ -19,6 +19,8 @@ import uuid
 from typing import Any
 
 import httpx
+
+from app.core.internal_http import internal_httpx_client
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 
@@ -90,11 +92,8 @@ async def forward_terminate_session(
     }
 
     headers: dict[str, str] = {}
-    # Multi-tenancy: forward the signed tenant context received from
-    # CC so Agent Runtime binds the execution to the tenant.
-
-    from app.core.tenant_signature import forward_tenant_headers
-    headers.update(forward_tenant_headers())
+    # Tenant headers are attached by the internal_httpx_client egress hook
+    # (forwards the CC-signed set CH's middleware verified and bound).
     if cert_manager and cert_manager.cert_path and cert_manager.key_path:
         if ar_base.startswith("https://"):
             client_kwargs["cert"] = (str(cert_manager.cert_path), str(cert_manager.key_path))
@@ -131,7 +130,7 @@ async def forward_terminate_session(
                 )
                 await asyncio.sleep(delay)
 
-            async with httpx.AsyncClient(**client_kwargs) as client:
+            async with internal_httpx_client(**client_kwargs) as client:
                 response = await client.post(
                     ar_endpoint,
                     json=payload,

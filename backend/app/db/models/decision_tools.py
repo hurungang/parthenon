@@ -104,8 +104,19 @@ class DecisionTool(Base):
     confirm_threshold: Mapped[float] = mapped_column(
         Float, nullable=False, default=0.7, server_default="0.7"
     )
+    # Legacy free-text model identifier. Superseded by
+    # decision_model_availability_id; kept readable/backfilled during
+    # migration, retired per the data-model doc.
     provider_model: Mapped[str] = mapped_column(
         String(200), nullable=False, default="jev-latest", server_default="jev-latest"
+    )
+    decision_model_availability_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey(
+            "decision_model_availability.id", ondelete="RESTRICT"
+        ),
+        nullable=True,
+        comment="Selected enabled decision model (replaces legacy provider_model)",
     )
     status: Mapped[DecisionToolStatus] = mapped_column(
         Enum(DecisionToolStatus, name="decision_tool_status_enum"),
@@ -134,6 +145,9 @@ class DecisionTool(Base):
     output_data_type: Mapped["AgentDataType | None"] = relationship(
         "AgentDataType", foreign_keys=[output_data_type_id], lazy="joined"
     )
+    decision_model_availability: Mapped["DecisionModelAvailability | None"] = relationship(
+        "DecisionModelAvailability", foreign_keys=[decision_model_availability_id]
+    )
     questions: Mapped[list["DecisionToolQuestion"]] = relationship(
         "DecisionToolQuestion",
         back_populates="tool",
@@ -151,6 +165,14 @@ class DecisionTool(Base):
     def __repr__(self) -> str:
         return (
             f"<DecisionTool id={self.id} tenant_id={self.tenant_id} name={self.name}>"
+        )
+
+    @property
+    def ready(self) -> bool:
+        """Readiness: both input and output data types are configured."""
+        return (
+            self.input_data_type_id is not None
+            and self.output_data_type_id is not None
         )
 
 
@@ -200,5 +222,6 @@ class DecisionToolQuestion(Base):
         )
 
 
-# Resolve forward reference
+# Resolve forward references
+from app.db.models.decision_model_availability import DecisionModelAvailability  # noqa: E402, F401
 from app.db.models.results import DecisionExecutionResult  # noqa: E402, F401

@@ -8,7 +8,18 @@ Multi-tenancy turns the single-tenant deployment into a shared platform serving 
 - **Single resolution point** — tenant context is established exactly once per request in Control Center, from a verified source (tenant address subdomain, or tenant header for API/MCP clients); fail-closed in multi-tenant mode.
 - **Control Center is the sole database gateway** — every read and write (including quota usage counting) passes through tenant-scoped repositories; no other service touches the database.
 - **Read-only propagation** — Agent Runtime and Communication Hub receive a signed, immutable tenant context over the existing mTLS channels; no new trust paths.
+- **Strict tenant isolation (fail-closed)** — signed `X-Internal-Tenant-*` headers are **mandatory** on every `/api/v1/internal/*` data-plane hop; missing, stale, or invalidly signed requests are rejected with 401 before any handler or DB access (no verify-if-present). When the tenancy switch is off, every context (request, internal, scheduler, seeder) resolves to the root tenant — never tenant-less.
 - **Quota governance** — license tiers (free / team / enterprise) with limits enforced only in Control Center; over-quota actions are refused there and never dispatched.
+
+### Strict Tenant Isolation
+
+The isolation properties below are **as-built** cross-cutting invariants; they apply to every module documented under `modules/`.
+
+- **Mandatory signed internal headers** — HMAC-signed `X-Internal-Tenant-Id/Slug/Timestamp/Signature` headers (per `backend/app/core/tenant_signature.py`) are required on all CC↔CH↔AR internal calls. Verification is fail-closed: absent or invalid signatures → 401 before any handler runs. Data-plane DB sessions without a resolved tenant are rejected (or bound to root when multi-tenancy is off) instead of running unscoped; every data-plane service additionally applies explicit tenant predicates as defense in depth.
+- **Egress choke point** — all CH/AR → CC internal HTTP goes through the shared `internal_httpx_client` (`app/core/internal_http.py`), which automatically attaches the forwarding tenant headers on every outbound internal call, so no call site can forget them.
+- **Signing origin** — **Control Center is the only signing origin** for internal calls. CH and AR are **forward-only receivers**: they verify and forward received tenant headers but never sign new ones. The WS chat path in CH mints per-call signatures from its already-verified tenant context (bound from the token's tenant claim).
+- **Retired concepts** — the NULL-tenant "shared slot" on the data plane (shared data types, NULL-tenant seeded skills, shared recipient groups) and the platform-wide MCP tool registry no longer exist. All legacy NULL-tenant rows were adopted into the root tenant by an idempotent data migration; `tenant_id` is NOT NULL on data-plane tables and NULL tenant at dispatch/creation is a hard error.
+- **Login/identity plane (strict)** — per-tenant IdP resolution uses the tenant's **own slot only** (no shared/root fallback chain); with tenancy OFF, providers resolve from the root slot. Vendor interactions go through the Control Center decision provider abstraction (multi-vendor client factory), so decision-provider backends are tenant-resolved, not hard-wired.
 
 ## Tenant Resolution and Token Validation
 
@@ -22,7 +33,7 @@ flowchart TD
     TRM[Tenant Resolution Middleware<br/>resolve once · fail-closed]
     PUB[Public Registration Endpoints<br/>only unauthenticated group]
     AM[Auth Middleware]
-    POR[Per-Tenant OIDC Registry<br/>own → shared → root slot]
+    POR[Per-Tenant OIDC Registry<br/>own slot only · root slot when off]
     CHKC{JWT tenant claim<br/>== resolved tenant?}
     TC[Immutable Tenant Context]
     AR[Agent Runtime<br/>signed headers over mTLS]
@@ -110,10 +121,12 @@ The public registration endpoint group (the only unauthenticated group, active o
 | Concern | Mechanism |
 |---|---|
 | Tenant resolution | Address subdomain (browser) or tenant header (API/MCP), once per request, fail-closed |
-| Token validation | Per-tenant OIDC registry (own → shared → root slot); JWT tenant claim must match resolved tenant |
+| Token validation | Per-tenant OIDC registry (own slot only; root slot when tenancy off); JWT tenant claim must match resolved tenant |
 | Data isolation | Tenant-scoped repositories at the sole DB gateway — automatic row-level filtering |
 | Permission | Containment: grants evaluated only within the session tenant; no global roles |
 | AR/CH propagation | Signed immutable tenant headers over existing mTLS; no new trust paths |
+| Internal calls | Signed `X-Internal-Tenant-*` headers mandatory, fail-closed 401; CH/AR verify-and-forward only; CC is the sole signing origin; all CH/AR→CC egress via `internal_httpx_client` |
+| Shared-slot legacy | Retired: NULL-tenant rows adopted into root; `tenant_id` NOT NULL on data plane; exact tenant matching only |
 | MCP API keys | Issued per tenant; validation binds the session to that tenant |
 | A2A messaging | Broker never routes across tenants; pairs must share the tenant context |
 | Quota | Single decision point in CC; scheduler consults at dispatch; usage never refunded |

@@ -48,6 +48,13 @@ class ProviderSetupRequest(BaseModel):
 
     # External OIDC-specific fields
     client_secret: Optional[str] = Field(default=None, description="Pre-existing OIDC client secret")
+    ui_client_id: Optional[str] = Field(
+        default=None,
+        description=(
+            "PUBLIC client ID used by the frontend browser sign-in (PKCE, "
+            "no secret). Required for user-scope provider setup."
+        ),
+    )
     oidc_discovery_url: Optional[str] = Field(
         default=None, description="Full /.well-known/openid-configuration URL"
     )

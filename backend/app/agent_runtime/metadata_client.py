@@ -18,6 +18,7 @@ from typing import Any
 import httpx
 
 from app.agent_runtime.certificate_manager import CertificateLoadError, CertificateManager
+from app.core.internal_http import internal_httpx_client
 
 logger = logging.getLogger(__name__)
 
@@ -110,7 +111,9 @@ class MetadataClient:
 
         for attempt in range(1, _MAX_RETRIES + 1):
             try:
-                async with self._cert_manager.configure_mtls_client(timeout=30.0) as client:
+                async with internal_httpx_client(
+                    **self._cert_manager.mtls_client_kwargs(), timeout=30.0
+                ) as client:
                     response = await client.get(url)
 
                 if response.status_code == 200:

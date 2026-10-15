@@ -1,9 +1,25 @@
-"""SQLAlchemy model for SystemOneProviderConfig."""
+"""SQLAlchemy model for the multi-vendor Decision Model Provider registry.
+
+Conceptually renamed from "System One Provider" to "Decision Model Provider";
+the internal table identity (``system_one_provider_configs``) is kept unchanged
+to limit migration risk. Multiple providers may be registered per tenant; each
+stores encrypted credentials (AES-256, never returned in plaintext) and a
+vendor-level ``enabled`` flag that cascades to its per-model availability rows
+(see ``decision_model_availability.py``).
+"""
 import enum
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, String, func
+from sqlalchemy import (
+    Boolean,
+    DateTime,
+    Enum,
+    ForeignKey,
+    String,
+    UniqueConstraint,
+    func,
+)
 from sqlalchemy.dialects.postgresql import JSON, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -11,19 +27,29 @@ from app.db.session import Base
 
 
 class SystemOneProviderType(str, enum.Enum):
-    """Supported System One model provider types (extensible)."""
+    """Supported decision model provider (vendor) types — extensible."""
 
     typesafe = "typesafe"
 
 
 class SystemOneProviderConfig(Base):
-    """Stores credentials for a System One model provider (initially TypeSafe/Jev).
+    """A decision model provider (vendor) with credentials and default model.
 
     Follows the encrypted-credential pattern used by identity provider configs:
     the API key is AES-256 encrypted at rest and never returned in plaintext.
+    Multiple rows per tenant are allowed; display names are unique per vendor
+    type within a tenant.
     """
 
     __tablename__ = "system_one_provider_configs"
+    __table_args__ = (
+        UniqueConstraint(
+            "tenant_id",
+            "provider_type",
+            "display_name",
+            name="uq_system_one_providers_tenant_type_display",
+        ),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), primary_key=True, default=uuid.uuid4

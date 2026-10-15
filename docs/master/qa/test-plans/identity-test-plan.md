@@ -171,3 +171,15 @@
 - `e2e/tests/role-policy-management.spec.ts`
 - `e2e/tests/auth-required/access-control.spec.ts` — permission-denied scenarios, group-role assignment (assign/remove/permission-error), error message detail
 - `e2e/tests/permission-errors.spec.ts` — structured 403 rendering across all pages and dialog contexts
+
+---
+
+## strict-tenant-isolation Update (2026-10)
+
+Strict identity plane: every tenant uses ONLY its own identity provider — no shared (NULL-tenant) provider config and no candidate/fallback chain. Migration `c9d0e1f2a3b4` adds unique `(tenant_id, provider_scope)` on `identity_provider_configs`; with multi-tenancy disabled only the root tenant's providers are used.
+
+Test files added (verified present):
+
+- `backend/tests/integration/test_multitenant_auth_chain.py` — per-tenant OIDC provider isolation (token validates against own tenant's provider only, rejected in another tenant's context), `provider_scope` uniqueness enforced at DB level, NULL-tenant rows inert, tenancy-off resolves the root slot only, tenant discovery serves sign-in-ready providers with own user provider only
+
+E2E: N/A — backend-only change.

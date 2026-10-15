@@ -17,10 +17,11 @@ from pydantic import BaseModel, Field, StringConstraints, model_validator
 from app.db.models.decision_tools import DecisionQuestionType, DecisionToolStatus
 from app.db.models.results import DecisionExecutionStatus, DecisionOutcome
 
-# Sources allowed in a state-preset mapping. Each mapping pulls a value from
-# the execution input (``input``) or from agent data saved in the session
-# (``agent_data``) into the state sent to the System One model.
-StatePresetSource = Literal["input", "agent_data"]
+# Sources allowed in a state-preset mapping. State maps FROM THE INPUT ONLY:
+# each mapping pulls ``input_state[key]`` into the state sent to the System
+# One model. The legacy ``agent_data`` source is retired — existing rows are
+# ignored with a warning at execution time and dropped on the next save.
+StatePresetSource = Literal["input"]
 
 
 class AgentDataTypeSummary(BaseModel):
@@ -113,9 +114,16 @@ class DecisionToolCreate(BaseModel):
     act_threshold: float = Field(default=0.9, ge=0.0, le=1.0)
     confirm_threshold: float = Field(default=0.7, ge=0.0, le=1.0)
     provider_model: str = "jev-latest"
+    # Selected enabled decision model (replaces the legacy free-text
+    # provider_model for new tools). Validated server-side: must exist and
+    # be enabled within the tenant.
+    decision_model_availability_id: uuid.UUID | None = None
     status: DecisionToolStatus = DecisionToolStatus.active
     enabled: bool = True
-    questions: list[DecisionToolQuestionCreate] = Field(min_length=1)
+    # Manual questions are OPTIONAL: when omitted, questions are derived
+    # 1:1 from the output data type at execution time (manual wins when
+    # present as the override).
+    questions: list[DecisionToolQuestionCreate] = []
 
     @model_validator(mode="after")
     def validate_thresholds_and_preset(self) -> "DecisionToolCreate":
@@ -144,6 +152,7 @@ class DecisionToolUpdate(BaseModel):
     act_threshold: float | None = Field(default=None, ge=0.0, le=1.0)
     confirm_threshold: float | None = Field(default=None, ge=0.0, le=1.0)
     provider_model: str | None = None
+    decision_model_availability_id: uuid.UUID | None = None
     status: DecisionToolStatus | None = None
     enabled: bool | None = None
     questions: list[DecisionToolQuestionCreate] | None = None
@@ -168,8 +177,13 @@ class DecisionToolRead(BaseModel):
     act_threshold: float
     confirm_threshold: float
     provider_model: str
+    decision_model_availability_id: uuid.UUID | None = None
+    provider_type: str | None = None
+    provider_display_name: str | None = None
+    model_name: str | None = None
     status: DecisionToolStatus
     enabled: bool
+    ready: bool = True
     is_system: bool = False
     created_at: datetime
     updated_at: datetime

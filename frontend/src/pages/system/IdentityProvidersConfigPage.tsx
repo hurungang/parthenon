@@ -134,8 +134,14 @@ export function IdentityProvidersConfigPage() {
                 <li>{window.location.origin}/* — Wildcard for dev environments</li>
               </ul>
             </li>
-            <li><strong>Client setup (user identity):</strong> Register a <strong>public</strong> OIDC client in your provider for browser PKCE login (no secret). This is the <em>UI Client ID</em> field below — the only required client. A separate confidential API client is optional (platform does not enforce client-level access control).</li>
-            <li><strong>Client setup (agent identity):</strong> Register a single client for the agent realm. This client is used for both the OAuth authorization flow and token exchange.</li>
+            <li>
+              <strong>{t('systemConfig.identityProviders.setupUserClientLabel')}</strong>{' '}
+              {t('systemConfig.identityProviders.setupUserClientText')}
+            </li>
+            <li>
+              <strong>{t('systemConfig.identityProviders.setupAgentClientLabel')}</strong>{' '}
+              {t('systemConfig.identityProviders.setupAgentClientText')}
+            </li>
           </ul>
         </Typography>
       </Alert>

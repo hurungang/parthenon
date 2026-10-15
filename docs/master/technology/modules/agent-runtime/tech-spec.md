@@ -148,3 +148,22 @@ Agent Runtime is tenant-bound via signed headers since the multi-tenant support 
 | `ControlCenterCertificateMiddleware` | middleware (modified) | Additionally verifies CC-signed tenant headers (verify-if-present) and binds the verified context to requests | `backend/app/agent_runtime/middleware.py` |
 | `ControlCenterDataClient` (AR) | class (modified) | Forwards signed tenant headers to CC (`_get`/`_post`/`_patch`) | `backend/app/agent_runtime/data_client.py` |
 | execute / terminate endpoints | routers (reference) | Unchanged — the runtime loader resolves configuration only within the middleware-bound tenant context; no widening path exists and agents still hold no tokens or credentials | `backend/app/agent_runtime/api/execute.py`, `backend/app/agent_runtime/api/terminate.py` |
+
+## Strict Tenant Isolation (as-built — strict-tenant-isolation change)
+
+Agent Runtime is a virtual tenant: it resolves the calling tenant once from the signed context on the execution request and applies it to all tool/MCP/A2A resolution and every downstream internal call during the run.
+
+- The tenant-verification middleware is **fail-closed**: execution requests without a valid signed `X-Internal-Tenant-*` binding are rejected (root-default when multi-tenancy is off).
+- All AR→CC data calls go through `ControlCenterDataClient` (`backend/app/agent_runtime/data_client.py`) and the global egress hook `internal_httpx_client` / `attach_forwarded_tenant_headers` (`backend/app/core/internal_http.py`), which stamp the run's forwarded signed headers on every request — including the `agent_data` context fetch, decision toolset registration, and `save_data`/`get_data` hops.
+- The LangChain tool wrapper carries the tenant through the run so `server____tool` and `agent____<slug>` names resolve only within the run's tenant; the runtime executor's MCP tool lookup is tenant-filtered and fails closed.
+
+### As-built Code Reference Map additions
+
+| Symbol | Type | Description | File |
+|--------|------|-------------|------|
+| AR tenant-verification middleware | middleware | Requires a signed tenant binding on execution requests; fail-closed (verify-if-present replaced) | `backend/app/agent_runtime/middleware.py` |
+| `ControlCenterDataClient` | class | AR→CC data client; forwards the run's signed tenant headers on every call (`_get`/`_post`/`_patch`) | `backend/app/agent_runtime/data_client.py` |
+| `comm_hub_client` header forwarding | client behaviour | Every AR→CH/CC internal call stamps the run's forwarded signed tenant headers via the global egress hook | `backend/app/agent_runtime/comm_hub_client.py` |
+| `internal_httpx_client` / `attach_forwarded_tenant_headers` | functions | Global egress hook (shared with CH) attaching forwarded tenant headers to all outbound internal requests | `backend/app/core/internal_http.py` |
+| `build_langchain_tools_for_ar_path` | function | Tenant-aware tool-set construction for a run | `backend/app/services/agents/langchain_tool_wrapper.py` |
+| runtime executor MCP lookup | function behaviour | `server____tool` lookup tenant-filtered, fails closed | `backend/app/services/agents/runtime_executor.py` |

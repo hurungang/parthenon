@@ -55,17 +55,11 @@ def reset_schema() -> None:
 
         engine = create_async_engine(TEST_DB_URL)
         async with engine.begin() as conn:
-            await conn.exec_driver_sql(
-                """
-                DO $$ DECLARE r RECORD; BEGIN
-                  FOR r IN (SELECT tablename FROM pg_tables
-                            WHERE schemaname = 'public') LOOP
-                    EXECUTE 'TRUNCATE TABLE public.' ||
-                            quote_ident(r.tablename) || ' CASCADE';
-                  END LOOP;
-                END $$;
-                """
-            )
+            # Drop + recreate the schema so create_all rebuilds tables with
+            # the CURRENT metadata shape (truncate alone would leave stale
+            # columns from older runs — create_all never alters tables).
+            await conn.exec_driver_sql("DROP SCHEMA public CASCADE")
+            await conn.exec_driver_sql("CREATE SCHEMA public")
             await conn.run_sync(lambda sync_conn: Base.metadata.create_all(sync_conn))
         await engine.dispose()
 

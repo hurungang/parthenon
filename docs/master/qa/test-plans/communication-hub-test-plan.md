@@ -139,3 +139,18 @@
 - `e2e/tests/agent-runtime.spec.ts` — execution trigger path coverage through hub forwarding boundaries
 - `e2e/tests/comm-hub-websocket.spec.ts` — communication hub websocket coverage
 - `e2e/tests/websocket-communication-hub.spec.ts` — websocket routing and delivery checks
+
+---
+
+## strict-tenant-isolation Update (2026-10)
+
+Communication Hub verifies and forwards signed tenant context on all hops: WS chat, tool routing, conversation dispatch, and internal HTTP egress; MCP protocol `tools/list` / `tools/call` served per tenant for API-key clients.
+
+Test files added (verified present):
+
+- `backend/tests/communication_hub/test_ws_chat_signed_tenant_forwarding.py` — signed tenant context verification and forwarding on the WS chat path
+- `backend/tests/communication_hub/test_tool_routing_tenant_forwarding.py` — tool routing stamps/verifies the bound tenant on forwarded calls
+- `backend/tests/communication_hub/test_conversation_dispatch_tenant_forwarding.py` — conversation dispatch forwards tenant context
+- `backend/tests/communication_hub/test_internal_http_egress.py` — internal HTTP egress carries signed tenant headers
+
+E2E: N/A — backend-only change.

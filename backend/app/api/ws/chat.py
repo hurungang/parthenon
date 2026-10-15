@@ -3,6 +3,7 @@ import asyncio
 import json
 import logging
 import uuid
+from contextlib import contextmanager
 from datetime import datetime, timezone
 from typing import Any, Awaitable, Callable
 
@@ -95,6 +96,42 @@ def _build_chat_status_event(
     return payload
 
 
+@contextmanager
+def _signed_tenant_forwarding():
+    """Bind a FRESHLY signed tenant header set for one outbound CC call.
+
+    WebSocket connections bypass the HTTP tenant-resolution middleware, so no
+    CC-signed forwarded header set is ever bound for them — the loopback
+    data-client calls to ``/internal/data/conversations/*`` would otherwise go
+    out headerless and fail closed with 401 ("Signed tenant context headers
+    are required").  The tenant context was resolved at connection time from
+    the VERIFIED user token and bound via ``set_current_tenant_context``; here
+    we mint a per-call signature (a signature minted once at connect time
+    would exceed CC's replay window on a long-lived conversation).
+
+    No tenant context (single-tenant mode) → yields unchanged: headerless
+    traffic, and CC binds the root tenant as before.
+    """
+    from app.core.tenant_context import get_current_tenant_context
+    from app.core.tenant_signature import (
+        bind_forwarded_tenant_headers,
+        reset_forwarded_tenant_headers,
+        sign_context_for_authenticated_session,
+    )
+
+    context = get_current_tenant_context()
+    if context is None:
+        yield
+        return
+    token = bind_forwarded_tenant_headers(
+        sign_context_for_authenticated_session(context)
+    )
+    try:
+        yield
+    finally:
+        reset_forwarded_tenant_headers(token)
+
+
 class WebSocketServer:
     """
     WebSocket endpoint handler.
@@ -103,7 +140,14 @@ class WebSocketServer:
 
     @staticmethod
     async def authenticate(websocket: WebSocket) -> dict[str, Any] | None:
-        """Validate the token query param and return claims, or None if invalid."""
+        """Validate the token query param and return claims, or None if invalid.
+
+        Tries OIDC (Keycloak/external IdP) first, then platform-account
+        JWTs (self-managed email+password users — HS256 platform-issued
+        tokens carrying the ``tenant`` slug claim).  REST requests accept
+        both via the auth middleware tiers; the WebSocket must too, or
+        platform-account users can never connect to a conversation.
+        """
         token = websocket.query_params.get("token")
         if not token:
             return None
@@ -112,6 +156,18 @@ class WebSocketServer:
             claims = await client.validate_token(token)
             return claims
         except OIDCError:
+            pass
+        except Exception:
+            logger.warning("WebSocket auth: unexpected OIDC error", exc_info=True)
+        # Fallback: platform-issued account token (carries ``tenant`` slug)
+        try:
+            from app.services.tenancy.platform_account_auth_service import (
+                validate_platform_account_token,
+            )
+
+            return validate_platform_account_token(token)
+        except Exception:
+            logger.warning("WebSocket auth: platform token validation failed", exc_info=True)
             return None
 
 
@@ -138,6 +194,35 @@ async def websocket_chat(websocket: WebSocket, session_id: str) -> None:
 
     await websocket.accept()
     subject = claims.get("sub", "unknown")
+
+    # Bind the tenant context for this connection: WebSockets bypass the
+    # HTTP tenant-resolution middleware, so all in-connection queries and
+    # model/tool resolution would otherwise run context-less (fail-closed
+    # under strict tenant scoping).  Both token kinds carry ``tenant``
+    # (slug): platform-account JWTs natively; OIDC tokens via middleware
+    # claim injection during the REST calls that created the session.
+    tenant_slug = claims.get("tenant")
+    if isinstance(tenant_slug, str) and tenant_slug.strip():
+        try:
+            from app.db.session import AsyncSessionLocal
+            from app.services.tenancy.tenant_resolution_service import (
+                TenantResolutionService,
+                TenantResolutionError,
+            )
+            from app.core.tenant_context import set_current_tenant_context
+
+            async with AsyncSessionLocal() as db:
+                context = await TenantResolutionService().resolve_slug(
+                    db, tenant_slug.strip()
+                )
+            set_current_tenant_context(context)
+        except TenantResolutionError:
+            await websocket.close(code=4003, reason="Unknown tenant")
+            logger.warning(
+                "WebSocket rejected: unknown tenant %r for session %s",
+                tenant_slug, session_id,
+            )
+            return
 
     # Register this WebSocket connection for intervention routing
     ActiveSessionTracker.register(session_id, websocket)
@@ -341,10 +426,11 @@ async def _handle_intervention_response(
 
             # Submit via CC internal intervene endpoint (service cert, no JWT needed)
             response_body["operator_subject"] = subject
-            await data_client._post(
-                "/internal/data/intervene/respond",
-                response_body,
-            )
+            with _signed_tenant_forwarding():
+                await data_client._post(
+                    "/internal/data/intervene/respond",
+                    response_body,
+                )
             logger.info("Intervention response %s persisted via CC", request_id)
         except Exception as exc:
             logger.error(
@@ -392,10 +478,11 @@ async def _handle_intervention_cancel(
     )
     if data_client:
         try:
-            await data_client._post(
-                f"/intervene/requests/{request_id}/cancel",
-                {},
-            )
+            with _signed_tenant_forwarding():
+                await data_client._post(
+                    f"/intervene/requests/{request_id}/cancel",
+                    {},
+                )
         except Exception as exc:
             logger.warning(
                 "Failed to cancel intervention request %s via CC: %s",
@@ -435,7 +522,8 @@ async def _process_message(
     guardrail_usage: dict[str, Any] | None = None
     status_events: list[dict[str, str]] = []
 
-    prepared = await data_client.prepare_conversation_turn(conv_session_id, user_message)
+    with _signed_tenant_forwarding():
+        prepared = await data_client.prepare_conversation_turn(conv_session_id, user_message)
 
     no_agent_message = prepared.get("no_agent_message")
     agent_type_id_raw = prepared.get("agent_type_id")
@@ -444,24 +532,32 @@ async def _process_message(
     if no_agent_message:
         agent_reply = str(no_agent_message)
     elif agent_type_id_raw:
-        agent_reply, guardrail_usage, status_events = await _call_llm(
-            conv_session_id=conv_session_id,
-            agent_type_id=uuid.UUID(str(agent_type_id_raw)),
-            messages=prepared_messages,
-            app=app,
-            on_status_event=on_status_event,
-        )
+        # The conversational dispatch into Agent Runtime must carry the
+        # signed tenant context too: AR's execution binds the forwarded set
+        # and replays it on every AR→CC data call (PATCH status, result
+        # submission, execution logs).  Mint fresh at delegate time so a
+        # long turn never reuses a stale signature from the connect-time
+        # bind.
+        with _signed_tenant_forwarding():
+            agent_reply, guardrail_usage, status_events = await _call_llm(
+                conv_session_id=conv_session_id,
+                agent_type_id=uuid.UUID(str(agent_type_id_raw)),
+                messages=prepared_messages,
+                app=app,
+                on_status_event=on_status_event,
+            )
     else:
         agent_reply = "No model is configured for this agent."
 
-    appended = await data_client.append_conversation_turn(
-        conv_session_id=conv_session_id,
-        agent_reply=agent_reply,
-        is_first_message=is_first_message,
-        first_user_message=user_message if is_first_message else None,
-        guardrail_usage=guardrail_usage,
-        status_events=status_events,
-    )
+    with _signed_tenant_forwarding():
+        appended = await data_client.append_conversation_turn(
+            conv_session_id=conv_session_id,
+            agent_reply=agent_reply,
+            is_first_message=is_first_message,
+            first_user_message=user_message if is_first_message else None,
+            guardrail_usage=guardrail_usage,
+            status_events=status_events,
+        )
     session_title = appended.get("title")
     return agent_reply, (str(session_title) if session_title else None), guardrail_usage, status_events
 
@@ -577,7 +673,14 @@ async def _delegate_conversation_turn_to_agent_runtime(
         "timeout": timeout_seconds,
         "verify": get_ssl_context(),
     }
-    headers: dict[str, str] = {}
+    # Multi-tenancy: forward the signed tenant header set minted by
+    # ``_signed_tenant_forwarding`` (single-tenant mode → {}, unchanged).
+    # Agent Runtime verifies this set, binds it, and forwards it verbatim
+    # on its AR→CC data calls — without it, AR's first PATCH of the
+    # session status fails closed with 401 once multi-tenancy is on.
+    from app.core.tenant_signature import forward_tenant_headers
+
+    headers: dict[str, str] = dict(forward_tenant_headers())
 
     if cert_manager and cert_manager.cert_path and cert_manager.key_path:
         if ar_base.startswith("https://"):

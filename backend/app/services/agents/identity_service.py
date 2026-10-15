@@ -51,13 +51,14 @@ async def resolve_agent_provider_config(
 
     Strict tenant containment (SaaS model): only the tenant's OWN
     ``(tenant_id, "agent")`` slot is used — never another tenant's, the
-    root tenant's, or a shared config.  Returns ``None`` when the tenant
-    has no enabled agent provider (callers surface a config error).
+    root tenant's, or a shared config (the shared NULL-tenant slot is
+    RETIRED).  Returns ``None`` when the tenant has no enabled agent
+    provider (callers surface a config error).
 
-    With ``tenant_id=None`` (legacy/adopted rows without a tenant
-    binding), the SHARED tenant-less ``(NULL, "agent")`` slot is used,
-    falling back to the ROOT tenant's slot since pre-tenancy data was
-    adopted into root.
+    With ``tenant_id=None`` (tenancy-off/legacy path), the ROOT
+    tenant's ``("agent",)`` slot is used — routed through the registry's
+    explicit DEFAULT-provider lookup (tenancy off = root only; there is
+    no hidden fallback).
     """
     from app.db.models.identity_provider_config import IdentityProviderConfig
     from app.db.models.tenant import Tenant
@@ -68,9 +69,7 @@ async def resolve_agent_provider_config(
             .where(
                 IdentityProviderConfig.provider_scope == "agent",
                 IdentityProviderConfig.is_enabled == True,
-                IdentityProviderConfig.tenant_id.is_(None)
-                if candidate_tenant is None
-                else IdentityProviderConfig.tenant_id == candidate_tenant,
+                IdentityProviderConfig.tenant_id == candidate_tenant,
             )
             .limit(1)
         )
@@ -80,10 +79,15 @@ async def resolve_agent_provider_config(
     if tenant_id is not None:
         return await _fetch(tenant_id)
 
-    # tenant-unbound rows (legacy adoption) → shared slot, then root
-    config = await _fetch(None)
-    if config is not None:
-        return config
+    # tenancy-off / tenant-less path: the ROOT tenant's slot ONLY —
+    # routed through the registry's explicit tenancy-off lookup when the
+    # registry is live (single mechanism); direct root-row lookup as the
+    # pre-initialization fallback.
+    from app.main import _get_registry
+
+    registry = _get_registry()
+    if registry.initialized and not registry.multi_tenancy_enabled:
+        return registry.get_default_provider("agent")
     root_result = await db.execute(
         select(Tenant.id).where(Tenant.is_system_tenant.is_(True)).limit(1)
     )
@@ -100,9 +104,10 @@ async def _resolve_agent_oauth_config(
     """Resolve the agent identity provider config from the database.
 
     Reads the agent ``IdentityProviderConfig`` for the given tenant (or the
-    current tenant context when not provided), following the own → shared →
-    root candidate chain.  Resolves OIDC Discovery endpoints.  Falls back to
-    the legacy env-var / YAML config if no DB config exists.
+    current tenant context when not provided): the tenant's OWN slot only,
+    or the ROOT tenant's slot on the tenant-less (tenancy-off/legacy)
+    path.  Resolves OIDC Discovery endpoints.  Falls back to the legacy
+    env-var / YAML config if no DB config exists.
     """
     from app.core.tenant_context import get_current_tenant_context
     from app.services.oidc_config_service import OIDCConfigService

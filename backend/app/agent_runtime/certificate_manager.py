@@ -391,11 +391,37 @@ class CertificateManager:
 
     # ── mTLS Client ───────────────────────────────────────────────────────────
 
+    def mtls_client_kwargs(self) -> dict[str, Any]:
+        """Return httpx client kwargs carrying this instance's certificate.
+
+        Callers that build clients via ``app.core.internal_http.internal_httpx_client``
+        spread these kwargs to attach the cert while keeping the global
+        tenant-forwarding egress hook.
+
+        Raises:
+            CertificateLoadError: If the certificate is not loaded.
+        """
+        if not self._cert_pem:
+            raise CertificateLoadError("Certificate not loaded; call load_certificate() first")
+
+        # Control Center expects certificate in X-Client-Certificate header
+        # Replace newlines with literal \n to make it valid for HTTP headers
+        cert_header_value = self._cert_pem.replace("\n", "\\n")
+        return {"headers": {"X-Client-Certificate": cert_header_value}}
+
     def configure_mtls_client(self, **httpx_kwargs: Any) -> httpx.AsyncClient:
         """Return an httpx AsyncClient configured for mutual TLS.
 
         The client presents the agent certificate for every request.  The caller
         is responsible for closing the client.
+
+        NOTE (egress-scan exemption): this module builds clients directly
+        for pre-tenancy certificate bootstrap/renewal — headerless by
+        design, no tenant context exists yet.  It is allowlisted in
+        ``tests/communication_hub/test_internal_http_egress.py`` and must
+        NOT gain tenant-header forwarding here.  Data/metadata clients
+        that talk to internal endpoints use ``internal_httpx_client`` with
+        :meth:`mtls_client_kwargs` instead.
 
         Args:
             **httpx_kwargs: Additional kwargs passed to httpx.AsyncClient.
@@ -406,22 +432,13 @@ class CertificateManager:
         Raises:
             CertificateLoadError: If certificate or key is not loaded.
         """
-        if not self._cert_pem:
-            raise CertificateLoadError("Certificate not loaded; call load_certificate() first")
+        default_headers = self.mtls_client_kwargs()["headers"]
 
-        # Control Center expects certificate in X-Client-Certificate header
-        # Replace newlines with literal \n to make it valid for HTTP headers
-        cert_header_value = self._cert_pem.replace("\n", "\\n")
-        
-        default_headers = {
-            "X-Client-Certificate": cert_header_value
-        }
-        
         # Merge with any headers provided by caller
         if "headers" in httpx_kwargs:
             default_headers.update(httpx_kwargs["headers"])
             httpx_kwargs = {k: v for k, v in httpx_kwargs.items() if k != "headers"}
-        
+
         return httpx.AsyncClient(
             headers=default_headers,
             timeout=30.0,

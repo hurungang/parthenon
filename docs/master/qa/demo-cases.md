@@ -3,6 +3,8 @@
 <!-- Use with: /demo-app --cases docs/master/qa/demo-cases.md -->
 <!-- Updated automatically by /change:update-master — do not edit grep patterns manually -->
 
+> **strict-tenant-isolation (2026-10): contributed no E2E scenarios.** This was a backend-only change (signed internal tenant headers, DB tenant predicates, migrations) with no UI changes, so no Playwright specs or grep patterns were added. Isolation coverage lives in the backend integration suites — see `docs/master/qa/test-plans/multi-tenancy-test-plan.md`.
+
 ## Grep Patterns
 <!-- Matches Playwright test titles and Vitest describe > it names (same format) -->
 <!-- One pattern per line; joined with | at runtime for --grep / regex matching -->
@@ -187,6 +189,11 @@
 - Agent Management Panel — Communication Hub in existing preview topologies > Agent Types details dialog shows the hub in a typed agent plan preview topology
 - Agent Management Panel — permissions > 403 on the roles list disables only the role slot with a localized explanation
 - Agent Management Panel — CRUD lifecycle > pending-changes tray saves the draft with exactly one agent-type PUT
+- Decision Model Providers (mocked) > settings > navigation and page header show "Decision Model Providers" with no trace of "System One Providers"
+- Decision Model Providers (mocked) > settings > admin creates a decision model provider and sees it appear without reload
+- Decision Model Providers (mocked) > settings > admin deletes an unreferenced provider and can recreate the same name afterwards
+- Decision Model Providers (mocked) > decision tools > model selector lists only enabled models and submits the availability id
+- Real Backend Integration - Decision Model Providers > multi-provider CRUD, availability cascade, delete blocking, DB persistence
 
 ## Scenario Index table
 | # | Feature | What it Shows | Change | Spec File |
@@ -402,4 +409,9 @@
 | 203 | Communication Hub in preview topologies | The Agent Types details dialog (Agent Preview tab) appends the Communication Hub node with its dashed "platform messaging" edge to a typed agent's persisted plan topology, exactly once | agent-management-panel | agent-management-panel-topology.spec.ts |
 | 204 | Permission degradation (403 slot disable) | A 403 on the roles list disables only the role slot with a localized explanation while every other slot keeps working and no error alert appears | agent-management-panel | agent-management-panel-permissions.spec.ts |
 | 205 | Unsaved-changes tray / single-PUT save | Assigning a model dirties the draft with zero write calls and the tray lists the pending change; Save Changes issues exactly one agent-type PUT and flips the tray to saved | agent-management-panel | agent-management-panel.spec.ts |
+| 206 | Decision Providers — Terminology | Settings nav, page header, and rendered UI use "Decision Model Providers" with zero occurrences of the legacy "System One Providers" string | decision-model-providers | system-one-decision-tools.spec.ts |
+| 207 | Decision Providers — Create | Admin fills the create dialog (vendor, display name, endpoint, credential) and the new provider row appears in the table immediately without a page reload, with correct vendor chip and credentials-set indicator | decision-model-providers | system-one-decision-tools.spec.ts |
+| 208 | Decision Providers — Delete & Recreate | Admin deletes an unreferenced provider and can recreate one with the same display name/vendor afterwards — proves true deletion, not soft-hide | decision-model-providers | system-one-decision-tools.spec.ts |
+| 209 | Decision Tools — Model Selection | Decision tool authoring form lists only enabled models across providers and submits the availability id as the selection | decision-model-providers | system-one-decision-tools.spec.ts |
+| 210 | Decision Providers — Real Backend | Live backend (no mocks): multi-provider CRUD, availability cascade, referenced-provider delete blocking, and DB persistence against the actual API + PostgreSQL — validates migration applied | decision-model-providers | decision-model-providers-real-backend.spec.ts |
 

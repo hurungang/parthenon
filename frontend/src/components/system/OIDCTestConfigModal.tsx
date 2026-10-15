@@ -16,13 +16,48 @@ import {
 import { useTranslation } from 'react-i18next'
 import { useDialogErrorHandler } from '../../hooks/useDialogErrorHandler'
 import PermissionDeniedAlert from '../permissions/PermissionDeniedAlert'
-import { testOidcConnection, type OIDCTestStep, type OIDCTestResponse } from '../../api/systemConfigApi'
+import { testOidcConnection, type OIDCTestStep, type OIDCTestResponse, type OIDCTestClientIdStatus } from '../../api/systemConfigApi'
 
 interface OIDCTestConfigModalProps {
   open: boolean
   onClose: () => void
   issuerUrl: string
   clientId: string
+}
+
+/** Renders the client_id validation outcome reported by the backend. */
+function ClientIdStatusLine({
+  status,
+}: {
+  status: OIDCTestClientIdStatus | null
+}) {
+  const { t } = useTranslation()
+  if (!status) return null
+  const severity =
+    status.status === 'ok'
+      ? 'success.main'
+      : status.status === 'invalid'
+        ? 'error.main'
+        : 'warning.main'
+  const labelKey =
+    status.status === 'missing'
+      ? 'systemConfig.oidcTest.clientMissing'
+      : status.status === 'invalid'
+        ? 'systemConfig.oidcTest.clientInvalid'
+        : status.status === 'warning'
+          ? 'systemConfig.oidcTest.clientUnverified'
+          : 'systemConfig.oidcTest.clientVerified'
+  return (
+    <Box display="flex" alignItems="center" gap={1} mb={2}>
+      <Box component="span" sx={{ color: severity, fontWeight: 600 }}>
+        {t('systemConfig.oidcTest.clientStatusLabel')}
+      </Box>
+      <Typography variant="body2">
+        {status.client_id ? `${status.client_id} — ` : ''}
+        {t(labelKey)}
+      </Typography>
+    </Box>
+  )
 }
 
 export function OIDCTestConfigModal({
@@ -124,6 +159,8 @@ export function OIDCTestConfigModal({
                   : t('systemConfig.oidcTest.failed')}
               </Typography>
             </Box>
+
+            <ClientIdStatusLine status={result.client_id_status ?? null} />
 
             <Stepper activeStep={activeStep} orientation="vertical">
               {steps.map((step) => (

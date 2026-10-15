@@ -54,4 +54,4 @@ The Agent Data module gives platform operators a dedicated UI for browsing inter
 
 ## Multi-Tenancy Note
 
-When multi-tenancy is enabled (see [Multi-Tenancy](multi-tenancy.md)), saved agent data is tenant-owned and only the owning tenant's members can browse it. With multi-tenancy disabled (the default), behavior is unchanged — the deployment operates as the root tenant's workspace.
+When multi-tenancy is enabled (see [Multi-Tenancy](multi-tenancy.md) and [Strict Tenant Isolation](strict-tenant-isolation.md)), saved agent data is tenant-owned: every record carries its owning tenant, `save_data` writes with the calling tenant's binding, and retrieval (`get_data` and the internal listing APIs) filters strictly by tenant — an identical record name in another tenant is never retrievable. With multi-tenancy disabled (the default), behavior is unchanged — the deployment operates as the root tenant's workspace.

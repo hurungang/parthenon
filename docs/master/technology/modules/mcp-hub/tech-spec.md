@@ -178,3 +178,27 @@ Synchronisation (`POST /mcp/servers/{id}/sync`) is hardened: non-fatal initialis
 |--------|------|-------------|------|
 | `mcp.sessions.passthrough` | i18n key | Display label for passthrough auth type chip in session table | `frontend/src/i18n/locales/en.json` |
 | `mcp.sessions.passthroughInfo` | i18n key | Informational Alert text shown when passthrough auth type is selected | `frontend/src/i18n/locales/en.json` |
+
+## Strict Tenant Isolation (as-built — strict-tenant-isolation change)
+
+MCP hub identity is per-tenant `(tenant, slug)`, not platform-wide:
+
+- `McpServer.slug` is unique **per tenant** (business identity `(tenant_id, slug)`); the platform-wide slug constraint was dropped by migration `b8c9d0e1f2a3`.
+- `McpTool` carries a denormalized `tenant_id` stamped from its owning server at sync time; `ToolSyncService` upserts are tenant-bound.
+- `ToolPermission` grants and skill bindings enforce same-tenant containment: a grant in tenant A never authorizes tenant B's same-named tool. The `server____tool` wire format is unchanged — tenant qualification happens at resolution time only.
+- Resolution of `server____tool` names at runtime is tenant-filtered and fails closed (see the [multi-tenancy spec](../multi-tenancy/tech-spec.md) and [agent-runtime spec](../agent-runtime/tech-spec.md)).
+
+### As-built Code Reference Map additions
+
+| Symbol | Type | Description | File |
+|--------|------|-------------|------|
+| `McpServer.slug` per-tenant uniqueness | model behaviour | Slug unique per tenant; tenant mandatory | `backend/app/db/models/mcp_hub.py` |
+| `McpTool.tenant_id` | column | Denormalized tenant binding stamped at sync time | `backend/app/db/models/mcp_hub.py` |
+| `ToolSyncService` (tenant-bound) | class behaviour | Tool sync upserts stamp the server's tenant on every tool row | `backend/app/services/mcp/tool_sync.py` |
+| `ToolRegistryBridge.build_catalog` | method | Per-tenant tool catalogue: caller's tenant MCP tools + tenant decision tools, no cross-tenant names | `backend/app/communication_hub/mcp/tool_registry_bridge.py` |
+| `ToolRegistryBridge.dispatch` | method | Tenant-contained dispatch: the tool must exist in the caller's tenant before forwarding | `backend/app/communication_hub/mcp/tool_registry_bridge.py` |
+| `AgentPermissionManager` | class | Role→tool resolution with same-tenant containment — a binding resolved for a role only surfaces tools of the role's own tenant | `backend/app/services/agents/permission_manager.py` |
+| `build_langchain_tools_for_ar_path` | function | Builds the AR tool set with tenant-aware `server____tool` / `agent____<slug>` resolution | `backend/app/services/agents/langchain_tool_wrapper.py` |
+| `_extract_delegation_target_slug` | function | Parses `agent____<slug>`; wire format unchanged, resolution `(tenant, slug)` | `backend/app/services/agents/langchain_tool_wrapper.py` |
+| `build_tool_name` / `parse_tool_name` / `RESERVED_SERVER_NAMES` | functions + constant | `server____tool` wire format unchanged; call sites tenant-qualified | `backend/app/services/agents/tool_naming.py` |
+| Adoption migration (MCP part) | migration | Drops the platform-wide `McpServer.slug` constraint; adopts MCP rows into root; realigns `McpTool.tenant_id` with its server | `backend/alembic/versions/b8c9d0e1f2a3_per_tenant_entity_adoption_and_mcp_slug_scoping.py` |

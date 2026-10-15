@@ -89,4 +89,4 @@ These triggers follow the same dispatch pattern as existing notification types a
 
 ## Multi-Tenancy Note
 
-When multi-tenancy is enabled (see [Multi-Tenancy](multi-tenancy.md)), notification channels, recipient groups, and delivery logs are tenant-owned and visible only within the owning tenant. With multi-tenancy disabled (the default), behavior is unchanged — the deployment operates as the root tenant's workspace.
+When multi-tenancy is enabled (see [Multi-Tenancy](multi-tenancy.md) and [Strict Tenant Isolation](strict-tenant-isolation.md)), notification channels, recipient groups, and delivery logs are tenant-owned; dispatch resolves the calling tenant's own recipient group, `get_recipient_group` returns only the bound tenant's groups, and the legacy global "shared" group slot no longer exists on the data plane. With multi-tenancy disabled (the default), behavior is unchanged — the deployment operates as the root tenant's workspace.

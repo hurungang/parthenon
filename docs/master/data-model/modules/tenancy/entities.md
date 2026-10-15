@@ -2,6 +2,8 @@
 
 Multi-tenant core (opt-in, disabled by default via the `multi_tenancy_enabled` switch in `PlatformSetting`). The former system tenant is the **root tenant** (workspace name/address `root`, `is_root_tenant = true`): it adopts pre-existing data at migration and hosts platform staff as ordinary members with platform roles.
 
+**Strict tenant containment — the shared-slot concept is retired:** every data-plane business entity (skills, SOPs, agent roles/identities/types, model configs, agent data/outputs/data types, decision tools, recipient groups, notification channels, scheduled jobs, tag definitions, policy grants, MCP servers/tools) belongs to **exactly one tenant**. There is no NULL-tenant "platform-shared" slot: legacy NULL-tenant rows are **adopted once into the root tenant** (idempotent one-time migration), and the `tenant IS NULL OR tenant = own` lookup pattern is removed everywhere — only exact tenant matching remains. Fail-open tenant resolution is likewise retired: an unbound context is a hard error, never a default. When multi-tenancy is disabled, everything binds to the root tenant and behavior is identical, never tenant-less.
+
 ```mermaid
 erDiagram
     Tenant {

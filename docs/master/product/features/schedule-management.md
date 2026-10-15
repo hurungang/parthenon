@@ -71,4 +71,4 @@ Schedule Management enables platform administrators to automate recurring Agent 
 
 ## Multi-Tenancy Note
 
-When multi-tenancy is enabled (see [Multi-Tenancy](multi-tenancy.md)), schedules and their execution history are tenant-owned, a schedule can only trigger tenant-owned agents and SOPs, and schedule-triggered executions count toward the tenant's monthly execution quota. With multi-tenancy disabled (the default), behavior is unchanged — the deployment operates as the root tenant's workspace.
+When multi-tenancy is enabled (see [Multi-Tenancy](multi-tenancy.md) and [Strict Tenant Isolation](strict-tenant-isolation.md)), schedules and their execution history are tenant-owned: every job is bound to a tenant at creation and always dispatched under its owning tenant's context — a job created in one tenant never runs with access to another tenant's resources. A schedule can only trigger tenant-owned agents and SOPs, and schedule-triggered executions count toward the tenant's monthly execution quota. With multi-tenancy disabled (the default), behavior is unchanged — the deployment operates as the root tenant's workspace.

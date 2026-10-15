@@ -26,6 +26,8 @@ from pathlib import Path
 from typing import Any, Callable
 
 import httpx
+
+from app.core.internal_http import internal_httpx_client
 from fastapi import Request, Response
 from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
@@ -129,7 +131,7 @@ async def validate_certificate_with_control_center(
 
     try:
         client_kwargs, headers = _build_control_center_auth(request, control_center_url)
-        async with httpx.AsyncClient(**client_kwargs) as client:
+        async with internal_httpx_client(**client_kwargs) as client:
             response = await client.post(
                 f"{control_center_url}/api/v1/internal/certificates/validate",
                 json={
@@ -166,7 +168,7 @@ async def authorize_tool_call(
 
     try:
         client_kwargs, headers = _build_control_center_auth(request, control_center_url)
-        async with httpx.AsyncClient(**client_kwargs) as client:
+        async with internal_httpx_client(**client_kwargs) as client:
             response = await client.post(
                 f"{control_center_url}/api/v1/internal/authorize/tool-call",
                 json={

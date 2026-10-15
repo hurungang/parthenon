@@ -54,7 +54,7 @@ flowchart TB
 
 ## Quota Consultation at Dispatch
 
-Schedule-triggered executions are tenant-owned: a cron job adopts its owning tenant's context end to end, and the dispatch path consults the tenant's monthly execution quota **at dispatch time in Control Center** — before any Communication Hub or Agent Runtime involvement. An exhausted quota skips dispatch and records a quota-exhaustion audit event (OTEL-attributed, visible to the platform admin). Usage counting happens centrally in CC; no quota logic exists in the scheduler beyond the consultation.
+Schedule-triggered executions are tenant-owned: a cron job carries a mandatory `tenant_id` at creation (NULL is a hard error — no NULL-tenant jobs exist), dispatch resolves a **single owning tenant** (no `agent_type.tenant_id` fallback), and the job runs fully within that tenant's context. The dispatch path consults the tenant's monthly execution quota **at dispatch time in Control Center** — before any Communication Hub or Agent Runtime involvement. An exhausted quota skips dispatch and records a quota-exhaustion audit event (OTEL-attributed, visible to the platform admin). Usage counting happens centrally in CC; no quota logic exists in the scheduler beyond the consultation. The dispatched execution chain carries the owning tenant's signed headers end to end.
 
 ## Key Design Decisions
 

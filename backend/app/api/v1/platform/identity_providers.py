@@ -1,13 +1,12 @@
-"""Platform identity-provider API — manages the SHARED (NULL-tenant) slot.
+"""Platform identity-provider API — manages the ROOT tenant's providers.
 
-FIX-20261001-010107 (option b): the shared provider config must be
-manageable from the platform surface.  ``/system/identity-providers``
-writes are tenant-scoped and fail-closed without a tenant context
-(TenantResolutionMiddleware A3 pins), so the platform admin surface gets
-its own routes under the bypassed ``/api/v1/platform/`` prefix.  These
-handlers call the SAME ``OIDCConfigService`` with ``tenant_id=None``
-every time — a platform admin can never accidentally touch a tenant's
-own ``(tenant, scope)`` slot from here.
+The shared (NULL-tenant) slot is RETIRED: every tenant uses ONLY its
+own identity provider.  The platform surface manages the ROOT tenant's
+``(root_id, scope)`` slots — platform admins are root-tenant users, so
+they manage their own tenant's providers here.  These handlers call the
+SAME ``OIDCConfigService`` with ``tenant_id=root_tenant_id`` every time
+— a platform admin can never accidentally touch another tenant's own
+``(tenant, scope)`` slot from here.
 
 All routes are guarded by ``platform::settings`` (metadata-level platform
 administration; no tenant business data is exposed).
@@ -15,6 +14,7 @@ administration; no tenant business data is exposed).
 from __future__ import annotations
 
 import logging
+import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 
@@ -41,20 +41,30 @@ PlatformIdentityProvidersRouter = APIRouter(
     prefix="/platform/identity-providers", tags=["Platform: Identity Providers"]
 )
 
-#: The shared slot is ALWAYS tenant-less from this surface.
-_SHARED_TENANT_ID = None
+
+async def _root_tenant_id(db: DbSession) -> uuid.UUID:
+    """The ROOT tenant's id (``Tenant.is_system_tenant``), or 400."""
+    from app.services.tenancy.root_tenant import get_root_tenant_id
+
+    root_id = await get_root_tenant_id(db)
+    if root_id is None:
+        raise HTTPException(
+            status_code=400,
+            detail="Root tenant not initialized; complete setup first.",
+        )
+    return root_id
 
 
 @PlatformIdentityProvidersRouter.get(
     "", response_model=IdentityProviderConfigListResponse
 )
-async def list_shared_identity_providers(
+async def list_platform_identity_providers(
     db: DbSession,
     _: dict = Depends(require_permission(RT_PLATFORM_SETTINGS, "read")),
 ) -> IdentityProviderConfigListResponse:
-    """List the SHARED (NULL-tenant) provider configs (secrets masked)."""
+    """List the ROOT tenant's provider configs (secrets masked)."""
     configs = await OIDCConfigService().list_providers(
-        db, tenant_id=_SHARED_TENANT_ID
+        db, tenant_id=await _root_tenant_id(db)
     )
     items = [_config_to_response(cfg, mask_secret=True) for cfg in configs]
     return IdentityProviderConfigListResponse(items=items, total=len(items))
@@ -63,15 +73,15 @@ async def list_shared_identity_providers(
 @PlatformIdentityProvidersRouter.get(
     "/{scope}", response_model=IdentityProviderConfigResponse
 )
-async def get_shared_identity_provider(
+async def get_platform_identity_provider(
     scope: str,
     db: DbSession,
     _: dict = Depends(require_permission(RT_PLATFORM_SETTINGS, "read")),
 ) -> IdentityProviderConfigResponse:
-    """Get a shared provider config by scope (user or agent)."""
+    """Get a ROOT-tenant provider config by scope (user or agent)."""
     try:
         config = await OIDCConfigService().get_by_scope(
-            db, scope, tenant_id=_SHARED_TENANT_ID
+            db, scope, tenant_id=await _root_tenant_id(db)
         )
     except OIDCConfigError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
@@ -83,13 +93,13 @@ async def get_shared_identity_provider(
 @PlatformIdentityProvidersRouter.post(
     "", response_model=IdentityProviderConfigResponse, status_code=201
 )
-async def create_shared_identity_provider(
+async def create_platform_identity_provider(
     body: IdentityProviderConfigCreate,
     request: Request,
     db: DbSession,
     _: dict = Depends(require_permission(RT_PLATFORM_SETTINGS, "manage")),
 ) -> IdentityProviderConfigResponse:
-    """Create a SHARED provider config (NULL-tenant slot)."""
+    """Create a provider config in the ROOT tenant's slot."""
     try:
         config = await OIDCConfigService().create_provider(
             db,
@@ -105,7 +115,7 @@ async def create_shared_identity_provider(
             is_enabled=body.is_enabled,
             default_tenant_role=body.default_tenant_role,
             changed_by=_get_changed_by(request),
-            tenant_id=_SHARED_TENANT_ID,
+            tenant_id=await _root_tenant_id(db),
         )
         await db.commit()
         await _reload_registry(db, scope=body.provider_scope)
@@ -117,14 +127,14 @@ async def create_shared_identity_provider(
 @PlatformIdentityProvidersRouter.put(
     "/{scope}", response_model=IdentityProviderConfigResponse
 )
-async def update_shared_identity_provider(
+async def update_platform_identity_provider(
     scope: str,
     body: IdentityProviderConfigUpdate,
     request: Request,
     db: DbSession,
     _: dict = Depends(require_permission(RT_PLATFORM_SETTINGS, "manage")),
 ) -> IdentityProviderConfigResponse:
-    """Update the SHARED provider config for a scope."""
+    """Update the ROOT tenant's provider config for a scope."""
     try:
         config = await OIDCConfigService().update_provider(
             db,
@@ -140,7 +150,7 @@ async def update_shared_identity_provider(
             is_enabled=body.is_enabled,
             default_tenant_role=body.default_tenant_role,
             changed_by=_get_changed_by(request),
-            tenant_id=_SHARED_TENANT_ID,
+            tenant_id=await _root_tenant_id(db),
         )
         await db.commit()
         await _reload_registry(db, scope=scope)
@@ -150,19 +160,19 @@ async def update_shared_identity_provider(
 
 
 @PlatformIdentityProvidersRouter.delete("/{scope}", status_code=204)
-async def delete_shared_identity_provider(
+async def delete_platform_identity_provider(
     scope: str,
     request: Request,
     db: DbSession,
     _: dict = Depends(require_permission(RT_PLATFORM_SETTINGS, "manage")),
 ) -> Response:
-    """Delete the SHARED provider config for a scope."""
+    """Delete the ROOT tenant's provider config for a scope."""
     try:
         await OIDCConfigService().delete_provider(
             db,
             scope,
             changed_by=_get_changed_by(request),
-            tenant_id=_SHARED_TENANT_ID,
+            tenant_id=await _root_tenant_id(db),
         )
         await db.commit()
         await _reload_registry(db, scope=scope)
@@ -174,21 +184,21 @@ async def delete_shared_identity_provider(
 @PlatformIdentityProvidersRouter.patch(
     "/{scope}/toggle", response_model=IdentityProviderConfigResponse
 )
-async def toggle_shared_identity_provider(
+async def toggle_platform_identity_provider(
     scope: str,
     body: IdentityProviderConfigToggle,
     request: Request,
     db: DbSession,
     _: dict = Depends(require_permission(RT_PLATFORM_SETTINGS, "manage")),
 ) -> IdentityProviderConfigResponse:
-    """Enable/disable the SHARED provider config for a scope."""
+    """Enable/disable the ROOT tenant's provider config for a scope."""
     try:
         config = await OIDCConfigService().toggle_provider(
             db,
             scope,
             is_enabled=body.is_enabled,
             changed_by=_get_changed_by(request),
-            tenant_id=_SHARED_TENANT_ID,
+            tenant_id=await _root_tenant_id(db),
         )
         await db.commit()
         await _reload_registry(db, scope=scope)

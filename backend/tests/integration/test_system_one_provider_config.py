@@ -272,12 +272,12 @@ async def test_base_url_defaults_to_preset_on_create(app_client):
     assert resp.status_code == 201, resp.text
     body = resp.json()
     assert body["base_url"] == SYSTEM_ONE_PRESET_BASE_URL
-    assert body["base_url"] == "https://api.typesafe.ai/v1"
+    assert body["base_url"] == "https://api.typesafe.ai/v1/systemone"
 
 
 @pytest.mark.asyncio
-async def test_base_url_absent_from_update_payload(app_client):
-    """Round 2: update no longer accepts base_url — the preset stays."""
+async def test_update_base_url_persists(app_client):
+    """base_url is editable per tenant — update persists it."""
     created = await app_client.post(PROVIDERS_URL, json=PRESET_CREATE_BODY)
     assert created.status_code == 201
     provider_id = created.json()["id"]
@@ -286,20 +286,61 @@ async def test_base_url_absent_from_update_payload(app_client):
         json={"display_name": "Renamed", "base_url": "http://other.example/v1"},
     )
     assert resp.status_code == 200, resp.text
-    assert resp.json()["base_url"] == SYSTEM_ONE_PRESET_BASE_URL
+    assert resp.json()["base_url"] == "http://other.example/v1"
 
     listing = await app_client.get(PROVIDERS_URL)
-    assert listing.json()[0]["base_url"] == SYSTEM_ONE_PRESET_BASE_URL
+    assert listing.json()[0]["base_url"] == "http://other.example/v1"
+
+
+@pytest.mark.asyncio
+async def test_update_base_url_used_verbatim_no_stripping(app_client):
+    """base_url is the FULL endpoint URL — stored verbatim, no stripping."""
+    created = await app_client.post(PROVIDERS_URL, json=PRESET_CREATE_BODY)
+    assert created.status_code == 201
+    provider_id = created.json()["id"]
+    resp = await app_client.patch(
+        f"{PROVIDERS_URL}/{provider_id}",
+        json={"base_url": "https://tenant.example/v1/systemone"},
+    )
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["base_url"] == "https://tenant.example/v1/systemone"
+
+
+@pytest.mark.asyncio
+async def test_create_base_url_used_verbatim_no_stripping(app_client):
+    body = dict(PRESET_CREATE_BODY)
+    body["base_url"] = "https://tenant.example/v1/systemone"
+    resp = await app_client.post(PROVIDERS_URL, json=body)
+    assert resp.status_code == 201, resp.text
+    assert resp.json()["base_url"] == "https://tenant.example/v1/systemone"
+
+
+@pytest.mark.asyncio
+async def test_create_base_url_verbatim_preserves_other_paths(app_client):
+    """No magic suffix: any complete URL (e.g. a proxy) is stored verbatim."""
+    body = dict(PRESET_CREATE_BODY)
+    body["base_url"] = "http://127.0.0.1:18099/v1/systemone"
+    resp = await app_client.post(PROVIDERS_URL, json=body)
+    assert resp.status_code == 201, resp.text
+    assert resp.json()["base_url"] == "http://127.0.0.1:18099/v1/systemone"
+
+
+@pytest.mark.asyncio
+async def test_create_base_url_rejects_non_http_scheme(app_client):
+    body = dict(PRESET_CREATE_BODY)
+    body["base_url"] = "ftp://tenant.example/v1"
+    resp = await app_client.post(PROVIDERS_URL, json=body)
+    assert resp.status_code == 422, resp.text
 
 
 # ── Round 2: test-connection endpoint ─────────────────────────────────────
 
 
 def _patch_typesafe_client(monkeypatch, impl):
-    """Patch the TypeSafeJevClient the service constructs at call time."""
+    """Patch the client the factory returns at call time."""
     import app.services.system_one.client as client_module
 
-    monkeypatch.setattr(client_module, "TypeSafeJevClient", lambda: impl)
+    monkeypatch.setattr(client_module, "get_system_one_client", lambda pt: impl)
 
 
 @pytest.mark.asyncio

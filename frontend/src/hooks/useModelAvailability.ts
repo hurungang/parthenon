@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import apiClient from '../api/apiClient'
 import type { ModelAvailabilityHierarchy } from '../types'
 
-export function useModelAvailability() {
+export function useModelAvailability(enabled = true) {
   return useQuery<ModelAvailabilityHierarchy>({
     queryKey: ['agents', 'model-availability'],
     queryFn: async () => {
@@ -12,6 +12,7 @@ export function useModelAvailability() {
       return data
     },
     refetchInterval: 15000,
+    enabled,
   })
 }
 
