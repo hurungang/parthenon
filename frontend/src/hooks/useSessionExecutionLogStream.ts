@@ -2,6 +2,10 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { API_CONFIG } from '../api/API_CONFIG'
 import type { AgentJobStatus, ExecutionLogEntry } from '../types'
 
+// Mirror of apiClient's key (declared locally to avoid a circular import —
+// same convention as tenantApi.ts / tenantAuthApi.ts).
+const TENANT_SLUG_KEY = 'parthenon_tenant_slug'
+
 export type ExecutionLogStreamConnectionState =
   | 'idle'
   | 'connecting'
@@ -109,6 +113,14 @@ export function useSessionExecutionLogStream({
           headers: {
             Accept: 'application/x-ndjson',
             ...(token ? { Authorization: `Bearer ${token}` } : {}),
+            // Multi-tenancy: the stream endpoint is tenant-resolved like
+            // every other API — attach the resolved tenant slug the same
+            // way the shared apiClient's request interceptor does.  Raw
+            // fetch bypasses that interceptor, and a headerless stream
+            // request is rejected by CC's fail-closed tenant resolution.
+            ...(sessionStorage.getItem(TENANT_SLUG_KEY)
+              ? { 'X-Tenant': sessionStorage.getItem(TENANT_SLUG_KEY) as string }
+              : {}),
           },
           signal: abortControllerRef.current.signal,
         })

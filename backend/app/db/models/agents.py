@@ -687,6 +687,20 @@ class AgentType(Base):
     output_data_type: Mapped["AgentDataType | None"] = relationship(
         "AgentDataType", back_populates="agent_types", foreign_keys=[output_data_type_id]
     )
+    # Software 3.0: scripts owned by this agent type (script inherits its identity/permissions)
+    script_definitions: Mapped[list["ScriptDefinition"]] = relationship(
+        "ScriptDefinition",
+        back_populates="agent_type",
+        cascade="all, delete-orphan",
+        foreign_keys="ScriptDefinition.agent_type_id",
+    )
+    # Software 3.0 two-layer plan model: optimized plans authored for this type
+    optimized_plans: Mapped[list["OptimizedImplementationPlan"]] = relationship(
+        "OptimizedImplementationPlan",
+        back_populates="agent_type",
+        cascade="all, delete-orphan",
+        foreign_keys="OptimizedImplementationPlan.agent_type_id",
+    )
 
     def __repr__(self) -> str:
         return f"<AgentType id={self.id} name={self.name}>"
@@ -866,7 +880,7 @@ class AgentJob(Base):
     )
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    output_data: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    output_data: Mapped[dict | str | list | None] = mapped_column(JSON, nullable=True)
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
     stop_category: Mapped[SessionStopCategory | None] = mapped_column(
         Enum(SessionStopCategory, name="agent_job_stop_category_enum"),
@@ -950,6 +964,11 @@ class AgentPlan(Base):
     )
     plan_steps: Mapped[list | None] = mapped_column(JSON, nullable=True)
     topology: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    # Execution semantics (product decision): plan-generation LLM marks the
+    # plan fully_scripted when no/typed input AND a SINGLE script can achieve
+    # the requirement end-to-end. Only then does the dispatcher serve the
+    # compiled script directly (zero-LLM software mode).
+    fully_scripted: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
     generation_status: Mapped[AgentPlanStatus] = mapped_column(
         Enum(AgentPlanStatus, name="agent_plan_status_enum"), nullable=False
     )
@@ -971,6 +990,19 @@ class AgentPlan(Base):
     # Relationships
     agent_type: Mapped["AgentType"] = relationship(
         "AgentType", back_populates="plan"
+    )
+    # Software 3.0 lineage: script definitions compiled from this plan (G1)
+    script_definitions: Mapped[list["ScriptDefinition"]] = relationship(
+        "ScriptDefinition",
+        back_populates="source_plan",
+        foreign_keys="ScriptDefinition.source_plan_id",
+    )
+    # Software 3.0 two-layer plan model: optimized plans generated from this base plan
+    optimized_plans: Mapped[list["OptimizedImplementationPlan"]] = relationship(
+        "OptimizedImplementationPlan",
+        back_populates="base_plan",
+        cascade="all, delete-orphan",
+        foreign_keys="OptimizedImplementationPlan.agent_plan_id",
     )
 
     def __repr__(self) -> str:

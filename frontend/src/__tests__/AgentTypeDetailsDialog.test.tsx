@@ -254,7 +254,7 @@ describe('AgentTypeDetailsDialog', () => {
     }, { timeout: 3000 })
   })
 
-  it('renders three tabs', async () => {
+  it('renders four tabs — the Scripts tab is removed, Optimized Plan remains', async () => {
     mockAgentTypeData = MOCK_AGENT_TYPE
 
     const { AgentTypeDetailsDialog } = await import(
@@ -263,10 +263,65 @@ describe('AgentTypeDetailsDialog', () => {
     render(<AgentTypeDetailsDialog open agentTypeId="at-1" onClose={vi.fn()} />, { wrapper })
 
     const tabs = screen.getAllByRole('tab')
-    expect(tabs.length).toBe(3)
+    expect(tabs.length).toBe(4)
     expect(tabs[0].textContent).toBe('agents.types.detailsTab')
     expect(tabs[1].textContent).toBe('agents.types.agentPreviewTab')
     expect(tabs[2].textContent).toBe('agents.types.executionLogsTab')
+    // The Scripts tab is gone — no such tab label anywhere.
+    expect(screen.queryByRole('tab', { name: 'agents.types.scriptsTab' })).toBeNull()
+    // The Optimized Plan tab now maps to panel index 4.
+    expect(tabs[3].textContent).toBe('agents.optimizedPlan.tab')
+    expect(tabs[3]).toHaveAttribute('aria-controls', 'agent-details-tabpanel-4')
+  })
+
+  it('opens the script view dialog directly from the Optimized Plan tab step link', async () => {
+    mockAgentTypeData = { ...MOCK_AGENT_TYPE, plan: MOCK_PLAN }
+    mockApiGet.mockImplementation(async (url: string) => {
+      if (url === '/agents/types/at-1/optimized-plan') {
+        return {
+          data: {
+            status: 'ready',
+            fully_scripted: true,
+            steps_count: 1,
+            scripts_authored: 1,
+            steps: [
+              {
+                order: 1,
+                type: 'tool_call',
+                name: 'Fetch contact',
+                description: 'Fetch the contact from the CRM',
+                python_source: 'def run(context, tools):\n    return {"result": "ok"}',
+                scriptable: true,
+              },
+            ],
+            feedback_comments: [],
+          },
+        }
+      }
+      return { data: [] }
+    })
+
+    const { AgentTypeDetailsDialog } = await import(
+      '../components/agents/AgentTypeDetailsDialog'
+    )
+    render(<AgentTypeDetailsDialog open agentTypeId="at-1" onClose={vi.fn()} />, { wrapper })
+
+    // Switch to the Optimized Plan tab (panel index 4).
+    const tabs = screen.getAllByRole('tab')
+    await act(async () => {
+      fireEvent.click(tabs[3])
+    })
+
+    const link = await screen.findByTestId('view-script-link-0')
+    await act(async () => {
+      fireEvent.click(link)
+    })
+
+    // The script dialog opens INLINE — no Scripts tab involved.
+    const source = await screen.findByTestId('script-view-source')
+    expect(source.textContent).toContain('def run(context, tools)')
+    // The description appears both in the step list (hidden tab panel) and the dialog.
+    expect(screen.getAllByText('Fetch the contact from the CRM').length).toBeGreaterThan(0)
   })
 
   it('keeps Start Chat action visible when switching tabs for conversation agents', async () => {
@@ -445,8 +500,76 @@ describe('AgentTypeDetailsDialog', () => {
     })
 
     await waitFor(() => {
-      expect(mockApiPost).toHaveBeenCalledWith('/agents/types/at-1/regenerate-plan')
+      expect(mockApiPost).toHaveBeenCalledWith(
+        '/agents/types/at-1/regenerate-plan',
+        undefined,
+        { timeout: 180_000 },
+      )
     })
+  })
+
+  it('retires the optimized plan from the Optimized Plan tab', async () => {
+    mockAgentTypeData = { ...MOCK_AGENT_TYPE, plan: MOCK_PLAN }
+    mockApiPost.mockResolvedValue({ data: { retired: true, plans_removed: 1 } })
+    mockApiGet.mockImplementation(async (url: string) => {
+      if (url === '/agents/types/at-1/optimized-plan') {
+        return {
+          data: {
+            status: 'ready',
+            fully_scripted: true,
+            steps_count: 1,
+            scripts_authored: 1,
+            steps: [],
+            feedback_comments: [],
+          },
+        }
+      }
+      return { data: [] }
+    })
+
+    const { AgentTypeDetailsDialog } = await import(
+      '../components/agents/AgentTypeDetailsDialog'
+    )
+    render(<AgentTypeDetailsDialog open agentTypeId="at-1" onClose={vi.fn()} />, { wrapper })
+
+    // Switch to the Optimized Plan tab (panel index 5).
+    const tabs = screen.getAllByRole('tab')
+    await act(async () => {
+      fireEvent.click(tabs[3])
+    })
+
+    const retire = await screen.findByTestId('retire-optimized-plan')
+    await act(async () => {
+      fireEvent.click(retire)
+    })
+
+    await waitFor(() => {
+      expect(mockApiPost).toHaveBeenCalledWith('/agents/types/at-1/optimized-plan/retire')
+    })
+  })
+
+  it('shows the absent/retired state hint when no optimized plan exists', async () => {
+    mockAgentTypeData = { ...MOCK_AGENT_TYPE, plan: MOCK_PLAN }
+    mockApiGet.mockImplementation(async (url: string) => {
+      if (url === '/agents/types/at-1/optimized-plan') {
+        throw Object.assign(new Error('not found'), { response: { status: 404 } })
+      }
+      return { data: [] }
+    })
+
+    const { AgentTypeDetailsDialog } = await import(
+      '../components/agents/AgentTypeDetailsDialog'
+    )
+    render(<AgentTypeDetailsDialog open agentTypeId="at-1" onClose={vi.fn()} />, { wrapper })
+
+    const tabs = screen.getAllByRole('tab')
+    await act(async () => {
+      fireEvent.click(tabs[3])
+    })
+
+    await screen.findByTestId('optimized-plan-absent')
+    // The hint tells the user the next run offers optimization again.
+    expect(screen.getByText(/agents.optimizedPlan.absentHint/)).toBeDefined()
   })
 
   it('shows session list on Execution Logs tab', async () => {

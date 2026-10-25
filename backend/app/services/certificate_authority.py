@@ -20,7 +20,7 @@ from typing import NamedTuple
 from cryptography import x509
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
-from cryptography.x509.oid import NameOID
+from cryptography.x509.oid import ExtendedKeyUsageOID, NameOID
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -398,7 +398,14 @@ async def issue_agent_certificate(
     )
 
 
-async def issue_service_certificate(service_name: str) -> IssuedCertificate:
+async def issue_service_certificate(
+    service_name: str,
+    *,
+    validity_days: int | None = None,
+    san_dns_names: list[str] | None = None,
+    san_ips: list[str] | None = None,
+    include_tls_extended_key_usage: bool = False,
+) -> IssuedCertificate:
     """Issue a service certificate for internal service-to-service authentication.
 
     Service certificates use CN format ``service:{service_name}`` and are NOT
@@ -408,6 +415,16 @@ async def issue_service_certificate(service_name: str) -> IssuedCertificate:
 
     Args:
         service_name: Logical name for the service (e.g. ``communication-hub``).
+        validity_days: Override the certificate lifetime in days (default:
+            the historical ``_CERT_VALIDITY_HOURS * 30`` = 30 days). CC's
+            self-renewal passes 365 so the daily check stays quiet.
+        san_dns_names: Optional DNS Subject Alternative Names (e.g.
+            ``["localhost"]``).
+        san_ips: Optional IP Subject Alternative Names (e.g.
+            ``["127.0.0.1"]``).
+        include_tls_extended_key_usage: When True add the clientAuth +
+            serverAuth extended key usage (needed for endpoints that perform
+            TLS-role checks).
 
     Returns:
         IssuedCertificate with PEM-encoded certificate and private key.
@@ -420,7 +437,11 @@ async def issue_service_certificate(service_name: str) -> IssuedCertificate:
 
     service_key = _generate_rsa_key(2048)
     now = _now_utc()
-    expires_at = now + timedelta(hours=_CERT_VALIDITY_HOURS * 30)  # 30-day validity for services
+    expires_at = (
+        now + timedelta(days=validity_days)
+        if validity_days is not None
+        else now + timedelta(hours=_CERT_VALIDITY_HOURS * 30)  # 30-day default
+    )
     serial = _serial_from_uuid()
     cn = f"service:{service_name}"
 
@@ -429,7 +450,7 @@ async def issue_service_certificate(service_name: str) -> IssuedCertificate:
         x509.NameAttribute(NameOID.ORGANIZATION_NAME, "Parthenon Service"),
     ])
 
-    cert = (
+    builder = (
         x509.CertificateBuilder()
         .subject_name(subject)
         .issuer_name(_ca_certificate.subject)
@@ -440,6 +461,32 @@ async def issue_service_certificate(service_name: str) -> IssuedCertificate:
         .add_extension(
             x509.BasicConstraints(ca=False, path_length=None), critical=True
         )
+    )
+    if san_dns_names or san_ips:
+        import ipaddress as _ipaddress
+
+        builder = builder.add_extension(
+            x509.SubjectAlternativeName(
+                [
+                    x509.DNSName(name) for name in (san_dns_names or [])
+                ]
+                + [
+                    x509.IPAddress(_ipaddress.IPv4Address(ip))
+                    for ip in (san_ips or [])
+                ]
+            ),
+            critical=False,
+        )
+    if include_tls_extended_key_usage:
+        builder = builder.add_extension(
+            x509.ExtendedKeyUsage([
+                ExtendedKeyUsageOID.CLIENT_AUTH,
+                ExtendedKeyUsageOID.SERVER_AUTH,
+            ]),
+            critical=False,
+        )
+    cert = (
+        builder
         .add_extension(
             x509.SubjectKeyIdentifier.from_public_key(service_key.public_key()),
             critical=False,

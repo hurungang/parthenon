@@ -6,6 +6,7 @@ import { LogViewer } from '../executions/LogViewer'
 
 import { OutputTypeResultTab } from '../executions/OutputTypeResultTab'
 import { InterveneResponseDialog } from './InterveneResponseDialog'
+import { AgentTypeDetailsDialog } from './AgentTypeDetailsDialog'
 import { useExecutionLogs } from '../../hooks/useExecutionLogs'
 import { useSessionExecutionLogStream } from '../../hooks/useSessionExecutionLogStream'
 import { useTypedOutput } from '../../hooks/useTypedOutput'
@@ -33,6 +34,12 @@ interface TabDef {
 
 const TERMINAL_STATUSES: AgentJobStatus[] = ['completed', 'failed', 'terminated']
 
+/** A script-path session may store its result as a raw string (render output).
+ *  Normalize to a record for the object-keyed lookups below. */
+function outputDataAsRecord(od: AgentJob['output_data'] | undefined): Record<string, unknown> | null {
+  return typeof od === 'string' ? null : od ?? null
+}
+
 // ── Component ──────────────────────────────────────────────────────────────────
 
 export function AgentExecutionDetailsDialog({
@@ -55,6 +62,7 @@ export function AgentExecutionDetailsDialog({
   const [autoDialogOpen, setAutoDialogOpen] = useState(false)
   const [autoDialogRequest, setAutoDialogRequest] = useState<InterveneRequest | null>(null)
   const [terminating, setTerminating] = useState(false)
+  const [agentDialogOpen, setAgentDialogOpen] = useState(false)
 
   // ── Typed output management hook ──────────────────────────────────────────
   const { outputId, typedOutput, outputLoading, extractAndSetOutputId, fetchTypedOutput, reset: resetTypedOutput } = useTypedOutput(session)
@@ -248,7 +256,7 @@ export function AgentExecutionDetailsDialog({
   const hasConversationHistory = !!conversationHistory && conversationHistory.length > 0
   const allTabs: TabDef[] = []
   if (hasResult) {
-    const outputType = session?.output_data?.['__output_type'] as AgentOutputType | undefined
+    const outputType = outputDataAsRecord(session?.output_data)?.['__output_type'] as AgentOutputType | undefined
     const label = outputType
       ? `${t('agents.sessions.result', { defaultValue: 'Result' })}`
       : t('agents.sessions.result', { defaultValue: 'Result' })
@@ -345,14 +353,17 @@ export function AgentExecutionDetailsDialog({
   }, [sessionId])
 
   // ── Computed state ─────────────────────────────────────────────────────────
-  const outputType: AgentOutputType = (session?.output_data?.['__output_type'] as AgentOutputType) ?? 'auto'
-  const outputSchema = (session?.output_data?.['__schema'] as Record<string, unknown> | undefined) ?? undefined
+  const outputRecord = outputDataAsRecord(session?.output_data)
+  // Script-path sessions may store the final output as a raw string.
+  const stringOutput = typeof session?.output_data === 'string' ? session.output_data : null
+  const outputType: AgentOutputType = (outputRecord?.['__output_type'] as AgentOutputType) ?? 'auto'
+  const outputSchema = (outputRecord?.['__schema'] as Record<string, unknown> | undefined) ?? undefined
 
   // Extract typed output data type info
-  const dataTypeId = (session?.output_data?.['__data_type_id'] as string | undefined) ?? null
-  const dataTypeName = (session?.output_data?.['__data_type_name'] as string | undefined) ?? null
-  const validationStatus = (session?.output_data?.['validation_status'] as 'valid' | 'validation_error' | undefined) ?? null
-  const rawOutput = (session?.output_data?.['raw_output'] as string | undefined) ?? null
+  const dataTypeId = (outputRecord?.['__data_type_id'] as string | undefined) ?? null
+  const dataTypeName = (outputRecord?.['__data_type_name'] as string | undefined) ?? null
+  const validationStatus = (outputRecord?.['validation_status'] as 'valid' | 'validation_error' | undefined) ?? null
+  const rawOutput = (outputRecord?.['raw_output'] as string | undefined) ?? null
 
   // ── Render ──────────────────────────────────────────────────────────────────
 
@@ -376,6 +387,16 @@ export function AgentExecutionDetailsDialog({
           )}
         </Box>
         <Box display="flex" alignItems="center" gap={1}>
+          {session?.agent_type_id && (
+            <Button
+              size="small"
+              variant="outlined"
+              data-testid="view-agent-link"
+              onClick={() => setAgentDialogOpen(true)}
+            >
+              {t('agents.sessions.viewAgent', { defaultValue: 'View agent' })}
+            </Button>
+          )}
           {sessionStatus && !TERMINAL_STATUSES.includes(sessionStatus) && (
             <Button
               size="small"
@@ -527,7 +548,7 @@ export function AgentExecutionDetailsDialog({
             ) : (
               <OutputTypeResultTab
                 outputType={outputType}
-                outputData={session.output_data}
+                outputData={stringOutput !== null ? { result: stringOutput } : outputRecord}
                 outputSchema={outputSchema}
                 dataTypeId={dataTypeId}
                 dataTypeName={dataTypeName}
@@ -590,6 +611,17 @@ export function AgentExecutionDetailsDialog({
         onTerminate={handleTerminateSession}
       />
     </Dialog>
+
+      {/* Agent type details dialog opened from the header "View agent" link
+          (default Overview tab — the Scripts tab no longer exists). */}
+      {agentDialogOpen && session?.agent_type_id && (
+        <AgentTypeDetailsDialog
+          open
+          agentTypeId={session.agent_type_id}
+          onClose={() => setAgentDialogOpen(false)}
+          initialTab={0}
+        />
+      )}
 
       {/* Sub-agent execution log dialog (opened from delegation entry) */}
       {subAgentDialogSessionId && (

@@ -1,4 +1,5 @@
 """Pydantic v2 schemas for Agent management."""
+import enum
 import uuid
 from datetime import datetime
 from typing import Annotated, Any
@@ -113,6 +114,19 @@ def _validate_guardrail_contract(
 # ── Plan / Topology Schemas ────────────────────────────────────────────────────
 
 
+class PlanOutputMode(str, enum.Enum):
+    """How the final user-facing output of a workflow is produced (Software 3.0).
+
+    - ``deterministic``: assembled from tool data (typed JSON, or markdown/HTML
+      rendered from ``output_template``) — no model call.
+    - ``llm_render``: open-ended prose needing semantic judgment — one final
+      LLM semantic-bridge render step.
+    """
+
+    deterministic = "deterministic"
+    llm_render = "llm_render"
+
+
 class PlanStepRead(BaseModel):
     model_config = {"from_attributes": True}
 
@@ -120,6 +134,17 @@ class PlanStepRead(BaseModel):
     type: str
     name: str
     description: str | None = None
+    # Software 3.0 scriptability marks (set by the plan-generating LLM):
+    # - scriptable: False marks a step that genuinely needs a model
+    #   (semantic bridging / judgment / interaction).
+    # - output_mode / output_template (on the final step) decide whether the
+    #   final result is assembled deterministically or LLM-rendered.
+    scriptable: bool = True
+    output_mode: PlanOutputMode | None = None
+    output_template: str | None = None
+    # Script linkage (E4a): populated when the step is backed by a compiled script.
+    script_definition_id: uuid.UUID | None = None
+    script_version_id: uuid.UUID | None = None
 
 
 class TopologyNodeRead(BaseModel):
@@ -364,6 +389,11 @@ class WorkflowGenerationModelConfigUpdate(BaseModel):
 class AgentJobCreate(BaseModel):
     agent_type_id: uuid.UUID
     input_data: dict[str, Any] | None = None
+    # Opt-in flag: when true, the launch becomes the optimization opportunity —
+    # the execution runs as the "optimize-and-verify" command (the agent authors
+    # and verifies scripts against real tool-call executions while accomplishing
+    # the user's real task) and persists the verified optimized plan for reuse.
+    optimize: bool = False
 
 
 class AgentJobStatusRead(BaseModel):
@@ -377,7 +407,7 @@ class AgentJobStatusRead(BaseModel):
     stop_details: dict[str, Any] | None = None
     started_at: datetime | None
     completed_at: datetime | None
-    output_data: dict[str, Any] | None = None
+    output_data: dict[str, Any] | str | list[Any] | None = None
     error_message: str | None
     created_at: datetime
     agent_type_name: str | None = None
@@ -399,7 +429,7 @@ class AgentJobRead(BaseModel):
     stop_details: dict[str, Any] | None = None
     started_at: datetime | None
     completed_at: datetime | None
-    output_data: dict[str, Any] | None
+    output_data: dict[str, Any] | str | list[Any] | None
     error_message: str | None
     conversation_history: list[dict[str, Any]] | None = None
     created_at: datetime

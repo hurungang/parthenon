@@ -89,3 +89,5 @@ erDiagram
 | `PlatformUser` | Tenant-agnostic real-world person; tenant presence via memberships; platform-issued email + password credential for self-serve accounts | `backend/app/db/models/platform_user.py` |
 
 **Self-serve registration:** one all-or-nothing action creates `PlatformUser` + `Tenant` + the creator's root `TenantUserMembership` (`is_root = true`), then lands the root user in guided onboarding; a user who already owns a tenant is blocked (one owned tenant per user).
+
+**Software 3.0 script-framework tables:** `script_definitions`, `script_versions`, `verification_runs`, `fallback_events`, `repair_attempts`, `script_execution_records`, `llm_mock_recordings`, and `optimized_implementation_plans` all follow the platform `tenant_id` FK pattern (`SET NULL` on tenant delete), keeping registry, execution, and mock-recording data tenant-scoped while never blocking tenant deletion.

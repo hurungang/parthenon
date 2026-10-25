@@ -122,3 +122,21 @@ flowchart TB
     PGS --> OUT
     RIB --> OUT
 ```
+
+## Sandboxed Scripting & Model-Authored Composition
+
+Agent Runtime also executes **sandboxed, model-authored Python scripts**
+(RestrictedPython; allowlisted builtins/pre-bound modules; no I/O; MCP-only
+egress via the injected session-bound `CommHubToolClient`; CPU / memory /
+wall-time caps with safe termination). The composition follows a
+**two-layer plan model**: the base implementation plan stays high-level,
+and an opt-in "Run with optimization" step of the Run Agent flow launches a
+command-driven side execution that authors the optimized composition
+(script segments + LLM bridges + decision steps) as a separate
+`OptimizedImplementationPlan` with a `fully_scripted` execution-semantics
+mark; the Script Compiler validates and normalizes the authored scripts (no
+steps are auto-appended). Sandbox violations and cap terminations are
+unconditional LLM-fallback triggers. A first-class **LLM Mock Layer**
+(`LLM_MOCK_MODE` env/config) serves deterministic model responses for
+zero-LLM test runs. See
+[sandboxed-scripting.md](../sandboxed-scripting.md).

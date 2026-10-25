@@ -99,3 +99,13 @@ erDiagram
 | **CertificateValidationLog** | Audit trail for every certificate validation performed by Control Center and Communication Hub. One entry is written per agent metadata request and per tool call. High-volume table; indexed on `certificate_serial_number` and `validated_at` for audit queries. Old entries (> 90 days) may be archived for compliance. |
 | **AgentApiKey** | API key bound to a specific agent identity and agent role for third-party MCP hub access. The key value is SHA-256 hashed at rest (`key_hash`); only the hash and a readable prefix (`key_prefix`, e.g. `phn_sk_`) are persisted. The clear-text key is displayed once at creation and never retrievable afterward. Status is `active` or `revoked`; revoked keys remain for audit. `last_used_at` is updated on each successful authentication. Optional `expires_at` sets a key expiry — `NULL` means the key never expires, and a past value causes the key to be rejected at authentication. One active key per identity-role pair. |
 | **ApiKeyUsageLog** | Immutable audit record for each API key operation. Captures the action type (`validate` for authentication, `load_skills` for skill discovery, `tool_call` for individual tool invocations), the tool name when applicable, client IP address, timestamp, and whether the operation succeeded. Append-only; entries are never modified or deleted. Supports security monitoring and usage analytics. |
+
+## Sandboxed Script & Mock Recording Security Attributes
+
+`ScriptVersion` carries sandbox-validation attributes
+(`sandbox_validation_status` pending/passed/failed + `sandbox_validation_reason`)
+and per-version resource caps; the validator's secret-shape guard keeps
+credential-shaped strings out of model-authored script source. `LLMMockRecording`
+is prompt+response+usage only — API keys and identity tokens are rejected at
+the CC internal endpoint — and scripts themselves never receive credentials:
+their only external binding is the session-bound MCP client.

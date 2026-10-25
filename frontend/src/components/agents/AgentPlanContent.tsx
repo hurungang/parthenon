@@ -4,6 +4,7 @@ import {
   Box,
   Chip,
   Divider,
+  Link,
   List,
   ListItem,
   ListItemText,
@@ -35,6 +36,11 @@ interface AgentPlanContentProps {
   plan: AgentPlan | null | undefined
   noPlanMessage?: string
   onNodeClick?: (node: TopologyNode) => void
+  /**
+   * Open the owning agent type's Scripts tab (E4a) — invoked when the user
+   * clicks a script link on a script-backed plan step.
+   */
+  onOpenScript?: () => void
 }
 
 /**
@@ -42,7 +48,12 @@ interface AgentPlanContentProps {
  * Used by AgentTypeDetailsDialog's plan tab (PlanPreviewModal renders its own
  * plan layout and applies the same hub helper to its topology).
  */
-const AgentPlanContent: React.FC<AgentPlanContentProps> = ({ plan, noPlanMessage, onNodeClick }) => {
+const AgentPlanContent: React.FC<AgentPlanContentProps> = ({
+  plan,
+  noPlanMessage,
+  onNodeClick,
+  onOpenScript,
+}) => {
   const { t } = useTranslation()
 
   if (!plan) {
@@ -119,6 +130,17 @@ const AgentPlanContent: React.FC<AgentPlanContentProps> = ({ plan, noPlanMessage
                       <Typography variant="body2" fontWeight={500}>
                         {step.name}
                       </Typography>
+                      {step.script_version_id && (
+                        <Link
+                          component="button"
+                          variant="caption"
+                          underline="hover"
+                          sx={{ cursor: 'pointer' }}
+                          onClick={onOpenScript}
+                        >
+                          {t('agents.scripts.scriptLink')}
+                        </Link>
+                      )}
                     </Box>
                   }
                   secondary={

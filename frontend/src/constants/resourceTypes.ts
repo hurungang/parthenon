@@ -21,6 +21,7 @@ export const RESOURCE_TYPE_MANIFEST = {
   "agent::data_types": { actions: ["create", "read", "update", "delete", "manage"] },
   "agent::data": { actions: ["read"] },
   "agent::outputs": { actions: ["read"] },
+  "agent::scripts": { actions: ["read", "manage"] },
   "integration::mcp_hub": { actions: ["create", "read", "update", "delete", "execute", "manage"] },
   "integration::notifications": { actions: ["read", "manage"] },
   "system::observability": { actions: ["read"] },
@@ -64,6 +65,7 @@ export const MODULE_GROUPS: Record<string, ModuleGroup> = {
       "agent::data_types",
       "agent::data",
       "agent::outputs",
+      "agent::scripts",
     ],
   },
   integrations: {

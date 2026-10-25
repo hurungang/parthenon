@@ -109,7 +109,13 @@ async def trigger_execution(
     # outlive the operator's intent and continue running the agent until
     # the natural completion path.
     task = asyncio.create_task(
-        _execute_session(body.session_id, data_client, semaphore),
+        _execute_session(
+            body.session_id,
+            data_client,
+            semaphore,
+            body.agent_type_id,
+            input_data=body.input_data,
+        ),
         name=f"execute-{body.session_id}",
     )
     session_tasks: dict[uuid.UUID, asyncio.Task] = getattr(
@@ -133,7 +139,9 @@ async def _execute_session(
     session_id: uuid.UUID,
     data_client: Any,
     semaphore: asyncio.Semaphore | None,
+    agent_type_id: uuid.UUID | None = None,
     response_value: dict | None = None,
+    input_data: dict[str, Any] | None = None,
 ) -> None:
     """Run a single session to completion, optionally bounded by the concurrency semaphore.
 
@@ -143,6 +151,9 @@ async def _execute_session(
         semaphore:       Optional concurrency limiter.
         response_value:  When set (resume after human intervention), the executor
                          injects this as follow-up context so the LLM can continue.
+        input_data:      The session's input payload (from the execution trigger).
+                         Carries the ``__command`` marker for command-driven side
+                         executions, which must bypass script-first dispatch.
     """
     from opentelemetry import trace
     tracer = trace.get_tracer(__name__)
@@ -154,8 +165,27 @@ async def _execute_session(
         ):
             try:
                 from app.services.agents.runtime_executor import AgentRuntimeExecutor
-                executor = AgentRuntimeExecutor(data_client=data_client)
-                await executor.run(session_id, data_client, response_value=response_value)
+
+                async def _run_llm() -> None:
+                    executor = AgentRuntimeExecutor(data_client=data_client)
+                    await executor.run(session_id, data_client, response_value=response_value)
+
+                # Software 3.0: script-first dispatch — when a verified/
+                # compiled serving script version exists for this workflow the
+                # script path runs automatically (unconditional LLM fallback on
+                # any failure); otherwise the LLM executor runs exactly as
+                # before. There are no execution modes.
+                from app.agent_runtime.scripts.dispatch import (
+                    run_session_script_first,
+                )
+
+                await run_session_script_first(
+                    str(session_id),
+                    str(agent_type_id) if agent_type_id else "",
+                    data_client,
+                    _run_llm,
+                    input_data=input_data,
+                )
             except asyncio.CancelledError:
                 # Operator-requested termination.  Re-raise so the parent
                 # task wrapper (and asyncio) see the cancellation, but

@@ -128,6 +128,16 @@ require(path.resolve('e2e/node_modules/@playwright/test/cli.js'));
 | License usage panel | `Quota Enforcement (mocked) > CS-34: the tenant usage panel mirrors tier and limits` | Tenant settings shows the tier chip and usage against limits |
 | Real-backend tenant isolation | `Real Backend Integration - Multi-Tenant Isolation > isolation contract holds against the live backend` | ⚠️ Requires a live running stack (see `/start-app`); auto-skips otherwise |
 | Real-backend self-serve registration | `Real Backend Integration - Self-Serve Registration & Quotas > registration + one-tenant block + usage read against the live backend` | ⚠️ Requires a live running stack (see `/start-app`); auto-skips otherwise |
+| **Agent Type Scripts tab** (agent-type-scripts-tab — change `software-3.0-agent-framework`) | | |
+| Scripts tab list | `Agent Type Scripts tab — agent-owned script governance > Scripts tab lists the agent type script with description, lifecycle and health` | Agent Type dialog Scripts tab: script with description, lifecycle chip (Compiled), health chip (Degraded) |
+| Version lineage & evidence | `Agent Type Scripts tab — agent-owned script governance > version lineage with repaired_from and verification evidence are visible` | Versions with derived / repair-of lineage badges; Promoted verdict; fallback reason |
+| Repairs (self-improvement) | `Agent Type Scripts tab — agent-owned script governance > Repairs list shows repair attempts recorded after fallback (E10)` | Repairs sub-tab: diagnosis, retry outcome, applied diff after fallback |
+| Promote version | `Agent Type Scripts tab — agent-owned script governance > operator promotes a version from the Scripts tab (asserted payload)` | Promote request sent with `target_status: verified` |
+| Retire version | `Agent Type Scripts tab — agent-owned script governance > operator retires a version from the Scripts tab` | Retire action sent for a version |
+| Plan-step script link | `Agent Type Scripts tab — agent-owned script governance > plan review shows a script link on the script-backed step and opens the Scripts tab (E4a)` | Agent Preview shows a Script link on the script-backed step; clicking lands in the Scripts tab |
+| Permission gating | `Agent Type Scripts tab — agent-owned script governance > permission-gated promote surfaces via the dialog error pattern without crashing` | Permission Denied alert inside the dialog instead of a crash |
+
+Demo cases for this change: `docs/changes/software-3.0-agent-framework/demo-cases.md` — run with `--cases docs/changes/software-3.0-agent-framework/demo-cases.md`.
 
 ## Prerequisites
 

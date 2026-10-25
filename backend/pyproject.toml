@@ -36,6 +36,9 @@ dependencies = [
     # Scheduling
     "apscheduler>=3.10.0",
     "SQLAlchemy-Utils>=0.41.0",
+    # Sandboxed scripting (Agent Runtime) — hardened compile/exec of
+    # model-authored Python (allowlisted builtins, guarded attribute access).
+    "RestrictedPython~=7.0",
     # Notifications
     "aiosmtplib>=3.0.0",
     "slack-sdk>=3.30.0",

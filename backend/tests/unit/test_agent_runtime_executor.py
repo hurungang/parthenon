@@ -1143,6 +1143,34 @@ def test__build_guardrail_state_sets_delegation_depth_to_zero():
     assert state.tree_depth == 1, "tree_depth must reflect the inherited depth"
 
 
+def test__build_guardrail_state_command_run_gets_raised_iteration_limit():
+    """Command-driven runs (__command marker) get COMMAND_MAX_ITERATIONS, not
+    the task-agent default of 10 — command runs legitimately iterate on
+    script authoring beyond 10 iterations."""
+    from app.services.agents.command_prompts import COMMAND_MAX_ITERATIONS
+    from app.services.agents.runtime_executor import AgentRuntimeExecutor
+
+    executor = AgentRuntimeExecutor()
+
+    # Command run: raised limit regardless of the policy value.
+    state = executor._build_guardrail_state(
+        {"guardrail_policy": {"max_iterations": 10}},
+        {"input_data": {"__command": "optimize-and-verify"}},
+    )
+    assert state.max_iterations == COMMAND_MAX_ITERATIONS
+    assert COMMAND_MAX_ITERATIONS > 10
+
+    # Plain task run: policy/default limit unchanged.
+    state = executor._build_guardrail_state(
+        {"guardrail_policy": {"max_iterations": 10}}, {"input_data": {}}
+    )
+    assert state.max_iterations == 10
+    state = executor._build_guardrail_state(
+        {"guardrail_policy": {}}, {"input_data": {}}
+    )
+    assert state.max_iterations == 10
+
+
 def test__build_guardrail_state_sets_tree_depth_from_delegation_depth_input():
     """_build_guardrail_state tree_depth mirrors __delegation_depth; delegation_depth stays 0."""
     from app.services.agents.runtime_executor import AgentRuntimeExecutor

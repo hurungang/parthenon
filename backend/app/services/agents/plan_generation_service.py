@@ -53,7 +53,11 @@ class PlanGenerationService:
     """
 
     async def generate_plan(
-        self, agent_type: AgentType, db: AsyncSession
+        self,
+        agent_type: AgentType,
+        db: AsyncSession,
+        *,
+        user_requirement: str | None = None,
     ) -> AgentPlan:
         """
         Generate a plan for the given agent type and upsert the AgentPlan row.
@@ -61,6 +65,12 @@ class PlanGenerationService:
         Args:
             agent_type: The saved AgentType ORM instance.
             db: Active async SQLAlchemy session.
+            user_requirement: Optional verbatim user requirement / session
+                input for this run. When provided it is included in the plan
+                prompt so the authored composition serves it exactly
+                (plans are normally generated at agent-type save time, when
+                no session input exists yet — callers that DO have it, e.g.
+                a per-run regeneration, pass it here).
 
         Returns:
             The upserted AgentPlan row (success or failed status).
@@ -75,7 +85,9 @@ class PlanGenerationService:
             config_hash = self._compute_config_hash(agent_type)
 
             try:
-                plan_steps, topology = await self._do_generate(agent_type, db)
+                plan_steps, topology, fully_scripted = await self._do_generate(
+                    agent_type, db, user_requirement=user_requirement
+                )
                 plan = await self._upsert_plan(
                     agent_type_id=agent_type.id,
                     plan_steps=plan_steps,
@@ -84,6 +96,7 @@ class PlanGenerationService:
                     error=None,
                     config_hash=config_hash,
                     db=db,
+                    fully_scripted=fully_scripted,
                 )
                 span.set_attribute("status", "success")
                 span.set_attribute("step_count", len(plan_steps))
@@ -111,31 +124,38 @@ class PlanGenerationService:
                     error=error_msg,
                     config_hash=config_hash,
                     db=db,
+                    fully_scripted=None,
                 )
                 return plan
 
     # ── Internal orchestration ────────────────────────────────────────────────
 
     async def _do_generate(
-        self, agent_type: AgentType, db: AsyncSession
-    ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
-        """Core generation logic — raises on failure (caller handles non-blocking)."""
+        self,
+        agent_type: AgentType,
+        db: AsyncSession,
+        *,
+        user_requirement: str | None = None,
+    ) -> tuple[list[dict[str, Any]], dict[str, Any], bool]:
+        """Core generation logic — raises on failure (caller handles non-blocking).
+        Returns ``(plan_steps, topology, fully_scripted)``."""
         # Step 1: Resolve the role→SOP→Skill→Tool graph
         graph = await self._resolve_graph(agent_type, db)
 
         # Step 2: Construct prompt
-        prompt = self._build_prompt(agent_type, graph)
+        prompt = self._build_prompt(agent_type, graph, user_requirement)
 
         # Step 3: Invoke LLM
         raw_response = await self._invoke_llm(agent_type, db, prompt)
 
-        # Step 4: Parse plan steps
+        # Step 4: Parse plan steps (and the fully_scripted execution-semantics mark)
         plan_steps = self._parse_plan_steps(raw_response)
+        fully_scripted = self._parse_fully_scripted(raw_response)
 
         # Step 5: Build topology
         topology = _topology_builder.build_topology(graph)
 
-        return plan_steps, topology
+        return plan_steps, topology, fully_scripted
 
     async def _resolve_graph(
         self, agent_type: AgentType, db: AsyncSession
@@ -398,7 +418,10 @@ class PlanGenerationService:
         return {str(row[0]) for row in result.fetchall()}
 
     def _build_prompt(
-        self, agent_type: AgentType, graph: dict[str, Any]
+        self,
+        agent_type: AgentType,
+        graph: dict[str, Any],
+        user_requirement: str | None = None,
     ) -> str:
         """Construct the LLM prompt with agent context."""
         lines: list[str] = [
@@ -414,6 +437,15 @@ class PlanGenerationService:
                 "",
                 "### System Instruction",
                 agent_type.system_instruction,
+            ])
+
+        if user_requirement:
+            lines.extend([
+                "",
+                "## User Requirement (context only)",
+                "```",
+                user_requirement.strip(),
+                "```",
             ])
 
         role = graph.get("role")
@@ -512,12 +544,25 @@ class PlanGenerationService:
         ]
 
         start = time.monotonic()
-        response = await model_layer.complete(
-            agent_type=agent_type,
-            model_config=model_config,
-            messages=messages,
-            max_tokens=2048,
-        )
+        # Bound the call so a slow provider fails fast instead of hanging the
+        # regenerate request indefinitely (frontend uses the matching 180s
+        # client timeout).
+        import asyncio
+        try:
+            response = await asyncio.wait_for(
+                model_layer.complete(
+                    agent_type=agent_type,
+                    model_config=model_config,
+                    messages=messages,
+                    max_tokens=8192,
+                ),
+                timeout=180.0,
+            )
+        except asyncio.TimeoutError as exc:
+            raise RuntimeError(
+                "Plan generation timed out after 180s — the model did not "
+                "respond. Check the model provider connectivity."
+            ) from exc
         elapsed = time.monotonic() - start
 
         # Extract text from the response
@@ -543,7 +588,21 @@ class PlanGenerationService:
         """Parse LLM response into a list of plan step dicts."""
         text = raw_response.strip()
 
-        # Try to extract a JSON array from the response
+        # Try to extract a JSON array from the response. The plan LLM may
+        # also emit an object ``{"fully_scripted": <bool>, "steps": [...]}``
+        # (execution-semantics decision) — accept both shapes.
+        start_idx = text.find("[")
+        obj_start_idx = text.find("{")
+        if obj_start_idx != -1 and (start_idx == -1 or obj_start_idx < start_idx):
+            try:
+                obj_end_idx = text.rfind("}")
+                candidate = json.loads(text[obj_start_idx : obj_end_idx + 1])
+                if isinstance(candidate, dict) and isinstance(
+                    candidate.get("steps"), list
+                ):
+                    text = json.dumps(candidate["steps"])
+            except json.JSONDecodeError:
+                pass
         start_idx = text.find("[")
         end_idx = text.rfind("]")
         if start_idx != -1 and end_idx != -1 and end_idx > start_idx:
@@ -561,6 +620,14 @@ class PlanGenerationService:
                         "type": str(step.get("type", "tool_call")),
                         "name": str(step.get("name", f"Step {i + 1}")),
                         "description": step.get("description") or None,
+                        # Scriptability marks (Software 3.0): preserved when
+                        # the plan LLM provides them, defaulted otherwise.
+                        "scriptable": bool(step.get("scriptable", True)),
+                        # Model-authored composition emission (Phase 2.1):
+                        # sandboxed Python source per scriptable segment.
+                        "python_source": step.get("python_source") or None,
+                        "output_mode": step.get("output_mode") or None,
+                        "output_template": step.get("output_template") or None,
                     })
                 return normalized
             except (json.JSONDecodeError, ValueError) as exc:
@@ -577,6 +644,27 @@ class PlanGenerationService:
             }
         ]
 
+    def _parse_fully_scripted(self, raw_response: str) -> bool:
+        """Extract the plan LLM's ``fully_scripted`` execution-semantics mark.
+
+        True only when the response carries an explicit
+        ``{"fully_scripted": true, ...}`` object — i.e. no/typed input AND a
+        SINGLE script can achieve the requirement end-to-end. Anything else
+        (array-only responses, missing mark) defaults to tool-mode.
+        """
+        text = raw_response.strip()
+        start_idx = text.find("{")
+        end_idx = text.rfind("}")
+        if start_idx == -1 or end_idx <= start_idx:
+            return False
+        try:
+            candidate = json.loads(text[start_idx : end_idx + 1])
+        except json.JSONDecodeError:
+            return False
+        if isinstance(candidate, dict):
+            return candidate.get("fully_scripted") is True
+        return False
+
     async def _upsert_plan(
         self,
         agent_type_id: uuid.UUID,
@@ -586,6 +674,7 @@ class PlanGenerationService:
         error: str | None,
         config_hash: str | None,
         db: AsyncSession,
+        fully_scripted: bool | None = None,
     ) -> AgentPlan:
         """Insert or update the AgentPlan row for the given agent type."""
         result = await db.execute(
@@ -602,6 +691,8 @@ class PlanGenerationService:
             existing.generation_error = error
             existing.agent_config_hash = config_hash
             existing.generated_at = now
+            if fully_scripted is not None or status == AgentPlanStatus.success:
+                existing.fully_scripted = fully_scripted
             await db.flush()
             await db.refresh(existing)
             return existing
@@ -614,6 +705,7 @@ class PlanGenerationService:
                 generation_error=error,
                 agent_config_hash=config_hash,
                 generated_at=now,
+                fully_scripted=fully_scripted,
             )
             db.add(plan)
             await db.flush()

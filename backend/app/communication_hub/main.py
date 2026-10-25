@@ -119,6 +119,7 @@ def _register_routers(app: FastAPI) -> None:
     from app.api.ws.chat import ws_router
     from app.communication_hub.api.dispatch import dispatch_router  # Phase 5.2
     from app.communication_hub.api.internal.tool_routing import router as tool_routing_router
+    from app.communication_hub.api.internal.script_forwarding import router as script_forwarding_router
     from app.communication_hub.api.internal.agent_execute import router as agent_execute_router
     from app.communication_hub.api.internal.agent_terminate import router as agent_terminate_router
     from app.communication_hub.api.internal.agent_resume import router as agent_resume_router
@@ -131,6 +132,7 @@ def _register_routers(app: FastAPI) -> None:
     app.include_router(ws_router)
     app.include_router(dispatch_router)  # POST /internal/dispatch
     app.include_router(tool_routing_router)  # POST /internal/tools/call
+    app.include_router(script_forwarding_router)  # POST /internal/script-tools/forward
     app.include_router(agent_execute_router)  # POST /internal/agent/execute
     app.include_router(agent_terminate_router)  # POST /internal/agent/terminate/{session_id}
     app.include_router(agent_resume_router)  # POST /internal/agent/resume/{session_id}

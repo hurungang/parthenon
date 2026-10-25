@@ -494,9 +494,11 @@ export function AgentOutputsPage() {
               <ContentRenderer
                 mode="auto"
                 content={
-                  typeof autoDetailSession.output_data?.result === 'string'
-                    ? autoDetailSession.output_data.result
-                    : JSON.stringify(autoDetailSession.output_data)
+                  typeof autoDetailSession.output_data === 'string'
+                    ? autoDetailSession.output_data
+                    : typeof autoDetailSession.output_data?.result === 'string'
+                      ? autoDetailSession.output_data.result
+                      : JSON.stringify(autoDetailSession.output_data)
                 }
               />
             </MaximizableContent>

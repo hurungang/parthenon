@@ -138,3 +138,12 @@ External agents do not receive identity tokens. The MCP Protocol Endpoint accept
 ## WebSocket Messages
 
 The Communication Hub supports structured WebSocket messages for intervention and chat flows. Intervention messages include request delivery, response submission, cancellation, and status updates between server and client. Chat messages from clients are rejected when the session has a pending intervention, ensuring orderly resolution of HITL requests.
+
+## Sandboxed Script Egress
+
+Sandboxed scripts in Agent Runtime reach the Hub exclusively through the
+injected session-bound tool client — the same authenticated MCP path as the
+LLM agent loop, with unchanged handling: the agent's dual identities,
+per-call token injection, and script provenance tagging. No new protocol or
+identity pathway is introduced for scripted execution. See
+[Sandboxed Scripting](sandboxed-scripting.md).

@@ -74,3 +74,13 @@ The frontend fetches its telemetry settings from the backend at startup, avoidin
 | **Custom Endpoint** | Arbitrary OTLP-compatible backends |
 
 Multiple targets may be active simultaneously for the same signal (e.g., Console + OTEL Collector during local debugging).
+
+## Script Execution Telemetry (Software 3.0)
+
+Script executions ship **humanized one-line log entries** — step name, what
+ran, and a natural-language outcome summary (shape + salient content) —
+never truncated JSON blobs. Sandbox violations and resource-cap
+terminations are first-class events (`script_run_failed` with a one-line
+`sandbox_violation_detail`); executions record **measured** `tokens_saved_actual`
+against the reference LLM run when known (`tokens_saved_estimate` remains
+only on historical rows).

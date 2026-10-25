@@ -23,7 +23,7 @@ import {
 } from '@mui/material'
 import OpenInNewIcon from '@mui/icons-material/OpenInNew'
 import { useQuery } from '@tanstack/react-query'
-import ReactMarkdown from 'react-markdown'
+import { MarkdownRenderer } from '../../components/common/MarkdownRenderer'
 import apiClient from '../../api/apiClient'
 import PermissionDeniedAlert from '../../components/permissions/PermissionDeniedAlert'
 import { DecisionResultView } from '../../components/results/DecisionResultView'
@@ -224,9 +224,7 @@ export function ResultRepositoryPage() {
         <DialogTitle>{selected?.title ?? 'Result Detail'}</DialogTitle>
         <DialogContent>
           {selected?.content_type === 'text/markdown' && selectedContent ? (
-            <Box sx={{ '& p': { my: 1 }, '& pre': { overflow: 'auto' }, '& code': { fontFamily: 'monospace' } }}>
-              <ReactMarkdown>{selectedContent}</ReactMarkdown>
-            </Box>
+            <MarkdownRenderer content={selectedContent} sx={{ '& p': { my: 1 } }} />
           ) : selected?.content_type === 'text/plain' && selectedContent ? (
             <Typography component="pre" sx={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word', fontSize: 13 }}>
               {selectedContent}

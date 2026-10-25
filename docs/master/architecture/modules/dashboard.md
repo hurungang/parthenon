@@ -53,3 +53,12 @@ Queried with a `start_time` / `end_time` range (defaults to last 24 hours):
 | Agent Roles | `RT_AGENT_ROLES` (read) |
 | MCP Servers | `RT_INTEGRATION_MCP_HUB` (read) |
 | Guardrail Breach Events | `RT_AGENT_TRAILS` (read) |
+
+## Scripted-Run Cost Reporting
+
+For scripted (Software 3.0) runs, `tokens_saved` is **measured** against the
+reference LLM execution's real token usage — not estimated — so cost
+reporting reflects actual avoidance. Script execution logs are humanized
+one-liners (step name, what ran, natural-language outcome summary) instead
+of truncated JSON blobs; sandbox violations and cap terminations appear as
+first-class events with a one-line reason.

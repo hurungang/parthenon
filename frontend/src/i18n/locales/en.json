@@ -608,7 +608,8 @@
         "editRawJson": "Edit Raw JSON",
         "inputSchemaHelper": "Define the structure of input data expected by this agent",
         "outputSchemaHelper": "Define the structure of output data produced by this agent"
-      }
+      },
+      "scriptsTab": "Scripts"
     },
     "sessions": {
       "launchTitle": "Launch Session — {{name}}",
@@ -625,6 +626,10 @@
       "initialMessage": "Initial Message",
       "initialMessagePlaceholder": "Type your first message to the agent…",
       "invalidJson": "Input data is not valid JSON.",
+      "optimizePromptTitle": "Run with optimization?",
+      "optimizePromptDescription": "This agent has no verified optimized plan yet.\n\nRun with optimization and this execution becomes the optimization opportunity: the agent first reviews its own scripts and recent execution logs, then authors sandboxed Python scripts and verifies them against real tool-call executions while accomplishing your task. The verified optimized plan is saved so future runs execute faster with fewer LLM calls.\n\nSkip optimization to run normally.",
+      "runWithOptimization": "Run with optimization",
+      "skipOptimization": "Skip optimization",
       "sessionTitle": "Agent Session",
       "dashboardTitle": "Agent Executions",
       "detailsTitle": "Execution Details",
@@ -911,7 +916,8 @@
           "copyToClipboard": "Copy Raw Log",
           "copied": "Copied!"
         }
-      }
+      },
+      "viewAgent": "View agent"
     },
     "executions": {
       "delegationTimeline": {
@@ -1051,7 +1057,9 @@
         "sop_invocation": "SOP Invocation",
         "skill_invocation": "Skill Invocation",
         "agent_delegation": "Agent Delegation",
-        "tool_call": "Tool Call"
+        "tool_call": "Tool Call",
+        "semantic_bridge": "Semantic Bridge",
+        "decision": "Decision"
       },
       "nodeTypes": {
         "agent": "Agent",
@@ -1073,6 +1081,121 @@
         "empty_output_data_type": "Output Data Type (empty)",
         "empty_model": "Model (empty)"
       }
+    },
+    "optimizedPlan": {
+      "tab": "Optimized Plan",
+      "status": "Status",
+      "fullyScripted": "fully scripted",
+      "toolMode": "tool mode",
+      "noPlan": "No optimized plan.",
+      "absentHint": "No verified optimized plan exists. The next time you run this agent, you will be offered the option to run with optimization — that run authors and verifies the scripts against real executions and saves the plan for reuse.",
+      "retire": "Retire plan",
+      "retiredHint": "Optimized plan retired — the next run will offer optimization again.",
+      "stepsTitle": "Composition Steps",
+      "noSteps": "No steps in this optimized plan.",
+      "stepFallback": "Step",
+      "viewScript": "View script",
+      "needsFeedbackPrompt": "Verification could not produce a passing workflow script. Describe what to change below and submit feedback — it will guide the next regeneration.",
+      "feedbackTitle": "Feedback",
+      "feedbackPlaceholder": "Describe what to change about this optimized plan…",
+      "feedbackSubmit": "Submit feedback",
+      "feedbackSaved": "Feedback saved — it will be incorporated when the plan is regenerated."
+    },
+    "scripts": {
+      "title": "Scripts",
+      "filterAgentType": "Agent Type",
+      "allAgentTypes": "All Agent Types",
+      "filterLifecycle": "Lifecycle Status",
+      "allLifecycleStatuses": "All Statuses",
+      "columnName": "Name",
+      "columnAgentType": "Agent Type",
+      "columnLifecycle": "Lifecycle",
+      "columnHealth": "Health",
+      "columnVersions": "Versions",
+      "columnCurrentVersion": "Serving Version",
+      "noResults": "No script definitions found.",
+      "noVersions": "No versions recorded for this script.",
+      "noVerifications": "No verification runs recorded.",
+      "noFallbacks": "No fallback events recorded.",
+      "servingVersion": "Serving",
+      "unknownCreator": "unknown",
+      "repairOf": "repair of",
+      "recentFallbacks_one": "{{count}} fallback in the last 24h",
+      "recentFallbacks_other": "{{count}} fallbacks in the last 24h",
+      "targetStatus": "Target Status",
+      "promote": "Promote",
+      "retire": "Retire",
+      "tabVersions": "Versions",
+      "versionHistory": "Version history",
+      "versionHistoryTitle": "Version history",
+      "historyPrevPage": "Previous",
+      "historyNextPage": "Next",
+      "historyPageInfo": "Page {{page}} of {{total}}",
+      "tabVerifications": "Verifications",
+      "tabFallbacks": "Fallbacks",
+      "lifecycle": {
+        "draft": "Draft",
+        "verified": "Verified",
+        "compiled": "Compiled",
+        "retired": "Retired"
+      },
+      "health": {
+        "healthy": "Healthy",
+        "degraded": "Degraded",
+        "unhealthy": "Unhealthy"
+      },
+      "verificationOutcome": {
+        "match": "Match",
+        "match_within_tolerance": "Match (within tolerance)",
+        "mismatch": "Mismatch"
+      },
+      "verdict": {
+        "promoted": "Promoted",
+        "rejected": "Rejected"
+      },
+      "fallbackTrigger": {
+        "execution_error": "Execution error",
+        "tool_schema_mismatch": "Tool schema mismatch",
+        "output_validation_failure": "Output validation failure"
+      },
+      "fallbackAction": {
+        "llm_completed": "LLM completed",
+        "repaired_candidate_produced": "Repair candidate produced",
+        "repair_not_produced": "Repair not produced"
+      },
+      "noRepairs": "No repair attempts recorded.",
+      "tabRepairs": "Repairs",
+      "repairAttempt": "Repair attempt",
+      "repairDiff": "Diff applied",
+      "repairRetryOutcome": {
+        "pending": "Pending retry",
+        "succeeded": "Retry succeeded",
+        "failed": "Retry failed"
+      },
+      "scriptLink": "Script",
+      "promoteTargetStatusLabel": "Promote to",
+      "versionsCount_one": "{{count}} version",
+      "versionsCount_other": "{{count}} versions",
+      "lineage": "Lineage",
+      "lineageChild": "derived",
+      "sandboxedPython": "sandboxed Python",
+      "sandboxValidationPassed": "sandbox ok",
+      "sandboxValidationFailed": "sandbox failed",
+      "verificationOutcomeLabel": "Comparison Outcome",
+      "verdictLabel": "Verdict",
+      "verdictReason": "Reason",
+      "fallbackTriggerLabel": "Trigger",
+      "fallbackActionLabel": "Resulting Action",
+      "failureDetail": "Failure Detail",
+      "defectDiagnosis": "Defect Diagnosis",
+      "retryOutcomeLabel": "Retry Outcome",
+      "viewScript": "View script",
+      "scriptViewer": {
+        "title": "Script version {{label}}",
+        "close": "Close"
+      },
+      "showVersions": "Show version history ({{count}})",
+      "hideVersions": "Hide version history"
     }
   },
   "gateway": {

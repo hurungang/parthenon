@@ -147,6 +147,14 @@ class LangChainModelFactory:
                 f"Supported: {sorted(self.SUPPORTED_PROVIDERS)}"
             )
 
+        # LLM Mock Layer (Phase 4): when LLM_MOCK_MODE is active the mock
+        # provider serves every dispatch — production default is off.
+        from app.services.agents.llm_mock_provider import maybe_mock_model
+
+        mock = maybe_mock_model(provider_key, model_id)
+        if mock is not None:
+            return mock
+
         if provider_key == "azure_openai":
             return self._create_azure_openai(model_id, api_key, base_url, max_tokens, output_json_schema)
 

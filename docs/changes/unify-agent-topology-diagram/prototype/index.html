@@ -1,0 +1,646 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Parthenon — Unify Agent Topology Diagram</title>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --primary:#2563EB;--primary-dark:#1D4ED8;--primary-light:#DBEAFE;
+  --sidebar-bg:#FFFFFF;--sidebar-text:#424242;--sidebar-active-bg:rgba(0,0,0,0.06);
+  --sidebar-hover-bg:rgba(0,0,0,0.03);--sidebar-active-text:#2563EB;
+  --surface:#FFFFFF;--bg:#FAFAFA;--border:#E0E0E0;
+  --success:#4CAF50;--warning:#FF9800;--error:#F44336;--info:#2196F3;
+  --text-primary:#212121;--text-secondary:#757575;
+  --shadow:0 1px 2px 0 rgba(60,64,67,0.3),0 1px 3px 1px rgba(60,64,67,0.15);
+  --shadow-md:0 4px 6px 0 rgba(60,64,67,0.3),0 4px 8px 3px rgba(60,64,67,0.15);
+  --radius:8px;--radius-sm:4px;--radius-lg:12px;
+  --sidebar-w:256px;--topbar-h:64px;
+  --transition:0.2s ease;
+}
+html,body{height:100%;font-family:'Inter','Roboto',system-ui,sans-serif;background:var(--bg);color:var(--text-primary);font-size:14px;line-height:1.5}
+button{cursor:pointer;font-family:inherit;font-size:14px}
+input,select{font-family:inherit;font-size:14px}
+strong{font-weight:600}
+
+/* ── APP SHELL ── */
+.app-shell{display:flex;height:100vh;overflow:hidden}
+.sidebar{width:var(--sidebar-w);background:var(--sidebar-bg);display:flex;flex-direction:column;flex-shrink:0;overflow-y:auto;border-right:1px solid var(--border);z-index:100}
+.sidebar::-webkit-scrollbar{width:4px}.sidebar::-webkit-scrollbar-thumb{background:rgba(0,0,0,.15);border-radius:4px}
+.sidebar-logo{padding:20px 20px 16px;border-bottom:1px solid var(--border);flex-shrink:0}
+.sidebar-logo h1{font-size:18px;font-weight:700;letter-spacing:-.5px}
+.sidebar-logo small{font-size:11px;color:var(--text-secondary);letter-spacing:.5px;text-transform:uppercase}
+.nav-item{display:flex;align-items:center;gap:8px;padding:8px 14px;cursor:pointer;transition:background var(--transition),color var(--transition);border-radius:var(--radius);margin:1px 6px;color:var(--sidebar-text);font-size:13px;user-select:none;white-space:nowrap}
+.nav-item:hover{background:var(--sidebar-hover-bg)}
+.nav-item.active{background:var(--sidebar-active-bg);color:var(--sidebar-active-text);font-weight:500}
+.nav-item .nav-icon{font-size:14px;width:18px;text-align:center;flex-shrink:0;line-height:1}
+.nav-parent-group-label{padding:8px 14px 4px;font-size:11px;font-weight:600;color:var(--text-secondary);display:flex;align-items:center;justify-content:space-between;cursor:pointer;user-select:none;transition:color var(--transition)}
+.nav-item.sub-item{padding-left:32px;font-size:11px;margin:0 6px;padding-top:5px;padding-bottom:5px;gap:6px;color:var(--text-secondary)}
+.nav-item.sub-item .nav-icon{font-size:11px;width:14px}
+.nav-item.sub-item:hover{background:var(--sidebar-hover-bg);color:var(--text-primary)}
+.nav-item.sub-item.active{background:var(--sidebar-active-bg);color:var(--sidebar-active-text);font-weight:500}
+
+/* ── MAIN ── */
+.main-wrapper{flex:1;display:flex;flex-direction:column;overflow:hidden}
+.topbar{height:var(--topbar-h);background:var(--surface);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 24px;gap:16px;flex-shrink:0}
+.topbar-title{font-size:18px;font-weight:600;flex:1}
+.avatar{width:36px;height:36px;border-radius:50%;background:var(--primary);color:#fff;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:600;flex-shrink:0}
+.main-content{flex:1;overflow-y:auto;padding:24px}
+.main-content::-webkit-scrollbar{width:6px}.main-content::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+.view{display:none}.view.active{display:block}
+.view-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:20px}
+.view-header h2{font-size:22px;font-weight:600}
+.view-desc{font-size:13px;color:var(--text-secondary);margin-top:2px}
+
+/* ── BUTTONS / CHIPS / CARDS ── */
+.btn{display:inline-flex;align-items:center;gap:6px;padding:8px 16px;border-radius:var(--radius-sm);border:none;font-weight:500;transition:all var(--transition);white-space:nowrap}
+.btn-primary{background:var(--primary);color:#fff}.btn-primary:hover{background:var(--primary-dark)}
+.btn-secondary{background:var(--surface);color:var(--text-primary);border:1px solid var(--border)}.btn-secondary:hover{background:var(--bg)}
+.btn-sm{padding:5px 12px;font-size:12px}
+.chip{display:inline-flex;align-items:center;gap:4px;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:600;white-space:nowrap}
+.chip-blue{background:#DBEAFE;color:#1D4ED8}
+.chip-green{background:#DCFCE7;color:#15803D}
+.chip-purple{background:#EDE9FE;color:#6D28D9}
+.chip-gray{background:#F1F5F9;color:#475569}
+.chip-orange{background:#FED7AA;color:#C2410C}
+.chip-cyan{background:#CFFAFE;color:#155E75}
+.card{background:var(--surface);border-radius:var(--radius);border:1px solid var(--border);box-shadow:var(--shadow)}
+.card-header{padding:14px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
+.card-header h3{font-size:15px;font-weight:600}
+.card-body{padding:20px}
+.change-banner{display:flex;align-items:flex-start;gap:14px;padding:14px 18px;border:1px solid #BBD8F0;background:#E8F1FB;border-left:4px solid var(--primary);border-radius:var(--radius);margin-bottom:18px}
+.change-banner .cb-icon{width:32px;height:32px;border-radius:50%;background:var(--primary);color:#fff;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0}
+.change-banner .cb-body{flex:1}
+.change-banner h4{font-size:14px;margin-bottom:4px;color:var(--primary-dark)}
+.change-banner p{font-size:12.5px;color:var(--text-secondary);line-height:1.5}
+.change-banner .cb-tag{display:inline-block;padding:2px 8px;border-radius:999px;background:var(--primary);color:#fff;font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;margin-left:6px;vertical-align:middle}
+
+/* ── TABLES ── */
+.table-wrap{background:var(--surface);border-radius:var(--radius);border:1px solid var(--border);box-shadow:var(--shadow);overflow:hidden}
+table{width:100%;border-collapse:collapse}
+thead{background:#F8FAFC}
+thead th{padding:10px 16px;text-align:left;font-size:12px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid var(--border);white-space:nowrap}
+tbody tr{border-bottom:1px solid var(--border);transition:background var(--transition);cursor:pointer}
+tbody tr:hover{background:#F8FAFC}
+tbody tr.selected{background:var(--primary-light)}
+tbody td{padding:12px 16px;vertical-align:middle}
+.status-dot{width:8px;height:8px;border-radius:50%;display:inline-block;flex-shrink:0}
+.dot-green{background:var(--success)}.dot-gray{background:#94A3B8}
+
+/* ── TABS ── */
+.tabs{display:flex;border-bottom:2px solid var(--border);margin-bottom:20px;gap:0}
+.tab{padding:10px 20px;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-2px;font-weight:500;color:var(--text-secondary);transition:all var(--transition);white-space:nowrap}
+.tab.active{border-bottom-color:var(--primary);color:var(--primary)}
+.tab:hover:not(.active){color:var(--text-primary)}
+.tab-panel{display:none}.tab-panel.active{display:block}
+
+/* ═══════════════════════════════════════════════
+   UNIFIED TOPOLOGY DIAGRAM COMPONENT
+   (the single shared component — same markup/CSS/JS
+   used in BOTH agent preview and management panel)
+   ═══════════════════════════════════════════════ */
+.topo-component{position:relative;border:1px solid var(--border);border-radius:var(--radius);background:
+  linear-gradient(rgba(37,99,235,.045) 1px,transparent 1px),
+  linear-gradient(90deg,rgba(37,99,235,.045) 1px,transparent 1px),#FDFEFF;
+  background-size:22px 22px,22px 22px,auto;
+  overflow:hidden}
+.topo-canvas-wrap{height:100%;width:100%;overflow:hidden;cursor:grab}
+.topo-canvas-wrap.panning{cursor:grabbing}
+.topo-svg{display:block;transition:transform .15s ease;transform-origin:0 0}
+.topo-toolbar{position:absolute;top:12px;right:12px;display:flex;flex-direction:column;gap:6px;z-index:10}
+.topo-tool-btn{width:34px;height:34px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface);color:var(--text-secondary);font-size:16px;display:flex;align-items:center;justify-content:center;box-shadow:var(--shadow);transition:all var(--transition)}
+.topo-tool-btn:hover{background:#F0F7FE;color:var(--primary);border-color:var(--primary)}
+.topo-tool-btn:disabled{opacity:.35;cursor:not-allowed}
+.topo-zoom-label{position:absolute;bottom:12px;right:12px;background:rgba(255,255,255,.92);border:1px solid var(--border);border-radius:999px;padding:3px 12px;font-size:11.5px;font-weight:600;color:var(--text-secondary);box-shadow:var(--shadow);z-index:10;font-variant-numeric:tabular-nums}
+.topo-legend{position:absolute;bottom:12px;left:12px;display:flex;gap:12px;background:rgba(255,255,255,.92);border:1px solid var(--border);border-radius:var(--radius-sm);padding:6px 12px;font-size:11px;color:var(--text-secondary);box-shadow:var(--shadow);z-index:10;flex-wrap:wrap}
+.topo-legend .lg-item{display:inline-flex;align-items:center;gap:5px}
+.topo-legend .lg-dot{width:10px;height:10px;border-radius:3px;flex-shrink:0}
+
+/* graph nodes */
+.topo-node rect{fill:#fff;stroke-width:1.5;filter:drop-shadow(0 1px 2px rgba(0,0,0,.12));transition:stroke .15s}
+.topo-node{cursor:pointer}
+.topo-node:hover rect{stroke-width:2.5}
+.topo-node.selected rect{stroke-width:2.5;stroke:var(--primary)!important}
+.topo-edge{stroke-width:1.75;fill:none;opacity:.75}
+.topo-edge.dimmed{opacity:.15}
+.topo-node.dimmed{opacity:.35}
+
+/* node detail popover */
+.topo-popover{position:absolute;min-width:210px;max-width:260px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow-md);padding:12px 14px;z-index:20;display:none}
+.topo-popover.open{display:block}
+.topo-popover h5{font-size:13px;font-weight:600;margin-bottom:2px;padding-right:20px}
+.topo-popover .tp-kind{font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;margin-bottom:6px}
+.topo-popover .tp-desc{font-size:11.5px;color:var(--text-secondary);line-height:1.45;margin-bottom:6px}
+.topo-popover .tp-close{position:absolute;top:8px;right:8px;background:none;border:none;color:var(--text-secondary);font-size:14px;cursor:pointer}
+.topo-popover .tp-tools{display:flex;flex-wrap:wrap;gap:4px}
+
+/* ── PREVIEW LAYOUT ── */
+.preview-shell{display:grid;grid-template-columns:300px 1fr;gap:20px;align-items:start}
+.preview-side{display:flex;flex-direction:column;gap:12px}
+.spec-row{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #F1F5F9;font-size:13px}
+.spec-row:last-child{border-bottom:none}
+.spec-row .k{color:var(--text-secondary)}
+.spec-row .v{font-weight:500;text-align:right}
+
+/* permission denied */
+.perm-error{display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:70px 24px;color:var(--text-secondary)}
+.perm-error .pe-icon{width:64px;height:64px;border-radius:50%;background:#FEE2E2;color:var(--error);display:flex;align-items:center;justify-content:center;font-size:30px;margin-bottom:16px}
+.perm-error h4{font-size:16px;color:var(--text-primary);margin-bottom:6px}
+.perm-error p{font-size:13px;max-width:400px;margin-bottom:16px}
+
+/* before/after compare */
+.compare-grid{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+.compare-card{position:relative}
+.compare-badge{position:absolute;top:-10px;left:16px;padding:2px 10px;border-radius:999px;font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;z-index:5}
+.badge-old{background:#FEE2E2;color:#B91C1C;border:1px solid #FECACA}
+.badge-new{background:#DCFCE7;color:#15803D;border:1px solid #BBF7D0}
+.old-diagram{padding:24px;background:#F5F5F5;border-radius:var(--radius-sm);border:1px solid var(--border)}
+.old-flow{display:flex;align-items:center;justify-content:center;gap:0;flex-wrap:wrap;padding:24px 8px}
+.old-box{padding:8px 14px;border:1px solid #9E9E9E;background:#fff;font-size:12px;border-radius:3px;color:#616161;white-space:nowrap}
+.old-arrow{color:#9E9E9E;font-size:16px;padding:0 8px}
+.old-caption{font-size:11.5px;color:var(--error);background:#FEF2F2;border:1px solid #FECACA;border-radius:6px;padding:8px 12px;margin-top:12px;display:flex;gap:8px;align-items:flex-start;line-height:1.45}
+.new-caption{font-size:11.5px;color:#15803D;background:#F0FDF4;border:1px solid #BBF7D0;border-radius:6px;padding:8px 12px;margin-top:12px;display:flex;gap:8px;align-items:flex-start;line-height:1.45}
+
+/* toast */
+@keyframes toastIn{from{opacity:0;transform:translateX(-50%) translateY(10px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}
+.toast-container{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);z-index:2000;display:flex;flex-direction:column;gap:8px;align-items:center}
+.toast{padding:12px 20px;border-radius:var(--radius);color:#fff;font-size:13px;font-weight:500;box-shadow:var(--shadow-md);animation:toastIn .3s ease}
+.toast-success{background:#2E7D32}.toast-info{background:#1565C0}
+
+.demo-controls{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:14px}
+.text-secondary{color:var(--text-secondary)}.text-xs{font-size:11px}.text-sm{font-size:12px}
+</style>
+</head>
+<body>
+<div class="app-shell">
+  <!-- ══ SIDEBAR ══ -->
+  <div class="sidebar">
+    <div class="sidebar-logo">
+      <h1>Parthenon</h1>
+      <small>Agent Management</small>
+    </div>
+    <div style="padding:6px 0">
+      <div class="nav-item"><span class="nav-icon">▦</span>Dashboard</div>
+      <div class="nav-item active"><span class="nav-icon">🤖</span>Agents</div>
+      <div class="nav-item sub-item" onclick="showView('preview')"><span class="nav-icon">•</span>Agent Preview</div>
+      <div class="nav-item sub-item" onclick="showView('manage')"><span class="nav-icon">•</span>Agent Management Panel</div>
+      <div class="nav-item" onclick="showView('compare')"><span class="nav-icon">⇄</span>Before / After Comparison</div>
+      <div class="nav-item"><span class="nav-icon">🧩</span>Skills</div>
+      <div class="nav-item"><span class="nav-icon">📄</span>SOPs</div>
+      <div class="nav-item"><span class="nav-icon">🔌</span>MCP Servers</div>
+      <div class="nav-item"><span class="nav-icon">⏰</span>Schedules</div>
+    </div>
+  </div>
+
+  <div class="main-wrapper">
+    <div class="topbar">
+      <div class="topbar-title" id="topbarTitle">Agent Preview</div>
+      <div style="display:flex;align-items:center;gap:12px">
+        <span class="chip chip-gray">admin@acme.corp</span>
+        <div class="avatar">AD</div>
+      </div>
+    </div>
+
+    <div class="main-content">
+
+      <!-- ═══════════ VIEW: AGENT PREVIEW ═══════════ -->
+      <div class="view active" id="view-preview">
+        <div class="change-banner">
+          <div class="cb-icon">★</div>
+          <div class="cb-body">
+            <h4>Unified Topology Diagram <span class="cb-tag">This Epic</span></h4>
+            <p>The agent preview now renders the <strong>same polished topology component</strong> used in the Agent Management Panel — identical visuals, interactions, and zoom in/out. Try the zoom controls, pan by dragging, and click nodes for details.</p>
+          </div>
+        </div>
+
+        <div class="view-header">
+          <div>
+            <h2>Agent Preview</h2>
+            <div class="view-desc">Inspect an agent type's configuration before deployment — including its topology.</div>
+          </div>
+          <div class="demo-controls">
+            <label class="text-sm text-secondary">Simulate:</label>
+            <button class="btn btn-secondary btn-sm" id="btnPerm" onclick="togglePermission()">Toggle no-permission agent</button>
+          </div>
+        </div>
+
+        <div class="preview-shell">
+          <!-- agent list -->
+          <div class="preview-side">
+            <div class="table-wrap">
+              <div class="card-header" style="padding:12px 16px"><h3 style="font-size:13px">Agent Types</h3></div>
+              <table>
+                <thead><tr><th>Agent</th></tr></thead>
+                <tbody id="agentList"></tbody>
+              </table>
+            </div>
+
+            <div class="card">
+              <div class="card-header" style="padding:12px 16px"><h3 style="font-size:13px">Configuration</h3></div>
+              <div class="card-body" style="padding:6px 16px" id="specPanel"></div>
+            </div>
+          </div>
+
+          <!-- topology -->
+          <div class="card" style="overflow:hidden">
+            <div class="card-header">
+              <div>
+                <h3 id="topoTitle">Topology</h3>
+                <div class="text-xs text-secondary" id="topoSubtitle"></div>
+              </div>
+              <span class="chip chip-blue">Shared component · AgentTopologyDiagram</span>
+            </div>
+            <div style="height:520px;position:relative" id="topoMountPreview"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ═══════════ VIEW: MANAGEMENT PANEL ═══════════ -->
+      <div class="view" id="view-manage">
+        <div class="view-header">
+          <div>
+            <h2>Agent Management Panel</h2>
+            <div class="view-desc">The reference implementation — behaviour is unchanged by this epic (no regression).</div>
+          </div>
+          <button class="btn btn-primary btn-sm" onclick="verifyIdentical()">Verify identical to preview</button>
+        </div>
+        <div class="card" style="overflow:hidden">
+          <div class="card-header">
+            <div>
+              <h3 id="topoTitleManage">Topology</h3>
+              <div class="text-xs text-secondary" id="topoSubtitleManage"></div>
+            </div>
+            <span class="chip chip-blue">Shared component · AgentTopologyDiagram</span>
+          </div>
+          <div style="height:560px;position:relative" id="topoMountManage"></div>
+        </div>
+      </div>
+
+      <!-- ═══════════ VIEW: COMPARE ═══════════ -->
+      <div class="view" id="view-compare">
+        <div class="view-header">
+          <div>
+            <h2>Before / After</h2>
+            <div class="view-desc">The divergent preview diagram (retired) vs. the unified shared component.</div>
+          </div>
+        </div>
+        <div class="compare-grid">
+          <div class="card compare-card">
+            <span class="compare-badge badge-old">Before — retired</span>
+            <div class="card-header"><h3>Agent Preview diagram (old)</h3></div>
+            <div class="card-body">
+              <div class="old-diagram">
+                <div class="old-flow">
+                  <div class="old-box">Role: data-analyst</div>
+                  <div class="old-arrow">→</div>
+                  <div class="old-box">2 Skills</div>
+                  <div class="old-arrow">→</div>
+                  <div class="old-box">4 Tools</div>
+                </div>
+              </div>
+              <div class="old-caption"><span>✕</span><span>No zoom, flat linear list, no node details, no connection lines — diverged from the management panel view and caused user confusion.</span></div>
+            </div>
+          </div>
+          <div class="card compare-card">
+            <span class="compare-badge badge-new">After — unified</span>
+            <div class="card-header"><h3>Agent Preview diagram (new)</h3></div>
+            <div class="card-body">
+              <div style="height:340px;position:relative" id="topoMountCompare"></div>
+              <div class="new-caption"><span>✓</span><span>Pixel-identical shared component: same node graph, same zoom in/out, same interactions as the management panel. One component to maintain.</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<div class="toast-container" id="toastContainer"></div>
+
+<script>
+/* ═══════════════ SAMPLE TOPOLOGY DATA ═══════════════ */
+const AGENTS = {
+  analyst: {
+    name: 'Data Analyst', version: 'v2.4', model: 'gpt-4o', role: 'data-analyst',
+    desc: 'Analyses business datasets and produces structured reports.',
+    nodes: [
+      {id:'agent', x:40, y:150, w:170, label:'Data Analyst', sub:'Agent Type', kind:'agent', color:'#2563EB', tools:['Model: gpt-4o','Role: data-analyst']},
+      {id:'role', x:280, y:40, w:160, label:'data-analyst', sub:'Agent Role', kind:'role', color:'#7C3AED', tools:['Grants 2 Skills','6 resolved tools']},
+      {id:'sop', x:280, y:255, w:160, label:'report-workflow', sub:'SOP', kind:'sop', color:'#0E7490', tools:['4 sequenced steps']},
+      {id:'sk1', x:510, y:40, w:160, label:'sql-query', sub:'Skill', kind:'skill', color:'#B45309', tools:['hub1____sql_execute','hub1____sql_schema']},
+      {id:'sk2', x:510, y:148, w:160, label:'chart-render', sub:'Skill', kind:'skill', color:'#B45309', tools:['hub2____plot_data']},
+      {id:'sk3', x:510, y:255, w:160, label:'report-writer', sub:'Skill', kind:'skill', color:'#B45309', tools:['hub1____save_data','hub1____get_data']},
+      {id:'t1', x:740, y:40, w:150, label:'sql_execute', sub:'MCP Tool', kind:'tool', color:'#15803D', tools:['Server: db-hub']},
+      {id:'t2', x:740, y:148, w:150, label:'plot_data', sub:'MCP Tool', kind:'tool', color:'#15803D', tools:['Server: viz-hub']},
+      {id:'t3', x:740, y:255, w:150, label:'save_data', sub:'MCP Tool', kind:'tool', color:'#15803D', tools:['Server: db-hub']},
+      {id:'t4', x:740, y:362, w:150, label:'get_data', sub:'MCP Tool', kind:'tool', color:'#15803D', tools:['Server: db-hub']},
+      {id:'t5', x:740, y:469, w:150, label:'sql_schema', sub:'MCP Tool', kind:'tool', color:'#15803D', tools:['Server: db-hub']}
+    ],
+    edges: [
+      ['agent','role'],['agent','sop'],
+      ['role','sk1'],['role','sk2'],['role','sk3'],
+      ['sop','sk3'],
+      ['sk1','t1'],['sk1','t5'],['sk2','t2'],['sk3','t3'],['sk3','t4']
+    ]
+  },
+  triage: {
+    name: 'Support Triage', version: 'v1.1', model: 'claude-sonnet-4', role: 'support-triage',
+    desc: 'Classifies inbound support requests and routes them to the right queue.',
+    nodes: [
+      {id:'agent', x:40, y:180, w:180, label:'Support Triage', sub:'Agent Type', kind:'agent', color:'#2563EB', tools:['Model: claude-sonnet-4','Role: support-triage']},
+      {id:'role', x:300, y:180, w:170, label:'support-triage', sub:'Agent Role', kind:'role', color:'#7C3AED', tools:['Grants 3 Skills','8 resolved tools']},
+      {id:'sk1', x:560, y:60, w:160, label:'classify', sub:'Skill', kind:'skill', color:'#B45309', tools:['hub1____save_data']},
+      {id:'sk2', x:560, y:180, w:160, label:'escalate', sub:'Skill', kind:'skill', color:'#B45309', tools:['notify____send_email','notify____send_slack']},
+      {id:'sk3', x:560, y:300, w:160, label:'ticket-create', sub:'Skill', kind:'skill', color:'#B45309', tools:['hub2____create_ticket']},
+      {id:'t1', x:800, y:60, w:150, label:'save_data', sub:'MCP Tool', kind:'tool', color:'#15803D', tools:['Server: db-hub']},
+      {id:'t2', x:800, y:180, w:150, label:'send_slack', sub:'MCP Tool', kind:'tool', color:'#15803D', tools:['Server: notify-hub']},
+      {id:'t3', x:800, y:300, w:150, label:'create_ticket', sub:'MCP Tool', kind:'tool', color:'#15803D', tools:['Server: itsm-hub']}
+    ],
+    edges: [['agent','role'],['role','sk1'],['role','sk2'],['role','sk3'],['sk1','t1'],['sk2','t2'],['sk3','t3']]
+  },
+  restricted: {
+    name: 'Finance Auditor', version: 'v0.9', model: 'gpt-4o', role: 'finance-audit',
+    desc: 'Restricted topology — your permissions do not include this agent.',
+    restricted: true
+  }
+};
+const KIND_COLORS = {agent:'#2563EB', role:'#7C3AED', sop:'#0E7490', skill:'#B45309', tool:'#15803D'};
+const KIND_LABELS = {agent:'Agent', role:'Role', sop:'SOP', skill:'Skill', tool:'Tool'};
+
+/* ═══════════════ UNIFIED TOPOLOGY COMPONENT (shared) ═══════════════
+   One implementation mounted in preview, management panel, and compare.
+   Supports: zoom in/out buttons, ctrl/⌘+scroll zoom, drag-to-pan,
+   fit-to-view, zoom % readout, node click → detail popover.            */
+const mounts = {};
+function mountTopology(mountId, agentKey){
+  const data = AGENTS[agentKey];
+  const host = document.getElementById(mountId);
+  host.innerHTML = `
+    <div class="topo-component" style="height:100%">
+      <div class="topo-canvas-wrap" tabindex="0">
+        <svg class="topo-svg" width="920" height="600">
+          <g class="edges"></g>
+          <g class="nodes"></g>
+        </svg>
+      </div>
+      <div class="topo-toolbar">
+        <button class="topo-tool-btn" title="Zoom in" aria-label="Zoom in">+</button>
+        <button class="topo-tool-btn" title="Zoom out" aria-label="Zoom out">−</button>
+        <button class="topo-tool-btn" title="Fit to view" aria-label="Fit to view">⛶</button>
+        <button class="topo-tool-btn" title="Reset zoom" aria-label="Reset zoom">1:1</button>
+      </div>
+      <div class="topo-zoom-label">100%</div>
+      <div class="topo-legend">
+        <span class="lg-item"><span class="lg-dot" style="background:#2563EB"></span>Agent</span>
+        <span class="lg-item"><span class="lg-dot" style="background:#7C3AED"></span>Role</span>
+        <span class="lg-item"><span class="lg-dot" style="background:#0E7490"></span>SOP</span>
+        <span class="lg-item"><span class="lg-dot" style="background:#B45309"></span>Skill</span>
+        <span class="lg-item"><span class="lg-dot" style="background:#15803D"></span>Tool</span>
+      </div>
+      <div class="topo-popover"></div>
+    </div>`;
+  const m = {zoom:1, tx:24, ty:24, min:.4, max:2.5};
+  mounts[mountId] = m;
+  const svg = host.querySelector('svg');
+  const wrap = host.querySelector('.topo-canvas-wrap');
+  const zoomLabel = host.querySelector('.topo-zoom-label');
+  const pop = host.querySelector('.topo-popover');
+  const NODE_H = 52;
+
+  /* edges */
+  const gE = host.querySelector('.edges');
+  data.edges.forEach(([a,b])=>{
+    const A = data.nodes.find(n=>n.id===a), B = data.nodes.find(n=>n.id===b);
+    const x1 = A.x + A.w, y1 = A.y + NODE_H/2, x2 = B.x, y2 = B.y + NODE_H/2;
+    const mx = (x1+x2)/2;
+    const p = document.createElementNS('http://www.w3.org/2000/svg','path');
+    p.setAttribute('d',`M ${x1} ${y1} C ${mx} ${y1}, ${mx} ${y2}, ${x2} ${y2}`);
+    p.setAttribute('class','topo-edge');
+    p.setAttribute('stroke', B.color || A.color);
+    p.dataset.a = a; p.dataset.b = b;
+    gE.appendChild(p);
+  });
+
+  /* nodes */
+  const gN = host.querySelector('.nodes');
+  data.nodes.forEach(n=>{
+    const g = document.createElementNS('http://www.w3.org/2000/svg','g');
+    g.setAttribute('class','topo-node');
+    g.setAttribute('transform',`translate(${n.x},${n.y})`);
+    const rect = document.createElementNS('http://www.w3.org/2000/svg','rect');
+    rect.setAttribute('width',n.w); rect.setAttribute('height',NODE_H); rect.setAttribute('rx',9);
+    rect.setAttribute('stroke', n.color);
+    const dot = document.createElementNS('http://www.w3.org/2000/svg','rect');
+    dot.setAttribute('x',14); dot.setAttribute('y',14); dot.setAttribute('width',24); dot.setAttribute('height',24);
+    dot.setAttribute('rx',7); dot.setAttribute('fill', n.color);
+    const kt = document.createElementNS('http://www.w3.org/2000/svg','text');
+    kt.setAttribute('x',48); kt.setAttribute('y',22);
+    kt.setAttribute('style','font-size:8.5px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;fill:'+n.color);
+    kt.textContent = n.sub;
+    const lt = document.createElementNS('http://www.w3.org/2000/svg','text');
+    lt.setAttribute('x',48); lt.setAttribute('y',38);
+    lt.setAttribute('style','font-size:12px;font-weight:600;fill:#212121');
+    lt.textContent = n.label;
+    g.append(rect,dot,kt,lt);
+    g.addEventListener('click', e=>{ e.stopPropagation(); selectNode(mountId, n, g, gN); });
+    n._g = g;
+    gN.appendChild(g);
+  });
+
+  /* zoom helpers */
+  function apply(){
+    svg.style.transform = `translate(${m.tx}px,${m.ty}px) scale(${m.zoom})`;
+    zoomLabel.textContent = Math.round(m.zoom*100)+'%';
+    host.querySelector('[title="Zoom in"]').disabled = m.zoom >= m.max;
+    host.querySelector('[title="Zoom out"]').disabled = m.zoom <= m.min;
+  }
+  function setZoom(z, cx, cy){
+    z = Math.min(m.max, Math.max(m.min, z));
+    const rect = wrap.getBoundingClientRect();
+    cx = cx ?? rect.width/2; cy = cy ?? rect.height/2;
+    m.tx = cx - (cx - m.tx) * (z/m.zoom);
+    m.ty = cy - (cy - m.ty) * (z/m.zoom);
+    m.zoom = z; apply();
+  }
+  function fit(){
+    const rect = wrap.getBoundingClientRect();
+    const maxX = Math.max(...data.nodes.map(n=>n.x+n.w)) + 30;
+    const maxY = Math.max(...data.nodes.map(n=>n.y+NODE_H)) + 30;
+    m.zoom = Math.min(rect.width/maxX, rect.height/maxY, 1.4);
+    m.tx = (rect.width - maxX*m.zoom)/2;
+    m.ty = (rect.height - maxY*m.zoom)/2;
+    apply();
+  }
+  const btns = host.querySelectorAll('.topo-tool-btn');
+  btns[0].onclick = ()=>setZoom(m.zoom*1.2);
+  btns[1].onclick = ()=>setZoom(m.zoom/1.2);
+  btns[2].onclick = fit;
+  btns[3].onclick = ()=>{ m.zoom=1; m.tx=24; m.ty=24; apply(); };
+
+  /* ctrl/⌘ + wheel zoom */
+  wrap.addEventListener('wheel', e=>{
+    e.preventDefault();
+    const rect = wrap.getBoundingClientRect();
+    if(e.ctrlKey || e.metaKey){
+      setZoom(m.zoom * (e.deltaY<0?1.1:0.9), e.clientX-rect.left, e.clientY-rect.top);
+    } else {
+      m.tx -= e.deltaX; m.ty -= e.deltaY; apply();
+    }
+  }, {passive:false});
+
+  /* drag to pan */
+  let pan=null;
+  wrap.addEventListener('mousedown', e=>{ if(e.target.closest('.topo-node'))return; pan={x:e.clientX,y:e.clientY,tx:m.tx,ty:m.ty}; wrap.classList.add('panning'); });
+  window.addEventListener('mousemove', e=>{ if(!pan)return; m.tx=pan.tx+e.clientX-pan.x; m.ty=pan.ty+e.clientY-pan.y; apply(); });
+  window.addEventListener('mouseup', ()=>{ pan=null; wrap.classList.remove('panning'); });
+  wrap.addEventListener('click', e=>{ if(e.target===wrap||e.target===svg){ pop.classList.remove('open'); clearSelect(gN); } });
+
+  apply();
+  requestAnimationFrame(fit);
+}
+
+function clearSelect(gN){
+  gN.querySelectorAll('.topo-node').forEach(n=>n.classList.remove('selected'));
+}
+function selectNode(mountId, n, g, gN){
+  clearSelect(gN);
+  g.classList.add('selected');
+  const host = document.getElementById(mountId);
+  const pop = host.querySelector('.topo-popover');
+  const chipClass = {agent:'chip-blue',role:'chip-purple',sop:'chip-cyan',skill:'chip-orange',tool:'chip-green'}[n.kind];
+  pop.innerHTML = `
+    <button class="tp-close" onclick="this.parentElement.classList.remove('open')">✕</button>
+    <div class="tp-kind" style="color:${n.color}">${n.sub}</div>
+    <h5>${n.label}</h5>
+    <div class="tp-desc">${n.desc || (n.kind==='tool' ? 'MCP tool invoked under the tenant-namespaced slug.' : KIND_LABELS[n.kind]+' node in the agent topology.')}</div>
+    <div class="tp-tools">${n.tools.map(t=>`<span class="chip ${chipClass}" style="font-size:10px">${t}</span>`).join('')}</div>`;
+  pop.classList.add('open');
+  /* place popover near node, clamped to viewport */
+  const compRect = host.querySelector('.topo-component').getBoundingClientRect();
+  const m = mounts[mountId];
+  const px = Math.min(compRect.width - 280, Math.max(8, m.tx + (n.x + n.w + 12) * m.zoom));
+  const py = Math.min(compRect.height - 160, Math.max(8, m.ty + n.y * m.zoom));
+  pop.style.left = px+'px'; pop.style.top = py+'px';
+}
+
+/* highlight connected edges on node hover (parity behaviour) */
+document.addEventListener('mouseover', e=>{
+  const node = e.target.closest('.topo-node');
+  document.querySelectorAll('.topo-component').forEach(c=>{
+    c.querySelectorAll('.topo-edge').forEach(p=>p.classList.remove('dimmed'));
+    c.querySelectorAll('.topo-node').forEach(n=>n.classList.remove('dimmed'));
+  });
+  if(!node) return;
+  const comp = node.closest('.topo-component');
+  /* highlight only direct connections */
+  comp.querySelectorAll('.topo-node').forEach(n=>{
+    if(n!==node){ n.classList.add('dimmed'); n.style.opacity=.55; }
+  });
+  comp.querySelectorAll('.topo-edge').forEach(p=>{ p.classList.add('dimmed'); });
+});
+document.addEventListener('mouseout', e=>{
+  if(!e.target.closest('.topo-node')) return;
+  document.querySelectorAll('.topo-component').forEach(c=>{
+    c.querySelectorAll('.topo-edge').forEach(p=>p.classList.remove('dimmed'));
+    c.querySelectorAll('.topo-node').forEach(n=>{ n.classList.remove('dimmed'); n.style.opacity=''; });
+  });
+});
+
+/* ═══════════════ PREVIEW SCREEN STATE ═══════════════ */
+let currentAgent = 'analyst';
+let permDenied = false;
+
+function renderAgentList(){
+  const tb = document.getElementById('agentList');
+  tb.innerHTML = '';
+  Object.entries(AGENTS).forEach(([k,a])=>{
+    const tr = document.createElement('tr');
+    if(k===currentAgent) tr.classList.add('selected');
+    tr.innerHTML = `<td><div style="display:flex;align-items:center;gap:10px">
+      <span class="status-dot ${a.restricted?'dot-gray':'dot-green'}"></span>
+      <div><div style="font-weight:500">${a.name}</div>
+      <div class="text-xs text-secondary">${a.version} · ${a.model}</div></div></div></td>`;
+    tr.onclick = ()=>{ currentAgent=k; renderAgentList(); renderSpec(); renderTopology(); };
+    tb.appendChild(tr);
+  });
+}
+function renderSpec(){
+  const a = AGENTS[currentAgent];
+  const el = document.getElementById('specPanel');
+  if(a.restricted){
+    el.innerHTML = `<div class="text-sm text-secondary" style="padding:10px 0">No configuration details available — access denied.</div>`;
+    return;
+  }
+  const skills = a.nodes.filter(n=>n.kind==='skill').length;
+  const tools = a.nodes.filter(n=>n.kind==='tool').length;
+  el.innerHTML = `
+    <div class="spec-row"><span class="k">Description</span><span class="v">${a.desc}</span></div>
+    <div class="spec-row"><span class="k">Model</span><span class="v">${a.model}</span></div>
+    <div class="spec-row"><span class="k">Role</span><span class="v">${a.role}</span></div>
+    <div class="spec-row"><span class="k">Skills</span><span class="v">${skills}</span></div>
+    <div class="spec-row"><span class="k">MCP Tools</span><span class="v">${tools}</span></div>`;
+}
+function renderTopology(){
+  const a = AGENTS[currentAgent];
+  permDenied = !!a.restricted;
+  const mount = document.getElementById('topoMountPreview');
+  document.getElementById('topoTitle').textContent = a.name + ' — Topology';
+  document.getElementById('topoSubtitle').textContent = permDenied
+    ? '' : `${a.nodes.length} nodes · ${a.edges.length} relationships · zoom in/out available`;
+  document.getElementById('btnPerm').textContent = permDenied ? 'Back to permitted agent' : 'Toggle no-permission agent';
+  if(permDenied){
+    mount.innerHTML = `
+      <div class="topo-component" style="height:100%">
+        <div class="perm-error" style="height:100%">
+          <div class="pe-icon">🔒</div>
+          <h4>Permission denied</h4>
+          <p>You do not have permission to view the topology for <strong>${a.name}</strong>. Contact your administrator if you believe this is an error. <span class="text-xs">(Graceful localized error — never a broken or empty diagram.)</span></p>
+          <button class="btn btn-secondary btn-sm" onclick="togglePermission()">Back</button>
+        </div>
+      </div>`;
+    return;
+  }
+  mount.innerHTML = '';
+  mountTopology('topoMountPreview', currentAgent);
+}
+function togglePermission(){
+  currentAgent = permDenied ? 'analyst' : 'restricted';
+  renderAgentList(); renderSpec(); renderTopology();
+  toast(permDenied ? '403 — topology:read denied for Finance Auditor' : 'Topology loaded for Data Analyst', permDenied?'info':'success');
+}
+function verifyIdentical(){
+  toast('Preview and Management Panel render the same shared AgentTopologyDiagram component — identical layout, visuals & zoom', 'success');
+}
+
+/* ═══════════════ NAV / TOAST ═══════════════ */
+const TITLES = {preview:'Agent Preview', manage:'Agent Management Panel', compare:'Before / After'};
+function showView(v){
+  document.querySelectorAll('.view').forEach(x=>x.classList.remove('active'));
+  document.getElementById('view-'+v).classList.add('active');
+  document.getElementById('topbarTitle').textContent = TITLES[v];
+  document.querySelectorAll('.nav-item').forEach(n=>{
+    n.classList.toggle('active', n.textContent.trim()===TITLES[v]);
+  });
+  /* mount compare diagram lazily */
+  if(v==='compare' && !document.getElementById('topoMountCompare').hasChildNodes()){
+    mountTopology('topoMountCompare','triage');
+  }
+}
+function toast(msg, type){
+  const c = document.getElementById('toastContainer');
+  const t = document.createElement('div');
+  t.className = 'toast toast-'+type; t.textContent = msg;
+  c.appendChild(t);
+  setTimeout(()=>t.remove(), 3200);
+}
+
+/* init */
+renderAgentList(); renderSpec(); renderTopology();
+mountTopology('topoMountManage','analyst');
+document.getElementById('topoTitleManage').textContent = 'Data Analyst — Topology';
+document.getElementById('topoSubtitleManage').textContent = 'Reference behaviour — unchanged by this epic';
+</script>
+</body>
+</html>

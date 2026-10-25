@@ -20,6 +20,7 @@ Parthenon is self-serve SaaS-capable: a visitor can sign up with an email and pa
 - **Agent Identity** — OIDC agent-realm sign-in, encrypted token storage and automatic refresh, and identity-to-role assignment
 - **Agent Execution** — Asynchronous agent session lifecycle from submission through completion, powered by the deep agent framework
 - **Agent Plan Mode** — Pre-execution plan generation and preview for agent types
+- **Sandboxed Scripting & Model-Authored Composition** — Software 3.0 compiled workflows: sandboxed model-authored scripts, opt-in optimize-and-verify runs that author a separate optimized implementation plan (scripts-as-tools or fully-scripted zero-model mode) with unconditional fallback to the model-driven path, a mock model layer for deterministic zero-cost testing, and trustworthy token-savings accounting. See [Sandboxed Scripting](features/sandboxed-scripting.md)
 - **Agent Session Logs** — Full system instruction and user prompt captured for every agent run, visible in the UI for audit and traceability
 - **Agent Runtime Security** — Service-segregation boundary enforcement, internal allowlist, and API key authentication for external agents
 - **Agent A2A Communication and Slug Enforcement** — Dynamic agent-to-agent continuity, delegation governance, and slug-safe naming for routing-critical entities

@@ -31,6 +31,9 @@ class OAuthInitiateRequest(BaseModel):
     scope: str | None = None
     session_name: str | None = None
     session_description: str | None = None
+    # Existing session being re-authenticated — the OAuth callback updates
+    # this row in place instead of creating a duplicate session.
+    session_id: str | None = None
 
 
 class OAuthInitiateResponse(BaseModel):

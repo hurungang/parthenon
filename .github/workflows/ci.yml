@@ -74,6 +74,9 @@ jobs:
       SECRET_KEY: test-secret-key
       CREDENTIAL_VAULT_KEY: test-32-byte-key-for-aes-256-enc!
       ENVIRONMENT: test
+      # LLM Mock Layer (zero-LLM CI runs): backend tests run with the mock
+      # provider available; individual tests opt in via LLM_MOCK_MODE.
+      LLM_MOCK_MODE: off
 
     steps:
       - uses: actions/checkout@v4

@@ -30,6 +30,17 @@ vi.mock('../components/executions/LogViewer', () => ({
   LogViewer: () => <div data-testid="log-viewer" />,
 }))
 
+vi.mock('../components/executions/OutputTypeResultTab', () => ({
+  OutputTypeResultTab: (props: { outputData?: unknown }) => {
+    const od = props.outputData
+    const text =
+      od !== null && typeof od === 'object' && 'result' in od
+        ? String((od as { result: unknown }).result)
+        : JSON.stringify(od)
+    return <div data-testid="output-result">{text}</div>
+  },
+}))
+
 vi.mock('../pages/agents/AgentJobPage', () => ({
   AgentJobPage: () => <div data-testid="agent-job-page" />,
 }))
@@ -57,8 +68,25 @@ vi.mock('../hooks/useSessionExecutionLogStream', () => ({
   }),
 }))
 
+vi.mock('../components/agents/AgentTypeDetailsDialog', () => ({
+  AgentTypeDetailsDialog: (props: { agentTypeId: string | null; initialTab?: number }) => (
+    <div
+      data-testid="agent-type-details-dialog"
+      data-agent-type-id={props.agentTypeId}
+      data-initial-tab={props.initialTab}
+    />
+  ),
+}))
+
 describe('AgentExecutionDetailsDialog', () => {
   beforeEach(() => {
+    if (!Object.prototype.hasOwnProperty.call(Element.prototype, 'scrollIntoView')) {
+      Object.defineProperty(Element.prototype, 'scrollIntoView', {
+        value: () => undefined,
+        writable: true,
+        configurable: true,
+      })
+    }
     shared.mockGet.mockReset()
     shared.streamedEntries = []
     shared.mockGet
@@ -136,5 +164,79 @@ describe('AgentExecutionDetailsDialog', () => {
     })
 
     scrollIntoViewSpy.mockRestore()
+  })
+
+  it('shows a "View agent" header link that opens the agent type details dialog on the Overview tab', async () => {
+    if (!Object.prototype.hasOwnProperty.call(Element.prototype, 'scrollIntoView')) {
+      Object.defineProperty(Element.prototype, 'scrollIntoView', {
+        value: () => undefined,
+        writable: true,
+        configurable: true,
+      })
+    }
+    shared.mockGet.mockReset()
+    shared.mockGet
+      .mockResolvedValueOnce({ data: [] }) // logs
+      .mockResolvedValueOnce({
+        data: {
+          id: 'sess-9',
+          agent_type_id: 'at-42',
+          status: 'completed',
+          // Script-path session: final output stored as a raw string.
+          output_data: 'Hello from the render step',
+        },
+      }) // session
+      .mockResolvedValueOnce({ data: [] }) // conversation history
+
+    const user = (await import('@testing-library/user-event')).default
+    render(
+      <AgentExecutionDetailsDialog open sessionId="sess-9" onClose={vi.fn()} />,
+    )
+
+    // Header link (not inside the Result tab)
+    const link = await screen.findByRole('button', { name: 'agents.sessions.viewAgent' })
+    await user.click(link)
+
+    const dialog = screen.getByTestId('agent-type-details-dialog')
+    expect(dialog.getAttribute('data-agent-type-id')).toBe('at-42')
+    // Default Overview tab (the Scripts tab no longer exists).
+    expect(dialog.getAttribute('data-initial-tab')).toBe('0')
+    // The old Result-tab "View agent scripts" button is gone.
+    expect(
+      screen.queryByRole('button', { name: 'agents.sessions.viewAgentScripts' }),
+    ).toBeNull()
+  })
+
+  it('renders a raw string output_data as result text, not a JSON object', async () => {
+    if (!Object.prototype.hasOwnProperty.call(Element.prototype, 'scrollIntoView')) {
+      Object.defineProperty(Element.prototype, 'scrollIntoView', {
+        value: () => undefined,
+        writable: true,
+        configurable: true,
+      })
+    }
+    shared.mockGet.mockReset()
+    shared.mockGet
+      .mockResolvedValueOnce({ data: [] })
+      .mockResolvedValueOnce({
+        data: {
+          id: 'sess-10',
+          agent_type_id: 'at-42',
+          status: 'completed',
+          output_data: 'Plain render text',
+        },
+      })
+      .mockResolvedValueOnce({ data: [] })
+
+    render(
+      <AgentExecutionDetailsDialog open sessionId="sess-10" onClose={vi.fn()} />,
+    )
+
+    await screen.findByRole('button', { name: 'agents.sessions.viewAgent' })
+    // OutputTypeResultTab is rendered (not mocked) — the string is passed as
+    // { result: string } so the extracted text renders instead of raw JSON.
+    await waitFor(() => {
+      expect(screen.getByText('Plain render text')).toBeDefined()
+    })
   })
 })

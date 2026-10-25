@@ -106,6 +106,7 @@ from app.services.agents.model_config_service import (
 )
 from app.services.agents.permission_manager import get_shared_permission_manager
 from app.services.agents.plan_generation_service import PlanGenerationService
+from app.services.agents.optimized_plan_service import OptimizedPlanService
 from app.services.agents.role_service import (
     AgentRoleConflictError,
     AgentRoleNotFoundError,
@@ -150,6 +151,7 @@ _runtime_topology_controller = RuntimeTopologyController()
 _termination_orchestrator = TerminationOrchestrator()
 _lifecycle_handler = GatewayLifecycleHandler()
 _plan_generation_service = PlanGenerationService()
+_optimized_plan_service = OptimizedPlanService()
 _agent_type_service = AgentTypeService()
 
 # Wire the permission manager into the role service so it can invalidate the cache
@@ -679,11 +681,53 @@ async def launch_agent_session(
         # refunds on completion/failure.
         if quota_tenant_id is not None:
             await get_tenant_quota_service().increment_executions(db, quota_tenant_id)
+
+        launch_input = body.input_data
+        # Opt-in optimization: "Run with optimization" turns THIS execution into
+        # the optimization opportunity — the session runs as the
+        # "optimize-and-verify" command (the agent authors and verifies scripts
+        # against REAL tool-call executions while accomplishing the user's real
+        # task) and persists the verified optimized plan for reuse. Reuses the
+        # existing ``__command`` side-execution marker mechanism end to end.
+        if body.optimize:
+            from app.services.agents.command_prompts import (
+                OPTIMIZE_AND_VERIFY_SLUG,
+                build_command_mission,
+                get_command_prompt,
+            )
+
+            command_prompt = await get_command_prompt(db, OPTIMIZE_AND_VERIFY_SLUG)
+            mission = build_command_mission(
+                command_prompt.prompt_text, agent_type_id=body.agent_type_id
+            )
+            user_input = dict(body.input_data or {})
+            real_task = (
+                json.dumps(user_input, ensure_ascii=False, default=str)
+                if user_input
+                else "(no structured input — the mission above is the whole task)"
+            )
+            user_input["__command"] = OPTIMIZE_AND_VERIFY_SLUG
+            user_input["__command_agent_type_id"] = str(body.agent_type_id)
+            user_input["message"] = (
+                f"{mission}\n\n## Real task for this run\n"
+                "The user launched you with the input below. Accomplish THIS "
+                "task with REAL tool-call executions while authoring and "
+                "verifying the scripts against those real calls — the tool "
+                "calls run for real; there is no stub client.\n"
+                f"{real_task}"
+            )
+            launch_input = user_input
+
         result = await _lifecycle_handler.launch(
             agent_type_id=body.agent_type_id,
-            input_data=body.input_data,
+            input_data=launch_input,
             user_id=user_id,
             db=db,
+            # Multi-tenancy: propagate the resolved calling tenant so the
+            # execution trigger is signed end to end (CC → CH → AR). AR
+            # re-forwards the verified set on its own CC data-plane calls
+            # (e.g. mark_session_running) — without it those calls 401.
+            tenant_context=tenant_context if tenant_context.is_set else None,
         )
     except AgentAuthError as exc:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc))
@@ -1668,6 +1712,16 @@ async def regenerate_agent_type_plan(
     if not agent_type:
         raise HTTPException(status_code=404, detail="Agent type not found")
 
+    # Plan regeneration invalidates serving scripts: any currently compiled
+    # script version was authored from the OLD plan. Retire it and clear the
+    # serving pointer so the next execution re-runs the LLM, re-authors the
+    # composition from the NEW plan, and auto-compiles a matching script.
+    from app.services.script_registry import ScriptRegistryService
+
+    await ScriptRegistryService().retire_serving_versions(
+        db, agent_type.id, actor="plan_regeneration"
+    )
+
     await _plan_generation_service.generate_plan(agent_type, db)
 
     result = await db.execute(
@@ -1681,6 +1735,121 @@ async def regenerate_agent_type_plan(
     )
     agent_type = result.scalar_one()
     return AgentTypeRead.model_validate(agent_type)
+
+
+class OptimizePlanRetireResponse(BaseModel):
+    retired: bool
+    plans_removed: int
+
+
+@AgentTypeRouter.post(
+    "/{type_id}/optimized-plan/retire", response_model=OptimizePlanRetireResponse
+)
+async def retire_agent_type_optimized_plan(
+    type_id: uuid.UUID,
+    db: DbSession,
+    _: dict = Depends(require_permission(RT_AGENT, "update")),
+) -> OptimizePlanRetireResponse:
+    """Retire ("clear") the optimized plan for an agent type.
+
+    The plan rows are MARKED ``retired`` (kept for reference, never deleted);
+    the next Run Agent flow finds no `ready` optimized plan and offers the
+    opt-in optimization dialog again — giving the user the opportunity to
+    redo the optimization. Serving script versions compiled from the retired
+    plan are retired too, so no stale script can shadow the next execution
+    (mirrors plan regeneration).
+    """
+    agent_type = await db.get(AgentType, type_id)
+    if not agent_type:
+        raise HTTPException(status_code=404, detail="Agent type not found")
+
+    removed = await _optimized_plan_service.retire_optimized_plan(db, type_id)
+
+    from app.services.script_registry import ScriptRegistryService
+
+    await ScriptRegistryService().retire_serving_versions(
+        db, type_id, actor="optimized_plan_retirement"
+    )
+    await db.commit()
+    logger.info(
+        "Optimized plan retired for agent_type=%s (%d plan row(s) marked retired)",
+        type_id,
+        removed,
+    )
+    return OptimizePlanRetireResponse(retired=True, plans_removed=removed)
+
+
+@AgentTypeRouter.get("/{type_id}/optimized-plan")
+async def get_agent_type_optimized_plan(
+    type_id: uuid.UUID,
+    db: DbSession,
+    _: dict = Depends(require_permission(RT_AGENT, "read")),
+) -> dict[str, Any]:
+    """Return the current (latest) optimized plan for an agent type."""
+    optimized = await _optimized_plan_service.get_latest_optimized_plan(db, type_id)
+    if optimized is None:
+        raise HTTPException(status_code=404, detail="No optimized plan exists yet")
+    return _optimized_plan_payload(optimized)
+
+
+class OptimizePlanFeedbackRequest(BaseModel):
+    feedback: str = Field(min_length=1, max_length=10_000)
+
+
+@AgentTypeRouter.post("/{type_id}/optimize-plan/feedback")
+async def submit_optimize_plan_feedback(
+    type_id: uuid.UUID,
+    payload: OptimizePlanFeedbackRequest,
+    db: DbSession,
+    _: dict = Depends(require_permission(RT_AGENT, "update")),
+) -> dict[str, Any]:
+    """Accumulate user feedback on the current optimized plan: the LLM
+    summarizes the feedback (one-shot) and the {created_at, raw_feedback,
+    summary} entry is stored on the plan. ALL stored comments are included in
+    the authoring prompt when the optimized plan is regenerated."""
+    result = await db.execute(select(AgentType).where(AgentType.id == type_id))
+    agent_type = result.scalar_one_or_none()
+    if not agent_type:
+        raise HTTPException(status_code=404, detail="Agent type not found")
+
+    try:
+        optimized = await _optimized_plan_service.add_feedback(
+            agent_type, db, payload.feedback
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    await db.commit()
+
+    return {
+        "id": str(optimized.id),
+        "feedback_comments": optimized.feedback_comments or [],
+    }
+
+
+def _optimized_plan_payload(optimized: Any) -> dict[str, Any]:
+    """Serialize an OptimizedImplementationPlan (incl. the new result fields)."""
+    plan_steps = optimized.plan_steps or []
+    return {
+        "id": str(optimized.id),
+        "agent_type_id": str(optimized.agent_type_id),
+        "agent_plan_id": str(optimized.agent_plan_id),
+        "status": optimized.status.value,
+        "fully_scripted": optimized.fully_scripted,
+        "error": optimized.error,
+        "steps": plan_steps,
+        "steps_count": len(plan_steps),
+        "scripts_authored": sum(
+            1 for step in plan_steps
+            if isinstance(step, dict) and step.get("python_source")
+        ),
+        "feedback_comments": optimized.feedback_comments or [],
+        "generated_at": optimized.generated_at.isoformat()
+        if optimized.generated_at
+        else None,
+        "updated_at": optimized.updated_at.isoformat()
+        if optimized.updated_at
+        else None,
+    }
 
 
 @AgentTypeRouter.delete("/{type_id}", status_code=status.HTTP_204_NO_CONTENT)

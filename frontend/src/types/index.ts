@@ -255,7 +255,7 @@ export interface AgentJob {
   status: AgentJobStatus
   started_at: string | null
   completed_at: string | null
-  output_data: Record<string, unknown> | null
+  output_data: Record<string, unknown> | string | null
   error_message: string | null
   conversation_history: Array<{ role: string; content: string }> | null
   stop_category?: string | null
@@ -435,6 +435,9 @@ export interface PlanStep {
   type: string
   name: string
   description: string | null
+  /** Script linkage (E4a): present when the step is backed by a compiled script. */
+  script_definition_id?: string | null
+  script_version_id?: string | null
 }
 
 export interface TopologyNode {
@@ -675,7 +678,7 @@ export interface ScheduledJob {
 export interface LinkedAgentSession {
   id: string
   status: AgentJobStatus
-  output_data: Record<string, unknown> | null
+  output_data: Record<string, unknown> | string | null
   error_message: string | null
   started_at: string | null
   completed_at: string | null

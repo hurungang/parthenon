@@ -13,8 +13,11 @@ erDiagram
     SCRIPT_VERSION ||--o{ VERIFICATION_RUN : "verified by"
     SCRIPT_VERSION ||--o{ SCRIPT_EXECUTION_RECORD : "executed as"
     SCRIPT_EXECUTION_RECORD ||--o{ FALLBACK_EVENT : "may trigger"
-    FALLBACK_EVENT ||..o| SCRIPT_VERSION : "spawns repaired candidate"
-    CONVERSATION_SESSION ||..o{ SCRIPT_EXECUTION_RECORD : "occurred within"
+    FALLBACK_EVENT }o--|| SCRIPT_VERSION : "involves"
+    FALLBACK_EVENT ||--o{ REPAIR_ATTEMPT : "drives"
+    REPAIR_ATTEMPT ||..o| SCRIPT_VERSION : "produces repaired candidate"
+    SCRIPT_VERSION ||--o{ REPAIR_ATTEMPT : "repaired-toward"
+    CONVERSATION_SESSION ||--o{ SCRIPT_EXECUTION_RECORD : "is identity/permission context of"
 
     SCRIPT_DEFINITION {
         string name
@@ -32,6 +35,7 @@ erDiagram
         string declarative_step_graph
         string compiled_from_source
         string parent_version
+        string repaired_from_version
         string created_by
     }
     VERIFICATION_RUN {
@@ -45,12 +49,12 @@ erDiagram
     }
     SCRIPT_EXECUTION_RECORD {
         string script_version_used
-        string execution_mode
         string outcome
         string duration
         string tools_invoked
         string model_backed_steps_used
         string session_reference
+        string identity_parity_confirmed
         string tokens_saved_estimate
     }
     FALLBACK_EVENT {
@@ -59,6 +63,13 @@ erDiagram
         string resulting_action
         string script_health_impact
         string script_version_involved
+        string repair_attempts_used
+    }
+    REPAIR_ATTEMPT {
+        string defect_diagnosis
+        string diff_applied
+        string retry_outcome
+        string repaired_candidate_version
     }
 ```
 
@@ -80,7 +91,8 @@ An **immutable** revision of a Script Definition. Versioning warrants a separate
 - **Version label** — ordered identity within the parent script (1).
 - **Lifecycle status** — `draft / verified / compiled / retired` for this version (1).
 - **Content** — the declarative step graph (tool calls, transforms, model-backed steps) by reference — content is stored via Control Center, never in Agent Runtime (1).
-- **Parent version** — the prior version this was repaired/re-verified from (0..1).
+- **Parent version** — the prior version this was derived from (0..1).
+- **Repaired-from lineage** — when this version was produced by self-improvement, the defective version it repairs (0..1; E9). Distinct from generic parent lineage so defect-driven repair chains are auditable (E10, G2).
 - **Created by** — the run or actor that produced this version (1).
 
 ### 1.3 Verification Run
@@ -95,29 +107,42 @@ The evidence record of shadow-running a Script Version against an LLM execution 
 
 ### 1.4 Script Execution Record
 
-One execution of a compiled script (or its fallback run). Relates to the existing **Agent Session / ConversationSession** concept — a compiled run occurs within or on behalf of a session (G2 audit).
+One execution of a compiled script (or its fallback run). Execution is **bound to the agent session**: the session reference is the identity and permission context of the run — the script's MCP tool calls carry the same dual identities as the agent (identity parity, E7/SEC1). **Invocation contract:** the identity context of the owning agent type's session is **always passed** to every script execution — the script has **no identity of its own**, no credentials, and never authenticates independently; all tool calls execute strictly under the session's identities. There is **no execution-mode attribute**: script-first execution with unconditional LLM fallback is fixed platform behavior, not configuration (E1–E3).
 
 - **Script version used** — exactly 1.
-- **Execution mode in effect** — `llm` / `compiled-with-fallback` / `compiled-only` (1).
+- **Session reference** — the agent session the run is bound to; its identity/permission context (exactly 1; E7).
+- **Identity parity confirmed** — evidence that the script ran under the session's dual identities, with no separate or anonymous identity (1; E7, SEC1).
 - **Outcome** — success, validation failure, or fell back (1).
 - **Duration** — elapsed time (1).
-- **Tools invoked** — the tool calls made, mirroring existing tool-call records (0..many).
+- **Tools invoked** — the MCP tool calls made, mirroring existing tool-call records (0..many).
 - **Model-backed steps used** — semantic-bridge / decision steps that consumed model capacity (0..many; S3).
 - **Token savings estimate** — LLM tokens not consumed versus LLM baseline (1; G3).
+- **Repair lineage (where relevant)** — when the run is a post-repair retry, its repair attempts trace back to the defect that triggered it (0..many; E9/E10, G2).
 
 ### 1.5 Fallback Event
 
-Recorded whenever a compiled run fell back to the LLM path (F1, F2). Each belongs to exactly one execution record; each references the script version involved.
+Recorded whenever a script run failed and execution fell back to the LLM path (F1, F2, E2). Fallback is **unconditional and mode-independent**: every automation failure — script error, tool schema mismatch, output validation failure, or repair exhaustion — always completes via the LLM path. Each event belongs to exactly one execution record and references the script version involved.
 
-- **Trigger reason** — `execution error` / `tool schema mismatch` / `output validation failure` (1).
+- **Trigger reason** — `execution error` / `tool schema mismatch` / `output validation failure` / `repair exhaustion` (1).
 - **Failure detail** — context needed for repair (1).
-- **Resulting action** — LLM completed the run; repaired candidate produced or not (1).
+- **Resulting action** — LLM completed the run; repaired candidate produced or not (1; F3).
 - **Script health impact** — contribution to the owning script's health degradation (1; F4).
-- **Repaired candidate** — link to the successor Script Version, if repair produced one (0..1).
+- **Script version involved** — the defective version (exactly 1).
+- **Repair attempts used** — how many guardrail-bounded retry attempts were made within this failure episode (1; E9/E10).
+- **Repair lineage** — the Repair Attempts linking the defect to the repaired candidate version, if any (0..many; E9).
 
-### 1.6 Execution Mode Configuration
+### 1.6 Repair Attempt
 
-Per-agent / per-workflow execution mode setting (`llm` / `compiled-with-fallback` / `compiled-only`), operator-managed via Control Center (E1). One setting per agent-type/workflow pair; referenced when resolving how a run executes.
+One bounded, agent-driven repair cycle within a fallback episode (E9, E10). Many attempts may occur per fallback event, bounded by execution guardrails; exhaustion of the budget triggers unconditional fallback with reason capture (E2).
+
+- **Defect diagnosis** — the agent's recorded diagnosis of the script defect (1).
+- **Diff applied** — the change applied to produce the candidate (1).
+- **Retry outcome** — success or failure of the retried script version (1).
+- **Repaired candidate version** — the successor Script Version produced, if any (0..1); the candidate must re-verify (V1) before promotion.
+
+### 1.7 Removed: Execution Mode Configuration
+
+The previously-planned `ExecutionModeConfiguration` entity (per-agent / per-workflow `llm` / `compiled-with-fallback` / `compiled-only` setting) is **removed**. There is nothing to configure: script-first execution with unconditional LLM fallback is the single fixed strategy (E1–E3). Scripts always bind to the agent session for identity/permissions (E7); no mode-conditional execution semantics exist.
 
 ## 2. Modified Entities
 
@@ -131,16 +156,18 @@ Execution *records* for script runs are new entities (§1.4) rather than modific
 
 ## 3. Removed Entities / Fields
 
-**None.** No existing entity or field is removed or repurposed. The change is purely additive (capability extension).
+- **`ExecutionModeConfiguration`** (§1.7) — removed during refinement; execution strategy is fixed platform behavior, not configuration. Must be dropped from `script_execution.py` via a follow-up Alembic migration (see §4).
+
+No other existing entity or field is removed or repurposed.
 
 ## 4. Schema Files Needing Updates (`source.schema` = `backend/app/db/models/`)
 
-All new entities live behind Control Center (sole DB gateway); Agent Runtime consumes registry data only via Control Center APIs. New models and changes:
+All new entities live behind Control Center (sole DB gateway); Agent Runtime consumes registry data only via Control Center APIs. There is **no standalone admin module or page** for scripts: the registry is persisted and served via Control Center REST APIs, and its governance/consumption surface is the **Scripts tab of the Agent Type detail dialog**. New models and changes:
 
 | File | Change |
 |---|---|
-| **`backend/app/db/models/script_registry.py`** *(new)* | Host `ScriptDefinition`, `ScriptVersion`, `VerificationRun`, `FallbackEvent` — one module for the registry cluster, following the project's one-domain-per-file pattern (cf. `agent_security.py`, `scheduling.py`). |
-| **`backend/app/db/models/script_execution.py`** *(new)* | Host `ScriptExecutionRecord` and `ExecutionModeConfiguration`. |
+| **`backend/app/db/models/script_registry.py`** *(exists)* | Hosts `ScriptDefinition`, `ScriptVersion`, `VerificationRun`, `FallbackEvent`. Add `RepairAttempt` and the `repaired_from` lineage on `ScriptVersion`. |
+| **`backend/app/db/models/script_execution.py`** *(exists)* | Hosts `ScriptExecutionRecord`. **`ExecutionModeConfiguration` lives in this file and must be dropped via a follow-up Alembic migration** (see §3 / §1.7); apply per AGENTS.md migration rules (`alembic upgrade head`) before testing. |
 | **`backend/app/db/models/agents.py`** | Add FK relationships on `AgentType` and `AgentPlan` to the new script entities (existing classes otherwise unchanged). |
 | **`backend/app/db/models/__init__.py`** | Export the new models. |
 
@@ -148,7 +175,7 @@ All new entities live behind Control Center (sole DB gateway); Agent Runtime con
 
 ## 5. Updates to `docs/master/data-model/`
 
-- **`overview.md`** — add a Software 3.0 / Workflow Compilation section: introduce Script Definition, Script Version, Verification Run, Script Execution Record, Fallback Event, Execution Mode Configuration; state they are Control-Center-owned and Agent Runtime accesses them via APIs only.
+- **`overview.md`** — add a Software 3.0 / Workflow Compilation section: introduce Script Definition, Script Version, Verification Run, Script Execution Record, Fallback Event, Repair Attempt; state they are Control-Center-owned and Agent Runtime accesses them via APIs only; note there is no execution-mode configuration.
 - **`modules/agents/`** — extend the agent-type entity page with the Agent Type → Script Definitions ownership relationship and the Agent Plan → script lineage.
 - **New module page `modules/workflow-compilation/`** (or a page within the closest existing module, e.g. `modules/operations/`) — the script registry ERD from §1, lifecycle rules (`draft → verified → compiled → retired`), health/fallback semantics, and verification evidence retention.
-- **`modules/operations/`** (execution/audit pages) — document Script Execution Records as a first-class execution provenance kind alongside LLM runs, including mode, duration, tools invoked, and token savings.
+- **`modules/operations/`** (execution/audit pages) — document Script Execution Records as a first-class execution provenance kind alongside LLM runs, including outcome (script run vs fell back), duration, tools invoked, and token savings.

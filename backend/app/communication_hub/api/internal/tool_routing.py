@@ -36,6 +36,19 @@ router = APIRouter(prefix="/internal/tools", tags=["Internal - Tool Routing"])
 #: (``tool_registry_bridge``) dispatches on.
 DECISION_TOOL_PREFIX = f"decision{TOOL_SEPARATOR}"
 
+#: Semantic-bridge tools are virtual (no ``mcp_tools`` row) and surface as
+#: ``semantic____<name>`` — a one-shot LLM completion executed at Control
+#: Center with the agent type's configured model (same virtual-tool pattern
+#: as ``decision____``).
+SEMANTIC_TOOL_PREFIX = f"semantic{TOOL_SEPARATOR}"
+
+#: Script tools are virtual (no ``mcp_tools`` row) and surface as
+#: ``script____<name>``. Executing a script is AGENT-RUNTIME work (top-priority
+#: rule: agents/scripts only run in AR), so CH forwards the invocation to the
+#: AR script-execution endpoint — same virtual-tool pattern as
+#: ``decision____``/``semantic____``, identity = the session's agent.
+SCRIPT_TOOL_PREFIX = f"script{TOOL_SEPARATOR}"
+
 # Session-level cache of user JWTs for dual-identity tool calls
 # Keyed by session_id, populated by WebSocket chat on user auth
 _user_jwt_by_session: dict[str, str] = {}
@@ -105,6 +118,12 @@ class ToolCallRequest(BaseModel):
     agent_type_id: str
     user_jwt: str | None = None  # User identity JWT for dual-identity passthrough
     conv_session_id: str | None = None  # Parent conversation session ID for conversation-context interventions
+    # Script provenance tagging (G2): "script" | "llm" and originating version.
+    provenance: str | None = None
+    script_version: str | None = None
+    # Inline verification path (CC optimize-and-verify): full python_source
+    # forwarded verbatim to AR — executed there directly, no registry lookup.
+    python_source: str | None = None
 
 
 class ToolCallResponse(BaseModel):
@@ -146,6 +165,10 @@ async def route_tool_call(
     route_type = "system" if _is_system_tool(body.tool_name) else "mcp"
     if body.tool_name.startswith(DECISION_TOOL_PREFIX):
         route_type = "decision"
+    if body.tool_name.startswith(SEMANTIC_TOOL_PREFIX):
+        route_type = "semantic"
+    if body.tool_name.startswith(SCRIPT_TOOL_PREFIX):
+        route_type = "script"
     logger.info(
         "Tool call request: tool=%s, session=%s, route_type=%s",
         body.tool_name,
@@ -157,6 +180,10 @@ async def route_tool_call(
                 "session_id": body.session_id,
                 "agent_type_id": body.agent_type_id,
                 "route_type": route_type,
+                # Provenance audit trail (G2): script calls are distinguishable
+                # from LLM agent calls; permission path is identical.
+                "provenance": body.provenance or "llm",
+                "script_version": body.script_version,
             }
         },
     )
@@ -175,6 +202,19 @@ async def route_tool_call(
     # "MCP tool not found".
     if route_type == "decision":
         return await _route_to_decision_tool(body, request)
+
+    # Virtual semantic-bridge tools parse like MCP tools (server slug
+    # ``semantic``) but have no mcp_tools row — check before the MCP
+    # fallback, same as decision tools.
+    if route_type == "semantic":
+        return await _route_to_semantic_tool(body, request)
+
+    # Virtual script tools parse like MCP tools (server slug ``script``) but
+    # have no mcp_tools row — check before the MCP fallback, same as
+    # decision/semantic tools. Forwarded to Agent Runtime (scripts can only
+    # run there) with the session's agent identity.
+    if route_type == "script":
+        return await _route_to_script_tool(body, request)
 
     # System tools are identified by the canonical system____ prefix.
     # Also accept legacy bare names for backward compatibility (is_system_tool handles both).
@@ -300,6 +340,218 @@ async def _route_to_decision_tool(body: ToolCallRequest, request: Request) -> To
                 }
             },
         )
+        raise HTTPException(status_code=502, detail=error_msg)
+
+
+async def _route_to_semantic_tool(body: ToolCallRequest, request: Request) -> ToolCallResponse:
+    """Route a virtual semantic-bridge tool (``semantic____<name>``) to Control Center.
+
+    One-shot LLM completion: CH forwards the prompt + input payload; CC
+    loads the agent type's configured model (DB access stays CC-only) and
+    returns ``{"text": "<completion>"}``. Same mTLS/tenant guards as the
+    decision route — signed tenant headers are attached by the
+    ``internal_httpx_client`` egress hook.
+    """
+    cc_base = settings.control_center_url or "http://localhost:8000"
+    bare_name = body.tool_name[len(SEMANTIC_TOOL_PREFIX):]
+
+    payload: dict[str, Any] = {
+        "session_id": body.session_id,
+        "agent_type_id": body.agent_type_id,
+        "prompt": body.tool_args.get("prompt", ""),
+        "input": body.tool_args.get("input"),
+    }
+
+    endpoint = f"{cc_base}/api/v1/internal/system-tools/semantic-bridge"
+
+    logger.info(
+        "Routing semantic-bridge tool '%s' (bare: %s) to Control Center",
+        body.tool_name,
+        bare_name,
+        extra={
+            "data": {
+                "route_type": "semantic",
+                "tool_name": body.tool_name,
+                "normalized_tool_name": bare_name,
+                "session_id": body.session_id,
+                "agent_type_id": body.agent_type_id,
+                "provenance": body.provenance or "llm",
+            }
+        },
+    )
+
+    try:
+        cc_client_kwargs, headers = _build_control_center_auth(request, cc_base)
+
+        async with internal_httpx_client(**cc_client_kwargs) as client:
+            response = await client.post(endpoint, json=payload, headers=headers)
+            response.raise_for_status()
+            result = response.json()
+
+            logger.info(
+                "Semantic-bridge tool '%s' completed successfully",
+                body.tool_name,
+                extra={
+                    "data": {
+                        "route_type": "semantic",
+                        "tool_name": body.tool_name,
+                        "normalized_tool_name": bare_name,
+                        "session_id": body.session_id,
+                        "status_code": response.status_code,
+                    }
+                },
+            )
+            # CC returns {"text": "<completion>"} — forward it as the tool
+            # result (the AR runner stores it under the step's output key).
+            return ToolCallResponse(result=result)
+
+    except httpx.HTTPStatusError as exc:
+        status_code = exc.response.status_code
+        detail = exc.response.text[:200]
+        error_msg = f"Control Center semantic-bridge call failed: HTTP {status_code} - {detail}"
+        logger.error(
+            "%s",
+            error_msg,
+            extra={
+                "data": {
+                    "route_type": "semantic",
+                    "tool_name": body.tool_name,
+                    "normalized_tool_name": bare_name,
+                    "session_id": body.session_id,
+                    "status_code": status_code,
+                }
+            },
+        )
+        if 400 <= status_code < 500:
+            return ToolCallResponse(result={}, error=error_msg)
+        raise HTTPException(status_code=502, detail=error_msg)
+    except Exception as exc:
+        error_msg = f"Semantic-bridge tool call error: {exc}"
+        logger.exception(
+            "Semantic-bridge tool call failed for %s",
+            body.tool_name,
+            extra={
+                "data": {
+                    "route_type": "semantic",
+                    "tool_name": body.tool_name,
+                    "normalized_tool_name": bare_name,
+                    "session_id": body.session_id,
+                }
+            },
+        )
+        raise HTTPException(status_code=502, detail=error_msg)
+
+
+async def _route_to_script_tool(body: ToolCallRequest, request: Request) -> ToolCallResponse:
+    """Route a virtual script tool (``script____<name>``) to Agent Runtime.
+
+    Sandboxed scripts execute ONLY in Agent Runtime (top-priority rule), so
+    CH forwards the invocation to the AR script-execution endpoint using the
+    CH service certificate (same auth as execute/terminate forwarding). AR
+    executes the script with the SESSION'S AGENT identity: the tool calls the
+    script makes use the same mTLS session-bound client and per-call token
+    injection as the agent's own tool calls (identity parity, SEC1).
+    """
+    ar_base = settings.agent_runtime_url or "http://localhost:8001"
+    payload: dict[str, Any] = {
+        "tool_name": body.tool_name,
+        "tool_args": body.tool_args,
+        "session_id": body.session_id,
+        "agent_type_id": body.agent_type_id,
+        "provenance": "llm",
+    }
+    if body.conv_session_id:
+        payload["conv_session_id"] = body.conv_session_id
+    if body.python_source:
+        payload["python_source"] = body.python_source
+
+    logger.info(
+        "Routing script tool '%s' to Agent Runtime",
+        body.tool_name,
+        extra={
+            "data": {
+                "route_type": "script",
+                "tool_name": body.tool_name,
+                "session_id": body.session_id,
+                "agent_type_id": body.agent_type_id,
+            }
+        },
+    )
+
+    try:
+        result = await _post_ar_script_execute(ar_base, payload, request)
+    except HTTPException:
+        raise
+    if result.get("error"):
+        return ToolCallResponse(result={}, error=str(result["error"]))
+    return ToolCallResponse(result=result.get("result", {}))
+
+
+def _build_ar_script_transport(
+    ar_base: str, request: Request
+) -> tuple[dict[str, Any], dict[str, str]]:
+    """Build transport kwargs + headers for the CH → AR script-forwarding hop.
+
+    The Communication Hub presents ITS OWN service certificate (mTLS in
+    production, ``X-Client-Certificate`` header fallback over development
+    HTTP) — the same identity used for execute/terminate forwarding. Raises
+    HTTP 503 when the CH certificate is not loaded.
+    """
+    cert_manager = getattr(request.app.state, "certificate_manager", None)
+    client_kwargs: dict[str, Any] = {"timeout": 120.0, "verify": get_ssl_context()}
+    headers: dict[str, str] = {}
+    if cert_manager and cert_manager.cert_path and cert_manager.key_path:
+        if ar_base.startswith("https://"):
+            client_kwargs["cert"] = (str(cert_manager.cert_path), str(cert_manager.key_path))
+        else:
+            from pathlib import Path
+
+            headers["X-Client-Certificate"] = (
+                Path(cert_manager.cert_path).read_text().replace("\n", "\\n")
+            )
+        return client_kwargs, headers
+    raise HTTPException(
+        status_code=503,
+        detail="Communication Hub service certificate is required to execute script tools",
+    )
+
+
+async def _post_ar_script_execute(
+    ar_base: str,
+    payload: dict[str, Any],
+    request: Request,
+) -> dict[str, Any]:
+    """POST a script execution payload to AR ``/internal/script-tools/execute``.
+
+    Shared by the ``script____<name>`` tool route (``_route_to_script_tool``)
+    and the CC verification forwarding endpoint (``script_forwarding.py``):
+    BOTH hops into Agent Runtime use the CH service certificate. Returns the
+    parsed AR contract dict (``{"result": ..., "error": str | None}``) — AR's
+    structured ``error`` is passed through (never raised); transport/HTTP
+    failures raise ``HTTPException(502)``.
+    """
+    endpoint = f"{ar_base}/internal/script-tools/execute"
+    client_kwargs, headers = _build_ar_script_transport(ar_base, request)
+
+    try:
+        async with internal_httpx_client(**client_kwargs) as client:
+            response = await client.post(endpoint, json=payload, headers=headers)
+            response.raise_for_status()
+            return response.json()
+    except httpx.HTTPStatusError as exc:
+        error_msg = (
+            f"Agent Runtime script execution failed: HTTP {exc.response.status_code} "
+            f"- {exc.response.text[:200]}"
+        )
+        logger.error("%s", error_msg)
+        if 400 <= exc.response.status_code < 500:
+            return {"result": {}, "error": error_msg}
+        raise HTTPException(status_code=502, detail=error_msg)
+    except HTTPException:
+        raise
+    except Exception as exc:
+        error_msg = f"Script tool call error: {exc}"
+        logger.exception("Script tool call failed for %s", payload.get("tool_name"))
         raise HTTPException(status_code=502, detail=error_msg)
 
 

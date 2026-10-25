@@ -407,6 +407,7 @@ async def initiate_oauth_flow(
     manual_config: OAuthDiscoveryResult | None = None,
     session_name: str | None = None,
     session_description: str | None = None,
+    session_id: UUID | None = None,
 ) -> dict:
     """Auto-discover OAuth config and generate an authorization URL for an MCP server.
 
@@ -526,6 +527,11 @@ async def initiate_oauth_flow(
         "code_verifier": code_verifier,
         "session_name": session_name,
         "session_description": session_description,
+        # When re-authenticating an EXISTING session, the callback updates
+        # that row in place instead of creating a duplicate — the tool-call
+        # reader resolves sessions by fixed IDs (role assignments, default
+        # flag), so a duplicate row would leave the stale token in use.
+        "reauth_session_id": str(session_id) if session_id else None,
         "expires_at": (
             datetime.now(tz=timezone.utc) + timedelta(minutes=_STATE_TTL_MINUTES)
         ).isoformat(),
@@ -642,6 +648,83 @@ async def _initialize_mcp_session(base_url: str, access_token: str) -> str:
         generated_id = str(uuid.uuid4())
         logger.info("Generated MCP session ID (network error): %s", generated_id[:16] + "...")
         return generated_id
+
+
+async def _sync_tools_best_effort(server, db: AsyncSession, session_id_str: str, server_id_str: str) -> dict:
+    """Best-effort tool sync after a successful OAuth flow — never raises."""
+    from app.services.mcp.tool_sync import ToolSyncService
+
+    sync_result = {"added": 0, "updated": 0, "deactivated": 0}
+    if not server:
+        return sync_result
+    try:
+        logger.info(f"Automatically syncing tools for server {server_id_str} after OAuth success")
+        sync_service = ToolSyncService()
+        sync_result = await sync_service.sync(server, db)
+        logger.info(f"Tool sync completed: {sync_result}")
+    except Exception as sync_exc:
+        logger.warning(f"Tool sync failed for server {server_id_str}: {sync_exc}")
+    return sync_result
+
+
+async def _supersede_server_oauth_sessions(
+    server, new_session, db: AsyncSession
+) -> None:
+    """Migrate session bindings from a server's prior active OAuth sessions
+    to ``new_session`` and deactivate the old rows.
+
+    The tool-call reader (``/internal/mcp/proxy-tool`` and
+    ``McpProxyEngine._resolve_session``) resolves sessions by fixed IDs —
+    ``AgentRoleMcpSession.mcp_session_id`` and the ``is_default`` flag.
+    Without this migration a successful re-auth that creates a NEW row
+    leaves those fixed IDs pointing at the superseded session, so tool
+    calls keep failing on the old expired token.
+    """
+    from sqlalchemy import select
+
+    from app.db.models.agents import AgentRoleMcpSession
+    from app.db.models.mcp_hub import McpServer, McpSession, McpSessionAuthType
+
+    old_result = await db.execute(
+        select(McpSession)
+        .join(McpServer, McpServer.id == McpSession.server_id)
+        .where(
+            McpSession.server_id == server.id,
+            McpSession.id != new_session.id,
+            McpSession.auth_type == McpSessionAuthType.oauth2,
+            McpSession.is_active == True,  # noqa: E712
+        )
+    )
+    old_sessions = old_result.scalars().all()
+    if not old_sessions:
+        return
+
+    old_ids = [s.id for s in old_sessions]
+
+    # Re-point role assignments to the new session (avoid duplicates)
+    assignments_result = await db.execute(
+        select(AgentRoleMcpSession).where(
+            AgentRoleMcpSession.mcp_session_id.in_(old_ids)
+        )
+    )
+    for assignment in assignments_result.scalars().all():
+        assignment.mcp_session_id = new_session.id
+
+    # Transfer the default flag
+    if any(s.is_default for s in old_sessions):
+        new_session.is_default = True
+        for s in old_sessions:
+            s.is_default = False
+
+    for s in old_sessions:
+        s.is_active = False
+
+    await db.flush()
+    logger.info(
+        "Superseded %d prior OAuth session(s) on server %s in favour of %s "
+        "(role assignments and default flag migrated)",
+        len(old_sessions), server.id, new_session.id,
+    )
 
 
 async def handle_oauth_callback(
@@ -805,10 +888,70 @@ async def handle_oauth_callback(
     state_data = mcp_oauth_states.get(state, {})
     user_provided_name = state_data.get("session_name")
     user_provided_desc = state_data.get("session_description")
-    
+    reauth_session_id_str = state_data.get("reauth_session_id")
+
+    # ── 5a. Re-authentication of an EXISTING session ───────────────────────────
+    # When the flow was started for a specific session, update THAT row in
+    # place.  The tool-call reader resolves sessions by fixed IDs (role
+    # assignments in ``agent_role_mcp_sessions`` and the ``is_default``
+    # flag), so creating a duplicate row leaves the stale, expired token
+    # in use even after a successful re-auth (FIX: re-auth token mismatch).
+    # The lookup joins the tenant-scoped McpServer parent so the choke
+    # point constrains it to the request's tenant — cross-tenant session
+    # IDs resolve to None here.
+    if reauth_session_id_str and server:
+        try:
+            reauth_id = UUID(reauth_session_id_str)
+        except (ValueError, TypeError):
+            reauth_id = None
+        if reauth_id:
+            existing_result = await db.execute(
+                select(McpSession)
+                .join(McpServer, McpServer.id == McpSession.server_id)
+                .where(
+                    McpSession.id == reauth_id,
+                    McpSession.server_id == UUID(server_id_str),
+                )
+            )
+            existing_session = existing_result.scalar_one_or_none()
+            if existing_session is not None:
+                existing_session.encrypted_credentials = encrypted_creds
+                existing_session.oauth_expires_at = oauth_expires_at
+                existing_session.oauth_refresh_expires_at = oauth_refresh_expires_at
+                existing_session.oauth_metadata = oauth_metadata
+                existing_session.is_active = True
+                try:
+                    await db.flush()
+                except Exception as exc:
+                    logger.error(
+                        "Failed to update MCP session %s during re-auth: %s",
+                        reauth_id, exc,
+                    )
+                    raise HTTPException(status_code=500, detail="Failed to update MCP session")
+                mcp_session_id = await _initialize_mcp_session(server.base_url, access_token)
+                # Re-initialize produced a fresh upstream MCP session ID
+                existing_session.identity_binding = {"mcp_session_id": mcp_session_id}
+                await db.flush()
+                await _sync_tools_best_effort(server, db, str(existing_session.id), server_id_str)
+                mcp_oauth_states.pop(state, None)
+                logger.info(
+                    "Re-authenticated existing MCP session %s for server %s (tokens updated in place)",
+                    existing_session.id, server_id_str,
+                )
+                return {
+                    "success": True,
+                    "session_id": str(existing_session.id),
+                    "message": "OAuth re-authentication successful",
+                    "tools_synced": {"added": 0, "updated": 0, "deactivated": 0},
+                }
+            logger.warning(
+                "Re-auth session %s not found for server %s — creating a new session",
+                reauth_session_id_str, server_id_str,
+            )
+
     session_name = user_provided_name or f"OAuth Session {datetime.now(tz=timezone.utc).strftime('%Y-%m-%d %H:%M')}"
     session_description = user_provided_desc or "Created via OAuth flow"
-    
+
     # Initialize MCP session with the server to get MCP session ID (skip if server missing)
     if server:
         mcp_session_id = await _initialize_mcp_session(server.base_url, access_token)
@@ -841,19 +984,18 @@ async def handle_oauth_callback(
         logger.error("Failed to create MCP session for server %s: %s", server_id_str, exc)
         raise HTTPException(status_code=500, detail="Failed to create MCP session")
 
-    # ── 7. Automatically sync tools from server ────────────────────────────────
-    from app.services.mcp.tool_sync import ToolSyncService
-    
-    sync_result = {"added": 0, "updated": 0, "deactivated": 0}
+    # ── 6a. Supersede prior OAuth sessions of this server ──────────────────────
+    # The tool-call reader resolves sessions by fixed IDs (role assignments,
+    # is_default).  A newly created session must inherit those bindings,
+    # otherwise the reader keeps using the superseded session's stale,
+    # expired token even after successful re-auth.  Old rows are kept
+    # (is_active=False) for audit; tenant scoping is inherited via the
+    # tenant-scoped McpServer parent join.
     if server:
-        try:
-            logger.info(f"Automatically syncing tools for server {server_id_str} after OAuth success")
-            sync_service = ToolSyncService()
-            sync_result = await sync_service.sync(server, db)
-            logger.info(f"Tool sync completed: {sync_result}")
-        except Exception as sync_exc:
-            # Log error but don't fail the OAuth flow
-            logger.warning(f"Tool sync failed for server {server_id_str}: {sync_exc}")
+        await _supersede_server_oauth_sessions(server, session, db)
+
+    # ── 7. Automatically sync tools from server ────────────────────────────────
+    sync_result = await _sync_tools_best_effort(server, db, str(session.id), server_id_str)
 
     # ── 8. Clean up state (prevent replay) ────────────────────────────────────
     mcp_oauth_states.pop(state, None)

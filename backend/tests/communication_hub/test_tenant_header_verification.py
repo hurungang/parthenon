@@ -103,7 +103,7 @@ class TestInvalidHeaderSets:
         assert response.status_code == 401
 
     def test_stale_replayed_signature_rejected(self, ch_client):
-        stale = build_tenant_signature_headers(CTX, timestamp=time.time() - 900)
+        stale = build_tenant_signature_headers(CTX, timestamp=time.time() - 7 * 24 * 3600)
         response = ch_client.post("/internal/agent/execute", json={}, headers=stale)
         assert response.status_code == 401
 

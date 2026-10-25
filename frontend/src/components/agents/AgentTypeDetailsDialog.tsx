@@ -42,6 +42,8 @@ import { AgentJobLaunchDialog } from '../../pages/agents/AgentJobLaunchDialog'
 import { AgentExecutionsDialog } from './AgentExecutionsDialog'
 import { AgentExecutionDetailsDialog } from './AgentExecutionDetailsDialog'
 import { ConversationSessionsTab } from './ConversationSessionsTab'
+import { AgentOptimizedPlanTab } from './AgentOptimizedPlanTab'
+import { ScriptViewDialog, type ScriptViewData } from './ScriptViewDialog'
 import { ConversationDialog } from './ConversationDialog'
 import { SopEditor } from './SopEditor'
 import { SkillEditor } from './SkillEditor'
@@ -125,6 +127,7 @@ export function AgentTypeDetailsDialog({
   const [skillViewSkill, setSkillViewSkill] = useState<Skill | null>(null)
   const [agentTypeViewOpen, setAgentTypeViewOpen] = useState(false)
   const [agentTypeViewId, setAgentTypeViewId] = useState<string | null>(null)
+  const [viewScript, setViewScript] = useState<ScriptViewData | null>(null)
 
   // Reset tab and error when dialog opens
   useEffect(() => {
@@ -301,7 +304,13 @@ export function AgentTypeDetailsDialog({
       if (!agentTypeId) {
         throw new Error('Agent type not selected')
       }
-      const { data } = await apiClient.post(`/agents/types/${agentTypeId}/regenerate-plan`)
+      // Plan generation authoring the full composition can take 60-90s —
+      // the default 30s client timeout is too short. Match the backend's 180s bound.
+      const { data } = await apiClient.post(
+        `/agents/types/${agentTypeId}/regenerate-plan`,
+        undefined,
+        { timeout: 180_000 },
+      )
       return data
     },
     onSuccess: async () => {
@@ -563,6 +572,12 @@ export function AgentTypeDetailsDialog({
                       aria-controls="agent-details-tabpanel-3"
                     />
                   )}
+                  <Tab
+                    label={t('agents.optimizedPlan.tab')}
+                    value={4}
+                    id="agent-details-tab-4"
+                    aria-controls="agent-details-tabpanel-4"
+                  />
                 </Tabs>
               </Box>
 
@@ -723,7 +738,21 @@ export function AgentTypeDetailsDialog({
                   )}
 
                   {!planIsStale && (
-                    <Box display="flex" justifyContent="flex-end" sx={{ mb: 2 }}>
+                    <Box display="flex" justifyContent="flex-end" gap={1} sx={{ mb: 2 }}>
+                      <Button
+                        variant="outlined"
+                        size="small"
+                        startIcon={<RefreshIcon />}
+                        onClick={() => {
+                          void queryClient.invalidateQueries({ queryKey: ['agents', 'types'] })
+                          void queryClient.invalidateQueries({
+                            queryKey: ['agents', 'sessions', 'dialog', agentTypeId],
+                          })
+                          void queryClient.invalidateQueries({ queryKey: ['scripts'] })
+                        }}
+                      >
+                        {t('app.refresh')}
+                      </Button>
                       <Button
                         variant="outlined"
                         size="small"
@@ -836,6 +865,9 @@ export function AgentTypeDetailsDialog({
                       plan={agentType.plan}
                       noPlanMessage={t('agents.types.noPlan')}
                       onNodeClick={handleNodeClick}
+                      // Base-plan script links point to the Optimized Plan
+                      // tab (index 4) where per-step script dialogs live.
+                      onOpenScript={() => setActiveTab(4)}
                     />
                   )}
                 </TabPanel>
@@ -918,6 +950,23 @@ export function AgentTypeDetailsDialog({
                 {agentType.input_type === 'conversation' && agentTypeId && (
                   <TabPanel value={activeTab} index={3}>
                     <ConversationSessionsTab agentTypeId={agentTypeId} onClose={onClose} />
+                  </TabPanel>
+                )}
+
+                {/* ── Tab 4: Optimized Plan (composition + verification + feedback) */}
+                {agentTypeId && (
+                  <TabPanel value={activeTab} index={4}>
+                    <AgentOptimizedPlanTab
+                      agentTypeId={agentTypeId}
+                      onError={setDialogError}
+                      onViewScript={(step) =>
+                        setViewScript({
+                          name: step.name ?? null,
+                          description: step.description ?? null,
+                          python_source: step.python_source ?? null,
+                        })
+                      }
+                    />
                   </TabPanel>
                 )}
               </Box>
@@ -1017,6 +1066,13 @@ export function AgentTypeDetailsDialog({
           onClose={() => setConversationDialogOpen(false)}
         />
       )}
+
+      {/* Script view dialog — opened directly from the Optimized Plan tab */}
+      <ScriptViewDialog
+        open={viewScript !== null}
+        script={viewScript}
+        onClose={() => setViewScript(null)}
+      />
 
       {/* SOP view — reuse SopEditor in view mode */}
       {sopViewSop && (

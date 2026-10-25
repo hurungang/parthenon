@@ -146,3 +146,14 @@ The hub is tenant-bound end to end:
 | `ToolRegistryBridge.build_catalog` / `dispatch` | methods | Per-tenant `tools/list` filtering and tenant-contained `tools/call` dispatch for API-key MCP clients | `backend/app/communication_hub/mcp/tool_registry_bridge.py` |
 | `websocket_chat` / `_signed_tenant_forwarding` | endpoint + function | WS chat auth for both token kinds, tenant binding, and signed CC loopback | `backend/app/api/ws/chat.py` |
 | `ControlCenterDataClient` (CH) | class | CH→CC internal client; uses the global egress hook stamping forwarded tenant headers | `backend/app/communication_hub/data_client.py` |
+
+---
+
+## Script-Tool Routing (sandboxed-scripting-and-llm-mocking change)
+
+Communication Hub routes `script____<name>` virtual tools to Agent Runtime sandbox execution (full details: [sandboxed-scripting module](../sandboxed-scripting/tech-spec.md)).
+
+| Symbol | Type | Description | File |
+|--------|------|-------------|------|
+| `_route_to_script_tool` | function | Forwards `script____<name>` invocations to AR `POST /internal/script-tools/execute` with the session's agent identity (`session_id` + `agent_type_id` + `tool_args`); unwraps `{"result"}`/`{"error"}` into the `call_tool` contract; provenance tagging unchanged | `backend/app/communication_hub/api/internal/tool_routing.py` |
+| Script forwarding hop | endpoint (new) | `POST /internal/script-tools/forward` — the CC→CH hop; forwards inline `python_source` to AR using CH's own service certificate (ControlPlaneMiddleware only accepts AR certs on `/internal/tools/`, so CC never uses that path for sandboxed execution) | `backend/app/communication_hub/api/internal/tool_routing.py` |

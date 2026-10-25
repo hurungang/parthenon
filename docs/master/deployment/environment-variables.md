@@ -397,3 +397,11 @@ Variables required exclusively by the `mcp-demo-app` service. No existing Parthe
 | `APP_PORT` | Port the FastAPI application listens on. Defaults to `9000`. | |
 | `KEYCLOAK_USER_REALM` | Keycloak realm that issues user identities. When empty (default), the app operates in **single-realm mode**: `verify_user_jwt` falls back to `KEYCLOAK_REALM` for issuer validation. When set to a realm name (e.g., `parthenon`), the app operates in **dual-realm mode**: `verify_user_jwt` uses this realm for issuer validation and a separate `user_keycloak_client` fetches JWKS from the user realm independently. | |
 | `KEYCLOAK_USER_CLIENT_ID` | Client ID registered in the user realm for the demo app. When empty (default), falls back to `KEYCLOAK_CLIENT_ID`. Only needed in dual-realm mode when the user realm uses a different client than the agent realm. | |
+
+## LLM Mock Layer (Agent Runtime / Control Center — test environments only)
+
+| Variable | Description |
+|---|---|
+| `LLM_MOCK_MODE` | Mock provider selection: `off` (default, production), `scripted`, `record`, or `replay`. Invalid values fail fast at model dispatch. |
+| `LLM_MOCK_SCRIPTED_RESPONSES` | Scripted mock rules: inline JSON (`[{"match": "<substring>", "response": "<text>"}]`) or `@/path/file.json`. Required when mode is `scripted`. |
+| `LLM_MOCK_RECORDINGS_FILE` | JSON file backing record/replay persistence in the default in-process store. |

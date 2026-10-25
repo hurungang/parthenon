@@ -153,6 +153,8 @@ async def list_auto_agent_outputs(
                 ]
                 text = "\n\n".join(p for p in parts if p)
                 output_preview = text[:_PREVIEW_LEN] if text else None
+        elif isinstance(job.output_data, str) and job.output_data:
+            output_preview = job.output_data[:_PREVIEW_LEN]
         items.append(
             AutoOutputItem(
                 session_id=job.id,

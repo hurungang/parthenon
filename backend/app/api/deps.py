@@ -38,6 +38,24 @@ _AR_ALLOWLIST: set[tuple[str, str]] = {
     ("POST", "/api/v1/internal/validate-output"),
     ("POST", "/api/v1/internal/agent-outputs"),
     ("GET", "/api/v1/internal/agent-outputs"),
+    # Script framework (Software 3.0 workflow compilation).
+    # No execution modes exist — the dispatcher fetches the serving version
+    # directly (absent → LLM path, E1–E3).
+    ("GET", "/api/v1/internal/scripts/serving-version"),
+    ("GET", "/api/v1/internal/scripts/invocable"),
+    # LLM mock recordings (record/replay via CC — Phase 4).
+    ("POST", "/api/v1/internal/llm-mock/recordings"),
+    ("GET", "/api/v1/internal/llm-mock/recordings"),
+    ("GET", "/api/v1/internal/scripts/optimized-plan"),
+    ("GET", "/api/v1/internal/scripts/versions/{version_id}"),
+    ("POST", "/api/v1/internal/scripts/candidates"),
+    ("POST", "/api/v1/internal/scripts/verifications"),
+    ("POST", "/api/v1/internal/scripts/promote"),
+    ("POST", "/api/v1/internal/scripts/fallbacks"),
+    ("POST", "/api/v1/internal/scripts/executions"),
+    ("POST", "/api/v1/internal/scripts/repairs"),
+    ("GET", "/api/v1/internal/scripts/repairs"),
+    ("GET", "/api/v1/internal/scripts/llm-reference/{session_id}"),
 }
 
 _CH_ALLOWLIST: set[tuple[str, str]] = {
@@ -60,10 +78,22 @@ _CH_ALLOWLIST: set[tuple[str, str]] = {
     ("POST", "/api/v1/internal/system-tools/query-result"),
     ("POST", "/api/v1/internal/mcp/proxy-tool"),
     ("POST", "/api/v1/internal/data/intervene/respond"),
+    ("POST", "/api/v1/internal/data/sessions/{session_id}/log"),
     ("POST", "/api/v1/internal/auth/validate-api-key"),
     ("POST", "/api/v1/internal/system-tools/skills/resolve"),
     ("POST", "/api/v1/internal/system-tools/decision/list"),
     ("POST", "/api/v1/internal/system-tools/decision/execute"),
+    ("POST", "/api/v1/internal/system-tools/semantic-bridge"),
+    # Optimization system tools (Optimize & Verify command-driven agent).
+    ("POST", "/api/v1/internal/system-tools/get-implementation-plan"),
+    ("POST", "/api/v1/internal/system-tools/get-optimized-implementation-plan"),
+    ("POST", "/api/v1/internal/system-tools/generate-optimized-plan"),
+    ("POST", "/api/v1/internal/system-tools/generate-script"),
+    ("POST", "/api/v1/internal/system-tools/execute-script"),
+    ("POST", "/api/v1/internal/system-tools/list-scripts"),
+    ("POST", "/api/v1/internal/system-tools/get-script"),
+    ("POST", "/api/v1/internal/system-tools/get-scripts"),
+    ("POST", "/api/v1/internal/system-tools/get-execution-log"),
 }
 
 _INTERNAL_ALLOWLISTS: dict[str, set[tuple[str, str]]] = {

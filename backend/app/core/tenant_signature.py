@@ -107,7 +107,7 @@ class VerifiedTenantContext:
 def verify_tenant_signature_headers(
     headers,  # Mapping[str, str] — case-insensitive per HTTP semantics
     *,
-    max_age_seconds: float = DEFAULT_MAX_AGE_SECONDS,
+    max_age_seconds: float | None = None,
     expected_tenant_id: uuid.UUID | str | None = None,
     now: float | None = None,
 ) -> VerifiedTenantContext:
@@ -120,6 +120,11 @@ def verify_tenant_signature_headers(
     stale (replayed) timestamps, malformed ids, and — when
     ``expected_tenant_id`` is given — contexts not matching the expected
     tenant (e.g. a session's own binding).
+
+    ``max_age_seconds`` defaults to the
+    ``tenant_signature_max_age_seconds`` setting.  It MUST exceed the
+    longest legitimate agent execution: the set is signed once by CC at
+    trigger time and forwarded verbatim by AR/CH for the whole run.
     """
     values = _read_headers(headers)
     missing = [h for h in TENANT_SIGNATURE_HEADERS if h not in values]
@@ -145,6 +150,8 @@ def verify_tenant_signature_headers(
         raise TenantSignatureError("malformed timestamp in signed context") from exc
 
     current = now if now is not None else time.time()
+    if max_age_seconds is None:
+        max_age_seconds = get_settings().tenant_signature_max_age_seconds
     if abs(current - signed_at) > max_age_seconds:
         raise TenantSignatureError(
             "stale tenant signature (replay outside the accepted window)"

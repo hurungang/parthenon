@@ -10,13 +10,33 @@ vi.mock('react-i18next', () => ({
 }))
 
 const mockPost = vi.fn()
+const mockGet = vi.fn()
 
 vi.mock('../api/apiClient', () => ({
   default: {
-    get: vi.fn().mockResolvedValue({ data: {} }),
+    get: mockGet,
     post: mockPost,
   },
 }))
+
+/** Default GET routing: the optimized-plan lookup 404s (no plan yet). */
+function defaultGetRouting() {
+  mockGet.mockImplementation((url: string) => {
+    if (url.includes('optimized-plan')) {
+      return Promise.reject({ response: { status: 404 } })
+    }
+    return Promise.resolve({ data: {} })
+  })
+}
+
+function mockReadyOptimizedPlan() {
+  mockGet.mockImplementation((url: string) => {
+    if (url.includes('optimized-plan')) {
+      return Promise.resolve({ data: { status: 'ready' } })
+    }
+    return Promise.resolve({ data: {} })
+  })
+}
 
 const onClose = vi.fn()
 const onLaunched = vi.fn()
@@ -57,6 +77,7 @@ function wrapper({ children }: { children: React.ReactNode }) {
 describe('AgentJobLaunchDialog', () => {
   afterEach(() => {
     vi.clearAllMocks()
+    defaultGetRouting()
   })
 
   it('renders launch button for input_type=none (no input fields)', async () => {
@@ -148,9 +169,107 @@ describe('AgentJobLaunchDialog', () => {
       fireEvent.click(screen.getByText('agents.sessions.launch'))
     })
 
+    // No verified optimized plan → the opt-in optimization dialog appears.
+    await waitFor(() => {
+      expect(screen.getByText('agents.sessions.skipOptimization')).toBeDefined()
+    })
+
+    await act(async () => {
+      fireEvent.click(screen.getByText('agents.sessions.skipOptimization'))
+    })
+
     await waitFor(() => {
       expect(onLaunched).toHaveBeenCalledWith(sessionId)
     })
+    expect(mockPost).toHaveBeenCalledWith(
+      '/agents/sessions',
+      expect.objectContaining({ optimize: false }),
+    )
+  })
+
+  it('launches directly when a ready optimized plan exists', async () => {
+    const { AgentJobLaunchDialog } = await import('../pages/agents/AgentJobLaunchDialog')
+    const sessionId = 'sess-ready'
+    mockReadyOptimizedPlan()
+    mockPost.mockResolvedValue({ data: { id: sessionId, status: 'queued' } })
+    const agentType = makeAgentType({ input_type: 'none' })
+
+    render(
+      <AgentJobLaunchDialog
+        open={true}
+        agentType={agentType}
+        onClose={onClose}
+        onLaunched={onLaunched}
+      />,
+      { wrapper },
+    )
+
+    await waitFor(() => {
+      expect(screen.getByText('agents.sessions.launch')).toBeDefined()
+    })
+
+    // Let the optimized-plan query resolve before launching.
+    await waitFor(() => {
+      expect(mockGet.mock.calls.some((c) => String(c[0]).includes('optimized-plan'))).toBe(true)
+    })
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 0))
+    })
+
+    await act(async () => {
+      fireEvent.click(screen.getByText('agents.sessions.launch'))
+    })
+
+    await waitFor(() => {
+      expect(onLaunched).toHaveBeenCalledWith(sessionId)
+    })
+    // The opt-in dialog never appears when a verified plan exists.
+    expect(screen.queryByText('agents.sessions.runWithOptimization')).toBeNull()
+    expect(mockPost).toHaveBeenCalledWith(
+      '/agents/sessions',
+      expect.objectContaining({ optimize: false }),
+    )
+  })
+
+  it('passes optimize: true when the user opts in', async () => {
+    const { AgentJobLaunchDialog } = await import('../pages/agents/AgentJobLaunchDialog')
+    const sessionId = 'sess-opt'
+    mockPost.mockResolvedValue({ data: { id: sessionId, status: 'queued' } })
+    const agentType = makeAgentType({ input_type: 'none' })
+
+    render(
+      <AgentJobLaunchDialog
+        open={true}
+        agentType={agentType}
+        onClose={onClose}
+        onLaunched={onLaunched}
+      />,
+      { wrapper },
+    )
+
+    await waitFor(() => {
+      expect(screen.getByText('agents.sessions.launch')).toBeDefined()
+    })
+
+    await act(async () => {
+      fireEvent.click(screen.getByText('agents.sessions.launch'))
+    })
+
+    await waitFor(() => {
+      expect(screen.getByText('agents.sessions.runWithOptimization')).toBeDefined()
+    })
+
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('run-with-optimization'))
+    })
+
+    await waitFor(() => {
+      expect(onLaunched).toHaveBeenCalledWith(sessionId)
+    })
+    expect(mockPost).toHaveBeenCalledWith(
+      '/agents/sessions',
+      expect.objectContaining({ optimize: true }),
+    )
   })
 
   it('shows PermissionDeniedAlert when API call fails', async () => {
@@ -175,6 +294,14 @@ describe('AgentJobLaunchDialog', () => {
 
     await act(async () => {
       fireEvent.click(screen.getByText('agents.sessions.launch'))
+    })
+
+    await waitFor(() => {
+      expect(screen.getByText('agents.sessions.skipOptimization')).toBeDefined()
+    })
+
+    await act(async () => {
+      fireEvent.click(screen.getByText('agents.sessions.skipOptimization'))
     })
 
     await waitFor(() => {

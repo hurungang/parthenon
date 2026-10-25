@@ -507,3 +507,196 @@ SystemToolRegistry.register(SystemTool(
         "Use this to build cross-session analysis, reports, or data pipelines."
     ),
 ))
+
+
+# ── Optimization system tools (Optimize & Verify command-driven agent) ──────
+#
+# These power the "Optimize & Verify" command: a side execution of the agent
+# authors the workflow composition through these tools. They are standard
+# system tools (routed by Communication Hub to the CC handlers in
+# backend/app/api/v1/internal/optimization_tools.py). No auto-seeded skills —
+# they are invoked directly by the command mission.
+#
+# UUID allocation (continue the reserved system-tool block):
+#   00000000-0000-0000-0000-000000000009  → get_implementation_plan
+#   00000000-0000-0000-0000-000000000010  → get_optimized_implementation_plan
+#   00000000-0000-0000-0000-000000000011  → generate_optimized_plan
+#   00000000-0000-0000-0000-000000000012  → generate_script
+#   00000000-0000-0000-0000-000000000013  → execute_script
+#   00000000-0000-0000-0000-000000000014  → list_scripts
+#   00000000-0000-0000-0000-000000000015  → get_script
+#   (00000000-0000-0000-0000-000000000016 retired — record_verification)
+
+SystemToolRegistry.register(SystemTool(
+    name="get_implementation_plan",
+    description=(
+        "Read the base (high-level) implementation plan steps for an agent "
+        "type. Returns the ordered step list the workflow must perform."
+    ),
+    parameters={
+        "type": "object",
+        "properties": {
+            "agent_type_id": {"type": "string", "description": "The target agent type id"},
+        },
+        "required": ["agent_type_id"],
+    },
+    cc_endpoint_path="/api/v1/internal/system-tools/get-implementation-plan",
+    mcp_hub_id=uuid.UUID("00000000-0000-0000-0000-000000000009"),
+))
+
+SystemToolRegistry.register(SystemTool(
+    name="get_optimized_implementation_plan",
+    description=(
+        "Read the current optimized implementation plan for an agent type: "
+        "authored steps, script ids, verification log, feedback comments, "
+        "status and the fully_scripted mark."
+    ),
+    parameters={
+        "type": "object",
+        "properties": {
+            "agent_type_id": {"type": "string", "description": "The target agent type id"},
+        },
+        "required": ["agent_type_id"],
+    },
+    cc_endpoint_path="/api/v1/internal/system-tools/get-optimized-implementation-plan",
+    mcp_hub_id=uuid.UUID("00000000-0000-0000-0000-000000000010"),
+))
+
+SystemToolRegistry.register(SystemTool(
+    name="generate_optimized_plan",
+    description=(
+        "Upsert the optimized implementation plan and associate/promote the "
+        "authored script versions. Provide steps (each with python_source and "
+        "optional script_version_id), fully_scripted, output_mode, "
+        "output_template, and status."
+    ),
+    parameters={
+        "type": "object",
+        "properties": {
+            "agent_type_id": {"type": "string", "description": "The target agent type id"},
+            "steps": {"type": "array", "description": "The authored composition steps"},
+            "fully_scripted": {"type": "boolean", "description": "Zero-LLM end-to-end script?"},
+            "output_mode": {"type": "string", "description": "deterministic | llm_render"},
+            "output_template": {"type": "string", "description": "Optional output template"},
+            "status": {"type": "string", "description": "ready | failed | needs_feedback"},
+        },
+        "required": ["agent_type_id", "steps"],
+    },
+    cc_endpoint_path="/api/v1/internal/system-tools/generate-optimized-plan",
+    mcp_hub_id=uuid.UUID("00000000-0000-0000-0000-000000000011"),
+))
+
+SystemToolRegistry.register(SystemTool(
+    name="generate_script",
+    description=(
+        "Sandbox-compile validate then save a draft script version for an "
+        "agent type. Returns the version id; rejected (unsafe/broken) source "
+        "returns a reason you must fix and retry."
+    ),
+    parameters={
+        "type": "object",
+        "properties": {
+            "agent_type_id": {"type": "string", "description": "The target agent type id"},
+            "name": {"type": "string", "description": "Script definition name"},
+            "description": {"type": "string", "description": "Short description"},
+            "python_source": {"type": "string", "description": "Sandboxed Python defining run(context, tools)"},
+        },
+        "required": ["agent_type_id", "name", "python_source"],
+    },
+    cc_endpoint_path="/api/v1/internal/system-tools/generate-script",
+    mcp_hub_id=uuid.UUID("00000000-0000-0000-0000-000000000012"),
+))
+
+SystemToolRegistry.register(SystemTool(
+    name="execute_script",
+    description=(
+        "Run a script version's python_source through the real sandbox with "
+        "the given input. Returns the output, or an error on a sandbox "
+        "compile/violation/resource-cap failure. This is the verification "
+        "primitive — a script that runs here runs at serving time."
+    ),
+    parameters={
+        "type": "object",
+        "properties": {
+            "python_source": {"type": "string", "description": "FULL inline python_source of the script to execute (preferred for verification — pass the complete script you authored; do not save first)"},
+            "script_version_id": {"type": "string", "description": "A saved script version id to run (alternative to python_source)"},
+            "input": {"type": "object", "description": "Input context dict for run(context, tools)"},
+        },
+        "required": [],
+    },
+    cc_endpoint_path="/api/v1/internal/system-tools/execute-script",
+    mcp_hub_id=uuid.UUID("00000000-0000-0000-0000-000000000013"),
+))
+
+SystemToolRegistry.register(SystemTool(
+    name="list_scripts",
+    description=(
+        "List authored script definitions and their current version (with "
+        "python_source and lifecycle) for an agent type, for reuse or repair."
+    ),
+    parameters={
+        "type": "object",
+        "properties": {
+            "agent_type_id": {"type": "string", "description": "The target agent type id"},
+        },
+        "required": ["agent_type_id"],
+    },
+    cc_endpoint_path="/api/v1/internal/system-tools/list-scripts",
+    mcp_hub_id=uuid.UUID("00000000-0000-0000-0000-000000000014"),
+))
+
+SystemToolRegistry.register(SystemTool(
+    name="get_script",
+    description=(
+        "Return one authored script definition (with python_source and "
+        "lifecycle) by name or definition id for an agent type."
+    ),
+    parameters={
+        "type": "object",
+        "properties": {
+            "agent_type_id": {"type": "string", "description": "The target agent type id"},
+            "name": {"type": "string", "description": "Script definition name"},
+            "definition_id": {"type": "string", "description": "Script definition id"},
+        },
+        "required": ["agent_type_id"],
+    },
+    cc_endpoint_path="/api/v1/internal/system-tools/get-script",
+    mcp_hub_id=uuid.UUID("00000000-0000-0000-0000-000000000015"),
+))
+
+SystemToolRegistry.register(SystemTool(
+    name="get_scripts",
+    description=(
+        "Self-reflection: read the agent's OWN script definitions — versions, "
+        "python_source, sandbox validation status and lifecycle — to assess "
+        "the current state before authoring or re-authoring scripts."
+    ),
+    parameters={
+        "type": "object",
+        "properties": {
+            "agent_type_id": {"type": "string", "description": "The target agent type id"},
+        },
+        "required": ["agent_type_id"],
+    },
+    cc_endpoint_path="/api/v1/internal/system-tools/get-scripts",
+    mcp_hub_id=uuid.UUID("00000000-0000-0000-0000-000000000017"),
+))
+
+SystemToolRegistry.register(SystemTool(
+    name="get_execution_log",
+    description=(
+        "Self-reflection: read the agent's recent execution logs (most recent "
+        "first, including failures) to learn from past errors before "
+        "authoring or re-authoring scripts."
+    ),
+    parameters={
+        "type": "object",
+        "properties": {
+            "agent_type_id": {"type": "string", "description": "The target agent type id"},
+            "limit": {"type": "integer", "description": "Max entries (default 30, max 100)"},
+        },
+        "required": ["agent_type_id"],
+    },
+    cc_endpoint_path="/api/v1/internal/system-tools/get-execution-log",
+    mcp_hub_id=uuid.UUID("00000000-0000-0000-0000-000000000018"),
+))

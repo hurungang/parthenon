@@ -74,6 +74,24 @@ The Agent Session Queue dispatches the session to the Agent Runtime. Before any 
 
 If identity-role validation fails, the session fails immediately with a permission error — no LLM or tool calls are made.
 
+### 3a. Optimized-Plan Check and Scripted Execution
+
+At dispatch, the Script-First Dispatcher checks for a serving optimized
+composition (`OptimizedImplementationPlan`):
+
+- If a **fresh** plan exists (ready and newer than the base plan), the run
+  follows the model-authored composition: `fully_scripted` plans execute as
+  a zero-LLM sandboxed script; otherwise the composition's scripts are
+  exposed as invocable tools the LLM orchestrates. Sandbox violations and
+  resource-cap terminations are **unconditional LLM-fallback triggers** with
+  the reason recorded — a run never fails solely because a script failed.
+- If no fresh plan exists, the run proceeds on the base plan's LLM path
+  (below). The "Run with optimization" option at launch launches the
+  "Optimize & Verify" side execution (command-prompt-driven) that authors
+  and verifies the optimized plan for future runs.
+
+See [Sandboxed Scripting](sandboxed-scripting.md).
+
 ### 4. Execution Log Capture
 
 Before the first LLM inference call, the Agent Runtime writes the full system instruction and user prompt to the Execution Log Store, keyed by `session_id`. This ensures the log reflects exactly what was sent to the model. Subsequent reasoning steps and tool calls are appended throughout the LangChain executor loop.

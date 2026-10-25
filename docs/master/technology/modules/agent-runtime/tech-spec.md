@@ -167,3 +167,16 @@ Agent Runtime is a virtual tenant: it resolves the calling tenant once from the 
 | `internal_httpx_client` / `attach_forwarded_tenant_headers` | functions | Global egress hook (shared with CH) attaching forwarded tenant headers to all outbound internal requests | `backend/app/core/internal_http.py` |
 | `build_langchain_tools_for_ar_path` | function | Tenant-aware tool-set construction for a run | `backend/app/services/agents/langchain_tool_wrapper.py` |
 | runtime executor MCP lookup | function behaviour | `server____tool` lookup tenant-filtered, fails closed | `backend/app/services/agents/runtime_executor.py` |
+
+---
+
+## Sandboxed Scripting Integration (sandboxed-scripting-and-llm-mocking change)
+
+Agent Runtime hosts the ONLY sandboxed script execution surface (full details: [sandboxed-scripting module](../sandboxed-scripting/tech-spec.md)).
+
+| Symbol | Type | Description | File |
+|--------|------|-------------|------|
+| Sandbox engine + resource caps | module (new) | RestrictedPython compile+exec, allowlisted builtins (no `import`), guarded attribute/write access, wall-time/memory caps, fail-closed typed errors, MCP-only `SandboxToolFacade` with tenant-header parity | `backend/app/agent_runtime/scripts/sandbox.py` |
+| Script runner / dispatcher / fallback | modules (modified) | `execute_python_source` sandbox path, humanized logs, optimized-plan preference, `sandbox_violation`/`resource_limit_exceeded` fallback triggers | `backend/app/agent_runtime/scripts/runner.py`, `dispatch.py`, `fallback.py` |
+| AR script-tool endpoint | endpoint (new) | `POST /internal/script-tools/execute` — runs a `script____<name>` tool's `python_source` in the sandbox with a session-bound client | `backend/app/agent_runtime/api/script_tools.py` |
+| Command toolset wiring | function (new) | `_command_tool_schemas(command)` injects the optimization system tools into command-execution LLM loops | `backend/app/services/agents/runtime_executor.py` |

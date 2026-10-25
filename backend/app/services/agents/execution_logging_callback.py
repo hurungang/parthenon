@@ -171,8 +171,13 @@ class ExecutionLoggingCallback(AsyncCallbackHandler):
         run_id = str(kwargs.get("run_id", ""))
         self._tool_start_times[run_id] = time.monotonic()
 
-        # Truncate large inputs in logs
-        logged_input = input_str[:500] if len(input_str) > 500 else input_str
+        # Truncate large inputs in logs — EXCEPT execute_script: the full
+        # python_source it receives IS the reviewable artifact (the in-context
+        # draft iteration), so keep it untruncated in the execution log.
+        if tool_name == "execute_script":
+            logged_input = input_str
+        else:
+            logged_input = input_str[:500] if len(input_str) > 500 else input_str
 
         await self._safe_log(
             event_type="tool_call",

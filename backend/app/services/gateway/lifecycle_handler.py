@@ -248,13 +248,18 @@ class GatewayLifecycleHandler:
             "Gateway launch: committed session %s to database", job.id
         )
         
-        # Trigger immediate execution via Communication Hub
-        # This replaces the 30-second polling delay with instant execution
-        await self._trigger_execution_via_comm_hub(
+        triggered, trigger_error = await self._trigger_execution_via_comm_hub(
             job.id, agent_type_id, input_data, db=db, tenant_context=tenant_context
         )
-        
-        return {"session_id": str(job.id)}
+
+        return {
+            "session_id": str(job.id),
+            # Surface the trigger outcome so callers can fail the request
+            # instead of reporting a false "queued" success when the CH→AR
+            # trigger failed (the session is already marked failed in DB).
+            "triggered": triggered,
+            "trigger_error": trigger_error,
+        }
 
     async def _trigger_execution_via_comm_hub(
         self,
@@ -263,8 +268,13 @@ class GatewayLifecycleHandler:
         input_data: dict[str, Any] | None,
         db: AsyncSession | None = None,
         tenant_context: Any = None,
-    ) -> None:
+    ) -> tuple[bool, str | None]:
         """Trigger immediate agent execution via Communication Hub.
+
+        Returns ``(triggered, error)`` — ``True`` when the trigger reached the
+        hub, or ``False`` with a human-readable reason when it failed (the
+        session is marked ``failed`` in this case).
+        
         
         Sends execution trigger to Communication Hub, which forwards to Agent Runtime.
         This enables instant execution instead of waiting for 30-second polling.
@@ -296,6 +306,7 @@ class GatewayLifecycleHandler:
                 "Execution trigger sent to Communication Hub: session=%s",
                 session_id,
             )
+            return True, None
         except CommunicationHubClientError as exc:
             # Mark the session as failed so users see a clear error in the UI
             # instead of the session hanging in 'queued' state forever.
@@ -326,6 +337,7 @@ class GatewayLifecycleHandler:
                         logger.info("Marked session %s as failed after CH trigger error", session_id)
                 except Exception as db_exc:
                     logger.warning("Could not mark session %s as failed in DB: %s", session_id, db_exc)
+            return False, error_msg
 
     # ── Legacy init/request/close path ────────────────────────────────────────
 

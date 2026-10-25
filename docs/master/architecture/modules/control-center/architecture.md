@@ -345,3 +345,16 @@ The live channel enforces the same access model as the read endpoint: the presen
 ## Schema Validation Service
 
 - **Schema Validation Service**: Lightweight payload validator invoked by Agent Runtime via mTLS. Accepts a data type ID and a payload, fetches the schema from the Data Type Registry, validates field types (string, number, boolean, ISO 8601 date, enum membership), required field presence, and default values. Returns validation result with field-level error details. Validation failure does not block execution — results are persisted with `validation_error` status and the raw output as fallback.
+
+## Script Registry, Optimized Plans & LLM Mock Recordings
+
+Control Center persists the Software 3.0 script framework — the script
+registry (draft → verified → compiled → retired lifecycle, sandbox
+validation), the `OptimizedImplementationPlan` compositions authored by the
+"Optimize & Verify" side execution, `CommandPrompt` mission storage, per-
+execution records, and `LLMMockRecording` test data (written only in
+test/recording modes). Its REST APIs serve the registry to Agent Runtime
+exclusively over mTLS; its internal recording endpoint stores mock LLM
+interactions (prompt + response + usage only). The semantic-bridge endpoint
+is served by the mock layer in test modes, so model-backed script steps run
+zero-LLM in tests. See [Sandboxed Scripting](sandboxed-scripting.md).

@@ -252,3 +252,75 @@ class CommunicationHubClient:
                 raise CommunicationHubClientError(
                     f"Communication Hub agent execute call failed: {exc}"
                 ) from exc
+
+    async def forward_sandboxed_script(
+        self,
+        *,
+        python_source: str,
+        session_id: str,
+        agent_type_id: str,
+        input_context: dict[str, Any] | None = None,
+        tenant_context: TenantContext | None = None,
+    ) -> dict[str, Any]:
+        """Execute inline ``python_source`` in the Agent Runtime sandbox.
+
+        Routes CC → CH ``POST /internal/script-tools/forward`` (this hop
+        presents CC's service certificate — kept fresh by CC's own
+        startup/daily self-renewal; ``/internal/tools/call`` is NOT usable
+        from CC because ControlPlaneMiddleware only accepts agent-runtime
+        certificates on ``/internal/tools/``). CH then forwards to Agent
+        Runtime's ``/internal/script-tools/execute`` using CH's OWN service
+        certificate — the exact same CH→AR hop ``script____<name>`` tools
+        take — where the sandbox runs with the SESSION-BOUND tool client
+        (AR cert + agent identity, SEC1). Scripts execute ONLY in Agent
+        Runtime (top-priority rule) — Control Center never runs the sandbox.
+
+        Args:
+            python_source:  Full script source (defines ``run(context, tools)``).
+            session_id:     Session identity for the sandbox + tool calls.
+            agent_type_id:  Agent type identity ("" when unresolvable).
+            input_context:  Optional input dict — becomes the script's ``context``.
+            tenant_context: Resolved tenant context (None in single-tenant mode).
+
+        Returns:
+            AR contract dict: ``{"result": ..., "error": str | None}`` — a
+            sandbox compile/violation/runtime failure surfaces as ``error``.
+
+        Raises:
+            CommunicationHubClientError — on any HTTP or network failure.
+        """
+        url = f"{self._comm_hub_url}/internal/script-tools/forward"
+        body: dict[str, Any] = {
+            "python_source": python_source,
+            "session_id": str(session_id),
+            "agent_type_id": str(agent_type_id or ""),
+            "tool_args": {"input": input_context or {}},
+        }
+        headers = tenant_context_headers(tenant_context)
+
+        async with self._make_client() as client:
+            try:
+                # Sandbox wall-time caps can exceed the default 30s timeout.
+                resp = await client.post(
+                    url, json=body, headers=headers, timeout=120.0
+                )
+                resp.raise_for_status()
+                data: dict[str, Any] = resp.json()
+                logger.info(
+                    "Executed sandboxed script for session=%s via Communication "
+                    "Hub → Agent Runtime (error=%s)",
+                    session_id,
+                    data.get("error"),
+                )
+                return data
+            except httpx.HTTPStatusError as exc:
+                raise CommunicationHubClientError(
+                    f"Communication Hub returned {exc.response.status_code}: "
+                    f"{exc.response.text[:200]}"
+                ) from exc
+            except CommunicationHubClientError:
+                raise
+            except Exception as exc:
+                raise CommunicationHubClientError(
+                    f"Communication Hub script-tool call failed: {exc}"
+                ) from exc

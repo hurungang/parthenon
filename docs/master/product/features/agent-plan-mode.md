@@ -5,6 +5,8 @@
 
 Agent Plan Mode provides a clear, actionable plan for each agent type, now accessible directly from the unified "AI Agent" menu. When configuring or reviewing agent types, users can open the Agent Type Details dialog, which includes a dedicated "Plan Preview" tab. This tab displays the LLM-generated implementation plan and a visual topology diagram, giving users confidence in agent setup, enabling better preview and validation before execution, and reducing errors in agent operation. The saved plan becomes part of the agent's execution context—during runtime, the agent follows the pre-approved plan to ensure compliant, predictable behavior. This dialog-based approach streamlines access to plan details and supports the new navigation structure.
 
+The plan model is now **two-layered**: the plan described here is the **base implementation plan** — a plain, high-level step list kept deliberately simple and readable for review and governance. Separately, an **optimized implementation plan** (model-authored workflow composition with script segments, model bridge steps, and decision steps) can be produced as an opt-in step of the Run Agent flow and is governed on the Optimized Plan tab. See [Sandboxed Scripting & Model-Authored Composition](sandboxed-scripting.md). This document covers the base plan layer.
+
 ## 2. Business Goals
 
 - Increase successful agent deployments by 30% through improved plan transparency and validation
@@ -55,7 +57,11 @@ Agent Plan Mode provides a clear, actionable plan for each agent type, now acces
 - Exporting plans to external formats (e.g., PDF, CSV)
 - Plan versioning or history (only the current plan is stored and used)
 
-## 7. Dependencies & Constraints
+## 7. Two-Layer Plan Model Note
+
+The base plan remains the plain high-level step list this document describes. It is never modified by optimization. The optional optimized implementation plan is authored separately by the model during an opt-in "Run with optimization" execution and lives on the Optimized Plan tab; it never alters the base plan's content. If the optimized plan is absent, stale, retired, or failed — or any script within it fails — execution falls back to following this base plan's model-driven path. See [Sandboxed Scripting & Model-Authored Composition](sandboxed-scripting.md).
+
+## 8. Dependencies & Constraints
 
 - Relies on accurate mapping between Agent Roles, SOPs, Skills, and Tools in the master data
 - Requires up-to-date SOP and Skill definitions for meaningful plan generation

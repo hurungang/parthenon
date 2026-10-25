@@ -55,6 +55,23 @@ flowchart TB
 
 ## Workflow Execution
 
+Agent workflows execute through a script-first strategy with unconditional
+LLM fallback: when a serving, sandbox-validated script version exists for
+the workflow, Agent Runtime executes model-authored sandboxed Python
+(RestrictedPython, MCP-only egress, resource caps) instead of the LLM loop;
+any sandbox violation or resource-cap breach falls back to the LLM path with
+a recorded reason — a run never fails solely because a script failed. See
+[modules/sandboxed-scripting.md](modules/sandboxed-scripting.md). The
+composition follows a **two-layer plan model**: the base implementation plan
+stays a plain high-level step list, while an opt-in "Run with optimization"
+step of the Run Agent flow launches a command-driven side execution
+("Optimize & Verify") that authors the optimized composition (script
+segments, LLM bridges, output decision) as a separate
+`OptimizedImplementationPlan` — served only while fresh; absent, stale, or
+retired plans fall back to the base-plan LLM path. In test
+environments the LLM Mock Layer (`LLM_MOCK_MODE`) serves deterministic
+model responses so runs complete with zero LLM API usage.
+
 ```mermaid
 flowchart LR
     AU[Author or Reviewer]

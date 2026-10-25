@@ -119,6 +119,26 @@ def _tool_names_from_definitions(tool_definitions: list[dict[str, Any]]) -> list
     return names
 
 
+def _command_tool_schemas(command: str | None) -> list[dict[str, Any]]:
+    """Return the OpenAI tool schemas for a command's system tools.
+
+    Command-driven executions (e.g. "optimize-and-verify") expose their system
+    tools (``command_tool_names``) to the LLM toolset. These are NOT part of the
+    agent type's permission-scoped allowed tools, so they are appended for the
+    command loop only. Non-command runs return ``[]``.
+    """
+    if not command:
+        return []
+    from app.services.agents.command_prompts import command_tool_names
+
+    schemas: list[dict[str, Any]] = []
+    for name in command_tool_names(command):
+        schema = SystemToolRegistry.get_schema(name)
+        if schema is not None:
+            schemas.append(schema)
+    return schemas
+
+
 def _canonicalize_tool_name_for_log(
     tool_name: str,
     tool_name_map: dict[str, str] | None = None,
@@ -570,6 +590,65 @@ class AgentRuntimeExecutor:
         self._runtime_loader = AgentRuntimeLoader()
         self._data_client = data_client
 
+    async def _append_invocable_script_tools(
+        self,
+        tool_definitions: list[dict[str, Any]],
+        tool_name_map: dict[str, str],
+        agent_type_id: str,
+        data_client: Any,
+    ) -> None:
+        """Expose compiled scripts as ``script____<name>`` virtual tools (tool mode).
+
+        When the agent type has compiled scripts (e.g. a tool-mode optimized
+        plan whose script segments stay invocable), each compiled script is
+        advertised to the LLM as an invocable function. Execution is resolved
+        at call time via Communication Hub → Agent Runtime
+        ``/internal/script-tools/execute`` (identity parity, SEC1).
+
+        Best-effort: any registry failure is logged and swallowed — the agent
+        simply runs without script tools, exactly as before this surface
+        existed.
+        """
+        if not agent_type_id:
+            return
+        cert_manager = getattr(data_client, "_cert_manager", None)
+        if cert_manager is None or not getattr(cert_manager, "is_loaded", False):
+            return
+        try:
+            from app.agent_runtime.scripts.cc_client import ScriptRegistryClient
+
+            items = await ScriptRegistryClient(cert_manager).list_invocable_scripts(
+                agent_type_id
+            )
+        except Exception as exc:  # noqa: BLE001 — fail open to the plain toolset
+            logger.info(
+                "Invocable-script lookup unavailable for agent type %s — "
+                "continuing without script tools: %s",
+                agent_type_id, exc,
+            )
+            return
+        for item in items or []:
+            name = str(item.get("name") or "").strip()
+            if not name:
+                continue
+            full_name = f"script____{name}"
+            sanitized = _sanitize_tool_name_for_openai(full_name)
+            if sanitized in tool_name_map:
+                continue
+            description = str(item.get("description") or f"Compiled script: {name}")
+            tool_definitions.append(
+                {
+                    "type": "function",
+                    "function": {
+                        "name": sanitized,
+                        "description": description,
+                        "parameters": {"type": "object", "properties": {}},
+                    },
+                }
+            )
+            tool_name_map[sanitized] = full_name
+            logger.debug("Advertised invocable script tool: %s", sanitized)
+
     def _build_guardrail_state(
         self,
         context: dict[str, Any],
@@ -582,19 +661,49 @@ class AgentRuntimeExecutor:
         if isinstance(input_data, dict):
             current_depth = _int_or_default(input_data.get("__delegation_depth"), 0)
 
+        # Command-driven special executions (e.g. "optimize-and-verify") legitimately
+        # iterate on script authoring (execute → fix source → execute again), which
+        # exhausts the default task-agent iteration limit of 10 mid-iteration.
+        # Raise the limit for command runs (command-aware guardrail).
+        from app.services.agents.command_prompts import (
+            COMMAND_MAX_ITERATIONS,
+            COMMAND_TOKEN_BUDGET,
+        )
+
+        is_command_run = isinstance(input_data, dict) and bool(
+            input_data.get("__command")
+        )
+
+        policy_token_budget = (
+            _int_or_default(policy.get("token_budget"), 0)
+            if policy.get("token_budget") is not None
+            else None
+        )
+        if is_command_run:
+            # Command runs are token-heavy (script authoring + verification).
+            # A role-level budget tuned for ordinary task runs exhausts
+            # mid-authoring and fails the command with a bare "token_budget"
+            # error — command runs get AT LEAST the generous command budget
+            # (a larger explicit policy budget wins).
+            token_budget: int | None = max(
+                policy_token_budget or 0, COMMAND_TOKEN_BUDGET
+            )
+        else:
+            token_budget = policy_token_budget
+
         guardrail = RuntimeGuardrailState(
-            max_iterations=_int_or_default(policy.get("max_iterations"), 10),
+            max_iterations=(
+                COMMAND_MAX_ITERATIONS
+                if is_command_run
+                else _int_or_default(policy.get("max_iterations"), 10)
+            ),
             max_delegation_depth=_int_or_default(policy.get("max_delegation_depth"), 3),
             max_delegated_steps=_int_or_default(policy.get("max_delegated_steps"), 20),
             execution_timeout_seconds=_int_or_default(
                 policy.get("execution_timeout_seconds"),
                 300,
             ),
-            token_budget=(
-                _int_or_default(policy.get("token_budget"), 0)
-                if policy.get("token_budget") is not None
-                else None
-            ),
+            token_budget=token_budget,
             token_enforcement_mode=str(policy.get("token_enforcement_mode") or "observe"),
             token_fallback_mode=str(policy.get("token_fallback_mode") or "observe_and_log"),
             conversational_token_visibility_mode=str(
@@ -1676,6 +1785,16 @@ class AgentRuntimeExecutor:
         agent_type_id = job_data["agent_type_id"]
         input_data = job_data.get("input_data") or {}
 
+        # Command-driven special agent execution (e.g. "optimize-and-verify"):
+        # the prompt is the command's mission, NOT the agent type's own system
+        # instruction. The mission arrives as ``input_data["message"]``; the
+        # agent's model + tools run unchanged.
+        command = (
+            input_data.get("__command")
+            if isinstance(input_data, dict)
+            else None
+        )
+
         # Extract conversation session ID for delegation context
         self._conv_session_id: str | None = input_data.get("__conv_session_id")
 
@@ -1731,8 +1850,13 @@ class AgentRuntimeExecutor:
         )
 
         # ── Build system instruction with binding + MCP context ──────────────
-        system_instruction: str | None = context.get("system_instruction")
-        binding_content: str | None = context.get("sop_content")
+        # Command-driven executions use the command mission as their prompt (the
+        # agent's own system instruction, SOP/Skill bindings, MCP context and
+        # plan are NOT injected — the mission is self-contained).
+        system_instruction: str | None = (
+            None if command else context.get("system_instruction")
+        )
+        binding_content: str | None = None if command else context.get("sop_content")
         if binding_content:
             base = system_instruction or ""
             system_instruction = f"{base}\n\n{binding_content}".strip()
@@ -1747,7 +1871,7 @@ class AgentRuntimeExecutor:
                 },
                 )
 
-        mcp_context: str | None = context.get("mcp_session_context")
+        mcp_context: str | None = None if command else context.get("mcp_session_context")
         if mcp_context:
             base = system_instruction or ""
             system_instruction = f"{base}\n\n{mcp_context}".strip()
@@ -1763,7 +1887,9 @@ class AgentRuntimeExecutor:
             )
 
         # ── Inject plan ───────────────────────────────────────────────────────
-        plan_data = await data_client.get_agent_plan(uuid.UUID(agent_type_id))
+        plan_data = None
+        if not command:
+            plan_data = await data_client.get_agent_plan(uuid.UUID(agent_type_id))
         if plan_data:
             plan_text = self._runtime_loader.format_plan_for_injection(plan_data)
             if plan_text.strip():
@@ -1784,6 +1910,23 @@ class AgentRuntimeExecutor:
         tool_name_map: dict[str, str] = context.get("tool_name_map") or {}
         role_mcp_sessions: dict[str, dict[str, str]] = context.get("role_mcp_sessions") or {}
         allowed_agent_types: set[str] = set(context.get("allowed_agent_types") or [])
+
+        # Command executions get the command's optimization system tools added
+        # to the LLM toolset — they are NOT in the agent type's permission-scoped
+        # allowed tools. This is the toolset the command's mission references.
+        if command:
+            for _cmd_schema in _command_tool_schemas(command):
+                if _cmd_schema not in tool_definitions:
+                    tool_definitions.append(_cmd_schema)
+
+        # ── Invocable script tools (script____<name> virtual-tool surface) ────
+        # When the agent type has compiled scripts (e.g. a tool-mode optimized
+        # plan whose scripts stay invocable), each is exposed to the LLM as an
+        # invocable tool. Best-effort: registry unavailability never blocks
+        # execution (mirrors the script-first dispatcher's fail-open stance).
+        await self._append_invocable_script_tools(
+            tool_definitions, tool_name_map, agent_type_id or "", data_client,
+        )
 
         # ── Initialize Communication Hub tool client ──────────────────────────
         from app.agent_runtime.comm_hub_client import CommHubToolClient

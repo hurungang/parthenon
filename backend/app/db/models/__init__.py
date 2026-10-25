@@ -147,3 +147,35 @@ from app.db.models.tenant_quota_usage import (  # noqa: F401
     QuotaType,
     TenantQuotaUsage,
 )
+
+# Software 3.0 Agent Framework — script registry and compiled execution models
+from app.db.models.script_registry import (  # noqa: F401
+    FallbackEvent,
+    FallbackResultingAction,
+    FallbackTriggerReason,
+    RepairAttempt,
+    RepairRetryOutcome,
+    ScriptDefinition,
+    ScriptHealthStatus,
+    ScriptLifecycleStatus,
+    ScriptVersion,
+    VerificationComparisonOutcome,
+    VerificationRun,
+    VerificationVerdict,
+)
+from app.db.models.script_execution import (  # noqa: F401
+    ScriptExecutionOutcome,
+    ScriptExecutionRecord,
+)
+from app.db.models.llm_mocking import (  # noqa: F401
+    LLMMockRecording,
+    MockInteractionKind,
+)
+from app.db.models.script_registry import SandboxValidationStatus  # noqa: F401
+from app.db.models.optimized_plan import (  # noqa: F401
+    OptimizedImplementationPlan,
+    OptimizedPlanStatus,
+)
+from app.db.models.command_prompt import (  # noqa: F401
+    CommandPrompt,
+)

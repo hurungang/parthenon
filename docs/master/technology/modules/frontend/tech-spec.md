@@ -327,3 +327,18 @@ The frontend gains multi-tenant surfaces since the multi-tenant support change (
 | tenant API clients | modules (new) | `tenantAuthApi` (discovery, register, login-password, remembered-slug hint), `platformAdminApi`, `tenantApi` | `frontend/src/api/tenantAuthApi.ts` (+ `platformAdminApi.ts`, `tenantApi.ts`) |
 | `apiClient` self-heal | module (modified) | Attaches `X-Tenant` from the per-tab resolved slug; recognizes the middleware's fail-closed unknown-slug 403 and clears the invalid binding | `frontend/src/api/apiClient.ts` |
 | quota-blocked UX | components (new) | `QuotaBlockedAlert` + `extractQuotaBlocked` rendering the structured quota contract on blocked actions | `frontend/src/components/tenant/QuotaBlockedAlert.tsx`, `frontend/src/utils/quotaErrorUtils.ts` |
+
+---
+
+## Optimized Plan UI (sandboxed-scripting-and-llm-mocking change)
+
+Full details: [sandboxed-scripting module](../sandboxed-scripting/tech-spec.md).
+
+| Symbol | Type | Description | File |
+|--------|------|-------------|------|
+| `AgentOptimizedPlanTab` | component | Optimized Plan tab (panel index 4): steps with per-step "View script" links (open inline `ScriptViewDialog`), status/error surfacing, feedback textarea + submit, "Retire plan" (marks rows `retired` + full agent-type query-scope invalidation), absent/retired "next run offers optimization" hint | `frontend/src/components/agents/AgentOptimizedPlanTab.tsx` |
+| `ScriptViewDialog` | component (new) | Inline python_source + description + version viewer replacing the removed standalone Scripts tab | `frontend/src/components/agents/ScriptViewDialog.tsx` |
+| Opt-in launch flow | component (modified) | `AgentJobLaunchDialog` checks optimized-plan existence; opt-in dialog ("Run with optimization" / "Skip optimization") posts `optimize: true/false`; a `ready` plan launches directly | `frontend/src/pages/agents/AgentJobLaunchDialog.tsx` |
+| String output rendering | type (modified) | `AgentJob.output_data` widened to `Record \| string`; raw script string output rendered as text; sandbox-validation chips via `t()` | `frontend/src/types/scripts.ts` |
+
+> Removed: `AgentScriptsTab.tsx` (standalone Scripts registry tab) and `AgentOptimizeLogDialog.tsx` (verification-log surface retired) — do not reference them.

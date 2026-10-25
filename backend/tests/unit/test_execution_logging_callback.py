@@ -213,6 +213,47 @@ async def test_no_data_client_does_not_raise():
     await cb.on_tool_error(error=RuntimeError("err"))
 
 
+# ── Drafted-script visibility (execute_script full source) ───────────────────
+
+
+@pytest.mark.asyncio
+async def test_on_tool_start_keeps_full_source_for_execute_script():
+    """The FULL python_source passed to execute_script appears in the
+    execution log — it is the reviewable in-context artifact, never truncated."""
+    from app.services.agents.execution_logging_callback import ExecutionLoggingCallback
+
+    data_client = AsyncMock()
+    data_client.log_execution_event = AsyncMock()
+    cb = ExecutionLoggingCallback(session_id="sess-11", data_client=data_client)
+
+    long_source = "def run(context, tools):\n    return {'pad': '" + ("x" * 2000) + "'}\n"
+    import json as _json
+    input_str = _json.dumps({"python_source": long_source, "input": {}})
+    assert len(input_str) > 500
+
+    await cb.on_tool_start(serialized={"name": "execute_script"}, input_str=input_str)
+
+    call_kwargs = data_client.log_execution_event.call_args[1]
+    assert call_kwargs["data"]["input"] == input_str
+    assert ("x" * 500) in call_kwargs["data"]["input"]  # untruncated
+
+
+@pytest.mark.asyncio
+async def test_on_tool_start_truncates_other_tools():
+    """Non-execute_script tool inputs are still truncated at 500 chars."""
+    from app.services.agents.execution_logging_callback import ExecutionLoggingCallback
+
+    data_client = AsyncMock()
+    data_client.log_execution_event = AsyncMock()
+    cb = ExecutionLoggingCallback(session_id="sess-12", data_client=data_client)
+
+    big = "y" * 2000
+    await cb.on_tool_start(serialized={"name": "other_tool"}, input_str=big)
+
+    call_kwargs = data_client.log_execution_event.call_args[1]
+    assert len(call_kwargs["data"]["input"]) == 500
+
+
 # ── iteration_ref tracking ────────────────────────────────────────────────────
 
 

@@ -54,6 +54,9 @@ class AgentPlanResponse(BaseModel):
     topology: dict | None
     generation_status: str
     generated_at: datetime | None
+    # Execution semantics: plan marked by the plan-generation LLM as fully
+    # scriptable (single end-to-end script, zero LLM at serving time).
+    fully_scripted: bool | None = None
 
 
 class SopSummary(BaseModel):
@@ -271,6 +274,7 @@ async def get_agent_plan(
         topology=plan.topology,
         generation_status=plan.generation_status.value,
         generated_at=plan.generated_at,
+        fully_scripted=getattr(plan, "fully_scripted", None),
     )
 
 

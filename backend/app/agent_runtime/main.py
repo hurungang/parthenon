@@ -93,6 +93,12 @@ def create_app() -> FastAPI:
     from app.agent_runtime.api.intervene import resume_router
     app.include_router(resume_router)
 
+    # Script-tool execution endpoint (Communication Hub → Agent Runtime):
+    # the ``script____<name>`` virtual tool resolves and runs a compiled script
+    # in the sandbox under the session's agent identity (identity parity, SEC1).
+    from app.agent_runtime.api.script_tools import script_tools_router
+    app.include_router(script_tools_router)
+
     return app
 
 

@@ -23,6 +23,7 @@ RT_AGENT_HUMAN_INTERVENTION: Final[str] = "agent::human_intervention"
 RT_AGENT_DATA_TYPES: Final[str] = "agent::data_types"
 RT_AGENT_DATA: Final[str] = "agent::data"
 RT_AGENT_OUTPUTS: Final[str] = "agent::outputs"
+RT_AGENT_SCRIPTS: Final[str] = "agent::scripts"
 
 # Integrations module
 RT_INTEGRATION_MCP_HUB: Final[str] = "integration::mcp_hub"
@@ -101,6 +102,9 @@ ResourceTypeManifest: Final[dict[str, dict[str, list[str]]]] = {
     RT_AGENT_OUTPUTS: {
         "actions": ["read"],
     },
+    RT_AGENT_SCRIPTS: {
+        "actions": ["read", "manage"],
+    },
     RT_INTEGRATION_MCP_HUB: {
         "actions": ["create", "read", "update", "delete", "execute", "manage"],
     },
@@ -157,6 +161,7 @@ MODULE_GROUPS: Final[dict[str, list[str]]] = {
         RT_AGENT_DATA_TYPES,
         RT_AGENT_DATA,
         RT_AGENT_OUTPUTS,
+        RT_AGENT_SCRIPTS,
     ],
     "integration": [
         RT_INTEGRATION_MCP_HUB,

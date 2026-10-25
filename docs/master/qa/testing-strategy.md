@@ -354,3 +354,18 @@ Changes involving startup dependency validation, environment-variable-based conf
 - Verify credentials never appear in log output, error messages, or JSON output
 
 Refer to `production-ready-configuration-test-plan.md` for module-specific coverage and test file references.
+
+## LLM Mock Layer for Agent-Execution Testing (sandboxed-scripting-and-llm-mocking)
+
+Agent-execution tests must not depend on real LLM APIs. A deterministic mock layer (`backend/app/services/agents/llm_mock_provider.py` — `MockChatModel`, a LangChain `BaseChatModel` subclass selected by `LangChainModelFactory` when `LLM_MOCK_MODE` is active; production default **off**) makes the full agent loop and script paths testable with zero LLM connectivity and zero cost.
+
+**Requirements for agent-execution tests:**
+- Run under the mock layer (scripted or replay mode) — no provider flakiness. CI sets `LLM_MOCK_MODE: off` as the production-safe default; test harnesses activate it explicitly.
+- Determinism is itself tested: identical inputs + identical mock scripts → identical runs.
+- Record/replay round-trips persist `LLMMockRecording` rows through the CC internal API (`/internal/llm-mock/recordings`, mTLS-only; AR never touches the DB); a missing `recording_key` in replay fails with a clear typed error.
+- Model-backed (semantic-bridge) script steps route through the mock layer in mock mode — zero-LLM coverage for scripts with LLM bridge steps.
+- Prompts sent to the mocked LLM are deterministically assertable (content + structure).
+- Zero-LLM E2E: `e2e/tests/agent-zero-llm-execution.spec.ts` runs a full agent execution with the mock provider in the CI `e2e-test` job; backend end-to-end coverage in `backend/tests/e2e/test_agent_execution_e2e.py`.
+- The same mock-aware path feeds the script generate→test→refine loop (repair generator receives the sandbox capability contract).
+
+Refer to `sandboxed-scripting-test-plan.md` for module-specific coverage and test file references.

@@ -427,12 +427,16 @@ async def startup_event() -> None:
     await _cleanup_super_admin_db_records()
     await _initialize_oidc_provider_registry()
     await _run_skill_seeder()
+    await _seed_command_prompts()
     await _initialize_certificate_authority()
     await _start_scheduling_engine()
 
 
 @app.on_event("shutdown")
 async def shutdown_event() -> None:
+    from app.core.cc_service_cert_renewal import stop_daily_renewal_task
+
+    await stop_daily_renewal_task()
     await _stop_scheduling_engine()
 
 
@@ -498,6 +502,19 @@ async def _run_skill_seeder() -> None:
         logger.info("SkillSeeder complete: %s", summary)
     except Exception:
         logger.exception("SkillSeeder failed; application will continue without default skills.")
+
+
+async def _seed_command_prompts() -> None:
+    """Idempotently seed the built-in command prompts (Optimize & Verify)."""
+    try:
+        from app.db.session import AsyncSessionLocal
+        from app.services.agents.command_prompts import seed_command_prompts
+        async with AsyncSessionLocal() as db:
+            await seed_command_prompts(db)
+            await db.commit()
+        logger.info("Command prompts seeded")
+    except Exception:
+        logger.exception("Command prompt seeding failed; the built-in fallback will be used.")
 
 
 # ── Startup validations (replaced auto-provisioning) ──────────────────────
@@ -642,40 +659,28 @@ async def _initialize_certificate_authority() -> None:
 
 
 async def _ensure_cc_service_certificate() -> None:
-    """Ensure Control Center has its own service certificate for outbound calls.
+    """Ensure Control Center has a VALID service certificate for outbound calls.
 
     The CommunicationHubClient requires a service certificate to make internal
-    calls to the Communication Hub.  If the certificate files do not exist on
-    disk, generate them now using the CA that was just initialized.
+    calls to the Communication Hub. If the certificate files do not exist on
+    disk, generate them now; if they exist but are expired or within the
+    renewal window (``CC_SERVICE_CERT_RENEWAL_DAYS``, default 30 days),
+    re-issue them from the CA (self-renewal — see
+    ``app.core.cc_service_cert_renewal``). Failures never crash startup.
     """
-    import os
-
-    from app.services.certificate_authority import issue_service_certificate
-
-    cert_dir = Path("certs/control-center")
-    cert_path = cert_dir / "service-cert.pem"
-    key_path = cert_dir / "service-key.pem"
-
-    if cert_path.exists() and key_path.exists():
-        logger.info("Control Center service certificate already exists")
-        return
+    from app.core.cc_service_cert_renewal import start_daily_renewal_task
 
     try:
-        issued = await issue_service_certificate("control-center")
-        cert_dir.mkdir(parents=True, exist_ok=True)
-        cert_path.write_text(issued.certificate_pem)
-        key_path.write_text(issued.private_key_pem)
-        logger.info(
-            "Control Center service certificate generated: serial=%s expires=%s",
-            issued.serial_number,
-            issued.expires_at,
-        )
+        renewed = await renew_cc_service_certificate_if_needed()
+        if not renewed:
+            logger.info("Control Center service certificate is present and valid")
     except Exception:
         logger.exception(
-            "Failed to generate Control Center service certificate; "
+            "Failed to ensure Control Center service certificate; "
             "internal calls to Communication Hub will fail. "
             "Ensure the Certificate Authority is initialized."
         )
+    start_daily_renewal_task()
 
 
 async def _start_scheduling_engine() -> None:

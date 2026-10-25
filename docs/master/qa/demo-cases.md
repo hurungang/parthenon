@@ -4,6 +4,8 @@
 <!-- Updated automatically by /change:update-master — do not edit grep patterns manually -->
 
 > **strict-tenant-isolation (2026-10): contributed no E2E scenarios.** This was a backend-only change (signed internal tenant headers, DB tenant predicates, migrations) with no UI changes, so no Playwright specs or grep patterns were added. Isolation coverage lives in the backend integration suites — see `docs/master/qa/test-plans/multi-tenancy-test-plan.md`.
+>
+> **sandboxed-scripting-and-llm-mocking (2026-10-25): no demo-cases.md merge — the change directory contains no `demo-cases.md`.** The change's coverage lives in backend suites (`backend/tests/` — sandbox engine, validator, LLM mock layer, optimized plan, dispatcher, command execution, allowlist guard) and one zero-LLM Playwright spec (`e2e/tests/agent-zero-llm-execution.spec.ts`, not a UI demo journey); see `docs/master/qa/test-plans/sandboxed-scripting-test-plan.md`. No existing patterns referenced the since-removed Scripts tab / optimize-log dialog, so no stale patterns were removed.
 
 ## Grep Patterns
 <!-- Matches Playwright test titles and Vitest describe > it names (same format) -->

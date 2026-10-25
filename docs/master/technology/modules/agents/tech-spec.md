@@ -881,3 +881,18 @@ The following components and services support the **Agent Runtime Monitor** (reb
 | `LogPresenter.test` | frontend test | 116 tests verifying `terminated` mapping to a distinct `terminated` outcome (not `failed`) | `frontend/src/__tests__/LogPresenter.test.ts` |
 | `LogSummaryPanel.test` | frontend test | 17 tests verifying amber `BlockIcon` Chip for `terminated` distinct from red `ErrorIcon` for `failed` | `frontend/src/__tests__/LogSummaryPanel.test.tsx` |
 | `runtime-control-dashboard.spec` | E2E test | Observe-only policy visibility, topology/terminate flow, recursion contract, real-backend runtime-control checks, vendor/model availability hierarchy | `e2e/tests/runtime-control-dashboard.spec.ts` |
+
+---
+
+## Optimize-and-Verify Command & Optimized Plan (sandboxed-scripting-and-llm-mocking change)
+
+The base implementation plan is HIGH-LEVEL only; composition authoring moved to the command-driven `optimize-and-verify` special execution (full details: [sandboxed-scripting module](../sandboxed-scripting/tech-spec.md)).
+
+| Symbol | Type | Description | File |
+|--------|------|-------------|------|
+| High-level-only plan generation | service (modified) | Plan prompt carries no composition authoring; `user_requirement` travels as context | `backend/app/services/agents/plan_generation_service.py` |
+| Optimized plan service | service (new) | Persistence + association behind the `optimize-and-verify` command; authored-plan normalization (consecutive scripted segments collapse into ONE chained step; verification-gated chaining with `_split_failed_chain` demotion to tool mode); feedback memory in the authoring prompt; `retire_optimized_plan` marks rows `retired` (never deleted; only `ready` gates execution) | `backend/app/services/agents/optimized_plan_service.py` |
+| Command prompts | model + service (new) | Stored `optimize-and-verify` mission (self-reflection first, real-execution verification, mandatory "Final answer" business-result section); `COMMAND_TOKEN_BUDGET` (default 2,000,000, env-overridable) for command runs | `backend/app/db/models/command_prompt.py`, `backend/app/services/agents/command_prompts.py` |
+| Optimization system tools | internal API (new) | `get_implementation_plan`, `get_optimized_implementation_plan`, `generate_optimized_plan`, `generate_script`, `execute_script` (inline source; every execution forwarded to the AR sandbox via CH), `list_scripts`, `get_scripts`, `get_script`, `get_execution_log`; AST-based tool-name validation against the agent's actual allowed tools | `backend/app/api/v1/internal/optimization_tools.py` |
+| REST surface | API (modified) | `GET .../optimized-plan`, `POST .../optimize-plan/feedback`, `POST .../optimized-plan/retire`; `AgentJobCreate.optimize` opt-in launch flag; `regenerate-plan` retires serving versions | `backend/app/api/v1/agents.py` |
+| Mock LLM provider | service (new) | `MockChatModel` (scripted/record/replay) selected when `LLM_MOCK_MODE` active; recordings via CC internal `/internal/llm-mock/recordings` | `backend/app/services/agents/llm_mock_provider.py`, `backend/app/api/v1/internal/llm_mocking.py` |

@@ -232,6 +232,7 @@ erDiagram
         enum generation_status
         string generation_error
         string agent_config_hash
+        boolean fully_scripted "base-plan mark: single-script zero-LLM workflow candidate"
         datetime generated_at
         datetime created_at
         datetime updated_at
@@ -456,8 +457,89 @@ erDiagram
 | **ExecutionLogEntry** | Immutable audit trail of agent session execution events (LLM calls, tool calls, system events, errors). Categorised by event type and actor type; referenced by `agent_job_id` for session-scoped queries. |
 
 **Business rules:**
-- A model can have one to four `ModelGuardrailConfiguration` records, one per period. There is no forced four-period entry.
-- `ModelAvailability.disabled_reason = vendor_disabled` indicates a cascade from vendor-level disable; the per-model `ModelGuardrailConfiguration` records remain visible to show the cascade source.
+- A model can have one to four `ModelGuardrailConfiguration` records, one per period. There is no forced four-period entry.- `ModelAvailability.disabled_reason = vendor_disabled` indicates a cascade from vendor-level disable; the per-model `ModelGuardrailConfiguration` records remain visible to show the cascade source.
 - `AgentJob.status` accepts `terminated` as a distinct value from `failed`, enabling operators to distinguish operator-initiated stops from execution errors.
 - `ExecutionEventCategory` accepts `model_disabled`, `vendor_disabled`, and `guardrail_breached` as user-visible event categories for execution logs. These are distinct from standard execution failures.
 - `SopRecursionValidationCheck` runs at every agent create, update, and run; `result = fail` blocks the action.
+
+## Software 3.0 Script Registry, Optimized Plan & Command Prompt Entities
+
+The two-layer plan model and its script registry: the base `AgentPlan` stays
+a high-level step list; the model-authored workflow composition lives in a
+separate `OptimizedImplementationPlan` produced by the opt-in "Optimize &
+Verify" side execution (its mission text is stored as a `CommandPrompt`).
+The composition's script segments are persisted as versioned, sandboxed
+`ScriptDefinition` / `ScriptVersion` rows with verification, fallback, and
+repair evidence.
+
+```mermaid
+erDiagram
+    AgentType ||--o{ ScriptDefinition : "owns"
+    AgentPlan ||--o{ OptimizedImplementationPlan : "optimized from"
+    OptimizedImplementationPlan ||--o{ ScriptDefinition : "authored"
+    ScriptDefinition ||--o{ ScriptVersion : "versions"
+    ScriptVersion ||--o{ VerificationRun : "verified by"
+    ScriptVersion |o--o| ScriptVersion : "repaired_from"
+    FallbackEvent |o--o{ RepairAttempt : "repaired by"
+    CommandPrompt {
+        string slug
+        text prompt_text
+        boolean is_active
+    }
+    OptimizedImplementationPlan {
+        uuid agent_plan_id "base plan optimized from"
+        json plan_steps "authored composition"
+        boolean fully_scripted "zero-LLM vs scripts-as-tools"
+        enum status "generating|ready|failed|needs_feedback|retired"
+        json feedback_comments
+    }
+    ScriptDefinition {
+        string name
+        enum lifecycle_status
+        enum health_status
+        boolean fully_scripted
+        uuid source_optimized_plan_id
+    }
+    ScriptVersion {
+        string version_label
+        text python_source
+        int cpu_limit_seconds
+        int memory_limit_mb
+        int wall_time_limit_seconds
+        enum sandbox_validation_status
+        text sandbox_validation_reason
+    }
+    VerificationRun {
+        enum comparison_outcome
+        enum verdict
+        boolean sandbox_check_passed
+    }
+    FallbackEvent {
+        enum trigger_reason "incl. sandbox_violation, resource_limit_exceeded"
+        enum resulting_action
+    }
+    RepairAttempt {
+        text defect_diagnosis
+        string diff_applied
+        enum retry_outcome
+    }
+```
+
+**Source**: `backend/app/db/models/script_registry.py` — ScriptDefinition, ScriptVersion, VerificationRun, FallbackEvent, RepairAttempt
+**Source**: `backend/app/db/models/optimized_plan.py` — OptimizedImplementationPlan
+**Source**: `backend/app/db/models/command_prompt.py` — CommandPrompt
+
+| Entity | Description |
+|--------|-------------|
+| **OptimizedImplementationPlan** | The model-authored workflow composition for an agent type — a separate entity from the high-level base plan. Carries the authored composition (`plan_steps`: sandboxed Python script segments, LLM bridge steps, output decision), the `fully_scripted` execution-semantics mark (only a fully-scripted plan is served zero-LLM; otherwise its scripts become invocable tools the LLM orchestrates), lifecycle status (`generating`/`ready`/`failed`/`needs_feedback`/`retired`), a one-line failure reason, and an accumulated `feedback_comments` memory that is included when the plan is regenerated. Served only while **fresh** (ready and newer than the base plan); "Retire plan" marks the row `retired` (kept for reference, never gates execution). |
+| **CommandPrompt** | A stored, named command mission (e.g. `optimize-and-verify`) that drives a special agent side execution: at launch, the mission text is used as the execution prompt (with the target agent type interpolated) instead of the agent type's own system instruction. Deliberately not a Skill/SOP — a command is a mission, not a permission-grantable capability. |
+| **ScriptDefinition** | A versioned, named script owned by exactly one AgentType (name unique per tenant); the script inherits the agent's identity and permissions. Lifecycle: `draft → verified → compiled → retired`. Carries lineage to the base plan, the optimized plan that authored it (`source_optimized_plan_id`), and/or the observed session, a `current_version` serving pointer, aggregate `health_status` derived from fallback behaviour, and the `fully_scripted` execution-semantics mark (set from the plan's mark at promotion). |
+| **ScriptVersion** | Immutable revision of a ScriptDefinition. Carries the model-authored `python_source` (sandboxed Python), per-version sandbox resource caps (`cpu_limit_seconds`, `memory_limit_mb`, `wall_time_limit_seconds`; platform defaults when null), the sandbox-validation outcome (`sandbox_validation_status` + recorded `sandbox_validation_reason`), the deprecated-but-retained `declarative_step_graph`, and repair lineage (`repaired_from`). Content + caps are immutable and auditable per version. |
+| **VerificationRun** | Evidence of shadow-running a script version against a reference LLM execution: recorded input/expected/actual, `comparison_outcome` (`match`/`match_within_tolerance`/`mismatch`), the promote/reject `verdict` with reason, and `sandbox_check_passed` sandbox-compliance evidence. Rejection keeps the version in draft. |
+| **FallbackEvent** | Recorded whenever a compiled run fell back to the LLM path. `trigger_reason` includes `sandbox_violation` and `resource_limit_exceeded` alongside `execution_error`, `tool_schema_mismatch`, `output_validation_failure`; records the resulting action and the contribution to the owning script's health degradation. |
+| **RepairAttempt** | One bounded, agent-driven repair cycle within a fallback episode: defect diagnosis, applied diff, and the produced successor `ScriptVersion` (which must re-verify). Retry outcome is `pending`/`succeeded`/`failed`; exhaustion triggers unconditional fallback with reason capture. |
+
+**Business rules:**
+- Script-First execution preference: a `fully_scripted` optimized plan is served as a zero-LLM script; all other scripts are exposed as `script____<name>` tools the LLM orchestrates. Absent, stale, retired, or failed optimized plans fall back to the base-plan LLM path.
+- The base `AgentPlan.fully_scripted` mark flags workflows achievable by a single script (no/typed input); it seeds the optimized-plan authoring, not execution itself.
+- Only Control Center persists registry, plan, and execution data; Agent Runtime consumes them exclusively via CC REST APIs.

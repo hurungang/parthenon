@@ -72,7 +72,7 @@ class SessionResponse(BaseModel):
     status: str
     started_at: datetime | None
     completed_at: datetime | None
-    output_data: dict | None
+    output_data: dict[str, Any] | str | list[Any] | None
     error_message: str | None
     stop_category: str | None
     stop_reason: str | None
@@ -91,7 +91,9 @@ class ConversationHistoryResponse(BaseModel):
 class SessionResultRequest(BaseModel):
     """Request body for POST /sessions/{session_id}/result."""
 
-    output_data: dict = Field(..., description="Execution output payload to persist")
+    output_data: dict[str, Any] | str | list[Any] = Field(
+        ..., description="Execution output payload to persist"
+    )
 
 
 class SessionResultResponse(BaseModel):
@@ -122,7 +124,7 @@ class SessionStatusUpdateRequest(BaseModel):
     """Request body for PATCH /sessions/{session_id}/status."""
 
     status: Literal["running", "completed", "failed", "waiting_for_human"]
-    output_data: dict | None = None
+    output_data: dict[str, Any] | str | list[Any] | None = None
     error_message: str | None = None
     stop_category: str | None = None
     stop_reason: str | None = None
@@ -359,7 +361,13 @@ async def post_session_result(
 
     # If the output contains an explicit result (e.g. from save_result via CommHub),
     # persist it to the Result Repository so it appears in the UI.
-    result_content: str | None = body.output_data.get("result") if body.output_data else None
+    result_content: str | None = (
+        body.output_data.get("result")
+        if isinstance(body.output_data, dict)
+        else body.output_data
+        if isinstance(body.output_data, str)
+        else None
+    )
     if result_content:
         try:
             from app.db.models.agents import AgentType, AgentOutputType
@@ -380,8 +388,12 @@ async def post_session_result(
             await store.save(
                 payload={"content": result_content},
                 db=db,
-                title=body.output_data.get("title") or None,
                 agent_type_id=job.agent_type_id,
+                title=(
+                    body.output_data.get("title")
+                    if isinstance(body.output_data, dict)
+                    else None
+                ) or None,
                 content_type=content_type,
                 # conversation_session_id is None for task agent sessions
             )

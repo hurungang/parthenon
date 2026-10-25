@@ -109,3 +109,12 @@ This pattern supports entering partial wildcards (`agent::mana*`), module wildca
 ## Agent Management Panel Permission Gating
 
 The [Agent Management Panel](agent-management-panel.md) reuses existing `agent::*` resource types only — **no new manifest entries** and no permission-resolution changes: `agent::roles`, `agent::identities`, `agent::skills`, `agent::sops`, `agent::data_types`, `agent::model_configs` (agent CRUD actions have no explicit binding and degrade through the standard API error surfaces). A denied (403) slot list query disables that slot's actions with an explanatory localized note instead of an error; structured 403 detail renders through the standard permission alert components in-dialog and the global permission snackbar. The backend Permission Engine remains the single enforcement point.
+
+## Sandboxed Scripts
+
+Sandboxed scripts bind to the agent session under the same dual identities
+as the LLM agent loop — the sandbox allowlist adds **no new identity or
+permission pathway**. A script can do only what its owning agent type's
+resolved permission set already allows, exercised exclusively through the
+session-bound tool client; permission evaluation and enforcement are
+unchanged.

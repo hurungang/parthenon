@@ -24,7 +24,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import require_internal_tenant_context, require_service_certificate
 from app.core.tenant_context import TenantContext
-from app.db.models.agents import AgentOutputType
+from app.db.models.agents import AgentOutputType, AgentType
 from app.db.session import get_db
 
 logger = logging.getLogger(__name__)
@@ -1165,3 +1165,108 @@ async def execute_decision_tool_internal(
             status_code=500,
             detail=f"Failed to execute decision tool: {exc}",
         )
+
+
+# ── Semantic bridge (Software 3.0 script framework) ──────────────────────────
+
+
+class SemanticBridgeRequest(BaseModel):
+    """One-shot LLM completion request routed from Communication Hub.
+
+    Sent by CH when a compiled script's ``semantic____<name>`` step runs:
+    the script carries the repeatable tool calls + data processing; only
+    the semantic step (summary / bridge / final render) consumes model
+    capacity here.
+    """
+
+    session_id: str
+    agent_type_id: str
+    prompt: str
+    input: Any = None
+
+
+class SemanticBridgeResponse(BaseModel):
+    """One-shot completion result."""
+
+    text: str
+
+
+@router.post("/semantic-bridge", response_model=SemanticBridgeResponse)
+async def execute_semantic_bridge_internal(
+    body: SemanticBridgeRequest,
+    tenant_ctx: Annotated[TenantContext, Depends(require_internal_tenant_context)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> SemanticBridgeResponse:
+    """One-shot LLM completion using the agent type's configured model.
+
+    The agent type resolves strictly within the request's tenant (signed
+    internal tenant context — same guard as the decision execute endpoint);
+    its model configuration is decrypted and dispatched here in Control
+    Center (CC-only DB access), and the raw completion text is returned.
+    No credentials or provider keys cross the service boundary.
+    """
+    from app.services.agents.model_binding import ModelBindingError, ModelBindingLayer
+
+    bound_tenant_id = tenant_ctx.tenant_id
+    try:
+        agent_type_id = uuid.UUID(str(body.agent_type_id))
+    except (ValueError, TypeError):
+        raise HTTPException(status_code=422, detail="Invalid agent_type_id")
+
+    result = await db.execute(
+        select(AgentType).where(
+            AgentType.id == agent_type_id,
+            AgentType.tenant_id == bound_tenant_id,
+        )
+    )
+    agent_type = result.scalars().first()
+    if agent_type is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Agent type not found in tenant for semantic bridge",
+        )
+
+    logger.info(
+        "Semantic bridge requested for agent type '%s' (session %s, tenant %s)",
+        agent_type.name,
+        body.session_id,
+        bound_tenant_id,
+    )
+
+    user_message = f"{body.prompt}\n\nInput data:\n{json.dumps(body.input, default=str)}"
+
+    # LLM Mock Layer (Phase 4.5): in test mock modes the bridge completion
+    # is served deterministically — zero LLM API usage. Inactive (default)
+    # returns None and the real model path below runs unchanged.
+    from app.services.agents.llm_mock_provider import maybe_mock_semantic_bridge
+
+    mocked = maybe_mock_semantic_bridge(
+        user_message, str(agent_type.model_id or "semantic-bridge")
+    )
+    if mocked is not None:
+        return SemanticBridgeResponse(text=mocked)
+
+    try:
+        binding = ModelBindingLayer()
+        model_config = await binding.resolve_model_config(agent_type.model_id, db)
+        response = await binding.complete(
+            agent_type=agent_type,
+            model_config=model_config,
+            messages=[{"role": "user", "content": user_message}],
+        )
+    except ModelBindingError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+    except Exception as exc:
+        logger.exception("Semantic bridge completion failed for agent type '%s'", agent_type.name)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Semantic bridge completion failed: {exc}",
+        )
+
+    text = response.text if hasattr(response, "text") else str(response)
+    logger.info(
+        "Semantic bridge completed for agent type '%s' (session %s)",
+        agent_type.name,
+        body.session_id,
+    )
+    return SemanticBridgeResponse(text=text)

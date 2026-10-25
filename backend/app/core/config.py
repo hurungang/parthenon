@@ -303,6 +303,12 @@ class Settings(BaseSettings):
     tenant_context_signing_key: str = Field(
         default="dev-tenant-signing-key-change-me-in-production!"
     )
+    # How long a CC-signed tenant context stays fresh for verification.
+    # The set is minted ONCE at execution-trigger time and forwarded
+    # verbatim by AR/CH for the WHOLE agent run (they never re-sign), so
+    # this must comfortably exceed the longest legitimate agent
+    # execution — not just a single HTTP hop.
+    tenant_signature_max_age_seconds: float = Field(default=86_400.0)
     # How long a resolved tenant (slug -> active tenant) may stay cached.
     tenant_resolution_cache_ttl_seconds: float = Field(default=30.0)
 

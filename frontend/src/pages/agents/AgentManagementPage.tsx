@@ -25,6 +25,7 @@ import {
 import AddIcon from '@mui/icons-material/Add'
 import DeleteIcon from '@mui/icons-material/Delete'
 import EditIcon from '@mui/icons-material/Edit'
+import RefreshIcon from '@mui/icons-material/Refresh'
 import PlayArrowIcon from '@mui/icons-material/PlayArrow'
 import VisibilityIcon from '@mui/icons-material/Visibility'
 import { useAgentTypes, useDeleteAgentType } from '../../hooks/useAgentTypes'
@@ -74,7 +75,7 @@ export function AgentManagementPage() {
   const navigate = useNavigate()
   const location = useLocation()
   const pag = usePagination()
-  const { data: agentTypes, isLoading, error } = useAgentTypes(pag.limit, pag.offset)
+  const { data: agentTypes, isLoading, error, refetch, isRefetching } = useAgentTypes(pag.limit, pag.offset)
   const queryClient = useQueryClient()
 
   // Role and identity name resolution for table columns
@@ -258,9 +259,22 @@ export function AgentManagementPage() {
     <Box>
       <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
         <Typography variant="h4" fontWeight={700}>{t('agents.title')}</Typography>
-        <Button variant="contained" startIcon={<AddIcon />} onClick={handleOpenCreate}>
-          {t('agents.createType')}
-        </Button>
+        <Box display="flex" alignItems="center" gap={1}>
+          <Tooltip title={t('app.refresh')}>
+            <span>
+              <IconButton
+                aria-label={t('app.refresh')}
+                onClick={() => void refetch()}
+                disabled={isRefetching}
+              >
+                {isRefetching ? <CircularProgress size={20} /> : <RefreshIcon />}
+              </IconButton>
+            </span>
+          </Tooltip>
+          <Button variant="contained" startIcon={<AddIcon />} onClick={handleOpenCreate}>
+            {t('agents.createType')}
+          </Button>
+        </Box>
       </Box>
 
       {isLoading && <CircularProgress />}

@@ -585,8 +585,17 @@ async def get_oauth_authorization_url(
     # Pass session metadata to OAuth flow
     session_name = body.session_name if body else None
     session_description = body.session_description if body else None
-    
-    return await initiate_oauth_flow(server_id, db, manual_config, session_name, session_description)
+    reauth_session_id: uuid.UUID | None = None
+    if body and body.session_id:
+        try:
+            reauth_session_id = uuid.UUID(body.session_id)
+        except (ValueError, TypeError):
+            raise HTTPException(status_code=400, detail="session_id must be a valid UUID")
+
+    return await initiate_oauth_flow(
+        server_id, db, manual_config, session_name, session_description,
+        session_id=reauth_session_id,
+    )
 
 
 # ── MCP Session Router ─────────────────────────────────────────────────────────

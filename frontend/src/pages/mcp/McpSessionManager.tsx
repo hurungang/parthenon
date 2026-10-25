@@ -351,7 +351,10 @@ export function McpSessionManager({ serverId }: McpSessionManagerProps) {
     try {
       const { data } = await apiClient.post<{ authorization_url: string }>(
         `/mcp/servers/${serverId}/oauth/authorize`,
-        { session_name: session.name, session_description: session.description }
+        // Pass the session id: the backend performs IN-PLACE re-auth for the
+        // expired session (updating its tokens) instead of creating a
+        // duplicate the tool-call reader never resolves.
+        { session_name: session.name, session_description: session.description, session_id: session.id }
       )
       const popup = window.open(
         data.authorization_url,

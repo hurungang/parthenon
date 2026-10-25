@@ -51,7 +51,7 @@ export function SessionExecutionLogsDialog({ open, sessionId, onClose }: Props) 
   const [sessionStatus, setSessionStatus] = useState<AgentJobStatus | undefined>(undefined)
   const [outputId, setOutputId] = useState<string | undefined>(undefined)
   const [outputType, setOutputType] = useState<AgentOutputType | null>(null)
-  const [markdownOutputData, setMarkdownOutputData] = useState<Record<string, unknown> | null>(null)
+  const [markdownOutputData, setMarkdownOutputData] = useState<Record<string, unknown> | string | null>(null)
   const [typedOutput, setTypedOutput] = useState<AgentOutputResponse | null>(null)
   const [loading, setLoading] = useState(false)
   const [outputLoading, setOutputLoading] = useState(false)
@@ -267,7 +267,11 @@ export function SessionExecutionLogsDialog({ open, sessionId, onClose }: Props) 
                 {!outputLoading && !typedOutput && markdownOutputData && (
                   <OutputTypeResultTab
                     outputType={outputType === 'markdown' ? 'markdown' : 'auto'}
-                    outputData={markdownOutputData}
+                    outputData={
+                      typeof markdownOutputData === 'string'
+                        ? { result: markdownOutputData }
+                        : markdownOutputData
+                    }
                   />
                 )}
                 {!outputLoading && !typedOutput && isErrorSession && (

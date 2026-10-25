@@ -655,6 +655,7 @@ erDiagram
         enum generation_status
         string generation_error
         string agent_config_hash
+        boolean fully_scripted "base-plan mark: single-script zero-LLM workflow candidate"
         datetime generated_at
         datetime created_at
         datetime updated_at
@@ -750,6 +751,105 @@ erDiagram
 **Source**: `backend/app/db/models/agent_data.py`, `backend/app/db/models/agent_output.py`, `backend/app/db/models/agent_data_type.py`
 
 ---
+
+## Software 3.0 Script Registry, Optimized Plans, Execution & LLM Mock Entities
+
+The script framework records model-authored, sandboxed workflow scripts
+(their lifecycle and evidence), the **two-layer plan model** — the high-level
+base `AgentPlan` plus the model-authored `OptimizedImplementationPlan`
+composition and the stored `CommandPrompt` mission that drives the
+"Optimize & Verify" side execution — per-execution provenance, and LLM mock
+recordings for zero-LLM test runs. All are Control-Center-owned (`tenant_id`
+FK, `SET NULL`); Agent Runtime consumes them exclusively via mTLS CC REST
+APIs.
+
+```mermaid
+erDiagram
+    AgentType ||--o{ ScriptDefinition : "owns"
+    OptimizedImplementationPlan ||--o{ ScriptDefinition : "authored"
+    AgentPlan ||--o{ OptimizedImplementationPlan : "optimized from"
+    ScriptDefinition ||--o{ ScriptVersion : "versions"
+    ScriptVersion ||--o{ VerificationRun : "verified by"
+    ScriptVersion ||--o{ ScriptExecutionRecord : "executed as"
+    ScriptExecutionRecord ||--o{ FallbackEvent : "falls back via"
+    FallbackEvent ||--o{ RepairAttempt : "repaired by"
+    ScriptVersion |o--o| ScriptVersion : "repaired_from"
+    AgentSession |o--o{ ScriptExecutionRecord : "ran within"
+    AgentSession |o--o{ LLMMockRecording : "recorded in"
+
+    ScriptDefinition {
+        string name "unique per tenant"
+        enum lifecycle_status "draft|verified|compiled|retired"
+        enum health_status "healthy|degraded|unhealthy"
+        bool fully_scripted "zero-LLM serving vs scripts-as-tools"
+        uuid current_version_id "serving version pointer"
+    }
+    ScriptVersion {
+        string version_label
+        text python_source "model-authored sandboxed Python"
+        int cpu_limit_seconds "resource caps (platform defaults when null)"
+        int memory_limit_mb
+        int wall_time_limit_seconds
+        enum sandbox_validation_status "pending|passed|failed"
+        text sandbox_validation_reason
+        json declarative_step_graph "deprecated-but-retained"
+    }
+    OptimizedImplementationPlan {
+        json plan_steps "authored composition: script segments + LLM bridges + output decision"
+        bool fully_scripted "execution-semantics mark"
+        enum status "generating|ready|failed|needs_feedback|retired"
+        text error
+        json feedback_comments "accumulated user feedback memory"
+    }
+    CommandPrompt {
+        string slug "stable mission slug (e.g. optimize-and-verify)"
+        string name
+        text prompt_text "mission text; agent_type_id interpolated at launch"
+        bool is_active
+    }
+    VerificationRun {
+        enum comparison_outcome
+        enum verdict
+        bool sandbox_check_passed "sandbox-compliance evidence"
+    }
+    ScriptExecutionRecord {
+        enum outcome
+        int tokens_saved_estimate "historical rows"
+        int tokens_saved_actual "measured, not estimated"
+        bool sandbox_termination
+        text sandbox_violation_detail "one-line human-readable"
+    }
+    FallbackEvent {
+        enum trigger_reason "includes sandbox_violation, resource_limit_exceeded"
+        enum resulting_action
+    }
+    LLMMockRecording {
+        string recording_key "deterministic SHA-256 of the request"
+        string model_identifier
+        enum interaction_kind "agent_loop|semantic_bridge|decision_step"
+        json request_payload "prompt + structure only — never credentials"
+        json response_payload
+        json usage_metadata
+    }
+```
+
+**Invariants:** ScriptVersion content (`python_source` + caps) is immutable
+per version; lifecycle is draft → verified → compiled → retired. The base
+`AgentPlan` stays a high-level step list (it carries a `fully_scripted` mark
+for single-script workflows); the optimized composition lives separately in
+`OptimizedImplementationPlan` and is served only while **fresh** (ready AND
+newer than the base plan); "Retire plan" marks the row `retired` (kept for
+reference) so the next run re-triggers the optimized-plan check.
+`CommandPrompt` is a stored mission, not a permission-grantable skill.
+`llm_mock_recordings` is test-infrastructure data keyed by request content
+(no relationship to ScriptVersion) and never contains API keys or identity
+tokens.
+
+**Source**: `backend/app/db/models/script_registry.py` — ScriptDefinition, ScriptVersion, VerificationRun, FallbackEvent, RepairAttempt
+**Source**: `backend/app/db/models/optimized_plan.py` — OptimizedImplementationPlan
+**Source**: `backend/app/db/models/command_prompt.py` — CommandPrompt
+**Source**: `backend/app/db/models/script_execution.py` — ScriptExecutionRecord
+**Source**: `backend/app/db/models/llm_mocking.py` — LLMMockRecording
 
 ## Decision Tools
 

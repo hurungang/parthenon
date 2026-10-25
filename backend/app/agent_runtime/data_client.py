@@ -405,9 +405,12 @@ class ControlCenterDataClient:
         await self._patch(f"/sessions/{session_id}/status", body)
 
     async def mark_session_completed(
-        self, session_id: uuid.UUID, output_data: dict[str, Any]
+        self, session_id: uuid.UUID, output_data: dict[str, Any] | str
     ) -> None:
         """Transition a session to completed and persist output data.
+
+        ``output_data`` may be a plain string (raw render output from a
+        script path) or a dict payload; it is persisted as-is either way.
 
         Calls ``PATCH /internal/data/sessions/{session_id}/status``.
         """

@@ -133,6 +133,15 @@ The `human_intervene` tool follows the same explicit-trigger pattern as `system_
 - Dead-loop scenarios are prevented during run initiation when risk conditions are detected
 - Recursion validation outcomes are reflected in execution logs
 
+## Optimized Plan Execution Preference & Fallback
+
+When an agent type has a verified, up-to-date **optimized implementation plan** (model-authored workflow composition, see [Sandboxed Scripting & Model-Authored Composition](sandboxed-scripting.md)), execution prefers it:
+
+- A **fully-scripted** composition completes with zero model calls.
+- Otherwise, the composition's scripts are exposed to the model as invocable tools and the model orchestrates them.
+- An absent, stale (e.g., base plan regenerated), retired, or failed optimized plan — or the failure of any script — falls back **unconditionally** to the base plan's model-driven path, with the reason recorded. A run never fails solely because a script or the optimized plan failed.
+- This preference is fixed platform behaviour; no execution-mode configuration is required from users.
+
 ## User Impact
 - Security administrators can verify and revoke agent instances
 - Platform operators do not manage or distribute identity tokens

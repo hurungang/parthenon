@@ -122,7 +122,9 @@ class TestInvalidHeaderSets:
         assert response.status_code == 401
 
     def test_stale_replayed_signature_rejected(self, ar_client):
-        stale = build_tenant_signature_headers(CTX, timestamp=time.time() - 600)
+        # Aged far beyond the configured acceptance window (24h default,
+        # signed once at trigger time and forwarded for the whole run).
+        stale = build_tenant_signature_headers(CTX, timestamp=time.time() - 7 * 24 * 3600)
         response = ar_client.get(
             "/internal/echo", headers={"X-Client-Certificate": "FAKE", **stale}
         )

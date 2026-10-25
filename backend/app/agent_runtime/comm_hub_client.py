@@ -55,6 +55,8 @@ class CommHubToolClient:
         session_id: str,
         agent_type_id: str,
         conv_session_id: str | None = None,
+        provenance: str | None = None,
+        script_version: str | None = None,
     ) -> dict[str, Any]:
         """Call a tool through Communication Hub.
 
@@ -81,6 +83,11 @@ class CommHubToolClient:
         }
         if conv_session_id:
             payload["conv_session_id"] = conv_session_id
+        # Script provenance tagging (G2): script vs llm + originating version.
+        if provenance:
+            payload["provenance"] = provenance
+        if script_version:
+            payload["script_version"] = script_version
 
         logger.info(
             "Calling tool '%s' via Communication Hub (session=%s)",
@@ -150,6 +157,22 @@ class CommHubToolClient:
                 # Return tool result
                 tool_result = result_data.get("result", {})
                 logger.info("Tool '%s' completed successfully", tool_name)
+
+                # Software 3.0: best-effort per-session capture of LLM-path
+                # tool calls (auto-compilation input). Script executions
+                # (provenance/script_version tagged) are never captured.
+                if not provenance and not script_version:
+                    try:
+                        from app.agent_runtime.scripts.capture import record_tool_call
+
+                        record_tool_call(
+                            session_id, tool_name, tool_args, tool_result
+                        )
+                    except Exception as capture_exc:
+                        logger.debug(
+                            "Tool-call capture skipped for '%s': %s",
+                            tool_name, capture_exc,
+                        )
                 return tool_result
 
         except httpx.HTTPStatusError as exc:

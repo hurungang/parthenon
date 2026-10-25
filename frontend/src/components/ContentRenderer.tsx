@@ -1,6 +1,6 @@
 import { Box, Typography } from '@mui/material'
 import { containsHtmlTags, sanitizeHtml } from '../utils/contentDetection'
-import { simpleMarkdownToHtml } from '../utils/markdown'
+import { MarkdownRenderer } from './common/MarkdownRenderer'
 
 /** Shared MUI styling for rendered HTML content (markdown and HTML paths). */
 const resultMarkdownSx = {
@@ -64,13 +64,6 @@ export function ContentRenderer({ content, mode = 'auto' }: ContentRendererProps
     )
   }
 
-  // Non-HTML content in auto mode: markdown conversion
-  const markdownHtml = simpleMarkdownToHtml(content)
-  return (
-    <Box
-      className="result-markdown"
-      sx={resultMarkdownSx}
-      dangerouslySetInnerHTML={{ __html: markdownHtml }}
-    />
-  )
+  // Non-HTML content in auto mode: markdown conversion (GFM via remark-gfm)
+  return <MarkdownRenderer content={content} sx={resultMarkdownSx} />
 }

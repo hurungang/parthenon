@@ -115,20 +115,34 @@ class TestReplayRejection:
         old = time.time() - (DEFAULT_MAX_AGE_SECONDS + 30)
         headers = build_tenant_signature_headers(_ctx(), timestamp=old)
         with pytest.raises(TenantSignatureError, match="stale"):
-            verify_tenant_signature_headers(headers)
+            verify_tenant_signature_headers(headers, max_age_seconds=DEFAULT_MAX_AGE_SECONDS)
 
     def test_future_timestamp_beyond_window_rejected(self):
         future = time.time() + (DEFAULT_MAX_AGE_SECONDS + 30)
         headers = build_tenant_signature_headers(_ctx(), timestamp=future)
         with pytest.raises(TenantSignatureError, match="stale"):
-            verify_tenant_signature_headers(headers)
+            verify_tenant_signature_headers(headers, max_age_seconds=DEFAULT_MAX_AGE_SECONDS)
 
     def test_explicit_now_honored_for_determinism(self):
         signed_at = 1_000_000
         headers = build_tenant_signature_headers(_ctx(), timestamp=signed_at)
         # Verify "now" far later than the window → stale.
         with pytest.raises(TenantSignatureError, match="stale"):
-            verify_tenant_signature_headers(headers, now=signed_at + DEFAULT_MAX_AGE_SECONDS + 1)
+            verify_tenant_signature_headers(
+                headers, max_age_seconds=DEFAULT_MAX_AGE_SECONDS, now=signed_at + DEFAULT_MAX_AGE_SECONDS + 1
+            )
+
+    def test_settings_default_window_allows_long_agent_runs(self):
+        """The set is signed once at trigger time and forwarded for the
+        whole run (AR/CH never re-sign) — the settings-driven default
+        window must accept a signature aged well beyond one HTTP hop."""
+        from app.core.config import get_settings
+
+        age = 3600.0  # a one-hour-old signature from a long agent run
+        assert age < get_settings().tenant_signature_max_age_seconds
+        headers = build_tenant_signature_headers(_ctx(), timestamp=time.time() - age)
+        verified = verify_tenant_signature_headers(headers)
+        assert str(verified.tenant_id) == str(_ctx().tenant_id)
 
 
 class TestUnsignedAndPartial:

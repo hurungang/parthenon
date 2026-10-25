@@ -148,3 +148,12 @@ Both agent authentication paths converge at the same permission engine. The reso
 ## Inline Identity Provisioning (Agent Management Panel)
 
 The [Agent Management Panel](agent-management-panel.md) provisions an agent identity inline by mounting the shared identity dialog, which reuses the **existing OAuth sign-in popup flow** end-to-end via Control Center only: the authorization URL is requested from the existing Control Center endpoint, the provider consent happens in the popup, and the existing popup callback route completes sign-in. No new authentication path is introduced; tokens remain stored encrypted and refreshed automatically by Control Center, and the identity → role → permission resolution chain is unchanged.
+
+## Sandboxed Scripts
+
+Scripts never receive identity tokens or credentials. They bind to the
+executing agent's session under the same dual identities (certificate +
+per-call injected tokens handled by Communication Hub); the sandbox adds no
+new identity surface — its single egress is the injected session-bound tool
+client, and a secret-shape guard at validation keeps credential-shaped
+strings out of script source.
