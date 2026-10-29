@@ -69,6 +69,8 @@ export interface McpSession {
   credential_config: Record<string, unknown> | null
   oauth_expires_at: string | null
   oauth_refresh_expires_at: string | null
+  requires_reauth: boolean
+  last_refresh_error: string | null
   created_at: string
   updated_at: string
 }
@@ -471,6 +473,11 @@ export interface TopologyNode {
    * matching route connectors reuse the same colour).
    */
   accentColor?: string
+  /**
+   * Token health badge state (token-expiry-alerting): 'expiring' renders a
+   * warning badge, 'expired' an error badge; omit for healthy/unknown.
+   */
+  tokenHealth?: 'expiring' | 'expired'
   /**
    * Zoned topology (agent panel): id of the parent node this node renders
    * BENEATH as an indented tree child inside its group box (e.g. a skill

@@ -26,7 +26,8 @@ erDiagram
     }
     TokenRefreshLog {
         uuid id
-        uuid agent_identity_id
+        uuid agent_identity_id "nullable; exactly one of identity/session per row"
+        uuid mcp_session_id "nullable; exactly one of identity/session per row"
         datetime attempted_at
         enum outcome
         string error_message
@@ -34,6 +35,18 @@ erDiagram
         datetime next_retry_at
         json metadata
         datetime created_at
+    }
+    TokenHealthCheck {
+        uuid id
+        uuid tenant_id "mandatory; tenant-scoped"
+        uuid agent_type_id "execution being preflighted"
+        uuid session_id "agent execution session, nullable if blocked pre-submission"
+        enum target_kind "agent_identity | mcp_session"
+        uuid target_id "polymorphic reference, no DB-level FK"
+        enum health_state "healthy | expiring | expired | unknown"
+        enum check_outcome "passed | blocked"
+        string message
+        datetime checked_at
     }
     CertificateValidationLog {
         uuid id
@@ -84,12 +97,14 @@ erDiagram
 
     AgentType ||--o{ AgentInstanceCertificate : "issues"
     AgentIdentity ||--o{ TokenRefreshLog : "logs"
-    AgentApiKey }o--|| AgentIdentity : "bound to"
-    AgentApiKey }o--|| AgentRole : "bound to"
-    AgentApiKey ||--o{ ApiKeyUsageLog : "audited by"
+    McpSession ||--o{ TokenRefreshLog : "logs (exactly one ref per row)"
+    Tenant ||--o{ TokenHealthCheck : "scopes"
+    AgentType ||--o{ TokenHealthCheck : "preflight before execution"
+    AgentIdentity ||--o{ TokenHealthCheck : "preflighted as"
+    McpSession ||--o{ TokenHealthCheck : "preflighted as"
 ```
 
-**Sources**: `backend/app/db/models/agent_security.py`, `backend/app/db/models/agent_api_key.py`
+**Sources**: `backend/app/db/models/agent_security.py`, `backend/app/db/models/token_health.py`, `backend/app/db/models/agent_api_key.py`
 
 | Entity | Description |
 |--------|-------------|

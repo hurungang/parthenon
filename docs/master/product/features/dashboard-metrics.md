@@ -86,6 +86,17 @@ The Dashboard Metrics feature replaces the original placeholder dashboard — wh
 - Cards populate independently as data arrives
 - The page title and tagline remain unchanged from the existing dashboard
 
+### Token Health Alerting
+
+The dashboard surfaces credential-expiry warnings alongside operational metrics:
+
+- Separate "expired" and "about to expire (within 7 days)" indicators are shown for (a) agent identities and (b) MCP sessions
+- Each warning is clickable and navigates directly to the page where the user can refresh the identity or re-authenticate the MCP session
+- Indicators are permission-checked consistent with existing card behaviour: inaccessible domains show the standard "Permission Denied" placeholder
+- Warnings disappear automatically once the underlying credential is refreshed/re-authenticated
+
+See [Token Expiry Alerting](token-expiry-alerting.md).
+
 ## Out of Scope
 
 - Drill-down or click-through from stat cards to filtered list views

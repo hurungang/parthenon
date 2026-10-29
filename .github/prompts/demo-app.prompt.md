@@ -101,7 +101,12 @@ require(path.resolve('e2e/node_modules/@playwright/test/cli.js'));
 | Create agent | `Agent Management Panel — CRUD lifecycle > creates an agent from the panel and shows it in sidebar + header immediately (no reload)` | RPG-style panel: create dialog → agent appears in sidebar + header instantly, no reload |
 | Inline create-and-assign | `Agent Management Panel — equipment slots (inline create-and-assign) > role slot: create-new mounts the real Agent Role dialog and assigns the created role` | Create a role inside the panel via the real module dialog; it's assigned to the agent immediately |
 | Live topology | `Agent Management Panel — live topology > topology updates immediately on draft mutations with zero network requests` | Topology re-renders on every equip/unequip BEFORE saving — zero API calls |
-| Hub in preview topology | `Agent Management Panel — Communication Hub in existing preview topologies > Agent Types details dialog shows the hub in a typed agent plan preview topology` | Communication Hub node rendered in the existing Agent Types plan preview topology |
+| Typed-agent unified topology | `Agent Management Panel — Communication Hub in existing preview topologies > Agent Types details dialog shows the unified topology canvas for a typed agent` | Typed agents get the unified panel topology canvas in the details dialog; plan steps kept, old plan diagram gone |
+| **Agent Type Preview — Unified Topology** (agent-type-preview-topology) | | |
+| Unified preview canvas | `Agent Type preview — unified panel topology canvas > preview shows the unified zoned panel topology canvas with hub bar` | Agent preview shows the same zoned panel topology canvas as the management panel — zones, hub bar, placeholders |
+| Zoom in preview | `Agent Type preview — unified panel topology canvas > zoom controls work in the preview fullscreen (parity with panel)` | Zoom in/out and fit-reset work in the preview, identical behavior to the panel |
+| Node interaction in preview | `Agent Type preview — unified panel topology canvas > clicking a topology node opens the entity view dialog` | Clicking a topology node in the preview opens the entity view dialog |
+| Typed-agent regression | `Agent Type preview — regression of untouched branches > typed agent plan preview is unchanged (AgentPlanContent still renders)` | Typed agents still render their plan preview via AgentPlanContent — unaffected by the topology swap |
 | Permission degradation | `Agent Management Panel — permissions > 403 on the roles list disables only the role slot with a localized explanation` | Denied slot disables gracefully with an explanation — no error surface |
 | Single-PUT save | `Agent Management Panel — CRUD lifecycle > pending-changes tray saves the draft with exactly one agent-type PUT` | Pending-changes tray persists the whole draft with exactly one agent-type update call |
 | **System One Decision Tools** (system-one-decision-skills) | | |
@@ -123,6 +128,11 @@ require(path.resolve('e2e/node_modules/@playwright/test/cli.js'));
 | Sign-up off (switch OFF) | `Self-Serve Sign-Up (mocked) > CS-29: switch off — no entry link on login, /signup inert` | No sign-up link on login; /signup renders an unavailable note with no form |
 | Self-serve sign-up journey | `Self-Serve Sign-Up (mocked) > CS-26: full journey — entry link → wizard → lands in onboarding as root` | Two-step wizard (account → organization); new root lands in guided onboarding, no platform-admin action |
 | Duplicate email blocked | `Self-Serve Sign-Up (mocked) > CS-27: duplicate email blocked with a clear inline error` | Inline "already exists" error; user stays on /signup, no session |
+| **Token Expiry Alerting** (token-expiry-alerting) | | |
+| Dashboard alerts + remediation | See `docs/changes/token-expiry-alerting/demo-cases.md` (Grep Patterns) | Expired/expiring indicators for agent identities + MCP sessions; click-through to remediation; warnings clear after refresh |
+| Execution preflight blocking | See demo-cases.md | Expired token (incl. subagent) BLOCKS execution with a message naming the identity — no session created |
+| Execution warn path | See demo-cases.md | Expiring (≤7 days) token WARNS but execution PROCEEDS |
+| Topology badges | See demo-cases.md | Expired identity renders an error badge; expiring renders a warning badge on the topology container |
 | One-tenant-per-user | `Self-Serve Sign-Up (mocked) > CS-28: one-tenant-per-user message on a second registration attempt` | Second registration attempt blocked with the dedicated message |
 | Quota-blocked invitation | `Quota Enforcement (mocked) > CS-35/CS-41: blocked invite shows tier/limit/usage/upgrade; unblocked once the license is raised` | Structured block alert (tier, limit, usage, upgrade path); raising the license unblocks with no reload |
 | License usage panel | `Quota Enforcement (mocked) > CS-34: the tenant usage panel mirrors tier and limits` | Tenant settings shows the tier chip and usage against limits |

@@ -51,6 +51,7 @@ const apiMock = vi.hoisted(() => ({
   listSystemOneProviderTypes: vi.fn(),
   listVendorModels: vi.fn(),
   importVendorModels: vi.fn(),
+  previewVendorModels: vi.fn(),
   SYSTEM_ONE_PRESET_BASE_URL: 'https://api.typesafe.ai/v1/systemone',
 }))
 
@@ -92,6 +93,7 @@ describe('SystemOneProviderConfigPage', () => {
     ])
     apiMock.listVendorModels.mockResolvedValue({ models: [] })
     apiMock.importVendorModels.mockResolvedValue(MOCK_PROVIDERS[0])
+    apiMock.previewVendorModels.mockResolvedValue({ models: [] })
   })
 
   it('renders providers with key-status chips and no key material', async () => {
@@ -104,6 +106,7 @@ describe('SystemOneProviderConfigPage', () => {
   })
 
   it('creates a provider with the API key sent once (write-only)', async () => {
+    apiMock.previewVendorModels.mockResolvedValue({ models: ['jev-latest'] })
     await renderPage()
     fireEvent.click(await screen.findByText('systemOne.addProvider'))
     fireEvent.change(screen.getByLabelText(/systemOne\.displayName/), {
@@ -115,7 +118,15 @@ describe('SystemOneProviderConfigPage', () => {
     fireEvent.change(screen.getByLabelText(/systemOne\.apiKey/), {
       target: { value: 'sk-new-secret' },
     })
-    fireEvent.click(screen.getByText('app.save'))
+    // step 1 → step 2: fetch the vendor catalogue with the typed key
+    fireEvent.click(screen.getByRole('button', { name: 'app.next' }))
+    await waitFor(() =>
+      expect(apiMock.previewVendorModels).toHaveBeenCalledWith(
+        'https://new.example/v1',
+        'sk-new-secret',
+      ),
+    )
+    fireEvent.click(await screen.findByRole('button', { name: 'app.save' }))
     await waitFor(() =>
       expect(apiMock.createSystemOneProvider).toHaveBeenCalledTimes(1),
     )
@@ -128,11 +139,11 @@ describe('SystemOneProviderConfigPage', () => {
   it('validates required fields on create', async () => {
     await renderPage()
     fireEvent.click(await screen.findByText('systemOne.addProvider'))
-    fireEvent.click(screen.getByText('app.save'))
+    fireEvent.click(screen.getByRole('button', { name: 'app.next' }))
     expect(
       await screen.findByText('systemOne.validation.displayNameRequired'),
     ).toBeInTheDocument()
-    expect(apiMock.createSystemOneProvider).not.toHaveBeenCalled()
+    expect(apiMock.previewVendorModels).not.toHaveBeenCalled()
   })
 
   it('edit dialog never prefills the API key and omits it when unchanged', async () => {
@@ -177,6 +188,7 @@ describe('SystemOneProviderConfigPage', () => {
     apiMock.createSystemOneProvider.mockRejectedValue({
       response: { status: 403 },
     })
+    apiMock.previewVendorModels.mockResolvedValue({ models: ['m-one'] })
     await renderPage()
     fireEvent.click(await screen.findByText('systemOne.addProvider'))
     fireEvent.change(screen.getByLabelText(/systemOne\.displayName/), {
@@ -188,14 +200,15 @@ describe('SystemOneProviderConfigPage', () => {
     fireEvent.change(screen.getByLabelText(/systemOne\.apiKey/), {
       target: { value: 'sk-x' },
     })
-    fireEvent.click(screen.getByText('app.save'))
+    fireEvent.click(screen.getByRole('button', { name: 'app.next' }))
+    await waitFor(() => expect(apiMock.previewVendorModels).toHaveBeenCalled())
+    fireEvent.click(await screen.findByRole('button', { name: 'app.save' }))
     // PermissionDeniedAlert renders both at page level and inside the dialog.
     await waitFor(() => {
       expect(screen.getAllByText('app.error').length).toBeGreaterThan(0)
     })
-    // Dialog stays open (its title button row still shows the add-provider text twice:
-    // page button + dialog title).
-    expect(screen.getAllByText('systemOne.addProvider').length).toBeGreaterThan(1)
+    // Dialog stays open on the model-confirmation step.
+    expect(screen.getByText('systemOne.addProviderModels')).toBeInTheDocument()
   })
 
   it('deletes a provider', async () => {
@@ -235,6 +248,7 @@ describe('SystemOneProviderConfigPage', () => {
   })
 
   it('sends the typed base_url on create', async () => {
+    apiMock.previewVendorModels.mockResolvedValue({ models: ['m-one'] })
     await renderPage()
     fireEvent.click(await screen.findByText('systemOne.addProvider'))
     const baseUrl = screen.getByLabelText(/systemOne\.baseUrl/) as HTMLInputElement
@@ -246,7 +260,9 @@ describe('SystemOneProviderConfigPage', () => {
     fireEvent.change(screen.getByLabelText(/systemOne\.apiKey/), {
       target: { value: 'sk-preset' },
     })
-    fireEvent.click(screen.getByText('app.save'))
+    fireEvent.click(screen.getByRole('button', { name: 'app.next' }))
+    await waitFor(() => expect(apiMock.previewVendorModels).toHaveBeenCalled())
+    fireEvent.click(await screen.findByRole('button', { name: 'app.save' }))
     await waitFor(() =>
       expect(apiMock.createSystemOneProvider).toHaveBeenCalledTimes(1),
     )
@@ -284,11 +300,11 @@ describe('SystemOneProviderConfigPage', () => {
     fireEvent.change(screen.getByLabelText(/systemOne\.apiKey/), {
       target: { value: 'sk-x' },
     })
-    fireEvent.click(screen.getByText('app.save'))
+    fireEvent.click(screen.getByRole('button', { name: 'app.next' }))
     expect(
       await screen.findByText('systemOne.validation.baseUrlRequired'),
     ).toBeInTheDocument()
-    expect(apiMock.createSystemOneProvider).not.toHaveBeenCalled()
+    expect(apiMock.previewVendorModels).not.toHaveBeenCalled()
   })
 
   it('shows the saved-key placeholder on edit when has_api_key, not on create', async () => {

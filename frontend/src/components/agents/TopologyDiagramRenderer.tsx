@@ -233,6 +233,15 @@ interface Props {
    * panning are handled internally while zoomed in and are inert at zoom 1.
    */
   viewZoom?: number
+  /**
+   * Font-scale cap as a zoom level: once `viewZoom` exceeds this value the
+   * DRAWN font sizes shrink proportionally (`cap / zoom`) so the on-screen
+   * glyph size stops growing. Zoom then reveals MORE WORLD (wider labels
+   * fit more characters before the ellipsis) instead of magnifying text.
+   * Omitted (or ≥ VIEW_MAX_ZOOM) = uncapped — fonts scale with zoom, the
+   * historical behaviour.
+   */
+  viewFontZoom?: number
 }
 
 // ── Generic layered layout ────────────────────────────────────────────────────
@@ -568,7 +577,7 @@ function computeZonedLayout(
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
-const TopologyDiagramRenderer: React.FC<Props> = ({ nodes, edges, onNodeClick, zones, hubBar, fillHeight, viewZoom }) => {
+const TopologyDiagramRenderer: React.FC<Props> = ({ nodes, edges, onNodeClick, zones, hubBar, fillHeight, viewZoom, viewFontZoom }) => {
   const { t } = useTranslation()
   const [clickedNodeId, setClickedNodeId] = useState<string | null>(null)
   const isZoned = Array.isArray(zones) && zones.length > 0
@@ -645,6 +654,12 @@ const TopologyDiagramRenderer: React.FC<Props> = ({ nodes, edges, onNodeClick, z
   const worldW = svgWidth + 20
   const worldH = svgHeight + 20
   const zoomLevel = clampView(fillHeight && viewZoom != null ? viewZoom : 1, VIEW_MIN_ZOOM, VIEW_MAX_ZOOM)
+  // Font-scale cap (Refinement: zoom shows more content, not bigger text).
+  // Drawn font sizes shrink by `cap / zoom` once zoom passes the cap, so the
+  // on-screen glyph size plateaus while the visible world region keeps
+  // shrinking — width-fitted labels then fit MORE characters per view.
+  const fontZoomCap = Math.max(1, viewFontZoom ?? VIEW_MAX_ZOOM)
+  const fontScale = Math.min(1, fontZoomCap / zoomLevel)
   const panEnabled = fillHeight && zoomLevel > 1
   const viewW = worldW / zoomLevel
   const viewH = worldH / zoomLevel
@@ -808,12 +823,15 @@ const TopologyDiagramRenderer: React.FC<Props> = ({ nodes, edges, onNodeClick, z
     // and truncated with an ellipsis to the node's inner width, so it can
     // never overflow the node bounds or overlap the icon. The full text
     // stays available via the native <title> (hover) and the click tooltip.
+    // Fitting AND rendering use the font-scaled sizes: past the font cap the
+    // drawn font shrinks, so the SAME box width fits more characters — zoom
+    // reduces trimming instead of magnifying glyphs.
     const labelFit = isBoundary
-      ? fitTextToWidth(node.label, boundaryTextMaxWidth(w), BOUNDARY_HEADER_FONT, { bold: true })
+      ? fitTextToWidth(node.label, boundaryTextMaxWidth(w), BOUNDARY_HEADER_FONT * fontScale, { bold: true })
       : fitTextToWidth(
           node.label,
-          nodeTextMaxWidth(w) - (isLocked ? LOCK_PREFIX_EM * NODE_LABEL_FONT : 0),
-          NODE_LABEL_FONT,
+          nodeTextMaxWidth(w) - (isLocked ? LOCK_PREFIX_EM * NODE_LABEL_FONT * fontScale : 0),
+          NODE_LABEL_FONT * fontScale,
         )
     const displayLabel = labelFit.text
     const isTruncated = labelFit.truncated
@@ -821,12 +839,12 @@ const TopologyDiagramRenderer: React.FC<Props> = ({ nodes, edges, onNodeClick, z
     // caption strip sits above the node box.
     const captionFit = node.caption
       ? isBoundary
-        ? fitTextToWidth(node.caption, boundaryTextMaxWidth(w), BOUNDARY_CAPTION_FONT)
-        : fitTextToWidth(node.caption, w - CAPTION_STRIP_X - NODE_TEXT_PAD_RIGHT, CAPTION_STRIP_FONT, { bold: true })
+        ? fitTextToWidth(node.caption, boundaryTextMaxWidth(w), BOUNDARY_CAPTION_FONT * fontScale)
+        : fitTextToWidth(node.caption, w - CAPTION_STRIP_X - NODE_TEXT_PAD_RIGHT, CAPTION_STRIP_FONT * fontScale, { bold: true })
       : null
     // Type badge renders uppercase via CSS — estimate the uppercase width.
-    const badgeFit = fitTextToWidth(node.type.toUpperCase(), nodeTextMaxWidth(w), NODE_BADGE_FONT, {
-      letterSpacing: BADGE_LETTER_SPACING,
+    const badgeFit = fitTextToWidth(node.type.toUpperCase(), nodeTextMaxWidth(w), NODE_BADGE_FONT * fontScale, {
+      letterSpacing: BADGE_LETTER_SPACING * fontScale,
     })
 
     return (
@@ -856,12 +874,46 @@ const TopologyDiagramRenderer: React.FC<Props> = ({ nodes, edges, onNodeClick, z
             {/* Native browser tooltip with the FULL label (hover) — on the
                 node group and on every truncated text element. */}
             {isTruncated && <title>{node.label}</title>}
+            {/* Token health badge (token-expiry-alerting): warning for
+                expiring-within-7-days, error for expired. Rendered in
+                viewBox units (all geometry is viewBox-scaled). */}
+            {(node.tokenHealth === 'expiring' || node.tokenHealth === 'expired') && (
+              <g
+                data-testid={`topology-token-badge-${node.id}`}
+                data-token-health={node.tokenHealth}
+              >
+                <title>
+                  {node.tokenHealth === 'expired'
+                    ? t('agents.panel.topologyTokenExpired')
+                    : t('agents.panel.topologyTokenExpiring')}
+                </title>
+                <circle
+                  cx={w - 8}
+                  cy={capH + 6}
+                  r={6}
+                  fill={node.tokenHealth === 'expired' ? '#dc2626' : '#f59e0b'}
+                  stroke="#ffffff"
+                  strokeWidth={1.5}
+                />
+                <text
+                  x={w - 8}
+                  y={capH + 9.5}
+                  fontSize={9 * fontScale}
+                  fontWeight={700}
+                  fill="#ffffff"
+                  textAnchor="middle"
+                  style={{ pointerEvents: 'none' }}
+                >
+                  !
+                </text>
+              </g>
+            )}
             {/* Caption strip (containment context, e.g. "signs in as") */}
             {capH > 0 && captionFit && (
               <text
                 x={CAPTION_STRIP_X}
                 y={capH - 4}
-                fontSize={CAPTION_STRIP_FONT}
+                fontSize={CAPTION_STRIP_FONT * fontScale}
                 fontWeight={700}
                 fill="#64748b"
                 style={{ textTransform: 'uppercase', letterSpacing: '0.08em' }}
@@ -897,12 +949,12 @@ const TopologyDiagramRenderer: React.FC<Props> = ({ nodes, edges, onNodeClick, z
                 />
                 {/* Boundary header: agent name + caption — left-aligned after
                     the icon, width-fitted to the boundary box */}
-                <text x={BOUNDARY_TEXT_X} y={capH + 17} fontSize={BOUNDARY_HEADER_FONT} fontWeight={700} fill="#1e3a8a">
+                <text x={BOUNDARY_TEXT_X} y={capH + 17} fontSize={BOUNDARY_HEADER_FONT * fontScale} fontWeight={700} fill="#1e3a8a">
                   {displayLabel}
                   {isTruncated && <title>{node.label}</title>}
                 </text>
                 {node.caption && captionFit && (
-                  <text x={BOUNDARY_TEXT_X} y={capH + 31} fontSize={BOUNDARY_CAPTION_FONT} fill="#475569">
+                  <text x={BOUNDARY_TEXT_X} y={capH + 31} fontSize={BOUNDARY_CAPTION_FONT * fontScale} fill="#475569">
                     {captionFit.text}
                     {captionFit.truncated && <title>{node.caption}</title>}
                   </text>
@@ -926,7 +978,7 @@ const TopologyDiagramRenderer: React.FC<Props> = ({ nodes, edges, onNodeClick, z
                 <text
                   x={NODE_LABEL_X}
                   y={capH + 12}
-                  fontSize={NODE_BADGE_FONT}
+                  fontSize={NODE_BADGE_FONT * fontScale}
                   fontWeight={600}
                   fill={fillColor}
                   style={{ textTransform: 'uppercase', letterSpacing: '0.05em' }}
@@ -939,7 +991,7 @@ const TopologyDiagramRenderer: React.FC<Props> = ({ nodes, edges, onNodeClick, z
                 <text
                   x={NODE_LABEL_X}
                   y={capH + (h - capH) / 2 + 4}
-                  fontSize={NODE_LABEL_FONT}
+                  fontSize={NODE_LABEL_FONT * fontScale}
                   fill="#212121"
                   textAnchor="start"
                   style={{ fontWeight: 500 }}
@@ -1003,8 +1055,8 @@ const TopologyDiagramRenderer: React.FC<Props> = ({ nodes, edges, onNodeClick, z
           zonedLayout!.bands.map(({ zone, x, y, w, h }) => {
             // Zone title/subtitle are width-fitted to the band so a long
             // localized string cannot spill past the band's border.
-            const titleFit = fitTextToWidth(zone.title, w - 24 - 10, 11, { bold: true })
-            const subtitleFit = zone.subtitle ? fitTextToWidth(zone.subtitle, w - 24 - 10, 9.5) : null
+            const titleFit = fitTextToWidth(zone.title, w - 24 - 10, 11 * fontScale, { bold: true })
+            const subtitleFit = zone.subtitle ? fitTextToWidth(zone.subtitle, w - 24 - 10, 9.5 * fontScale) : null
             return (
               <g key={`zone-${zone.id}`}>
                 <rect
@@ -1021,7 +1073,7 @@ const TopologyDiagramRenderer: React.FC<Props> = ({ nodes, edges, onNodeClick, z
                 <text
                   x={x + 24}
                   y={y + 32}
-                  fontSize={11}
+                  fontSize={11 * fontScale}
                   fontWeight={700}
                   fill={zone.border}
                   style={{ letterSpacing: '0.5px' }}
@@ -1030,7 +1082,7 @@ const TopologyDiagramRenderer: React.FC<Props> = ({ nodes, edges, onNodeClick, z
                   {titleFit.truncated && <title>{zone.title}</title>}
                 </text>
                 {zone.subtitle && subtitleFit && (
-                  <text x={x + 24} y={y + 47} fontSize={9.5} fill="#64748b">
+                  <text x={x + 24} y={y + 47} fontSize={9.5 * fontScale} fill="#64748b">
                     {subtitleFit.text}
                     {subtitleFit.truncated && <title>{zone.subtitle}</title>}
                   </text>
@@ -1044,7 +1096,7 @@ const TopologyDiagramRenderer: React.FC<Props> = ({ nodes, edges, onNodeClick, z
           zonedLayout!.groups.map((g) => {
             // Group label is width-fitted to the group box (long MCP server
             // slugs truncate; the full text stays on hover via <title>).
-            const groupLabelFit = g.label != null ? fitTextToWidth(g.label, g.w - 30 - 8, 9.5, { bold: true }) : null
+            const groupLabelFit = g.label != null ? fitTextToWidth(g.label, g.w - 30 - 8, 9.5 * fontScale, { bold: true }) : null
             return (
               <g key={`group-${g.key}`}>
                 <rect
@@ -1065,7 +1117,7 @@ const TopologyDiagramRenderer: React.FC<Props> = ({ nodes, edges, onNodeClick, z
                     <text
                       x={g.x + 30}
                       y={g.y + 10 + GROUP_LABEL_H / 2 + 3.5}
-                      fontSize={9.5}
+                      fontSize={9.5 * fontScale}
                       fontWeight={700}
                       fill={g.color}
                     >
@@ -1120,7 +1172,7 @@ const TopologyDiagramRenderer: React.FC<Props> = ({ nodes, edges, onNodeClick, z
                     x={centerX}
                     y={centerY + 12}
                     transform={`rotate(-90 ${centerX} ${centerY + 12})`}
-                    fontSize={10.5}
+                    fontSize={10.5 * fontScale}
                     fontWeight={700}
                     fill={barColor}
                     textAnchor="middle"
@@ -1247,7 +1299,7 @@ const TopologyDiagramRenderer: React.FC<Props> = ({ nodes, edges, onNodeClick, z
                 <text
                   x={labelX}
                   y={labelY}
-                  fontSize={9}
+                  fontSize={9 * fontScale}
                   fill={isZoned ? appearance.color : '#757575'}
                   textAnchor="middle"
                   style={isZoned ? { paintOrder: 'stroke', stroke: '#ffffff', strokeWidth: 3, fontWeight: 600 } : undefined}

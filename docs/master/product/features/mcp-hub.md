@@ -18,6 +18,7 @@ The MCP Hub enables Parthenon to connect with external tool servers, synchronize
 - Automatically treats a server's sole session as the default, requiring no manual action
 - Maps sessions or passthrough configuration to agent identities or roles for secure tool access
 - Exposes proxied MCP server tools to external MCP clients over the standard MCP protocol (initialize / tools/list / tools/call), in addition to internal Agent Runtime tool calls — both governed by the same role-based permission resolution
+- Exposes user-defined [decision tools](decision-tools.md) as MCP tools under the same permission model; decision tools carry a reserved "decision" naming prefix (mirroring the "system" prefix) and "decision" is reserved as an MCP slug namespace word so no registered server slug can conflict with it
 
 
 
@@ -37,6 +38,7 @@ The MCP Hub enables Parthenon to connect with external tool servers, synchronize
 - The MCP server list shows exactly one System entry, visually distinct from user-registered servers
 - Admins can configure an MCP server to use a passthrough session type (no explicit session selection required)
 - All available tools are synchronized and listed in the platform
+- User-defined decision tools appear in MCP tool listings alongside system and proxied server tools, visually distinguishable by their reserved "decision" naming prefix, and are invocable by permitted external MCP clients under the same permission model
 - Sync succeeds when tools/list works, even if the initialize handshake has warnings
 - The sync action is only available when at least one session is configured for the server
 - Sessions can be created, named, and bound to identities or roles, or passthrough can be enabled for compatible servers
@@ -48,6 +50,10 @@ The MCP Hub enables Parthenon to connect with external tool servers, synchronize
 - UI clearly distinguishes passthrough session type from traditional session selection
 - No regression in existing session-based workflows
 - MCP Demo App is available as a reference for validating dual-identity propagation (both agent and user identities), passthrough session type, per-identity `mcp_role` claim-based tool access control, and tool registration flows
+
+## Token Health States
+
+Each named MCP session exposes a visible credential health state — **valid**, **expiring within 7 days**, or **expired** — derived from its credential/identity binding. Session listings serve as the remediation target for dashboard token-expiry warnings: an administrator clicking a warning lands on the session page to re-authenticate, and warnings clear automatically once re-authentication completes. (See [Token Expiry Alerting](token-expiry-alerting.md).)
 
 ## Out of Scope
 - Changes to underlying authentication protocols or OIDC/OAuth2 flows

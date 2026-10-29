@@ -37,7 +37,7 @@ flowchart TB
 The `system` and `decision` server names are reserved namespaces (`RESERVED_SERVER_NAMES`) and are tenant-neutral in the wire format but resolved within the caller's tenant:
 
 - **`system____*`** — platform system tools (`save_data`, `get_data`, `get_output`, `query_result`, `send_notification`, `get_recipient_group`, …), routed to CC internal endpoints.
-- **`decision____*`** — decision tools. These are **virtual bindings with no `mcp_tools` rows**: they are registered via skill bindings against the tenant's configured decision provider. In AR, the tool-routing layer classifies `decision____` names before MCP proxying and dispatches them to the decision-tool service, which resolves data types and execution strictly within the calling tenant (exact `tenant_id` match; the old `IS NULL OR own` shared-slot pattern is removed). Decision-provider vendor differences are abstracted behind the Control Center multi-provider client factory, so provider backends are selected per resolved tenant, not hard-wired.
+- **`decision____*`** — decision tools. These are **virtual bindings with no `mcp_tools` rows**: they are registered via skill bindings against the tenant's configured decision provider. In AR, the tool-routing layer classifies `decision____` names before MCP proxying and dispatches them to the decision-tool service, which resolves data types and execution strictly within the calling tenant (exact `tenant_id` match; the old `IS NULL OR own` shared-slot pattern is removed). Decision-provider vendor differences are abstracted behind the Control Center multi-provider client factory, so provider backends are selected per resolved tenant, not hard-wired. Decision tools appear in `tools/list` and the skill-editor tool picker alongside system tools as `decision____<name>`; skills themselves are unchanged by this pathway. See [Decision Tools Architecture](../decision-tools/architecture.md).
 
 ## A2A Delegation Naming
 
@@ -46,6 +46,22 @@ The `system` and `decision` server names are reserved namespaces (`RESERVED_SERV
 ## Scheduler Tenant Binding
 
 Scheduled jobs carry a mandatory `tenant_id` at creation (NULL is a hard error). Dispatch resolves a single owning tenant — no `agent_type.tenant_id` fallback — and the job runs fully within that tenant's context: tenant scoping, quotas (consulted at dispatch time in CC), and signed tenant headers on the downstream execution chain. See [Scheduling Architecture](../scheduling/architecture.md).
+
+## MCP Session Token Health
+
+MCP sessions expose session-level token health (credential/identity bindings and their expiry state) so Control Center can classify each session alongside agent identity tokens. Classification feeds the same Token Health Service — expired sessions block executions that would use them (via the CH preflight gate), expiring-soon sessions warn. How tokens are injected per tool call is unchanged, and tokens still never cross to agents.
+
+```mermaid
+flowchart LR
+    MS[MCP Sessions<br/>session token health]
+    CC[Control Center<br/>Token Health Service]
+    CH[Communication Hub<br/>preflight gate]
+    FE[Dashboard token health cards]
+
+    MS -->|session health metadata| CC
+    CH -->|preflight check| CC
+    FE -->|health per category| CC
+```
 
 ## Tool Execution Chain
 

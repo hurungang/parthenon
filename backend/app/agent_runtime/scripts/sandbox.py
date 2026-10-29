@@ -47,6 +47,7 @@ from RestrictedPython import compile_restricted_exec, safe_builtins
 from RestrictedPython.Guards import (
     full_write_guard,
     guarded_iter_unpack_sequence,
+    guarded_unpack_sequence,
 )
 from RestrictedPython.PrintCollector import PrintCollector
 
@@ -252,21 +253,55 @@ _INPLACE_OPS: dict[str, Any] = {
 def build_safe_globals(extra: dict[str, Any] | None = None) -> dict[str, Any]:
     """Build the hardened globals for sandbox execution.
 
-    Allowlisted builtins only, safe computation modules pre-bound, no I/O,
-    no import, guarded attribute access and writes.
+    Seed from RestrictedPython's audited safe baseline wholesale; layer only
+    documented custom guards (tools facade/context binding/resource caps).
+    No I/O, no import, guarded attribute access and writes.
     """
+    # Seed wholesale from RestrictedPython's safe baseline
     builtins_map = dict(safe_builtins)
-    # Safe computation helpers extended onto safe_builtins (no I/O shapes).
     import builtins as _py_builtins
 
+    # Ensure common safe builtins are present even if baseline differs
     for name in (
-        "abs", "all", "any", "bool", "dict", "divmod", "enumerate", "float",
-        "frozenset", "int", "isinstance", "issubclass", "len", "list", "max",
-        "min", "range", "repr", "reversed", "round", "set", "slice", "sorted",
-        "str", "sum", "tuple", "zip",
+        "abs",
+        "all",
+        "any",
+        "bool",
+        "dict",
+        "divmod",
+        "enumerate",
+        "float",
+        "frozenset",
+        "int",
+        "isinstance",
+        "issubclass",
+        "len",
+        "list",
+        "max",
+        "min",
+        "range",
+        "repr",
+        "reversed",
+        "round",
+        "set",
+        "slice",
+        "sorted",
+        "str",
+        "sum",
+        "tuple",
+        "zip",
+        "Exception",
+        "ValueError",
+        "TypeError",
+        "KeyError",
+        "IndexError",
+        "AttributeError",
+        "RuntimeError",
+        "StopIteration",
     ):
-        builtins_map[name] = getattr(_py_builtins, name)
-    # Computation modules pre-bound (no file/network/db/subprocess surface).
+        if not hasattr(builtins_map, name) and hasattr(_py_builtins, name):
+            builtins_map[name] = getattr(_py_builtins, name)
+
     import json
     import math
     import statistics
@@ -286,23 +321,13 @@ def build_safe_globals(extra: dict[str, Any] | None = None) -> dict[str, Any]:
         "_write_": full_write_guard,
         "_getiter_": iter,
         "_iter_unpack_sequence_": guarded_iter_unpack_sequence,
-        # Direct tuple/list unpacking (a, b = item) — the transformer emits
-        # _unpack_sequence_(value, spec, _getiter_) where spec carries the
-        # expected min/max length; guard the length and return the items.
-        "_unpack_sequence_": lambda value, spec, getiter: (
-            (lambda seq: (
-                seq
-                if len(seq) >= spec.get("min_len", 0)
-                and (spec.get("max_len") is None or len(seq) <= spec["max_len"])
-                else (_ for _ in ()).throw(ValueError("Unpacked sequence has wrong length"))
-            ))(list(getiter(value)))
-        ),
+        "_unpack_sequence_": guarded_unpack_sequence,
         "_print_": PrintCollector,
-        # RestrictedPython passes op as a STRING ('+', '+=', '-=', ...)
-        # for augmented assignment (x += y) — map it to the real operator.
-        "_inplacevar_": lambda op, x, y: _INPLACE_OPS[op.rstrip("=")](x, y),
+        "_inplacevar_": lambda op, x, y: _INPLACE_OPS.get(str(op).rstrip("="), lambda a, b: a)(
+            x,
+            y,
+        ),
         "__name__": "sandboxed_script",
-        # Pre-bound safe modules (the only "imports" available):
         "json": safe_modules["json"],
         "math": safe_modules["math"],
         "statistics": safe_modules["statistics"],

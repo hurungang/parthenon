@@ -613,6 +613,64 @@ describe('TopologyDiagramRenderer — fullscreen view transform (zoom/pan)', () 
     const underView = viewBoxOf(under.container.querySelector('svg'))
     expect(underView.w).toBeCloseTo(base.w * 2, 1)
   })
+
+  it('caps the drawn font size once zoom passes viewFontZoom — zoom shows more content, not bigger text', async () => {
+    const { default: TopologyDiagramRenderer } = await import(
+      '../components/agents/TopologyDiagramRenderer'
+    )
+
+    // The zoned fixture renders the agent as a STANDALONE node: its texts
+    // are the type badge (8) then the label (11) — take the last (label).
+    const labelFontSizeOf = (svg: Element | null): number => {
+      const texts = svg!.querySelectorAll('[data-topology-node="agent"] text')
+      return Number(texts[texts.length - 1].getAttribute('font-size'))
+    }
+
+    // Base: zoom 1 — full base font size.
+    const fitted = render(
+      <TopologyDiagramRenderer nodes={NODES} edges={EDGES} zones={ZONED_TEST_ZONES} fillHeight viewZoom={1} viewFontZoom={1.6} />,
+    )
+    const baseFont = labelFontSizeOf(fitted.container.querySelector('svg'))
+    expect(baseFont).toBe(11)
+    fitted.unmount()
+
+    // Below the cap (zoom 1.2): fonts still scale with zoom on-screen —
+    // the drawn viewBox size is unchanged.
+    const below = render(
+      <TopologyDiagramRenderer nodes={NODES} edges={EDGES} zones={ZONED_TEST_ZONES} fillHeight viewZoom={1.2} viewFontZoom={1.6} />,
+    )
+    expect(labelFontSizeOf(below.container.querySelector('svg'))).toBe(11)
+    const belowView = viewBoxOf(below.container.querySelector('svg'))
+    below.unmount()
+
+    // Past the cap (zoom 3): drawn fonts shrink by cap/zoom so on-screen
+    // size plateaus at cap — AND the viewBox still expands (more world
+    // visible than below the cap).
+    const capped = render(
+      <TopologyDiagramRenderer nodes={NODES} edges={EDGES} zones={ZONED_TEST_ZONES} fillHeight viewZoom={3} viewFontZoom={1.6} />,
+    )
+    const cappedFont = labelFontSizeOf(capped.container.querySelector('svg'))
+    expect(cappedFont).toBeCloseTo(11 * (1.6 / 3), 5)
+    const cappedView = viewBoxOf(capped.container.querySelector('svg'))
+    expect(cappedView.w).toBeLessThan(belowView.w)
+    capped.unmount()
+  })
+
+  it('omitting viewFontZoom keeps the uncapped historical behaviour (fonts scale with zoom)', async () => {
+    const { default: TopologyDiagramRenderer } = await import(
+      '../components/agents/TopologyDiagramRenderer'
+    )
+
+    const labelFontSizeOf = (svg: Element | null): number => {
+      const texts = svg!.querySelectorAll('[data-topology-node="agent"] text')
+      return Number(texts[texts.length - 1].getAttribute('font-size'))
+    }
+    const zoomed = render(
+      <TopologyDiagramRenderer nodes={NODES} edges={EDGES} zones={ZONED_TEST_ZONES} fillHeight viewZoom={3} />,
+    )
+    // No cap → drawn font stays at the base size (apparent size scales).
+    expect(labelFontSizeOf(zoomed.container.querySelector('svg'))).toBe(11)
+  })
 })
 
 // ── Zoned Communication Hub vertical bar (runtime-monitor firewall pattern) ────

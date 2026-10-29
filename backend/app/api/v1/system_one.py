@@ -29,6 +29,7 @@ from app.schemas.system_one import (
     SystemOneStatus,
     SystemOneTestConnectionResult,
     VendorModelImportRequest,
+    VendorModelPreviewRequest,
     VendorModelSyncResult,
 )
 from app.services.control_center.model_usage_guardrail_service import (
@@ -217,6 +218,31 @@ async def import_vendor_models(
             status_code=_provider_error_status(exc), detail=str(exc)
         )
     return _service.to_read(config)
+
+
+@SystemOneRouter.post(
+    "/preview-models", response_model=VendorModelSyncResult
+)
+async def preview_vendor_models(
+    body: VendorModelPreviewRequest,
+    _: dict = Depends(require_permission(RT_SYSTEM_SYSTEM_ONE, "manage")),
+) -> VendorModelSyncResult:
+    """Discover a vendor's model catalogue with a raw, not-yet-persisted API
+    key (bearer auth, call time only — never logged or stored). Powers the
+    create wizard's model-confirmation step so the user selects models before
+    the provider is saved."""
+    from app.services.system_one.client import (
+        SystemOneClientError,
+        list_vendor_models as list_client_vendor_models,
+    )
+
+    try:
+        models = await list_client_vendor_models(
+            base_url=body.base_url, api_key=body.api_key
+        )
+    except SystemOneClientError as exc:
+        raise HTTPException(status_code=502, detail=str(exc))
+    return VendorModelSyncResult(models=models)
 
 
 @SystemOneRouter.delete(

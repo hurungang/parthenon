@@ -41,6 +41,12 @@ interface AgentPlanContentProps {
    * clicks a script link on a script-backed plan step.
    */
   onOpenScript?: () => void
+  /**
+   * Hide the internal plan-based topology diagram. Used by dialogs that render
+   * the unified PanelTopologyCanvas instead (PlanPreviewModal keeps its own
+   * plan topology and does NOT set this).
+   */
+  hideTopology?: boolean
 }
 
 /**
@@ -53,6 +59,7 @@ const AgentPlanContent: React.FC<AgentPlanContentProps> = ({
   noPlanMessage,
   onNodeClick,
   onOpenScript,
+  hideTopology = false,
 }) => {
   const { t } = useTranslation()
 
@@ -160,7 +167,8 @@ const AgentPlanContent: React.FC<AgentPlanContentProps> = ({
         </List>
       )}
 
-      {(plan.topology_nodes.length > 0 || plan.topology_edges.length > 0) && (
+      {!hideTopology &&
+        (plan.topology_nodes.length > 0 || plan.topology_edges.length > 0) && (
         <>
           <Divider sx={{ my: 2 }} />
           <Typography variant="h6" gutterBottom>

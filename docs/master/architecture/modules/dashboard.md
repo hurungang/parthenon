@@ -18,6 +18,23 @@ flowchart TD
     CCApi --> DashboardPage
 ```
 
+## Token Health Cards
+
+The dashboard also surfaces **token health** for agent identities and MCP sessions, powered by the Control Center Token Health Service (the sole DB reader of token metadata). Cards show counts per state (`healthy` / `expiring-within-7-days` / `expired`) with click-through to identity / MCP session pages for refresh or re-auth. The same token-health states are consumed client-side to enrich the **topology view** with warning/error badges per container.
+
+```mermaid
+flowchart LR
+    FE[Dashboard Page]
+    THC[Token Health API<br/>Control Center]
+    THS[Token Health Service]
+    DB[(Platform DB)]
+    TOPO[Topology View<br/>warning / error badges]
+
+    FE -->|token health cards| THC
+    FE -->|client-side enrichment| TOPO
+    THC --> THS --> DB
+```
+
 ## Snapshot-Count Domains
 
 Queried without a time filter — returns current state counts:

@@ -44,6 +44,7 @@ Agent execution in Parthenon is governed by a secure, auditable, and policy-driv
 - **The default enforcement mode for newly configured guardrails is `terminate`** unless an authorized operator explicitly selects a different posture
 - **Observe-only guardrail limit events are surfaced as user-visible alerts** in frontend execution logs for the affected run
 - **Agent execution is blocked when the requested model is disabled**, or when the model is under a disabled vendor, and the block is surfaced in execution logs with a clear operator-visible reason
+- **Token pre-flight**: before any agent execution starts, all credentials the run will use — including those of associated subagents — are validated; expired credentials block the run with a clear message naming the identity/session to refresh, and the run proceeds only after refresh/re-auth (see [Token Expiry Alerting](token-expiry-alerting.md))
 
 ## Model-Usage Guardrails
 - Model-usage guardrails are organised under a **vendor → model → guardrail hierarchy**: vendors group their models, and each model carries one to four guardrail records, one per period (hour, day, week, month)
@@ -167,6 +168,7 @@ When an agent type has a verified, up-to-date **optimized implementation plan** 
 - **The default enforcement mode for newly configured guardrails is terminate unless an authorized operator explicitly selects a different posture**
 - **When guardrail limits are reached in observe-only mode, a clear alert is visible in user-facing execution logs for the affected run**
 - **Agent execution is blocked when the requested model is disabled or when the model is under a disabled vendor, and the block is surfaced in execution logs**
+- **Agent execution is blocked before start when any required credential (including a subagent's) is expired, with a clear message identifying the affected identity/session; users never discover a credential failure for the first time at execution time**
 - Delegated sub-agent intervention requests in conversational sessions are routed to the parent conversation and surfaced as inline intervention dialogs in the conversation UI
 - Parallel intervention requests from multiple delegated sub-agents are queued and presented sequentially in the conversation — one at a time
 - The Agent Runtime Monitor surfaces intervention requests from conversational delegated agents alongside those from standalone non-conversational agents, with any node awaiting human intervention visible on the map by default carrying an alert icon

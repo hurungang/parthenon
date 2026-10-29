@@ -29,6 +29,7 @@ This directory contains all master QA documentation for the Parthenon Enterprise
 
 **Operations & Monitoring:**
 - [Dashboard Operational Metrics](test-plans/dashboard-test-plan.md)
+- [Token Expiry Alerting](test-plans/token-expiry-alerting-test-plan.md)
 - [Operations Modules](test-plans/operations-test-plan.md)
 - [Agent Data Types & Typed Outputs](test-plans/agent-data-types-test-plan.md)
 - [Conversation Sessions](test-plans/conversation-sessions-test-plan.md)

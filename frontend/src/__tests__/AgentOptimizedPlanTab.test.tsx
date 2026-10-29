@@ -239,4 +239,21 @@ describe('AgentOptimizedPlanTab', () => {
     expect(screen.queryByTestId('view-optimize-log-button')).toBeNull()
     expect(screen.queryByTestId('optimize-log-dialog')).toBeNull()
   })
+
+  it('shows a "nothing to retire" state and disables retire when the plan is already retired', async () => {
+    mockApiGet.mockResolvedValue({ data: { ...PLAN, status: 'retired' } })
+
+    render(
+      <AgentOptimizedPlanTab agentTypeId="at-1" onError={vi.fn()} onViewScript={vi.fn()} />,
+      { wrapper },
+    )
+
+    // The retired plan renders a clear "nothing to retire" indication instead
+    // of a silent no-op, and the retire button is disabled.
+    expect(await screen.findByTestId('nothing-to-retire')).toBeDefined()
+    const retireButton = screen.getByTestId('retire-optimized-plan') as HTMLButtonElement
+    expect(retireButton.disabled).toBe(true)
+    fireEvent.click(retireButton)
+    expect(mockApiPost).not.toHaveBeenCalled()
+  })
 })

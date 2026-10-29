@@ -32,6 +32,7 @@ const apiMock = vi.hoisted(() => ({
   listSystemOneProviderTypes: vi.fn(),
   listVendorModels: vi.fn(),
   importVendorModels: vi.fn(),
+  previewVendorModels: vi.fn(),
   listDecisionGuardrails: vi.fn(),
   createDecisionGuardrail: vi.fn(),
   updateDecisionGuardrail: vi.fn(),
@@ -127,6 +128,7 @@ describe('DecisionModelProvidersPage (settings page)', () => {
     ])
     apiMock.listVendorModels.mockResolvedValue({ models: [] })
     apiMock.importVendorModels.mockResolvedValue(PROVIDERS[0])
+    apiMock.previewVendorModels.mockResolvedValue({ models: [] })
     apiMock.listDecisionGuardrails.mockResolvedValue([GUARDRAIL])
     apiMock.getDecisionGuardrailPosture.mockResolvedValue([])
     apiMock.createDecisionGuardrail.mockResolvedValue(GUARDRAIL)
@@ -266,22 +268,41 @@ describe('DecisionModelProvidersPage (settings page)', () => {
 
   // ── Create + auto-refresh ──────────────────────────────────────────────
 
-  it('create succeeds → dialog closes, success notification shown, providers refetched', async () => {
+  it('create wizard: step 1 collects details + key, step 2 confirms fetched models, save closes', async () => {
+    apiMock.previewVendorModels.mockResolvedValue({
+      models: ['jev-latest', 'jev-pro', 'jev-mini'],
+    })
     await renderPage()
     fireEvent.click(await screen.findByText('systemOne.addProvider'))
+    // step 1: details + API key (no model fields yet)
+    expect(
+      screen.queryByLabelText(/systemOne\.enabledModels/),
+    ).not.toBeInTheDocument()
     fireEvent.change(screen.getByLabelText(/systemOne\.displayName/), {
       target: { value: 'Second Vendor' },
     })
     fireEvent.change(screen.getByLabelText(/systemOne\.apiKey/), {
       target: { value: 'sk-second' },
     })
-    fireEvent.click(screen.getByText('app.save'))
+    fireEvent.click(screen.getByRole('button', { name: 'app.next' }))
+    await waitFor(() => {
+      expect(apiMock.previewVendorModels).toHaveBeenCalledWith(
+        'https://api.typesafe.ai/v1/systemone',
+        'sk-second',
+      )
+    })
+    // step 2: models fetched and pre-selected for confirmation (not typed)
+    expect(screen.getByText('systemOne.addProviderModels')).toBeInTheDocument()
+    const options = screen.getAllByRole('option').map((o) => o.textContent)
+    expect(options).toContain('jev-pro')
+    // save persists the confirmed models and closes the dialog
+    fireEvent.click(screen.getByRole('button', { name: 'app.save' }))
     await waitFor(() => {
       expect(apiMock.createSystemOneProvider).toHaveBeenCalledTimes(1)
     })
-    // dialog closed (only the page-level add button remains)
-    await waitFor(() => {
-      expect(screen.getAllByText('systemOne.addProvider')).toHaveLength(1)
+    expect(apiMock.createSystemOneProvider.mock.calls[0][0]).toMatchObject({
+      api_key: 'sk-second',
+      enabled_models: ['jev-latest', 'jev-pro', 'jev-mini'],
     })
     expect(screen.getByText('systemOne.saveSuccess')).toBeInTheDocument()
     // parent table refetched automatically (no page reload)
@@ -294,6 +315,7 @@ describe('DecisionModelProvidersPage (settings page)', () => {
     apiMock.createSystemOneProvider.mockRejectedValue({
       response: { status: 409, data: { detail: 'already exists' } },
     })
+    apiMock.previewVendorModels.mockResolvedValue({ models: ['m-one'] })
     await renderPage()
     fireEvent.click(await screen.findByText('systemOne.addProvider'))
     fireEvent.change(screen.getByLabelText(/systemOne\.displayName/), {
@@ -302,7 +324,9 @@ describe('DecisionModelProvidersPage (settings page)', () => {
     fireEvent.change(screen.getByLabelText(/systemOne\.apiKey/), {
       target: { value: 'sk-dup' },
     })
-    fireEvent.click(screen.getByText('app.save'))
+    fireEvent.click(screen.getByRole('button', { name: 'app.next' }))
+    await waitFor(() => expect(apiMock.previewVendorModels).toHaveBeenCalled())
+    fireEvent.click(await screen.findByRole('button', { name: 'app.save' }))
     await waitFor(() => {
       expect(apiMock.createSystemOneProvider).toHaveBeenCalled()
     })
@@ -311,7 +335,10 @@ describe('DecisionModelProvidersPage (settings page)', () => {
     expect((await screen.findAllByText('already exists')).length).toBeGreaterThan(0)
   })
 
-  it('sends the selected enabled-model chips in the payload (multi-select)', async () => {
+  it('wizard sends the confirmed enabled-model chips in the payload', async () => {
+    apiMock.previewVendorModels.mockResolvedValue({
+      models: ['m-one', 'm-two'],
+    })
     await renderPage()
     fireEvent.click(await screen.findByText('systemOne.addProvider'))
     fireEvent.change(screen.getByLabelText(/systemOne\.displayName/), {
@@ -320,17 +347,13 @@ describe('DecisionModelProvidersPage (settings page)', () => {
     fireEvent.change(screen.getByLabelText(/systemOne\.apiKey/), {
       target: { value: 'sk-cat' },
     })
-    // type + Enter adds chips via the freeSolo multi-select
-    const modelsInput = screen.getByLabelText(/systemOne\.enabledModels/)
-    fireEvent.change(modelsInput, { target: { value: 'm-one' } })
-    fireEvent.keyDown(modelsInput, { key: 'Enter' })
-    fireEvent.change(modelsInput, { target: { value: 'm-two' } })
-    fireEvent.keyDown(modelsInput, { key: 'Enter' })
-    // default_model is now gated on the chips — pick one
+    fireEvent.click(screen.getByRole('button', { name: 'app.next' }))
+    await waitFor(() => expect(apiMock.previewVendorModels).toHaveBeenCalled())
+    // models pre-selected for confirmation; pick the default and save
     fireEvent.change(screen.getByLabelText(/systemOne\.defaultModel/), {
       target: { value: 'm-one' },
     })
-    fireEvent.click(screen.getByText('app.save'))
+    fireEvent.click(await screen.findByRole('button', { name: 'app.save' }))
     await waitFor(() => {
       expect(apiMock.createSystemOneProvider).toHaveBeenCalled()
     })
@@ -341,20 +364,30 @@ describe('DecisionModelProvidersPage (settings page)', () => {
 
   // ── FIX-20261014-002300: enabled models as a selection control ─────────
 
-  it('default-model select is disabled until an enabled model is selected; then shows only the chips', async () => {
+  it('wizard step 2 pre-selects models and offers them as the default options', async () => {
+    apiMock.previewVendorModels.mockResolvedValue({
+      models: ['m-one', 'm-two'],
+    })
     await renderPage()
     fireEvent.click(await screen.findByText('systemOne.addProvider'))
-    // nothing selected yet → default_model must not be selectable
-    const modelField = screen.getByLabelText(/systemOne\.defaultModel/)
-    expect(modelField).toBeDisabled()
-    expect(screen.getByText('systemOne.defaultModelSyncFirst')).toBeInTheDocument()
-    // select an enabled model → default becomes selectable and offers it
-    const modelsInput = screen.getByLabelText(/systemOne\.enabledModels/)
-    fireEvent.change(modelsInput, { target: { value: 'm-one' } })
-    fireEvent.keyDown(modelsInput, { key: 'Enter' })
-    const enabledField = screen.getByLabelText(/systemOne\.defaultModel/)
-    expect(enabledField).not.toBeDisabled()
-    expect(screen.getByRole('option', { name: 'm-one' })).toBeInTheDocument()
+    fireEvent.change(screen.getByLabelText(/systemOne\.displayName/), {
+      target: { value: 'Wizard' },
+    })
+    fireEvent.change(screen.getByLabelText(/systemOne\.apiKey/), {
+      target: { value: 'sk-w' },
+    })
+    // step 1 has no default-model field yet
+    expect(
+      screen.queryByLabelText(/systemOne\.defaultModel/),
+    ).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'app.next' }))
+    await waitFor(() => expect(apiMock.previewVendorModels).toHaveBeenCalled())
+    // step 2: models pre-selected → default select is enabled and offers them
+    const defaultField = screen.getByLabelText(/systemOne\.defaultModel/)
+    expect(defaultField).not.toBeDisabled()
+    const options = screen.getAllByRole('option').map((o) => o.textContent)
+    expect(options).toContain('m-one')
+    expect(options).toContain('m-two')
   })
 
   it('removing the default model from the enabled chips clears the default', async () => {
@@ -375,6 +408,7 @@ describe('DecisionModelProvidersPage (settings page)', () => {
     apiMock.listSystemOneProviderTypes.mockResolvedValue([
       { value: 'typesafe', label: 'typesafe' },
     ])
+    apiMock.previewVendorModels.mockResolvedValue({ models: ['m-one'] })
     await renderPage()
     fireEvent.click(await screen.findByText('systemOne.addProvider'))
     // The select is rendered with the vendor-type label and is NOT disabled.
@@ -386,7 +420,9 @@ describe('DecisionModelProvidersPage (settings page)', () => {
     fireEvent.change(screen.getByLabelText(/systemOne\.apiKey/), {
       target: { value: 'sk-typed' },
     })
-    fireEvent.click(screen.getByText('app.save'))
+    fireEvent.click(screen.getByRole('button', { name: 'app.next' }))
+    await waitFor(() => expect(apiMock.previewVendorModels).toHaveBeenCalled())
+    fireEvent.click(await screen.findByRole('button', { name: 'app.save' }))
     await waitFor(() => {
       expect(apiMock.createSystemOneProvider).toHaveBeenCalledTimes(1)
     })
@@ -458,6 +494,64 @@ describe('DecisionModelProvidersPage (settings page)', () => {
       await screen.findAllByText('the API key was rejected').then((r) => r.length),
     ).toBeGreaterThan(0)
     expect(screen.getByRole('dialog')).toBeInTheDocument()
+  })
+
+  // ── Auto-fetch on edit load (quick-fix) ────────────────────────────────
+
+  it('auto-fetches the vendor catalogue when the edit dialog opens', async () => {
+    apiMock.listVendorModels.mockResolvedValue({
+      models: ['jev-latest', 'jev-pro', 'jev-mini'],
+    })
+    await renderPage()
+    await screen.findByText('Primary Vendor')
+    fireEvent.click(screen.getAllByRole('button', { name: 'app.edit' })[0])
+    await waitFor(() => {
+      expect(apiMock.listVendorModels).toHaveBeenCalledWith('p-1')
+    })
+    // discovery-only: opening the editor never imports / mutates the backend
+    expect(apiMock.importVendorModels).not.toHaveBeenCalled()
+  })
+
+  it('does not auto-fetch when the provider has no stored API key', async () => {
+    apiMock.listSystemOneProviders.mockResolvedValue([
+      { ...PROVIDERS[0], id: 'p-2', display_name: 'No Key', has_api_key: false },
+    ])
+    await renderPage()
+    await screen.findByText('No Key')
+    fireEvent.click(screen.getAllByRole('button', { name: 'app.edit' })[0])
+    await waitFor(() => {
+      expect(
+        screen.getByLabelText(/systemOne\.defaultModel/),
+      ).toBeInTheDocument()
+    })
+    expect(apiMock.listVendorModels).not.toHaveBeenCalled()
+  })
+
+  it('offers the fetched models as selectable options without auto-enabling', async () => {
+    apiMock.listVendorModels.mockResolvedValue({
+      models: ['jev-latest', 'jev-pro', 'jev-mini'],
+    })
+    await renderPage()
+    await screen.findByText('Primary Vendor')
+    fireEvent.click(screen.getAllByRole('button', { name: 'app.edit' })[0])
+    await waitFor(() => {
+      expect(apiMock.listVendorModels).toHaveBeenCalledWith('p-1')
+    })
+    // the discovered model is offered in the enabled-models dropdown...
+    const input = await screen.findByLabelText(/systemOne\.enabledModels/)
+    fireEvent.mouseDown(input)
+    expect(
+      await screen.findByRole('option', { name: 'jev-pro' }),
+    ).toBeInTheDocument()
+    // ...but is NOT pre-enabled: the default-model select only lists the
+    // provider's existing enabled models (jev-latest, jev-mini).
+    fireEvent.keyDown(input, { key: 'Escape' })
+    const defaultOptions = screen
+      .getAllByRole('option')
+      .map((o) => o.textContent)
+    expect(defaultOptions).toContain('jev-latest')
+    expect(defaultOptions).toContain('jev-mini')
+    expect(defaultOptions).not.toContain('jev-pro')
   })
 
   // ── FIX-20261014-001900: default_model gated on enabled models ─────────

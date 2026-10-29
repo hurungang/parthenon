@@ -30,6 +30,7 @@ from app.api.v1.internal.scripts import InternalScriptsRouter
 from app.api.v1.internal.session_data import InternalSessionDataRouter
 from app.api.v1.internal.system_tools import router as InternalSystemToolsRouter
 from app.api.v1.internal.optimization_tools import router as InternalOptimizationToolsRouter
+from app.api.v1.internal.token_health import InternalTokenHealthRouter
 from app.api.v1.intervene import InterveneRouter
 from app.api.v1.mcp_hub import McpOAuthRouter, McpServerRouter, McpSessionRouter, McpToolRouter
 from app.api.v1.notifications import NotificationRouter
@@ -114,6 +115,7 @@ router.include_router(InternalOutputsRouter)
 router.include_router(InternalMcpProxyRouter)
 router.include_router(InternalScriptsRouter)
 router.include_router(InternalLLMMockRouter)
+router.include_router(InternalTokenHealthRouter)
 
 # Identity & auth
 router.include_router(RoleRouter)

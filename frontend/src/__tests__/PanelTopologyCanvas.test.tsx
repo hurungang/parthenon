@@ -3,6 +3,7 @@ import { render, screen, waitFor, fireEvent } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import {
   PanelTopologyCanvas,
+  TOPOLOGY_MAX_FONT_SCALE,
   buildPanelTopology,
   capabilityColor,
 } from '../components/agents/panel/PanelTopologyCanvas'
@@ -22,6 +23,7 @@ const {
   mockTopologyZones,
   mockTopologyHubBar,
   mockViewProps,
+  mockForwardedNodeClick,
 } = vi.hoisted(() => ({
   mockApiGet: vi.fn(),
   mockTopologyNodes: [] as unknown[],
@@ -32,7 +34,10 @@ const {
   mockViewProps: {
     fillHeight: undefined as boolean | undefined,
     viewZoom: undefined as number | undefined,
+    viewFontZoom: undefined as number | undefined,
   },
+  /** Last onNodeClick forwarded to the renderer (optional prop). */
+  mockForwardedNodeClick: { fn: undefined as ((n: unknown) => void) | undefined },
 }))
 
 vi.mock('../api/apiClient', () => ({
@@ -47,6 +52,8 @@ vi.mock('../components/agents/TopologyDiagramRenderer', () => ({
     hubBar,
     fillHeight,
     viewZoom,
+    viewFontZoom,
+    onNodeClick,
   }: {
     nodes: unknown[]
     edges: unknown[]
@@ -54,6 +61,8 @@ vi.mock('../components/agents/TopologyDiagramRenderer', () => ({
     hubBar?: unknown
     fillHeight?: boolean
     viewZoom?: number
+    viewFontZoom?: number
+    onNodeClick?: (node: unknown) => void
   }) => {
     mockTopologyNodes.length = 0
     mockTopologyNodes.push(...nodes)
@@ -65,6 +74,8 @@ vi.mock('../components/agents/TopologyDiagramRenderer', () => ({
     if (hubBar) mockTopologyHubBar.push(hubBar)
     mockViewProps.fillHeight = fillHeight
     mockViewProps.viewZoom = viewZoom
+    mockViewProps.viewFontZoom = viewFontZoom
+    mockForwardedNodeClick.fn = onNodeClick
     return <div data-testid="panel-topology" data-node-count={nodes.length} data-edge-count={edges.length} />
   },
 }))
@@ -83,6 +94,7 @@ const NAMES = {
   toolServerSlugs: { 'tool-1': 'mcp-github' },
   toolServerColors: { 'mcp-github': '#15803d' },
   skillToolIds: { 'skill-1': ['tool-1'] },
+  identityTokenHealth: {},
   sopComposedSkillIds: {},
 }
 
@@ -98,7 +110,10 @@ const LABELS = {
     model: 'agents.plan.nodeTypes.empty_model',
   },
   inputSchemaLabel: 'agents.types.inputSchema',
+  inputNone: 'agents.panel.noInputType',
+  inputConversation: 'agents.panel.inputTypeConversation',
   outputLocked: 'agents.panel.topologyOutputLocked',
+  outputAuto: 'agents.types.outputAuto',
   boundaryTyped: 'agents.plan.boundaryTyped',
   boundaryConversational: 'agents.plan.boundaryConversational',
   sections: {
@@ -352,16 +367,27 @@ describe('buildPanelTopology', () => {
   it('renders dashed placeholders for an empty/new agent draft — no hub node, zones still emitted', () => {
     const { nodes, edges, zones } = buildPanelTopology('new-agent', emptyDraft(), NAMES, LABELS)
 
+    // input type `none` and output type `auto` are deliberately-set states
+    // (matching the editor dialog), NOT unfilled slots — they no longer
+    // render as dashed placeholders.
     const placeholderNodes = nodes.filter((n) => n.usage === 'empty')
     expect(placeholderNodes.map((n) => n.id).sort()).toEqual([
       'identity',
-      'input_data_type',
       'model',
-      'output_data_type',
       'role',
       'sop_empty',
       'tool_empty',
     ])
+    // The input slot shows the editor's "None" label — a solid node.
+    expect(findNode(nodes, 'input_data_type')).toMatchObject({
+      label: 'agents.panel.noInputType',
+      usage: undefined,
+    })
+    // The output slot shows the editor's "Auto" label — a solid node.
+    expect(findNode(nodes, 'output_data_type')).toMatchObject({
+      label: 'agents.types.outputAuto',
+      usage: undefined,
+    })
     // No skills equipped → NO Skills section at all: no placeholder node, no
     // group frame — the Capabilities zone collapses to its SOPs empty
     // placeholder (existing zone-empty behaviour).
@@ -438,8 +464,74 @@ describe('buildPanelTopology', () => {
     expect(edges.some((e) => e.style === 'dotted')).toBe(false)
   })
 
-  it('keeps capability→tool connectors stable across rebuilds (deterministic colours)', () => {
-    const once = buildPanelTopology('research-agent', FULL_DRAFT, NAMES, LABELS)
+  it('labels the input slot with the editor text for deliberately-set none/conversation types', () => {
+    // input type none (with output typed still set up as in FULL_DRAFT).
+    const noneInput: AgentDraftComposition = {
+      ...FULL_DRAFT,
+      inputType: 'none',
+      inputSchema: null,
+    }
+    const none = buildPanelTopology('research-agent', noneInput, NAMES, LABELS)
+    expect(findNode(none.nodes, 'input_data_type')).toMatchObject({
+      label: 'agents.panel.noInputType',
+      usage: undefined,
+    })
+
+    // input type conversation: shows the editor's "Conversation" label; the
+    // output slot keeps its lock semantics.
+    const conv: AgentDraftComposition = {
+      ...FULL_DRAFT,
+      inputType: 'conversation',
+      inputSchema: null,
+      outputDataTypeId: null,
+    }
+    const convGraph = buildPanelTopology('chat-agent', conv, NAMES, LABELS)
+    expect(findNode(convGraph.nodes, 'input_data_type')).toMatchObject({
+      label: 'agents.panel.inputTypeConversation',
+      usage: undefined,
+    })
+    expect(findNode(convGraph.nodes, 'output_data_type')?.usage).toBe('locked')
+  })
+
+  it('keeps dashed empty placeholders for genuinely unfilled typed slots', () => {
+    // Typed input without a schema and typed output without a data type are
+    // slots NOT yet filled — placeholders, not None/Auto labels.
+    const unfilled: AgentDraftComposition = {
+      ...FULL_DRAFT,
+      inputType: 'typed',
+      inputSchema: null,
+      outputType: 'typed',
+      outputDataTypeId: null,
+    }
+    const { nodes } = buildPanelTopology('research-agent', unfilled, NAMES, LABELS)
+    expect(findNode(nodes, 'input_data_type')).toMatchObject({
+      label: 'agents.plan.nodeTypes.empty_input_data_type',
+      usage: 'empty',
+    })
+    expect(findNode(nodes, 'output_data_type')).toMatchObject({
+      label: 'agents.plan.nodeTypes.empty_output_data_type',
+      usage: 'empty',
+    })
+  })
+
+  it('labels the output slot "Auto" for auto/markdown/unset output types without a data type', () => {
+    for (const outputType of ['auto', 'markdown'] as const) {
+      const draft: AgentDraftComposition = { ...FULL_DRAFT, outputType, outputDataTypeId: null }
+      const { nodes } = buildPanelTopology('research-agent', draft, NAMES, LABELS)
+      expect(findNode(nodes, 'output_data_type')).toMatchObject({
+        label: 'agents.types.outputAuto',
+        usage: undefined,
+      })
+    }
+    // A typed output WITH a data type still resolves the data type name.
+    const typed = buildPanelTopology('research-agent', FULL_DRAFT, NAMES, LABELS)
+    expect(findNode(typed.nodes, 'output_data_type')).toMatchObject({
+      label: 'final-report',
+      usage: undefined,
+    })
+  })
+
+  it('keeps capability→tool connectors stable across rebuilds (deterministic colours)', () => {    const once = buildPanelTopology('research-agent', FULL_DRAFT, NAMES, LABELS)
     const twice = buildPanelTopology('research-agent', FULL_DRAFT, NAMES, LABELS)
     expect(once.edges).toEqual(twice.edges)
     expect(once.nodes.map((n) => [n.id, n.accentColor])).toEqual(twice.nodes.map((n) => [n.id, n.accentColor]))
@@ -634,6 +726,52 @@ describe('PanelTopologyCanvas', () => {
     // Inline canvas renders WITHOUT the fullscreen view transform.
     expect(mockViewProps.fillHeight).toBe(false)
     expect(mockViewProps.viewZoom).toBeUndefined()
+    expect(mockViewProps.viewFontZoom).toBeUndefined()
+  })
+
+  it('passes the font-scale cap in fullscreen — zooming changes viewZoom but not the cap', () => {
+    mockApiGet.mockResolvedValue({ data: [] })
+    renderCanvas(FULL_DRAFT)
+
+    fireEvent.click(screen.getByTestId('panel-topology-fullscreen'))
+
+    // Auto-fit: the cap is handed to the renderer alongside zoom 1.
+    expect(mockViewProps.fillHeight).toBe(true)
+    expect(mockViewProps.viewZoom).toBe(1)
+    expect(mockViewProps.viewFontZoom).toBe(TOPOLOGY_MAX_FONT_SCALE)
+
+    // Zooming in keeps expanding the visible world (viewZoom grows) while
+    // the font cap stays constant — the renderer, not the panel, derives the
+    // effective drawn font scale from the pair.
+    fireEvent.click(screen.getByTestId('panel-topology-zoom-in'))
+    expect(mockViewProps.viewZoom).toBeCloseTo(1.2)
+    expect(mockViewProps.viewFontZoom).toBe(TOPOLOGY_MAX_FONT_SCALE)
+    fireEvent.click(screen.getByTestId('panel-topology-zoom-in'))
+    fireEvent.click(screen.getByTestId('panel-topology-zoom-in'))
+    expect(mockViewProps.viewZoom).toBeCloseTo(1.728)
+    expect(mockViewProps.viewFontZoom).toBe(TOPOLOGY_MAX_FONT_SCALE)
+  })
+
+  it('labels the composed contract slots None/Auto for deliberately-set draft states', async () => {
+    mockApiGet.mockResolvedValue({ data: [] })
+    renderCanvas({
+      ...FULL_DRAFT,
+      inputType: 'none',
+      inputSchema: null,
+      outputType: 'auto',
+      outputDataTypeId: null,
+    })
+
+    await waitFor(() => {
+      expect(mockTopologyNodes.find((n) => (n as { id: string }).id === 'input_data_type')).toMatchObject({
+        label: 'agents.panel.noInputType',
+        usage: undefined,
+      })
+    })
+    expect(mockTopologyNodes.find((n) => (n as { id: string }).id === 'output_data_type')).toMatchObject({
+      label: 'agents.types.outputAuto',
+      usage: undefined,
+    })
   })
 
   it('shows zoom controls in fullscreen and steps the zoom % per click', () => {
@@ -724,5 +862,24 @@ describe('PanelTopologyCanvas', () => {
     expect(screen.getByText('agents.panel.topology')).toBeDefined()
     expect(screen.getByText('agents.panel.topologyLive')).toBeDefined()
     expect(screen.getByText('agents.panel.topologyHint')).toBeDefined()
+  })
+
+  it('forwards onNodeClick to the renderer when provided (optional prop)', () => {
+    mockApiGet.mockResolvedValue({ data: [] })
+    const onNodeClick = vi.fn()
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    render(
+      <PanelTopologyCanvas agentName="research-agent" draft={FULL_DRAFT} isDirty={false} onNodeClick={onNodeClick} />,
+      { wrapper: ({ children }) => <QueryClientProvider client={qc}>{children}</QueryClientProvider> },
+    )
+
+    expect(mockForwardedNodeClick.fn).toBe(onNodeClick)
+  })
+
+  it('leaves the renderer without onNodeClick by default — panel behaviour unchanged', () => {
+    mockApiGet.mockResolvedValue({ data: [] })
+    renderCanvas(FULL_DRAFT)
+
+    expect(mockForwardedNodeClick.fn).toBeUndefined()
   })
 })

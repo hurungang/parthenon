@@ -222,6 +222,7 @@
       "tokenExpired": "Expired",
       "tokenExpiringSoon": "Expiring Soon",
       "tokenValid": "Valid ({{time}})",
+      "needsReauth": "Needs re-authentication",
       "refreshToken": "Refresh OAuth Token",
       "reauthenticate": "Re-authenticate (refresh token expired)",
       "default": "Default",
@@ -413,7 +414,9 @@
           "label": "Model",
           "hint": "LLM model the agent runs on"
         }
-      }
+      },
+      "topologyTokenExpired": "Token expired — refresh or re-authenticate before executing",
+      "topologyTokenExpiring": "Token expires within 7 days — refresh soon"
     },
     "llmModel": "LLM Model",
     "instances": "Active Instances",
@@ -1091,6 +1094,7 @@
       "absentHint": "No verified optimized plan exists. The next time you run this agent, you will be offered the option to run with optimization — that run authors and verifies the scripts against real executions and saves the plan for reuse.",
       "retire": "Retire plan",
       "retiredHint": "Optimized plan retired — the next run will offer optimization again.",
+      "nothingToRetire": "Nothing to retire",
       "stepsTitle": "Composition Steps",
       "noSteps": "No steps in this optimized plan.",
       "stepFallback": "Step",
@@ -1975,7 +1979,11 @@
     "vendorsBreakdown": "vendors",
     "loadingError": "Failed to load dashboard metrics. Please try again.",
     "retry": "Retry",
-    "go": "Go"
+    "go": "Go",
+    "tokenHealthSection": "Token Health",
+    "tokenHealthIdentities": "Expired Agent Identity Tokens",
+    "tokenHealthMcpSessions": "Expired MCP Session Tokens",
+    "expiringWithin7Days": "expiring within 7 days"
   },
   "apiKeys": {
     "title": "API Key Management",
@@ -2271,7 +2279,7 @@
     "providerTypeHint": "The vendor type determines the API dialect and cannot be changed later.",
     "providerTypeLockedHint": "Locked — changing the vendor type would invalidate this provider's models and credentials.",
     "syncModels": "Sync models from vendor",
-    "syncEmpty": "The vendor returned an empty model list — add models manually instead.",
+    "syncEmpty": "The vendor returned an empty model list.",
     "guardrailsTitle": "Model Usage Guardrails",
     "guardrailsSubtitle": "Per-model usage guardrails for decision calls — evaluated before each decision execution.",
     "guardrailsToggle": "Toggle guardrails section",
@@ -2290,7 +2298,10 @@
     "defaultModelCreateHint": "Type the default model, or enter the enabled-models list below to pick from it. After creating, use \"Sync models from vendor\" to import the vendor's catalogue.",
     "enabledModels": "Enabled Models",
     "enabledModelsHint": "Comma-separated list of enabled models (optional)",
-    "enabledModelsSelectHint": "Select the models to enable — type a name and press Enter to add one manually.",
+    "enabledModelsSelectHint": "Select the models to enable — retrieved from the vendor using your API key.",
+    "enabledModelsEditHint": "Select the models to enable from the vendor's catalogue (loaded automatically).",
+    "addProviderModels": "Confirm Models",
+    "previewEmpty": "The vendor returned no models — check the API key and endpoint.",
     "deleteProviderTitle": "Delete Provider",
     "deleteProviderConfirm": "Delete provider \"{{name}}\"? Providers still referenced by decision tools cannot be deleted.",
     "enabled": "Enabled",

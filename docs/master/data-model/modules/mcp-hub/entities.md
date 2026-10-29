@@ -23,6 +23,11 @@ erDiagram
         string identity_subject
         json identity_binding
         json credential_config
+        datetime oauth_expires_at
+        datetime oauth_refresh_expires_at
+        datetime last_token_refresh_at "nullable; last CC OAuth refresh of this session"
+        enum last_token_refresh_outcome "success | failure (nullable)"
+        enum token_health_state "healthy | expiring | expired | unknown (computed, nullable)"
         boolean is_active
         boolean is_default
         datetime created_at
@@ -45,9 +50,12 @@ erDiagram
     McpServer ||--o{ McpSession : "has"
     McpServer ||--o{ McpTool : "provides"
     McpTool ||--o{ ToolPermission : "governed by"
+    McpSession ||--o{ TokenHealthCheck : "preflighted as"
 ```
 
-**Source**: `backend/app/db/models/mcp_hub.py`
+> **Token expiry health tracking:** OAuth-protected sessions carry a computed `token_health_state` (`healthy | expiring ≤7 days | expired | unknown`), refreshed on token refresh and dashboard read. Pre-execution evaluations are audited in `TokenHealthCheck` (`backend/app/db/models/token_health.py`).
+
+**Source**: `backend/app/db/models/mcp_hub.py`, `backend/app/db/models/token_health.py`
 
 **Business rules:**
 - `McpServer.slug` is the tool namespace **within its tenant only** — two tenants may each register a server with slug `supabase`; business identity of a server is **(tenant, slug)** (platform-wide slug uniqueness is retired). Tool namespaced names (`slug/tool`) are likewise unique per tenant.
@@ -59,7 +67,7 @@ erDiagram
 | Entity | Description |
 |--------|-------------|
 | **McpServer** | A tenant-owned registered external tool server with a slug unique per tenant; its status (active/inactive) is tracked by the platform. |
-| **McpSession** | A named connection configuration on a server that carries a specific identity, credential binding, and session-level config for outbound calls; supports structured identity binding and per-session credential configuration. `auth_type` may be `passthrough`, in which case the executing agent's identity is forwarded at call time and no credentials are stored. `is_default` designates the session used for sync operations and default tool calls when no specific session is requested. |
+| **McpSession** | A named connection configuration on a server that carries a specific identity, credential binding, and session-level config for outbound calls; supports structured identity binding and per-session credential configuration. `auth_type` may be `passthrough`, in which case the executing agent's identity is forwarded at call time and no credentials are stored. `is_default` designates the session used for sync operations and default tool calls when no specific session is requested. Token health fields (`last_token_refresh_at`, `last_token_refresh_outcome`, `token_health_state`) carry the computed health state (`healthy | expiring ≤7d | expired | unknown`) surfaced on dashboard and topology. |
 | **McpTool** | A capability synced from an external server; namespaced under the server's slug, unique within the tenant, and carrying its own denormalized tenant binding. |
 | **ToolPermission** | Grants a Role or Identity the right to invoke a specific tool — always within one tenant's role space. |
 

@@ -43,6 +43,13 @@ test.describe('System One Provider Config (mocked)', () => {
       }
       return route.fulfill({ status: 405, body: '{}' })
     })
+    await page.route(/\/api\/v1\/system-one\/preview-models$/, (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ models: ['jev-latest', 'jev-mini'] }),
+      }),
+    )
     await page.route(/\/api\/v1\/system-one\/status$/, (route) =>
       route.fulfill({
         status: 200,
@@ -63,7 +70,7 @@ test.describe('System One Provider Config (mocked)', () => {
     await expect(page.getByText('TypeSafe Jev (e2e)')).toBeVisible()
     await expect(page.getByText('Stored')).toBeVisible()
 
-    // Open the create dialog and save.
+    // Open the create dialog (2-step wizard): step 1 collects the key.
     await page.getByText('Add Provider').click()
     const dialog = page.getByRole('dialog')
     await expect(dialog).toBeVisible()
@@ -74,7 +81,11 @@ test.describe('System One Provider Config (mocked)', () => {
     await expect(baseUrl).not.toBeDisabled()
     await expect(baseUrl).toHaveValue('https://api.typesafe.ai/v1/systemone')
     await dialog.getByLabel('API Key').fill('sk-e2e-secret')
-    await dialog.getByText('Save').click()
+    // Step 1 → step 2: fetch the vendor catalogue with the typed key.
+    await dialog.getByRole('button', { name: 'Next' }).click()
+    await expect(dialog.getByText('Confirm Models')).toBeVisible()
+    // Confirm the fetched models and create the provider.
+    await dialog.getByRole('button', { name: 'Save' }).click()
 
     await expect
       .poll(() => createdPayload, { timeout: 10_000 })

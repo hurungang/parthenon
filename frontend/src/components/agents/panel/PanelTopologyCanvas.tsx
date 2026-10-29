@@ -13,6 +13,8 @@ import { useDataTypes } from '../../../hooks/useDataTypes'
 import { useAvailableModels } from '../../../hooks/useAvailableModels'
 import { useAllTools, useMcpServers } from '../../../hooks/useMcpServers'
 import apiClient from '../../../api/apiClient'
+import { useTokenHealth } from '../../../hooks/useTokenHealth'
+import { TokenHealthState } from '../../../types/tokenHealth'
 import { canonicalizeToolName } from '../../../utils/toolNaming'
 import type {
   AgentDraftComposition,
@@ -61,6 +63,12 @@ export interface PanelTopologyNames {
   /** MCP tool ids per skill id (tools zone resolution). */
   skillToolIds: Record<string, string[]>
   /**
+   * Token health badge state per agent identity id (token-expiry-alerting):
+   * 'expiring' / 'expired' — derived from the bound identity's and MCP
+   * sessions' persisted health states. Healthy/unknown identities are absent.
+   */
+  identityTokenHealth: Record<string, 'expiring' | 'expired'>
+  /**
    * Composed skill ids per SOP id (from the SOP detail's `skill_invocation`
    * steps — SOP → skill composition chain in the capabilities zone).
    */
@@ -72,8 +80,14 @@ export interface PanelTopologyLabels {
   hub: string
   empty: Record<string, string>
   inputSchemaLabel: string
+  /** Label of the deliberately-set "no input" state (input type none). */
+  inputNone: string
+  /** Label of the conversational input type (matches the editor dialog). */
+  inputConversation: string
   /** Label of the locked output slot (conversational agents). */
   outputLocked: string
+  /** Label of the auto/unset output type (matches the editor dialog). */
+  outputAuto: string
   /** Agent boundary caption for typed-output agents. */
   boundaryTyped: string
   /** Agent boundary caption for conversational agents. */
@@ -103,6 +117,28 @@ export interface PanelTopologyLabels {
 // ── Constants ─────────────────────────────────────────────────────────────────
 
 /**
+ * Worst-of token health merge (token-expiry-alerting): expired dominates
+ * expiring. Returns undefined when neither side carries a badge state.
+ */
+export function worstTokenHealth(
+  a: 'expiring' | 'expired' | undefined,
+  b: 'expiring' | 'expired' | undefined,
+): 'expiring' | 'expired' | undefined {
+  if (a === 'expired' || b === 'expired') return 'expired'
+  if (a === 'expiring' || b === 'expiring') return 'expiring'
+  return undefined
+}
+
+/** Badge state for a draft identity id (undefined = healthy/unknown/unset). */
+function identityTokenHealthOf(
+  identityId: string | null | undefined,
+  names: PanelTopologyNames,
+): 'expiring' | 'expired' | undefined {
+  if (identityId == null) return undefined
+  return names.identityTokenHealth[identityId]
+}
+
+/**
  * Fullscreen zoom clamps + per-click step (~20%). zoom = 1 is the auto-fit
  * view; the renderer scales the viewBox inversely (view = world / zoom) so
  * viewBox-unit text fitting stays valid at every level.
@@ -110,6 +146,14 @@ export interface PanelTopologyLabels {
 const TOPOLOGY_MIN_ZOOM = 0.5
 const TOPOLOGY_MAX_ZOOM = 3
 const TOPOLOGY_ZOOM_STEP = 1.2
+/**
+ * Font-scale cap (as a zoom level): once the fullscreen zoom passes this
+ * value, the drawn font sizes shrink proportionally (cap / zoom) in the
+ * renderer, so on-screen glyphs stop growing. Zooming in then reveals MORE
+ * WORLD (width-fitted labels gain room, so fewer labels are ellipsized)
+ * instead of magnifying text.
+ */
+export const TOPOLOGY_MAX_FONT_SCALE = 1.6
 
 /** Clamp a zoom scalar into the [TOPOLOGY_MIN_ZOOM, TOPOLOGY_MAX_ZOOM] range. */
 function clampZoom(value: number): number {
@@ -202,6 +246,11 @@ export function buildPanelTopology(
     label: agentName,
     zone: 'config',
     caption: draft.inputType === 'conversation' ? labels.boundaryConversational : labels.boundaryTyped,
+    // Container badge: worst token health across the bound identity (and
+    // any MCP sessions resolved into identityTokenHealth by the caller).
+    ...(identityTokenHealthOf(draft.identityId, names)
+      ? { tokenHealth: identityTokenHealthOf(draft.identityId, names) }
+      : {}),
   })
 
   nodes.push({
@@ -214,6 +263,9 @@ export function buildPanelTopology(
     containedIn: 'agent',
     caption: labels.sections.signsInAs,
     usage: draft.identityId ? undefined : 'empty',
+    ...(identityTokenHealthOf(draft.identityId, names)
+      ? { tokenHealth: identityTokenHealthOf(draft.identityId, names) }
+      : {}),
   })
 
   nodes.push({
@@ -226,21 +278,34 @@ export function buildPanelTopology(
     usage: draft.roleId ? undefined : 'empty',
   })
 
+  // Input slot: a typed slot without a schema is GENUINELY unfilled (empty
+  // placeholder); `none` and `conversation` are deliberately-set input
+  // types and render the SAME labels the editor dialog shows — solid nodes,
+  // not dashed placeholders.
   const hasInputSchema = draft.inputType === 'typed' && draft.inputSchema != null
+  const inputTypeLabel =
+    draft.inputType === 'none'
+      ? labels.inputNone
+      : draft.inputType === 'conversation'
+        ? labels.inputConversation
+        : null
   nodes.push({
     id: 'input_data_type',
     type: 'input_data_type',
     label: hasInputSchema
       ? (names.inputDataTypeName ?? labels.inputSchemaLabel)
-      : labels.empty.input_data_type,
+      : (inputTypeLabel ?? labels.empty.input_data_type),
     zone: 'config',
     containedIn: 'agent',
     caption: labels.sections.contract,
-    usage: hasInputSchema ? undefined : 'empty',
+    usage: hasInputSchema || inputTypeLabel != null ? undefined : 'empty',
   })
 
-  // Conversational lock: conversational agents do not support typed outputs.
+  // Output slot: the conversational lock wins; a typed output without a
+  // data type is unfilled (empty placeholder); `auto` / `markdown` / unset
+  // output types are deliberately set and show the editor's "Auto" label.
   const outputLocked = draft.inputType === 'conversation'
+  const outputUnfilled = !outputLocked && draft.outputType === 'typed' && draft.outputDataTypeId == null
   nodes.push({
     id: 'output_data_type',
     type: 'output_data_type',
@@ -248,10 +313,12 @@ export function buildPanelTopology(
       ? labels.outputLocked
       : draft.outputDataTypeId
         ? (names.dataTypeNames[draft.outputDataTypeId] ?? draft.outputDataTypeId)
-        : labels.empty.output_data_type,
+        : outputUnfilled
+          ? labels.empty.output_data_type
+          : labels.outputAuto,
     zone: 'config',
     containedIn: 'agent',
-    usage: outputLocked ? 'locked' : draft.outputDataTypeId ? undefined : 'empty',
+    usage: outputLocked ? 'locked' : draft.outputDataTypeId ? undefined : outputUnfilled ? 'empty' : undefined,
   })
 
   nodes.push({
@@ -494,6 +561,12 @@ interface PanelTopologyCanvasProps {
   agentName: string
   draft: AgentDraftComposition
   isDirty: boolean
+  /**
+   * Optional node-click handler (e.g. the agent preview dialog's detail
+   * navigation). The management panel omits it — default behaviour is
+   * unchanged (nodes render non-clickable, exactly as before).
+   */
+  onNodeClick?: (node: TopologyNode) => void
 }
 
 /**
@@ -505,7 +578,7 @@ interface PanelTopologyCanvasProps {
  * the Capabilities and Tools zones, and a fullscreen toggle expands the
  * topology over the whole viewport (Escape or the toggle exits).
  */
-export function PanelTopologyCanvas({ agentName, draft, isDirty }: PanelTopologyCanvasProps) {
+export function PanelTopologyCanvas({ agentName, draft, isDirty, onNodeClick }: PanelTopologyCanvasProps) {
   const { t } = useTranslation()
   const [fullscreen, setFullscreen] = useState(false)
   /** Fullscreen view zoom (1 = auto-fit; the renderer scales the viewBox). */
@@ -591,6 +664,9 @@ export function PanelTopologyCanvas({ agentName, draft, isDirty }: PanelTopology
   // Tools zone: MCP tools + servers for MCP-server tool grouping.
   const { data: mcpTools } = useAllTools()
   const { data: mcpServers } = useMcpServers()
+  // Token health (token-expiry-alerting): expired / expiring states for
+  // identities and MCP sessions, from the dashboard token-health API.
+  const { data: tokenHealth } = useTokenHealth()
 
   const graph = useMemo(() => {
     const roleNames: Record<string, string> = {}
@@ -638,6 +714,23 @@ export function PanelTopologyCanvas({ agentName, draft, isDirty }: PanelTopology
       toolServerColors[slug] = mcpGroupColor(slug)
     }
 
+    // Token health map per identity id: worst of the identity's own state
+    // and the states of any MCP sessions client-side resolvable to it.
+    // (Sessions bind via role; only identity-keyed states are resolvable
+    // here — session states still surface on the dashboard cards.)
+    const identityTokenHealth: Record<string, 'expiring' | 'expired'> = {}
+    const fold = (state: 'expiring' | 'expired', key: string) => {
+      const merged = worstTokenHealth(identityTokenHealth[key], state)
+      if (merged != null) identityTokenHealth[key] = merged
+    }
+    for (const item of tokenHealth?.identities?.items ?? []) {
+      if (item.health_state === TokenHealthState.Expired) fold('expired', item.id)
+      else if (item.health_state === TokenHealthState.Expiring) fold('expiring', item.id)
+    }
+    // MCP session states are NOT merged here: sessions bind via role, which
+    // is not client-side resolvable to a specific identity — they surface
+    // on the dashboard token-health cards instead.
+
     const emptyKeys = [
       'role',
       'identity',
@@ -676,13 +769,17 @@ export function PanelTopologyCanvas({ agentName, draft, isDirty }: PanelTopology
         toolServerSlugs,
         toolServerColors,
         skillToolIds,
+        identityTokenHealth,
         sopComposedSkillIds,
       },
       {
         hub: t('agents.plan.nodeTypes.communication_hub'),
         empty,
         inputSchemaLabel: t('agents.types.inputSchema'),
+        inputNone: t('agents.panel.noInputType'),
+        inputConversation: t('agents.panel.inputTypeConversation'),
         outputLocked: t('agents.panel.topologyOutputLocked'),
+        outputAuto: t('agents.types.outputAuto', { defaultValue: 'Auto' }),
         boundaryTyped: t('agents.plan.boundaryTyped'),
         boundaryConversational: t('agents.plan.boundaryConversational'),
         sections: {
@@ -714,7 +811,7 @@ export function PanelTopologyCanvas({ agentName, draft, isDirty }: PanelTopology
         noTools: t('agents.plan.noTools'),
       },
     )
-  }, [agentName, draft, roles, identities, skills, sops, sopDetails, dataTypesPage, availableModels, mcpTools, mcpServers, t])
+  }, [agentName, draft, roles, identities, skills, sops, sopDetails, dataTypesPage, availableModels, mcpTools, mcpServers, tokenHealth, t])
 
   const hubLabel = t('agents.plan.nodeTypes.communication_hub')
   const fullscreenLabel = t('agents.panel.topologyFullscreen')
@@ -727,7 +824,9 @@ export function PanelTopologyCanvas({ agentName, draft, isDirty }: PanelTopology
   /**
    * The zoned canvas — inline (aspect-scaled) or fullscreen (height-filling
    * with the viewBox zoom transform; `viewZoom` is omitted inline, which is
-   * the plain responsive behaviour).
+   * the plain responsive behaviour). The font-scale cap travels with the
+   * zoom: past TOPOLOGY_MAX_FONT_SCALE the renderer stops magnifying glyphs
+   * so zoom reveals more world (fewer ellipsized labels) instead.
    */
   const renderCanvas = (fillHeight: boolean, viewZoom?: number) => (
     <TopologyDiagramRenderer
@@ -737,6 +836,8 @@ export function PanelTopologyCanvas({ agentName, draft, isDirty }: PanelTopology
       hubBar={{ label: hubLabel, afterZone: 'capabilities' }}
       fillHeight={fillHeight}
       viewZoom={viewZoom}
+      viewFontZoom={viewZoom != null ? TOPOLOGY_MAX_FONT_SCALE : undefined}
+      onNodeClick={onNodeClick}
     />
   )
 

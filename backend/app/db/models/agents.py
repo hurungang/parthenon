@@ -19,6 +19,7 @@ from sqlalchemy import (
 from sqlalchemy.dialects.postgresql import JSON, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
+from app.db.models.token_health import TokenHealthState, TokenRefreshOutcome
 from app.db.session import Base
 
 
@@ -421,6 +422,21 @@ class AgentIdentity(Base):
     encrypted_refresh_token: Mapped[str | None] = mapped_column(Text, nullable=True)
     last_token_refresh_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
+    )
+    # Token expiry health tracking (token-expiry-alerting)
+    refresh_token_expires_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    last_token_refresh_outcome: Mapped[TokenRefreshOutcome | None] = mapped_column(
+        Enum(
+            TokenRefreshOutcome,
+            name="token_refresh_outcome_enum",
+            values_callable=lambda enum_cls: [member.value for member in enum_cls],
+        ),
+        nullable=True,
+    )
+    token_health_state: Mapped[TokenHealthState | None] = mapped_column(
+        Enum(TokenHealthState, name="token_health_state_enum"), nullable=True
     )
     token_status: Mapped[AgentTokenStatus | None] = mapped_column(
         Enum(AgentTokenStatus, name="agent_token_status_enum"), nullable=True

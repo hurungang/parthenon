@@ -10,7 +10,7 @@
  *   user-visible multi-tenancy UX).
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, fireEvent } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 
@@ -72,8 +72,11 @@ describe('AppShell — Phase 11 sidebar gating', () => {
     }, { timeout: 5000 })
     // The acme-admin bug: no platform items on a granted-tenant session
     expect(screen.queryByText('nav.groupPlatform')).toBeNull()
+    // Expand the Tenant Admin group so its child items render deterministically
+    // (the sidebar collapses all groups on /dashboard; this removes the
+    // collapse-timing flake that intermittently hid the children).
+    fireEvent.click(screen.getAllByText('nav.groupTenantAdmin')[0])
     // Tenant admin surfaces are present
-    // Tenant admin surfaces are present (await the collapse body render)
     await waitFor(() => {
       expect(screen.getAllByText("nav.tenantSettings").length).toBeGreaterThan(0)
       expect(screen.getAllByText("nav.tenantMembers").length).toBeGreaterThan(0)
@@ -89,6 +92,10 @@ describe('AppShell — Phase 11 sidebar gating', () => {
     mockAuth = { multiTenancyEnabled: true, activeTenant: { id: 't1', slug: 'root', name: 'Root' } }
     mockGetPlatformSettings.mockRejectedValue({ response: { status: 403 } })
     await renderShell()
+    await waitFor(() => {
+      expect(screen.getAllByText('nav.groupTenantAdmin').length).toBeGreaterThan(0)
+    }, { timeout: 5000 })
+    fireEvent.click(screen.getAllByText('nav.groupTenantAdmin')[0])
     await waitFor(() => {
       expect(screen.getAllByText('nav.tenantIdentityProviders').length).toBeGreaterThan(0)
     })

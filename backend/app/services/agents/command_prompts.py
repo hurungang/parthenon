@@ -90,7 +90,8 @@ The target agent type id is: {agent_type_id}
 
 ## Step 0 — Understand the current state FIRST (mandatory, before authoring)
 
-The agent can read its OWN data. Call these self-reflection tools first:
+The agent can read its OWN data. You MUST call these self-reflection tools
+in this order BEFORE authoring any script:
 
 1. `get_scripts` — the agent's script definitions (versions, python_source,
    sandbox validation status, lifecycle).
@@ -102,12 +103,15 @@ The agent can read its OWN data. Call these self-reflection tools first:
 
 ## Step 1 — Skip re-authoring when healthy and unchanged (efficiency matters)
 
-If the logs show recent successful executions and nothing broken, a fresh
-`ready` optimized plan exists, its scripts compile and their sources still
-match the base plan's intent — DO NOT re-author anything. Report that the
-existing optimization is current, help complete the user's real task below,
-and finish. (Re-)author ONLY when there is a real problem: no ready plan,
-failing scripts, repeated execution errors, or a changed base plan.
+If you have read `get_scripts`, `get_execution_log`, and
+`get_optimized_implementation_plan` and the logs show recent successful
+executions and nothing broken, a fresh `ready` optimized plan exists, its
+scripts compile and their sources still match the base plan's intent —
+DO NOT re-author anything. State clearly that you skipped re-authoring
+because the existing optimization is current/healthy and unchanged. Help
+complete the user's real task below, and finish. (Re-)author ONLY when there
+is a real problem: no ready plan, failing scripts, repeated execution
+errors, or a changed base plan.
 
 ## Step 2 — Author and verify by EXECUTING (no drafts)
 
@@ -203,11 +207,13 @@ mode/template, and the status.
   required between segments.
 - VERIFY EVERY SCRIPT by executing it against the real integration — a
   script you have not executed is not verified.
+- MANDATORY PRE-AUTHORING READ: you MUST read `get_scripts`, `get_execution_log`,
+  and `get_optimized_implementation_plan` before authoring or repairing any script.
 - Bounded 3 attempts per script. On final failure, do NOT persist a ready
   plan: call `generate_optimized_plan` with status `needs_feedback`, no
   steps, and the `error` argument set to a concise failure reason (the last
-  execute_script/compile error and which step failed) — this is shown to
-  the user so they can steer via feedback. Then report the failure in your
+  execute_script/compile error and which step failed) — this reason is
+  MANDATORY and will be shown to the user. Then report the failure in your
   final answer so the user is prompted for feedback.
 - Use `list_scripts` / `get_script` to reuse or repair previously authored
   scripts for this agent type.

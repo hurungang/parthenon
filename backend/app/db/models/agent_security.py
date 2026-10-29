@@ -14,6 +14,7 @@ from datetime import datetime
 from typing import TYPE_CHECKING
 
 from sqlalchemy import (
+    CheckConstraint,
     DateTime,
     Enum,
     ForeignKey,
@@ -169,15 +170,27 @@ class TokenRefreshLog(Base):
     __table_args__ = (
         Index("ix_token_refresh_logs_agent_identity_id", "agent_identity_id"),
         Index("ix_token_refresh_logs_attempted_at", "attempted_at"),
+        # Exactly-one-target invariant: each row targets exactly one entity
+        # (identity OR MCP session, never both, never neither).
+        CheckConstraint(
+            "(CASE WHEN agent_identity_id IS NOT NULL THEN 1 ELSE 0 END + "
+            "CASE WHEN mcp_session_id IS NOT NULL THEN 1 ELSE 0 END) = 1",
+            name="ck_token_refresh_logs_has_target",
+        ),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
     )
-    agent_identity_id: Mapped[uuid.UUID] = mapped_column(
+    agent_identity_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("agent_identities.id", ondelete="CASCADE"),
-        nullable=False,
+        nullable=True,
+    )
+    mcp_session_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("mcp_sessions.id", ondelete="CASCADE"),
+        nullable=True,
     )
     attempted_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False

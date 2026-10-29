@@ -80,6 +80,8 @@ from app.db.models.notifications import (  # noqa: F401
 )
 from app.services.gateway.registry import GatewayEndpointRegistry  # noqa: F401
 
+from app.db.models.token_health import TokenHealthCheck, TokenCheckOutcome, TokenHealthState  # noqa: F401
+
 # User Permission Management models
 from app.db.models.tag_definition import TagDefinition  # noqa: F401
 from app.db.models.tag_value import TagValue  # noqa: F401

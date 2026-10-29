@@ -18,6 +18,7 @@ from sqlalchemy import (
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
+from app.db.models.token_health import TokenHealthState, TokenRefreshOutcome
 from app.db.session import Base
 
 
@@ -136,8 +137,25 @@ class McpSession(Base):
     oauth_refresh_expires_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
-    # OAuth metadata (token_url, client_id, etc. for token refresh)
+    # Token expiry health tracking (token-expiry-alerting)
+    last_token_refresh_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    last_token_refresh_outcome: Mapped[TokenRefreshOutcome | None] = mapped_column(
+        Enum(
+            TokenRefreshOutcome,
+            name="token_refresh_outcome_enum",
+            values_callable=lambda enum_cls: [member.value for member in enum_cls],
+        ),
+        nullable=True,
+    )
+    token_health_state: Mapped[TokenHealthState | None] = mapped_column(
+        Enum(TokenHealthState, name="token_health_state_enum"), nullable=True
+    )
     oauth_metadata: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    # OAuth re-auth state (unrecoverable refresh failures)
+    requires_reauth: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    last_refresh_error: Mapped[str | None] = mapped_column(Text, nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     is_default: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     created_at: Mapped[datetime] = mapped_column(

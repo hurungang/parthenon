@@ -921,6 +921,11 @@ async def handle_oauth_callback(
                 existing_session.oauth_metadata = oauth_metadata
                 existing_session.is_active = True
                 try:
+                    existing_session.requires_reauth = False
+                    existing_session.last_refresh_error = None
+                except Exception:
+                    pass
+                try:
                     await db.flush()
                 except Exception as exc:
                     logger.error(

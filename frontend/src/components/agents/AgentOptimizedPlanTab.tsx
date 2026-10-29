@@ -185,8 +185,13 @@ export function AgentOptimizedPlanTab({
         <Button
           variant="outlined"
           size="small"
-          onClick={() => retireMutation.mutate()}
-          disabled={retireMutation.isPending}
+          onClick={() => {
+            if (!plan || plan.status === 'retired') {
+              return
+            }
+            retireMutation.mutate()
+          }}
+          disabled={retireMutation.isPending || !plan || plan.status === 'retired'}
           data-testid="retire-optimized-plan"
         >
           {t('agents.optimizedPlan.retire')}
@@ -195,6 +200,11 @@ export function AgentOptimizedPlanTab({
       {retireMutation.isSuccess && (
         <Alert severity="success" sx={{ mb: 1 }} data-testid="retire-success">
           {t('agents.optimizedPlan.retiredHint')}
+        </Alert>
+      )}
+      {plan && plan.status === 'retired' && (
+        <Alert severity="info" sx={{ mb: 1 }} data-testid="nothing-to-retire">
+          {t('agents.optimizedPlan.nothingToRetire', 'Nothing to retire')}
         </Alert>
       )}
 

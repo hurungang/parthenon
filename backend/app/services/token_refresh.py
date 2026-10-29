@@ -293,9 +293,25 @@ async def refresh_oauth_token(
             expires_in: int = int(token_data.get("expires_in", 300))
             new_expires_at = _now_utc() + timedelta(seconds=expires_in)
 
+            # Capture the refresh token's own expiry when the provider
+            # reports it (token-expiry-alerting health tracking).
+            new_refresh_expires_at: datetime | None = None
+            refresh_expires_in = token_data.get("refresh_expires_in")
+            if refresh_expires_in:
+                try:
+                    new_refresh_expires_at = _now_utc() + timedelta(
+                        seconds=int(refresh_expires_in)
+                    )
+                except (ValueError, TypeError):
+                    logger.warning(
+                        "Invalid refresh_expires_in in refresh response: %s",
+                        refresh_expires_in,
+                    )
+
             await store_refreshed_token(
                 identity_id, new_access_token, new_expires_at,
                 new_refresh_token, db,
+                refresh_token_expires_at=new_refresh_expires_at,
             )
             await _log_refresh(identity_id, TokenRefreshOutcome.success, attempt, None, None, db)
 
@@ -320,10 +336,15 @@ async def refresh_oauth_token(
             if attempt < len(_RETRY_DELAYS):
                 await asyncio.sleep(_RETRY_DELAYS[attempt - 1])
 
-    # All attempts failed — mark identity token_status
+    # All attempts failed — mark identity token_status and token health
     identity = await db.get(AgentIdentity, identity_id)
     if identity is not None:
+        from app.services.token_health import persist_identity_health_state
+
         identity.token_status = AgentTokenStatus.refresh_failed
+        persist_identity_health_state(
+            identity, refresh_outcome=TokenRefreshOutcome.failure
+        )
         await db.flush()
 
     logger.error(
@@ -341,10 +362,14 @@ async def store_refreshed_token(
     expires_at: datetime,
     new_refresh_token: str | None,
     db: AsyncSession,
+    refresh_token_expires_at: datetime | None = None,
 ) -> None:
     """Persist refreshed tokens to the agent_identity record.
 
     Encrypts the access token and optionally the new refresh token before storage.
+    Also persists the token-health fields (``token_health_state``,
+    ``last_token_refresh_outcome``) and optionally captures the refresh
+    token's expiry (``refresh_token_expires_at``) for health tracking.
 
     Args:
         identity_id: UUID of the AgentIdentity.
@@ -352,6 +377,8 @@ async def store_refreshed_token(
         expires_at: New expiration timestamp.
         new_refresh_token: New refresh token (if provider issued one).
         db: Active async database session.
+        refresh_token_expires_at: Expiry of the refresh token itself, when
+            the provider reports it (token-expiry-alerting).
     """
     identity = await db.get(AgentIdentity, identity_id)
     if identity is None:
@@ -362,6 +389,14 @@ async def store_refreshed_token(
     identity.token_expires_at = expires_at
     identity.last_token_refresh_at = _now_utc()
     identity.token_status = AgentTokenStatus.active
+    if refresh_token_expires_at is not None:
+        identity.refresh_token_expires_at = refresh_token_expires_at
+
+    # Token-expiry-alerting: persist the health classification after the
+    # successful refresh (clears expired/expiring states automatically).
+    from app.services.token_health import persist_identity_health_state
+
+    persist_identity_health_state(identity, refresh_outcome=TokenRefreshOutcome.success)
 
     if new_refresh_token:
         encrypted_rt = vault.encrypt(new_refresh_token)

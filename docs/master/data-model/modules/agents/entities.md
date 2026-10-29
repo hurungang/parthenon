@@ -65,10 +65,25 @@ erDiagram
         string encrypted_refresh_token
         datetime token_expiry
         datetime last_token_refresh_at
+        datetime refresh_token_expires_at "nullable; drives expiring (≤7d) vs expired"
+        enum last_token_refresh_outcome "success | failure (nullable)"
+        enum token_health_state "healthy | expiring | expired | unknown (computed, nullable)"
         enum status
         enum token_status
         datetime created_at
         datetime updated_at
+    }
+    TokenHealthCheck {
+        uuid id
+        uuid tenant_id "mandatory; tenant-scoped"
+        uuid agent_type_id "execution being preflighted"
+        uuid session_id "agent execution session, nullable if blocked pre-submission"
+        enum target_kind "agent_identity | mcp_session"
+        uuid target_id "polymorphic reference, no DB-level FK"
+        enum health_state "healthy | expiring | expired | unknown"
+        enum check_outcome "passed | blocked"
+        string message
+        datetime checked_at
     }
     AgentType {
         uuid id
@@ -282,6 +297,9 @@ erDiagram
     AgentTypeSopBinding }o--|| Sop : "references"
     AgentTypeSkillBinding }o--|| Skill : "references"
     AgentIdentity ||--o{ TokenRefreshLog : "logs"
+    Tenant ||--o{ TokenHealthCheck : "scopes"
+    AgentType ||--o{ TokenHealthCheck : "preflight before execution"
+    AgentIdentity ||--o{ TokenHealthCheck : "preflighted as"
     AgentType ||--o{ AgentData : "saves named data"
     AgentSession ||--o{ AgentData : "contains saved records"
     AgentType ||--o{ AgentOutput : "produces final output"
@@ -290,7 +308,7 @@ erDiagram
     AgentType }o--|| AgentDataType : "output schema defined by"
 ```
 
-**Sources**: `backend/app/db/models/agents.py`, `backend/app/db/models/agent_data.py`, `backend/app/db/models/agent_output.py`, `backend/app/db/models/agent_data_type.py`, `backend/app/db/models/agent_security.py`
+**Sources**: `backend/app/db/models/agents.py`, `backend/app/db/models/token_health.py`, `backend/app/db/models/agent_data.py`, `backend/app/db/models/agent_output.py`, `backend/app/db/models/agent_data_type.py`, `backend/app/db/models/agent_security.py`
 
 **Tenant containment:** `ModelConfig`, `AgentRole`, `AgentIdentity`, `AgentType`, `AgentData`, `AgentOutput`, and `AgentDataType` carry a **mandatory** tenant reference; names, slugs, and display names are unique **per tenant only** (NULL-tenant global uniqueness variants retired). Bindings resolve within the tenant: agent type → skill/SOP bindings and role grants are same-tenant only; SOP delegation steps and A2A delegation **by name** resolve the target agent type by **(tenant, name)** — a name collision across tenants never routes to the wrong tenant's agent. Data saves and typed output queries match the calling tenant only.
 
@@ -303,7 +321,7 @@ erDiagram
 | **AgentRoleSOP** | Join table linking an AgentRole to a Sop. Granting an SOP implicitly includes all Skills it depends on and all MCP tools those Skills require. |
 | **AgentRoleSkill** | Join table linking an AgentRole to a Skill directly (outside of any SOP). Contributes the Skill's required MCP tools to the role's allowed tool set. |
 | **AgentRoleMcpSession** | Join table associating an MCP Session with an AgentRole, providing credential and resource context for MCP tool calls. At most one session per MCP server per role. |
-| **AgentIdentity** | Represents an agent's user account in a dedicated identity provider realm (e.g., `ai_agents`). Stores encrypted OAuth tokens used at runtime; refresh tokens are stored encrypted and refreshed automatically. `token_status` tracks the current refresh state (`active`, `expired`, `refresh_failed`); `last_token_refresh_at` records the most recent successful refresh. If `token_status` becomes `refresh_failed`, agent execution is blocked until operator intervention. Identity slug/name is treated as a slug-safe runtime identifier, while display labels remain user-friendly. |
+| **AgentIdentity** | Represents an agent's user account in a dedicated identity provider realm (e.g., `ai_agents`). Stores encrypted OAuth tokens used at runtime; refresh tokens are stored encrypted and refreshed automatically. `token_status` tracks the current refresh state (`active`, `expired`, `refresh_failed`); `last_token_refresh_at` records the most recent successful refresh. If `token_status` becomes `refresh_failed`, agent execution is blocked until operator intervention. Token health fields (`refresh_token_expires_at`, `last_token_refresh_outcome`, `token_health_state`) carry the computed health state (`healthy | expiring ≤7d | expired | unknown`) surfaced on dashboard and topology, refreshed on token refresh and dashboard read. Identity slug/name is treated as a slug-safe runtime identifier, while display labels remain user-friendly. |
 | **AgentType** | The definition of an agent class: its identity, permission role, model selection, system instruction, and input/output schema. When `output_type` is `typed`, `output_data_type_id` links to the `AgentDataType` that defines the expected output schema. The `model_id` is resolved at runtime against active `ModelConfig.enabled_models`; there is no direct FK to ModelConfig. Agent type slug is the canonical routing key for delegation and protocol metadata. Agent Types store curated SOP and skill bindings via `AgentTypeSopBinding` and `AgentTypeSkillBinding` join tables. |
 | **AgentTypeSopBinding** | Join entity linking an AgentType to a Sop with an explicit ordering position. Each pair (agent_type_id, sop_id) is unique. The order field determines the sequence in the merged binding list alongside skill bindings. Used by system instruction generation and Agent Plan Mode. |
 | **AgentTypeSkillBinding** | Join entity linking an AgentType to a Skill with an explicit ordering position. Each pair (agent_type_id, skill_id) is unique. The order field determines the sequence in the merged binding list alongside SOP bindings. |
@@ -317,6 +335,7 @@ erDiagram
 | **AgentPlan** | Stores the most recent LLM-generated implementation plan for an agent type. One record per `AgentType` (unique on `agent_type_id`). `plan_steps` is a structured, ordered plan payload that is both human-readable (for UI preview) and machine-parseable (for runtime execution guidance). `topology` is an opaque node-edge JSON payload produced by the Topology Builder service for frontend rendering. `generation_status` tracks `pending` \| `success` \| `failed` state; `generation_error` captures the failure reason without discarding the last successful plan. `agent_config_hash` is a hash of the inputs at generation time (role, SOPs, skills, system instruction) used to detect plan staleness. The Agent Runtime loads the saved plan during session initialization to guide execution. |
 | **AgentInstanceCertificate** | X.509 certificate issued to a specific agent runtime instance by the Control Center CA. Tracks the full certificate lifecycle: issuance, expiration (24-hour validity), and revocation. The `instance_id` combined with `agent_type_id` uniquely identifies the runtime instance. `status` is computed: `revoked` if `revoked_at` is set, `expired` if past `expires_at`, otherwise `active`. |
 | **TokenRefreshLog** | Audit trail for every automatic OAuth token refresh attempt on an agent identity. Records the outcome (`success`, `failure`, `rate_limited`), retry attempt number, and any error message. Supports compliance review and debugging of refresh failures. Old entries (> 90 days) may be archived. |
+| **TokenHealthCheck** | One row per pre-execution token health evaluation performed by Control Center before an agent execution (including subagent token checks). Audit trail proving every expired token is surfaced before a run; `target_kind`/`target_id` is a polymorphic reference to the checked `AgentIdentity` or `McpSession` (no DB-level FK). `health_state` is computed at check time; `check_outcome` records `passed` or `blocked`. Source: `backend/app/db/models/token_health.py`. |
 
 **Business rules:**
 - `AgentType.slug` is the canonical agent routing identifier within its tenant, unique and normalized. A2A and SOP delegation by name resolve targets by **(tenant, name)**.
@@ -481,6 +500,7 @@ erDiagram
     ScriptVersion ||--o{ VerificationRun : "verified by"
     ScriptVersion |o--o| ScriptVersion : "repaired_from"
     FallbackEvent |o--o{ RepairAttempt : "repaired by"
+    RepairAttempt }o--o| ScriptVersion : "produces repaired candidate"
     CommandPrompt {
         string slug
         text prompt_text

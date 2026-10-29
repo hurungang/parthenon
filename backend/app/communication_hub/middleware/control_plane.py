@@ -48,20 +48,6 @@ _TOOL_CALL_PATH_PREFIX = "/internal/tools/"
 # A2A internal paths are called by agent-runtime
 _A2A_PATH_PREFIX = "/internal/a2a/"
 
-# Agent execute path - called by Control Center (CA itself, no service cert)
-_AGENT_EXECUTE_PATH = "/internal/agent/execute"
-
-# Agent terminate path - called by Control Center (CA itself, no service cert)
-# Mirrors the execute path exemption so the orchestrator can call
-# ``/internal/agent/terminate/{session_id}`` directly from CC.
-_AGENT_TERMINATE_PATH_PREFIX = "/internal/agent/terminate/"
-
-# Agent resume path - called by Control Center after human intervention.
-# Mirrors the execute/terminate exemption — Control Center (as CA authority)
-# routes through CH, but CH still exempts the path from cert validation
-# since CC may fall back to direct calls.
-_AGENT_RESUME_PATH_PREFIX = "/internal/agent/resume/"
-
 # The only service whose certificate is accepted on control plane paths
 _EXPECTED_SERVICE_NAME = "control-center"
 
@@ -177,38 +163,14 @@ class ControlPlaneMiddleware(BaseHTTPMiddleware):
                 extract_tenant_signature_headers(request.headers)
             )
 
-        # Agent execute endpoint is called by Control Center (CA itself) 
-        # which doesn't have a service certificate - exempt from validation
-        if request.url.path == _AGENT_EXECUTE_PATH:
-            logger.debug(
-                "CH control plane: allowing %s %s from Control Center (CA authority)",
-                request.method,
-                request.url.path,
-            )
-            return await call_next(request)
-
-        # Agent terminate endpoint mirrors the execute exemption: it is
-        # called by Control Center's termination orchestrator (which is
-        # the CA itself and does not carry a service certificate) and
-        # forwards to Agent Runtime.
-        if request.url.path.startswith(_AGENT_TERMINATE_PATH_PREFIX):
-            logger.debug(
-                "CH control plane: allowing %s %s from Control Center (CA authority)",
-                request.method,
-                request.url.path,
-            )
-            return await call_next(request)
-
-        # Agent resume endpoint — called by Control Center after human
-        # intervention.  Exempt from cert validation for the same reason as
-        # execute and terminate (CC is the CA authority).
-        if request.url.path.startswith(_AGENT_RESUME_PATH_PREFIX):
-            logger.debug(
-                "CH control plane: allowing %s %s from Control Center (CA authority)",
-                request.method,
-                request.url.path,
-            )
-            return await call_next(request)
+        # Agent execute / terminate / resume endpoints are called by Control
+        # Center over its own service certificate (``service:control-center``).
+        # Control Center carries a service certificate issued by its own CA
+        # (see ``app/core/cc_service_cert_renewal.py`` and
+        # ``app/services/control_center/comm_hub_client.py``), so these paths
+        # are validated like every other control-plane path below — no
+        # cert-exempt bypass. (FIX: previously exempted on the outdated
+        # assumption that CC "has no service certificate".)
 
         # Determine expected service based on path
         # Tool call and A2A endpoints accept agent-runtime certificates

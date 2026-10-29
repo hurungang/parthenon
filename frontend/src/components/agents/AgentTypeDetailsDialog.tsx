@@ -36,8 +36,9 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useAgentType, useAgentTypes } from '../../hooks/useAgentTypes'
 import PermissionDeniedAlert from '../permissions/PermissionDeniedAlert'
 import AgentPlanContent from './AgentPlanContent'
-import TopologyDiagramRenderer from './TopologyDiagramRenderer'
-import { withCommunicationHub, COMMUNICATION_HUB_NODE_ID } from './topologyHub'
+import { PanelTopologyCanvas } from './panel/PanelTopologyCanvas'
+import { agentTypeToDraftComposition } from './agentTypeToDraftComposition'
+import { COMMUNICATION_HUB_NODE_ID } from './topologyHub'
 import { AgentJobLaunchDialog } from '../../pages/agents/AgentJobLaunchDialog'
 import { AgentExecutionsDialog } from './AgentExecutionsDialog'
 import { AgentExecutionDetailsDialog } from './AgentExecutionDetailsDialog'
@@ -50,8 +51,7 @@ import { SkillEditor } from './SkillEditor'
 import { AgentRoleDialog } from './AgentRoleDialog'
 import { AgentIdentityViewDialog } from './AgentIdentityViewDialog'
 import apiClient from '../../api/apiClient'
-import { canonicalizeToolName } from '../../utils/toolNaming'
-import type { AgentIdentity, AgentJob, AgentJobStatus, AgentRole, McpTool, Skill, Sop, SopDetail, TopologyNode, TopologyEdge } from '../../types'
+import type { AgentIdentity, AgentJob, AgentJobStatus, AgentRole, Skill, Sop, SopDetail, TopologyNode } from '../../types'
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -222,15 +222,6 @@ export function AgentTypeDetailsDialog({
     enabled: open && isConversation && activeTab === 1 && roleSopIds.length > 0,
   })
 
-  // Fetch all MCP tools to resolve tool names from skill.tool_ids
-  const { data: allMcpTools } = useQuery<McpTool[]>({
-    queryKey: ['mcp', 'tools'],
-    queryFn: async () => {
-      const { data } = await apiClient.get<McpTool[]>('/mcp/tools')
-      return data
-    },
-    enabled: open && isConversation && activeTab === 1,
-  })
   const roleSops = (allSops ?? []).filter((s) => currentRole?.sop_ids.includes(s.id))
   const roleSkills = (allSkills ?? []).filter((s) => currentRole?.skill_ids.includes(s.id))
 
@@ -330,106 +321,12 @@ export function AgentTypeDetailsDialog({
     ? (allIdentities?.find((i) => i.id === agentType.identity_id)?.name ?? agentType.identity_id)
     : null
 
-  // Build topology nodes/edges for conversation agents (no plan required)
-  const { convTopologyNodes, convTopologyEdges } = useMemo<{
-    convTopologyNodes: TopologyNode[]
-    convTopologyEdges: TopologyEdge[]
-  }>(() => {
-    if (!agentType || !isConversation) return { convTopologyNodes: [], convTopologyEdges: [] }
-
-    const nodes: TopologyNode[] = []
-    const edges: TopologyEdge[] = []
-    const addedSkillIds = new Set<string>()
-    const addedToolIds = new Set<string>()
-    const addedDelegatedAgentTypeIds = new Set<string>()
-
-    nodes.push({ id: 'agent', type: 'agent', label: agentType.name })
-
-    if (agentType.identity_id && identityName) {
-      nodes.push({ id: 'identity', type: 'identity', label: identityName })
-      edges.push({ source: 'agent', target: 'identity' })
-    }
-
-    if (agentType.role_id && roleName) {
-      nodes.push({ id: 'role', type: 'role', label: roleName })
-      edges.push({ source: 'agent', target: 'role' })
-
-      // Helper: add skill node + its tool nodes, then return the skill node id
-      const addSkillWithTools = (skill: Skill): string => {
-        const skillNodeId = `skill_${skill.id}`
-        if (!addedSkillIds.has(skill.id)) {
-          addedSkillIds.add(skill.id)
-          nodes.push({ id: skillNodeId, type: 'skill', label: skill.name })
-          skill.tool_ids.forEach((toolId) => {
-            if (!addedToolIds.has(toolId)) {
-              addedToolIds.add(toolId)
-              const tool = (allMcpTools ?? []).find((t) => t.id === toolId)
-              if (tool) {
-                nodes.push({ id: `tool_${toolId}`, type: 'tool', label: canonicalizeToolName(tool.name) })
-              }
-            }
-            if (addedToolIds.has(toolId)) {
-              edges.push({ source: skillNodeId, target: `tool_${toolId}` })
-            }
-          })
-        }
-        return skillNodeId
-      }
-
-      // Track which skills are reached via SOP steps (to avoid duplicate role->skill edges)
-      const sopSkillIds = new Set<string>()
-
-      displaySops.forEach((sop) => {
-        const sopNodeId = `sop_${sop.id}`
-        nodes.push({ id: sopNodeId, type: 'sop', label: sop.name })
-        edges.push({ source: 'role', target: sopNodeId })
-
-        const detail = (sopDetails ?? []).find((d) => d.id === sop.id)
-        if (detail) {
-          detail.steps
-            .filter((step) => step.step_type === 'agent_delegation' && step.target_agent_type_id)
-            .forEach((step) => {
-              const targetAgentTypeId = step.target_agent_type_id!
-              const delegatedNodeId = `agent_type_${targetAgentTypeId}`
-              if (!addedDelegatedAgentTypeIds.has(targetAgentTypeId)) {
-                addedDelegatedAgentTypeIds.add(targetAgentTypeId)
-                const delegatedAgentTypeName = (allAgentTypes ?? []).find((at) => at.id === targetAgentTypeId)?.name ?? targetAgentTypeId
-                nodes.push({
-                  id: delegatedNodeId,
-                  type: 'agent_type',
-                  label: delegatedAgentTypeName,
-                })
-              }
-              edges.push({ source: sopNodeId, target: delegatedNodeId, label: 'delegates' })
-            })
-
-          detail.steps
-            .filter((step) => step.step_type === 'skill_invocation' && step.skill_id)
-            .forEach((step) => {
-              const skillId = step.skill_id!
-              sopSkillIds.add(skillId)
-              const skill = (allSkills ?? []).find((s) => s.id === skillId)
-              if (skill) {
-                const skillNodeId = addSkillWithTools(skill)
-                edges.push({ source: sopNodeId, target: skillNodeId })
-              }
-            })
-        }
-      })
-
-      // Skills directly on role but not reachable via any SOP step → connect to role
-      displaySkills
-        .filter((skill) => !sopSkillIds.has(skill.id))
-        .forEach((skill) => {
-          const skillNodeId = addSkillWithTools(skill)
-          edges.push({ source: 'role', target: skillNodeId })
-        })
-    }
-
-    // Communication Hub — fixed platform node connected to the agent (dashed edge).
-    const hub = withCommunicationHub(nodes, edges, t('agents.plan.nodeTypes.communication_hub'), t('agents.plan.hubEdgeLabel'))
-    return { convTopologyNodes: hub.nodes, convTopologyEdges: hub.edges }
-  }, [agentType, isConversation, identityName, roleName, displaySops, displaySkills, sopDetails, allSkills, allMcpTools, allAgentTypes, t])
+  // Map the loaded agent type into the draft-composition shape consumed by
+  // the canonical panel topology canvas (pure, derived, read-only).
+  const draftComposition = useMemo(
+    () => (agentType ? agentTypeToDraftComposition(agentType) : null),
+    [agentType],
+  )
 
   const handleClose = () => {
     setDialogError(null)
@@ -454,9 +351,19 @@ export function AgentTypeDetailsDialog({
     if (node.id === COMMUNICATION_HUB_NODE_ID || node.type === 'communication_hub') {
       return
     }
+    // Empty-slot placeholders carry no entity reference.
+    if (node.id === 'sop_empty' || node.id === 'tool_empty' || node.usage === 'empty') {
+      return
+    }
     const colonIdx = node.id.indexOf(':')
     const type = colonIdx >= 0 ? node.id.slice(0, colonIdx) : node.type
-    const entityId = colonIdx >= 0 ? node.id.slice(colonIdx + 1) : node.id
+    // Panel-canvas node ids use the `type_id` prefix form (e.g. `sop_x`);
+    // strip it to resolve the entity id. Colon-form ids (`type:id`) slice.
+    let entityId = colonIdx >= 0 ? node.id.slice(colonIdx + 1) : node.id
+    if (colonIdx < 0) {
+      const prefixed = /^(?:sop|skill|tool|agent_type)_(.+)$/.exec(entityId)
+      if (prefixed) entityId = prefixed[1]
+    }
 
     if (type === 'role') {
       setRoleViewOpen(true)
@@ -767,14 +674,14 @@ export function AgentTypeDetailsDialog({
 
                   {isConversation ? (
                     <Box>
-                      <Typography variant="subtitle2" gutterBottom>
-                        {t('agents.plan.topology')}
-                      </Typography>
-                      <TopologyDiagramRenderer
-                        nodes={convTopologyNodes}
-                        edges={convTopologyEdges}
-                        onNodeClick={handleNodeClick}
-                      />
+                      {draftComposition && (
+                        <PanelTopologyCanvas
+                          agentName={agentType.name}
+                          draft={draftComposition}
+                          isDirty={false}
+                          onNodeClick={handleNodeClick}
+                        />
+                      )}
 
                       <Divider sx={{ my: 2 }} />
 
@@ -861,14 +768,29 @@ export function AgentTypeDetailsDialog({
                       )}
                     </Box>
                   ) : (
-                    <AgentPlanContent
-                      plan={agentType.plan}
-                      noPlanMessage={t('agents.types.noPlan')}
-                      onNodeClick={handleNodeClick}
-                      // Base-plan script links point to the Optimized Plan
-                      // tab (index 4) where per-step script dialogs live.
-                      onOpenScript={() => setActiveTab(4)}
-                    />
+                    <Box>
+                      {draftComposition && (
+                        <PanelTopologyCanvas
+                          agentName={agentType.name}
+                          draft={draftComposition}
+                          isDirty={false}
+                          onNodeClick={handleNodeClick}
+                        />
+                      )}
+
+                      <Divider sx={{ my: 2 }} />
+
+                      {/* Unified topology above; plan steps below. The old
+                          plan-based topology is suppressed via hideTopology. */}
+                      <AgentPlanContent
+                        plan={agentType.plan}
+                        noPlanMessage={t('agents.types.noPlan')}
+                        hideTopology
+                        // Base-plan script links point to the Optimized Plan
+                        // tab (index 4) where per-step script dialogs live.
+                        onOpenScript={() => setActiveTab(4)}
+                      />
+                    </Box>
                   )}
                 </TabPanel>
 

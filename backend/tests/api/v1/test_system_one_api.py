@@ -226,3 +226,66 @@ async def test_default_model_validation_error_maps_to_422_on_create():
 
     assert resp.status_code == 422
     assert "must be one of" in resp.json()["detail"]
+
+
+@pytest.mark.asyncio
+async def test_preview_models_returns_discovered_ids_with_raw_key():
+    """POST /system-one/preview-models discovers models with a raw (unpersisted)
+    API key — used by the create wizard's model-confirmation step."""
+    app, _ = _app()
+    with _bypass_auth(), _mock_permission_allow(), patch(
+        "app.services.system_one.client.list_vendor_models",
+        AsyncMock(return_value=["jev-latest", "jev-pro"]),
+    ):
+        async with AsyncClient(
+            transport=ASGITransport(app=app), base_url="http://test"
+        ) as client:
+            resp = await client.post(
+                "/api/v1/system-one/preview-models",
+                json={
+                    "base_url": "https://api.typesafe.ai/v1/systemone",
+                    "api_key": "sk-preview",
+                },
+            )
+
+    assert resp.status_code == 200
+    assert resp.json() == {"models": ["jev-latest", "jev-pro"]}
+    assert "api_key" not in resp.text
+
+
+@pytest.mark.asyncio
+async def test_preview_models_rejects_non_http_base_url():
+    """Preview rejects a base_url that is not http(s) → 422."""
+    app, _ = _app()
+    with _bypass_auth(), _mock_permission_allow():
+        async with AsyncClient(
+            transport=ASGITransport(app=app), base_url="http://test"
+        ) as client:
+            resp = await client.post(
+                "/api/v1/system-one/preview-models",
+                json={"base_url": "not-a-url", "api_key": "sk-preview"},
+            )
+
+    assert resp.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_preview_models_vendor_error_maps_to_502():
+    """Preview maps a vendor client error (bad key / unreachable) → 502."""
+    from app.services.system_one.client import SystemOneClientError
+
+    app, _ = _app()
+    with _bypass_auth(), _mock_permission_allow(), patch(
+        "app.services.system_one.client.list_vendor_models",
+        AsyncMock(side_effect=SystemOneClientError("the API key was rejected")),
+    ):
+        async with AsyncClient(
+            transport=ASGITransport(app=app), base_url="http://test"
+        ) as client:
+            resp = await client.post(
+                "/api/v1/system-one/preview-models",
+                json={"base_url": "https://x.example/v1", "api_key": "bad"},
+            )
+
+    assert resp.status_code == 502
+    assert "API key" in resp.json()["detail"]

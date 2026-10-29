@@ -291,7 +291,38 @@ Covers frontend UI tests for agent navigation structure, `AgentTypeDetailsDialog
 
 ---
 
-## Manual Testing Requirements
+### 13. Unified Topology Canvas in Agent Preview (unify-agent-topology-diagram)
+
+**What is tested:**
+- Agent preview (`AgentTypeDetailsDialog`) renders the canonical `PanelTopologyCanvas` instead of the old conversation-topology renderer — same zoned layout (Configuration / Capabilities / Tools zones), Communication Hub bar, and empty-slot placeholders as the management panel
+- Pure mapping helper converts the read-only loaded agent type (identity, role, input schema, output data type, model, skills, SOPs, tools) into `AgentDraftComposition`; draft re-derived on agent switch with no stale nodes
+- Data accuracy: node/edge content (role/identity/skill/SOP names, model labels, tool names + server slugs, composed-SOP skill trees) reflects the selected agent
+- Zoom parity with the panel: limits 0.5×–3×, step factor 1.2, auto-fit at 1, zoom reset on fullscreen transitions
+- Fullscreen behavior: toggle, Escape exit, nothing clipped within dialog constraints
+- Node interaction: clicking a topology node opens the matching entity view dialog (role/identity/SOP/skill); Communication Hub bar and empty-slot placeholder clicks are safe no-ops
+- Dirty-state suppression: preview passes `isDirty={false}` so the canvas dirty-state affordance renders neutral; `onNodeClick` is the only new optional `PanelTopologyCanvas` prop and is omitted by the panel (panel regression)
+- Old conversation-topology path fully removed — no divergent diagram anywhere in the UI
+- Permission handling: graceful permission error alert instead of an empty/broken diagram
+- Localization: all visible text through i18n keys in all locales
+- Out-of-scope renderer consumers (`AgentPlanContent`, `PlanPreviewModal`) unaffected
+
+**Acceptance criteria:**
+- Preview topology view is identical in layout, visuals, and interactions to the management panel
+- Zoom in/out works in the preview with the same limits and step as the panel
+- Preview content remains accurate per selected agent, including composed skills
+- Management panel behavior unchanged — panel tests pass without behavioral edits
+- No backend/API/DB changes; preview uses only its existing queries
+
+**Test files:**
+- [frontend/src/__tests__/AgentTypeDetailsDialog.test.tsx](../../../../frontend/src/__tests__/AgentTypeDetailsDialog.test.tsx) — unified canvas rendering, data accuracy, draft re-mapping, node-click entity views, permission-denied alert, dirty-state suppression
+- [frontend/src/__tests__/agentTypeToDraftComposition.test.ts](../../../../frontend/src/__tests__/agentTypeToDraftComposition.test.ts) — draft mapping helper: pure mapping, composed SOP/bindings ordering, guardrail defaults, minimal agent type
+- [frontend/src/__tests__/PanelTopologyCanvas.test.tsx](../../../../frontend/src/__tests__/PanelTopologyCanvas.test.tsx) — regression guards: optional `onNodeClick` forwarding, zoom/fullscreen/Escape unchanged
+- [frontend/src/__tests__/AgentManagementPanelPage.test.tsx](../../../../frontend/src/__tests__/AgentManagementPanelPage.test.tsx) — management panel regression surface
+- [frontend/src/__tests__/AgentPlanContent.test.tsx](../../../../frontend/src/__tests__/AgentPlanContent.test.tsx) — out-of-scope typed-plan branch regression
+- [e2e/tests/agent-type-preview-topology.spec.ts](../../../../e2e/tests/agent-type-preview-topology.spec.ts) — preview shows the unified zoned panel canvas (hub bar, composed skill tree, ③ TOOLS zone, placeholders, no old "platform messaging" edge); zoom/fullscreen parity; node click opens entity view dialog; typed-agent regression
+- [e2e/tests/agent-management-panel-topology.spec.ts](../../../../e2e/tests/agent-management-panel-topology.spec.ts) — panel topology regression plus preview-dialog tests asserting the unified canvas
+
+---
 
 | Scenario | Why Manual |
 |---|---|
@@ -328,3 +359,4 @@ Covers frontend UI tests for agent navigation structure, `AgentTypeDetailsDialog
 | ai-assisted-workflow-authoring-for-sop-and-skill | Added Agent Type form Default SOP behavior coverage (label rename, visibility across input types, required-only-for-none validation, and payload preservation) | 2026-05-29 |
 | expand-model-config-providers | Added Model Configurations — Expanded Provider Dropdown coverage (12-provider dropdown, chip colour uniqueness, full CRUD lifecycle, dialog error pattern, i18n labels, reload-free parent table refresh) | 2026-06-03 |
 | improve-role-mcp-session-assignment | Added inline MCP session assignment coverage (dynamic server detection, inline dropdowns, pre-save validation, refresh, passthrough badges) | 2026-06-20 |
+| unify-agent-topology-diagram | Added unified topology canvas in agent preview coverage (Section 13): preview renders the same `PanelTopologyCanvas` as the panel via a pure agent-type → draft mapping; zoom/fullscreen/node-click parity; conversation-topology path removed; panel regression and out-of-scope `AgentPlanContent` consumers guarded | 2026-10-27 |

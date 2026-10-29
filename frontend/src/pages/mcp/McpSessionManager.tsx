@@ -386,6 +386,11 @@ export function McpSessionManager({ serverId }: McpSessionManagerProps) {
       return { label: 'N/A', color: 'success', icon: undefined }
     }
 
+    // Unrecoverable refresh failure — the session must be re-authenticated.
+    if (session.requires_reauth) {
+      return { label: t('mcp.sessions.needsReauth'), color: 'error', icon: <WarningIcon fontSize="small" /> }
+    }
+
     if (!session.oauth_expires_at) {
       return { label: t('mcp.sessions.tokenStatusUnknown'), color: 'warning', icon: <WarningIcon fontSize="small" /> }
     }
@@ -500,12 +505,17 @@ export function McpSessionManager({ serverId }: McpSessionManagerProps) {
                     </TableCell>
                     <TableCell>
                       {s.auth_type === 'oauth2' ? (
-                        <Chip
-                          label={tokenStatus.label}
-                          color={tokenStatus.color}
-                          size="small"
-                          icon={tokenStatus.icon}
-                        />
+                        <Tooltip
+                          title={s.requires_reauth && s.last_refresh_error ? s.last_refresh_error : ''}
+                          placement="top"
+                        >
+                          <Chip
+                            label={tokenStatus.label}
+                            color={tokenStatus.color}
+                            size="small"
+                            icon={tokenStatus.icon}
+                          />
+                        </Tooltip>
                       ) : (
                         <Typography variant="body2" color="text.secondary">—</Typography>
                       )}
@@ -531,7 +541,7 @@ export function McpSessionManager({ serverId }: McpSessionManagerProps) {
                         </span>
                       </Tooltip>
                       {s.auth_type === 'oauth2' && (
-                        isRefreshTokenValid(s) ? (
+                        !s.requires_reauth && isRefreshTokenValid(s) ? (
                           /* Refresh token is valid — green refresh button */
                           <IconButton
                             size="small"
@@ -543,12 +553,12 @@ export function McpSessionManager({ serverId }: McpSessionManagerProps) {
                             <RefreshIcon fontSize="small" />
                           </IconButton>
                         ) : (
-                          /* Refresh token expired or missing — red reauth button */
+                          /* Refresh token expired, missing, or requires re-auth — red reauth button */
                           <IconButton
                             size="small"
                             color="error"
                             onClick={(e) => { e.stopPropagation(); handleSessionReauth(s) }}
-                            title={t('mcp.sessions.reauthenticate')}
+                            title={s.requires_reauth ? t('mcp.sessions.needsReauth') : t('mcp.sessions.reauthenticate')}
                           >
                             <LoginIcon fontSize="small" />
                           </IconButton>

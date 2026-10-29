@@ -7,9 +7,14 @@ import type { AgentType, AgentJob, AgentPlan } from '../types'
 
 // ── Hoisted mock refs ─────────────────────────────────────────────────────────
 
-const { mockNavigate, mockTopologyProps } = vi.hoisted(() => ({
+const { mockNavigate, mockCanvasProps } = vi.hoisted(() => ({
   mockNavigate: vi.fn(),
-  mockTopologyProps: { nodes: [] as unknown[], edges: [] as unknown[], onNodeClick: undefined as ((n: unknown) => void) | undefined },
+  mockCanvasProps: {
+    agentName: '' as string,
+    draft: null as unknown,
+    isDirty: false as boolean,
+    onNodeClick: undefined as ((n: unknown) => void) | undefined,
+  },
 }))
 
 // ── Module mocks ──────────────────────────────────────────────────────────────
@@ -23,30 +28,41 @@ vi.mock('react-router-dom', async () => {
   return { ...actual, useNavigate: () => mockNavigate }
 })
 
-vi.mock('../components/agents/TopologyDiagramRenderer', () => ({
-  default: (props: {
-    nodes: unknown[]
-    edges: unknown[]
+vi.mock('../components/agents/panel/PanelTopologyCanvas', () => ({
+  PanelTopologyCanvas: (props: {
+    agentName: string
+    draft: { sopBindings?: { sop_id: string }[]; skillBindings?: { skill_id: string }[] }
+    isDirty: boolean
     onNodeClick?: (node: unknown) => void
   }) => {
-    // Record props so tests can assert on the composed topology graph.
-    mockTopologyProps.nodes = props.nodes
-    mockTopologyProps.edges = props.edges
-    mockTopologyProps.onNodeClick = props.onNodeClick
+    // Record props so tests can assert on the mapped draft + interactions.
+    mockCanvasProps.agentName = props.agentName
+    mockCanvasProps.draft = props.draft
+    mockCanvasProps.isDirty = props.isDirty
+    mockCanvasProps.onNodeClick = props.onNodeClick
+
+    // Render clickable stand-ins for the zoned canvas nodes so node-click
+    // behaviour can be exercised through the captured onNodeClick handler.
+    const nodes: { id: string }[] = [
+      { id: 'agent' },
+      { id: 'role' },
+      { id: 'identity' },
+      ...(props.draft?.sopBindings ?? []).map((b) => ({ id: `sop_${b.sop_id}` })),
+      ...(props.draft?.skillBindings ?? []).map((b) => ({ id: `skill_${b.skill_id}` })),
+      { id: 'sop_empty' },
+      { id: 'tool_empty' },
+    ]
     return (
-      <div data-testid="topology-diagram">
-        {(props.onNodeClick ? props.nodes : []).map((n) => {
-          const node = n as { id: string }
-          return (
-            <button
-              key={node.id}
-              data-testid={`topology-node-${node.id}`}
-              onClick={() => props.onNodeClick?.(n)}
-            >
-              {node.id}
-            </button>
-          )
-        })}
+      <div data-testid="panel-topology-canvas">
+        {(props.onNodeClick ? nodes : []).map((node) => (
+          <button
+            key={node.id}
+            data-testid={`topology-node-${node.id}`}
+            onClick={() => props.onNodeClick?.({ id: node.id, type: node.id.split('_')[0] })}
+          >
+            {node.id}
+          </button>
+        ))}
       </div>
     )
   },
@@ -56,12 +72,19 @@ vi.mock('../components/agents/AgentPlanContent', () => ({
   default: ({
     plan,
     noPlanMessage,
+    hideTopology,
   }: {
     plan: AgentPlan | null | undefined
     noPlanMessage?: string
+    hideTopology?: boolean
   }) =>
     plan ? (
-      <div data-testid="plan-content">plan-loaded</div>
+      <div
+        data-testid="plan-content"
+        data-hide-topology={hideTopology ? 'true' : 'false'}
+      >
+        plan-loaded
+      </div>
     ) : (
       <div data-testid="no-plan">{noPlanMessage ?? 'no-plan'}</div>
     ),
@@ -187,9 +210,10 @@ describe('AgentTypeDetailsDialog', () => {
     mockAgentTypeData = undefined
     mockAgentTypeLoading = false
     mockAgentTypeError = null
-    mockTopologyProps.nodes = []
-    mockTopologyProps.edges = []
-    mockTopologyProps.onNodeClick = undefined
+    mockCanvasProps.agentName = ''
+    mockCanvasProps.draft = null
+    mockCanvasProps.isDirty = false
+    mockCanvasProps.onNodeClick = undefined
     vi.resetAllMocks()
     mockApiGet.mockImplementation(async (url: string) => {
       if (url === '/agents/roles') {
@@ -777,43 +801,88 @@ describe('AgentTypeDetailsDialog', () => {
     expect(updatedTabs[0]).toHaveAttribute('aria-selected', 'true')
   })
 
-  // ── Communication Hub node in the preview topology (Phase 5.1 / 5.3) ────────
+  // ── Unified panel topology canvas in the preview (unify-agent-topology-diagram) ──
 
-  it('includes the Communication Hub node and dashed agent↔hub edge in the conversation preview topology', async () => {
-    mockAgentTypeData = { ...MOCK_AGENT_TYPE, input_type: 'conversation' }
+  it('renders the unified PanelTopologyCanvas with the mapped draft on the Agent Preview tab', async () => {
+    mockAgentTypeData = {
+      ...MOCK_AGENT_TYPE,
+      name: 'Chat Agent',
+      input_type: 'conversation',
+      role_id: 'role-1',
+      identity_id: 'identity-1',
+    }
 
     const { AgentTypeDetailsDialog } = await import(
       '../components/agents/AgentTypeDetailsDialog'
     )
     render(<AgentTypeDetailsDialog open agentTypeId="at-1" onClose={vi.fn()} />, { wrapper })
 
-    // Switch to the Agent Preview tab where the conversation topology renders.
     const tabs = screen.getAllByRole('tab')
     await act(async () => {
       fireEvent.click(tabs[1])
     })
 
     await waitFor(() => {
-      const hubNode = mockTopologyProps.nodes.find(
-        (n) => (n as { id: string }).id === 'communication_hub',
-      )
-      expect(hubNode).toBeDefined()
+      expect(screen.getByTestId('panel-topology-canvas')).toBeDefined()
     })
-    const hubNode = mockTopologyProps.nodes.find(
-      (n) => (n as { id: string }).id === 'communication_hub',
-    ) as { id: string; type: string; label: string }
-    expect(hubNode.type).toBe('communication_hub')
-    expect(mockTopologyProps.nodes.some((n) => (n as { id: string }).id === 'agent')).toBe(true)
-
-    const hubEdge = mockTopologyProps.edges.find(
-      (e) => (e as { target: string }).target === 'communication_hub',
-    ) as { source: string; style?: string }
-    expect(hubEdge).toBeDefined()
-    expect(hubEdge.source).toBe('agent')
-    expect(hubEdge.style).toBe('dashed')
+    // The canvas is fed by the pure agent-type → draft mapping.
+    expect(mockCanvasProps.agentName).toBe('Chat Agent')
+    expect(mockCanvasProps.draft).toMatchObject({
+      name: 'Chat Agent',
+      roleId: 'role-1',
+      identityId: 'identity-1',
+      inputType: 'conversation',
+    })
+    // Read-only preview: the dirty-state affordance is off, node navigation wired.
+    expect(mockCanvasProps.isDirty).toBe(false)
+    expect(typeof mockCanvasProps.onNodeClick).toBe('function')
   })
 
-  it('does not duplicate the hub node on topology recomposition', async () => {
+  it('renders the unified canvas + plan steps for typed agents — old plan topology hidden', async () => {
+    mockAgentTypeData = { ...MOCK_AGENT_TYPE, input_type: 'typed', plan: MOCK_PLAN }
+
+    const { AgentTypeDetailsDialog } = await import(
+      '../components/agents/AgentTypeDetailsDialog'
+    )
+    render(<AgentTypeDetailsDialog open agentTypeId="at-1" onClose={vi.fn()} />, { wrapper })
+
+    const tabs = screen.getAllByRole('tab')
+    await act(async () => {
+      fireEvent.click(tabs[1])
+    })
+
+    // Typed agents now see the unified canvas too.
+    await waitFor(() => {
+      expect(screen.getByTestId('panel-topology-canvas')).toBeDefined()
+    })
+    expect(mockCanvasProps.agentName).toBe('Research Agent')
+    expect(mockCanvasProps.isDirty).toBe(false)
+    expect(typeof mockCanvasProps.onNodeClick).toBe('function')
+
+    // Plan steps remain, but the old plan-based topology inside AgentPlanContent
+    // is suppressed via hideTopology.
+    const planContent = screen.getByTestId('plan-content')
+    expect(planContent.getAttribute('data-hide-topology')).toBe('true')
+  })
+
+  it('shows no-plan placeholder alongside the canvas for typed agents without a plan', async () => {
+    mockAgentTypeData = { ...MOCK_AGENT_TYPE, input_type: 'typed', plan: null }
+
+    const { AgentTypeDetailsDialog } = await import(
+      '../components/agents/AgentTypeDetailsDialog'
+    )
+    render(<AgentTypeDetailsDialog open agentTypeId="at-1" onClose={vi.fn()} />, { wrapper })
+
+    const tabs = screen.getAllByRole('tab')
+    await act(async () => {
+      fireEvent.click(tabs[1])
+    })
+
+    expect(screen.getByTestId('panel-topology-canvas')).toBeDefined()
+    expect(screen.getByTestId('no-plan')).toBeDefined()
+  })
+
+  it('re-derives the mapped draft when a different agent type is loaded', async () => {
     mockAgentTypeData = { ...MOCK_AGENT_TYPE, input_type: 'conversation' }
 
     const { AgentTypeDetailsDialog } = await import(
@@ -828,20 +897,27 @@ describe('AgentTypeDetailsDialog', () => {
     await act(async () => {
       fireEvent.click(tabs[1])
     })
+    await waitFor(() => {
+      expect(screen.getByTestId('panel-topology-canvas')).toBeDefined()
+    })
 
-    // Re-render the dialog (e.g. parent refresh) — hub count stays at one.
-    rerender(<AgentTypeDetailsDialog open agentTypeId="at-1" onClose={vi.fn()} />)
+    // Switch to another conversational agent — the draft re-maps, no stale data.
+    mockAgentTypeData = {
+      ...MOCK_AGENT_TYPE,
+      id: 'at-2',
+      name: 'Other Agent',
+      role_id: 'role-2',
+      input_type: 'conversation',
+    }
+    rerender(<AgentTypeDetailsDialog open agentTypeId="at-2" onClose={vi.fn()} />)
 
     await waitFor(() => {
-      expect(mockTopologyProps.nodes.length).toBeGreaterThan(0)
+      expect(mockCanvasProps.agentName).toBe('Other Agent')
     })
-    const hubCount = mockTopologyProps.nodes.filter(
-      (n) => (n as { id: string }).id === 'communication_hub',
-    ).length
-    expect(hubCount).toBe(1)
+    expect(mockCanvasProps.draft).toMatchObject({ name: 'Other Agent', roleId: 'role-2' })
   })
 
-  it('clicking the hub node is a safe no-op — no entity view opens and nothing throws', async () => {
+  it('clicking a topology node opens the matching entity view (identity)', async () => {
     mockAgentTypeData = { ...MOCK_AGENT_TYPE, input_type: 'conversation' }
 
     const { AgentTypeDetailsDialog } = await import(
@@ -855,14 +931,39 @@ describe('AgentTypeDetailsDialog', () => {
     })
 
     await waitFor(() => {
-      expect(screen.getByTestId('topology-node-communication_hub')).toBeDefined()
+      expect(screen.getByTestId('topology-node-identity')).toBeDefined()
     })
 
     await act(async () => {
-      fireEvent.click(screen.getByTestId('topology-node-communication_hub'))
+      fireEvent.click(screen.getByTestId('topology-node-identity'))
     })
 
-    // Hub click must not open the role/identity view dialogs or navigate.
+    expect(screen.getByTestId('identity-view-dialog')).toBeDefined()
+  })
+
+  it('clicking the hub node (or empty placeholders) is a safe no-op', async () => {
+    mockAgentTypeData = { ...MOCK_AGENT_TYPE, input_type: 'conversation' }
+
+    const { AgentTypeDetailsDialog } = await import(
+      '../components/agents/AgentTypeDetailsDialog'
+    )
+    render(<AgentTypeDetailsDialog open agentTypeId="at-1" onClose={vi.fn()} />, { wrapper })
+
+    const tabs = screen.getAllByRole('tab')
+    await act(async () => {
+      fireEvent.click(tabs[1])
+    })
+
+    await waitFor(() => {
+      expect(typeof mockCanvasProps.onNodeClick).toBe('function')
+    })
+
+    await act(async () => {
+      mockCanvasProps.onNodeClick?.({ id: 'communication_hub', type: 'communication_hub' })
+      mockCanvasProps.onNodeClick?.({ id: 'sop_empty', type: 'sop', usage: 'empty' })
+    })
+
+    // Hub/placeholder clicks must not open any entity view or navigate.
     expect(screen.queryByTestId('role-view-dialog')).toBeNull()
     expect(screen.queryByTestId('identity-view-dialog')).toBeNull()
     expect(mockNavigate).not.toHaveBeenCalled()

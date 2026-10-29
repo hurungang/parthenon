@@ -251,6 +251,19 @@ export async function importVendorModels(
   return data
 }
 
+/** Discover a vendor's model catalogue with a raw (not-yet-persisted) API key.
+ * Used by the create wizard's model-confirmation step before saving. */
+export async function previewVendorModels(
+  baseUrl: string,
+  apiKey: string,
+): Promise<VendorModelSyncResult> {
+  const { data } = await apiClient.post<VendorModelSyncResult>(
+    '/system-one/preview-models',
+    { base_url: baseUrl, api_key: apiKey },
+  )
+  return data
+}
+
 // ── Decision model catalogue API ───────────────────────────────────────────
 
 /** Provider → model hierarchy with effective availability state. */

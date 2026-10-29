@@ -81,7 +81,10 @@ async def cc_client(test_cert_manager: TestServiceCertificateManager):
     cc_url = os.environ.get("CONTROL_CENTER_URL", _DEFAULT_CC_URL)
     client = test_cert_manager.get_header_client(base_url=cc_url)
     yield client
-    await client.aclose()
+    try:
+        await client.aclose()
+    except RuntimeError:
+        pass  # event loop already closed at session teardown
 
 
 @pytest_asyncio.fixture(scope="session")
@@ -98,7 +101,10 @@ async def ar_client(test_cert_manager: TestServiceCertificateManager):
     ar_url = os.environ.get("AGENT_RUNTIME_URL", _DEFAULT_AR_URL)
     client = test_cert_manager.get_header_client(base_url=ar_url)
     yield client
-    await client.aclose()
+    try:
+        await client.aclose()
+    except RuntimeError:
+        pass  # event loop already closed at session teardown
 
 
 @pytest_asyncio.fixture(scope="session")
@@ -115,4 +121,7 @@ async def ch_client(test_cert_manager: TestServiceCertificateManager):
     ch_url = os.environ.get("COMMUNICATION_HUB_URL", _DEFAULT_CH_URL)
     client = test_cert_manager.get_header_client(base_url=ch_url)
     yield client
-    await client.aclose()
+    try:
+        await client.aclose()
+    except RuntimeError:
+        pass  # event loop already closed at session teardown

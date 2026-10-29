@@ -90,6 +90,9 @@ Strict tenant isolation (strict-tenant-isolation change): decision tools resolve
 | `is_decision_tool_ready` | function | Readiness check | `backend/app/services/system_one/decision_tool_service.py` |
 | `DecisionToolValidationError` | exception | Validation errors incl. unknown/disabled model selection | `backend/app/services/system_one/decision_tool_service.py` |
 | `generate_decision_draft` | function | Authoring draft generation | `backend/app/services/system_one/decision_authoring_service.py` |
+| `extract_state_placeholders` | function | Extracts backtick-quoted state paths (e.g. `` `input.tier` ``) from question instructions; returned by the generate endpoint as `detected_state_paths` | `backend/app/services/system_one/decision_authoring_service.py` |
+| `generate_tool_description` | function | Auto-generates the stored tool description from the definition (purpose, questions, referenced data types); regenerated on update | `backend/app/services/system_one/decision_tool_service.py` |
+| `DecisionToolCreate` / `DecisionToolUpdate` / `DecisionToolRead` / `DecisionToolQuestionCreate` / `DecisionExecutionResultRead` | schemas | Tool, question, and result DTOs; input/output contracts via `input_data_type_id` / `output_data_type_id` AgentDataType references (no inline schema storage) | `backend/app/schemas/decision_tools.py` |
 | `DecisionExecutionEngine` | class | Decision evaluation orchestration; resolves selected enabled model, applies guardrail/budget pre-call checks, records provider/model identity | `backend/app/services/system_one/decision_engine.py` |
 | `DecisionExecutionEngine.execute` | method | Evaluation entry point (model resolution + vendor call + metering) | `backend/app/services/system_one/decision_engine.py` |
 | `DecisionExecutionEngine.resolve_tool` | method | Resolves a decision tool by name WITHIN the caller's tenant; cross-tenant names never resolve | `backend/app/services/system_one/decision_engine.py` |
@@ -146,6 +149,10 @@ Strict tenant isolation (strict-tenant-isolation change): decision tools resolve
 | `AppRouter` | component | Route path/labels updated (internal path may remain) | `frontend/src/app/AppRouter.tsx` |
 | i18n `systemOne.*` strings | resource | All user-facing strings renamed to "Decision Model Providers", via `t()` | `frontend/src/i18n/locales/en.json` |
 | `DecisionToolForm` | component | Enabled-decision-model selector (fed by GET /decision-tools/enabled-models, enabled models only), validated on submit; never silently empty — placeholder option when unselected, stored-but-disabled selection rendered as a disabled "unavailable — re-select" option | `frontend/src/components/decisionTools/DecisionToolForm.tsx` |
+| `DecisionToolQuestionEditor` | component | Per-question typed editing (Choice/Score/Noul) | `frontend/src/components/decisionTools/DecisionToolQuestionEditor.tsx` |
+| `detectStatePlaceholders` | util | Frontend mirror of backtick state-path extraction; drives the form's "Auto-detect placeholders" button | `frontend/src/utils/decisionStatePaths.ts` |
+| `ResultRepositoryPage` | component | Results repository page; hosts the "Decision Results" tab rendering `DecisionResultView` | `frontend/src/pages/results/ResultRepositoryPage.tsx` |
+| decision results query endpoint | endpoint | `GET /api/v1/results/decision` — persisted decision execution results, filterable by tool/session/date range, tenant-scoped | `backend/app/api/v1/results.py` |
 | `DecisionToolsPage` | component | Responsive table (fixed layout, constrained columns, ellipsis tooltips, sticky actions); list/detail shows selected provider/model chip (without the internal `decision:` prefix) | `frontend/src/pages/agents/DecisionToolsPage.tsx` |
 | `DecisionResultView` | component | Result view shows which provider/model produced the decision | `frontend/src/components/results/DecisionResultView.tsx` |
 | `decisionToolsApi` | api client | Extended for model reference + enabled-models listing | `frontend/src/api/decisionToolsApi.ts` |

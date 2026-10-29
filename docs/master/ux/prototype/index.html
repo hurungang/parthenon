@@ -1041,6 +1041,42 @@ tr.revoked-row td{color:#9CA3AF}
 .amp-fs-body .amp-topo-stage svg{flex:1 1 0;min-height:0;width:100%;height:100%}
 .amp-fs-body .amp-legend{flex-shrink:0}
 .amp-fs-hint{font-size:11px;color:var(--text-secondary);text-align:center;flex-shrink:0}
+
+/* ══ Unified topology canvas (agent type details dialog — PanelTopologyCanvas) ══
+   Same component as the Agent Management Panel: zoned composition, zoom
+   0.5×–3× (step 1.2) with a 1.6× FONT-SIZE CAP in fullscreen (fonts plateau,
+   zooming reveals more content), contract slots labelled None/Conversation/Auto
+   as solid nodes, dashed placeholders only for genuinely unfilled slots. */
+.ut-wrap{position:relative;height:100%;width:100%;overflow:hidden;border:1px solid var(--border);border-radius:var(--radius);background:
+  linear-gradient(rgba(37,99,235,.045) 1px,transparent 1px),
+  linear-gradient(90deg,rgba(37,99,235,.045) 1px,transparent 1px),#FDFEFF;
+  background-size:22px 22px,22px 22px,auto}
+.ut-wrap.ut-fs{position:fixed;inset:0;z-index:3000;border-radius:0}
+.ut-toolbar{position:absolute;top:12px;right:12px;display:flex;flex-direction:column;gap:6px;z-index:10}
+.ut-btn{width:34px;height:34px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface);color:var(--text-secondary);font-size:15px;font-weight:600;display:flex;align-items:center;justify-content:center;box-shadow:var(--shadow);transition:all var(--transition);cursor:pointer}
+.ut-btn:hover{background:var(--primary-light);color:var(--primary);border-color:var(--primary)}
+.ut-btn:disabled{opacity:.35;cursor:not-allowed}
+.ut-zoom{position:absolute;bottom:12px;right:12px;background:rgba(255,255,255,.92);border:1px solid var(--border);border-radius:999px;padding:3px 12px;font-size:11.5px;font-weight:600;color:var(--text-secondary);box-shadow:var(--shadow);z-index:10;font-variant-numeric:tabular-nums}
+.ut-zoom.capped{color:#B45309;border-color:#FCD34D;background:#FFFBEB}
+.ut-legend{position:absolute;bottom:12px;left:12px;display:flex;gap:10px;background:rgba(255,255,255,.92);border:1px solid var(--border);border-radius:var(--radius-sm);padding:6px 12px;font-size:11px;color:var(--text-secondary);box-shadow:var(--shadow);z-index:10;flex-wrap:wrap}
+.ut-legend span{display:inline-flex;align-items:center;gap:5px}
+.ut-legend i{width:10px;height:10px;border-radius:3px;flex-shrink:0}
+.ut-svg{display:block;transform-origin:0 0}
+.ut-node{cursor:pointer}
+.ut-node .n-box{fill:#fff;stroke-width:1.5;filter:drop-shadow(0 1px 2px rgba(0,0,0,.12))}
+.ut-node:hover .n-box{stroke-width:2.5}
+.ut-node.selected .n-box{stroke-width:2.5;stroke:var(--primary)!important}
+.ut-node.placeholder{cursor:default}
+.ut-node.placeholder .n-box{fill:#FAFAFA;stroke:#94A3B8;stroke-dasharray:5 4;filter:none}
+.ut-edge{stroke-width:1.75;fill:none;opacity:.75}
+.ut-edge.dashed{stroke-dasharray:5 4}
+.ut-fs-head{display:none}
+.ut-wrap.ut-fs .ut-fs-head{display:flex;position:absolute;top:12px;left:16px;z-index:12;align-items:center;gap:10px;background:rgba(255,255,255,.95);border:1px solid var(--border);border-radius:999px;padding:5px 14px;box-shadow:var(--shadow-md)}
+.ut-fs-head b{font-size:13px}
+.ut-fs-head span{font-size:11px;color:var(--text-secondary)}
+.ut-note{font-size:11.5px;color:var(--text-secondary);background:#F8FAFC;border:1px solid var(--border);border-radius:6px;padding:8px 12px;display:flex;gap:8px;line-height:1.45;margin-top:12px}
+.plan-script{font-size:10.5px;font-weight:600;color:var(--primary-dark);background:var(--primary-light);border-radius:4px;padding:1px 7px;text-decoration:none;display:inline-flex;align-items:center;gap:3px;cursor:pointer}
+.plan-script:hover{text-decoration:underline}
 /* equipment slots */
 .amp-equip-head{padding:13px 16px 10px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:8px}
 .amp-equip-head h3{font-size:14px;font-weight:600;display:flex;align-items:center;gap:8px}
@@ -2784,7 +2820,7 @@ thead .dct-sticky-actions{background:#F8FAFC}
             <td><span class="chip chip-gray">gpt-4o</span></td>
             <td>3</td><td><strong>1</strong></td>
             <td><span class="chip chip-purple">pr-review-workflow</span></td>
-            <td class="actions-cell"><button class="btn-icon-sm">✏️</button><button class="btn-icon-sm">🗑️</button></td>
+            <td class="actions-cell"><button class="btn btn-xs btn-secondary" onclick="openOptimizedPlan('pr-reviewer')" title="Optimized Plan — compiled workflow scripts">🧩 Plan</button><button class="btn-icon-sm">✏️</button><button class="btn-icon-sm">🗑️</button></td>
           </tr>
           <tr>
             <td><strong>report-generator</strong></td>
@@ -2793,7 +2829,7 @@ thead .dct-sticky-actions{background:#F8FAFC}
             <td><span class="chip chip-gray">claude-3-5-sonnet</span></td>
             <td>2</td><td><strong>2</strong></td>
             <td><span class="chip chip-purple">daily-report-gen</span></td>
-            <td class="actions-cell"><button class="btn-icon-sm">✏️</button><button class="btn-icon-sm">🗑️</button></td>
+            <td class="actions-cell"><button class="btn btn-xs btn-secondary" onclick="openOptimizedPlan('report-generator')" title="Optimized Plan — compiled workflow scripts">🧩 Plan</button><button class="btn-icon-sm">✏️</button><button class="btn-icon-sm">🗑️</button></td>
           </tr>
           <tr>
             <td><strong>data-analyst</strong></td>
@@ -2802,7 +2838,7 @@ thead .dct-sticky-actions{background:#F8FAFC}
             <td><span class="chip chip-gray">gpt-4o-mini</span></td>
             <td>5</td><td><strong>3</strong></td>
             <td><span class="chip chip-blue">read-analyze-file</span> <span class="chip chip-blue">db-report</span></td>
-            <td class="actions-cell"><button class="btn-icon-sm">✏️</button><button class="btn-icon-sm">🗑️</button></td>
+            <td class="actions-cell"><button class="btn btn-xs btn-secondary" onclick="openOptimizedPlan('data-analyst')" title="Optimized Plan — compiled workflow scripts">🧩 Plan</button><button class="btn-icon-sm">✏️</button><button class="btn-icon-sm">🗑️</button></td>
           </tr>
           <tr>
             <td><strong>file-manager</strong></td>
@@ -2811,7 +2847,7 @@ thead .dct-sticky-actions{background:#F8FAFC}
             <td><span class="chip chip-gray">claude-3-haiku</span></td>
             <td>4</td><td><strong style="color:var(--text-secondary)">0</strong></td>
             <td><span class="chip chip-blue">file-organizer</span> <span class="chip chip-blue">read-analyze-file</span></td>
-            <td class="actions-cell"><button class="btn-icon-sm">✏️</button><button class="btn-icon-sm">🗑️</button></td>
+            <td class="actions-cell"><button class="btn btn-xs btn-secondary" onclick="openOptimizedPlan('file-manager')" title="Optimized Plan — compiled workflow scripts">🧩 Plan</button><button class="btn-icon-sm">✏️</button><button class="btn-icon-sm">🗑️</button></td>
           </tr>
           <tr>
             <td><strong>incident-bot</strong></td>
@@ -2820,7 +2856,7 @@ thead .dct-sticky-actions{background:#F8FAFC}
             <td><span class="chip chip-gray">gpt-4o</span></td>
             <td>2</td><td><strong>1</strong></td>
             <td><span class="chip chip-purple">incident-response</span></td>
-            <td class="actions-cell"><button class="btn-icon-sm">✏️</button><button class="btn-icon-sm">🗑️</button></td>
+            <td class="actions-cell"><button class="btn btn-xs btn-secondary" onclick="openOptimizedPlan('incident-bot')" title="Optimized Plan — compiled workflow scripts">🧩 Plan</button><button class="btn-icon-sm">✏️</button><button class="btn-icon-sm">🗑️</button></td>
           </tr>
         </tbody>
       </table>
@@ -4348,6 +4384,13 @@ Returns: { request_id, status }</div>
   <div class="view-header">
     <div><h2>Results</h2><div class="view-desc">Saved agent outputs and analysis reports</div></div>
   </div>
+  <div class="tabs">
+    <div class="tab active" onclick="switchTab(this,'results-saved-panel')">📄 Saved Results</div>
+    <div class="tab" onclick="switchTab(this,'results-decision-panel')">⚖️ Decision Results</div>
+  </div>
+
+  <!-- ── Panel: Saved Results ── -->
+  <div id="results-saved-panel" class="tab-panel active">
   <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px">
     <div class="search-input" style="max-width:320px">
       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
@@ -4425,8 +4468,92 @@ Returns: { request_id, status }</div>
       </tbody>
     </table>
   </div>
-</div>
+  </div><!-- /results-saved-panel -->
 
+  <!-- ── Panel: Decision Results (system-one-decision-skills — DecisionResultView as the second tab of the results repository) ── -->
+  <div id="results-decision-panel" class="tab-panel">
+    <div class="table-wrap" style="margin-bottom:16px">
+      <table>
+        <thead><tr><th>Time</th><th>Decision Tool</th><th>Trigger</th><th style="width:130px">Confidence</th><th style="width:180px">Gate Outcome</th><th style="text-align:right">Actions</th></tr></thead>
+        <tbody>
+          <tr>
+            <td class="text-secondary">Today 10:42:07</td>
+            <td class="font-mono" style="font-size:12px">decision____tool_a</td>
+            <td>SOP step 3</td>
+            <td><span class="chip chip-green">0.94</span></td>
+            <td><span class="chip chip-green">✅ Acted automatically</span></td>
+            <td class="actions-cell" style="text-align:right"><button class="btn btn-xs btn-secondary" onclick="drExpand()">👁 View answers</button></td>
+          </tr>
+          <tr>
+            <td class="text-secondary">Today 10:38:51</td>
+            <td class="font-mono" style="font-size:12px">decision____tool_a</td>
+            <td>Agent: support-triage</td>
+            <td><span class="chip chip-amber">0.61</span></td>
+            <td><span class="chip chip-amber">🖐 Confirmation required</span></td>
+            <td class="actions-cell" style="text-align:right"><button class="btn btn-xs btn-secondary" onclick="drExpand()">👁 View answers</button></td>
+          </tr>
+          <tr>
+            <td class="text-secondary">Today 10:31:12</td>
+            <td class="font-mono" style="font-size:12px">decision____priority_score_doc</td>
+            <td>Agent: docs-bot</td>
+            <td><span class="chip chip-red">0.22</span></td>
+            <td><span class="chip chip-red">🚨 Escalated to human</span></td>
+            <td class="actions-cell" style="text-align:right"><button class="btn btn-xs btn-secondary" onclick="drExpand()">👁 View answers</button></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Sample execution detail — per-question typed answers, probabilities, confidence, gate -->
+    <div class="card" id="drDetail" style="display:none">
+      <div style="display:flex;align-items:center;gap:16px;margin-bottom:12px;flex-wrap:wrap">
+        <div style="min-width:70px;height:70px;border-radius:50%;background:#15803D;color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:16px">94%</div>
+        <div style="flex:1">
+          <h3 style="margin:0">decision____tool_a <span class="chip chip-gray">exec-7f3a-21</span></h3>
+          <div style="font-size:12px;color:var(--text-secondary)">Single evaluation · jev-latest — Production TypeSafe · latency 214 ms · 3 questions</div>
+        </div>
+        <button class="btn btn-xs btn-secondary" onclick="document.getElementById('drDetail').style.display='none'">Collapse</button>
+      </div>
+
+      <div style="border:1px solid var(--border);border-radius:6px;margin-bottom:14px">
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:12px 16px;border-bottom:1px solid var(--border);flex-wrap:wrap;gap:8px">
+          <div><span class="font-mono" style="font-size:12px;background:#EFF6FF;color:#1D4ED8;padding:2px 8px;border-radius:4px">q_category</span> <span class="chip chip-blue">Choice</span></div>
+          <div><strong>🔗 "billing"</strong> <span class="chip chip-gray">string</span></div>
+        </div>
+        <div style="padding:12px 16px">
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;font-size:12px"><span style="width:110px;color:var(--text-secondary)" class="font-mono">billing</span><div style="flex:1;height:8px;border-radius:4px;background:#E5E7EB;overflow:hidden"><div style="width:81%;height:100%;background:var(--primary,#2563EB)"></div></div><span class="font-mono" style="width:44px;text-align:right">0.81</span></div>
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;font-size:12px"><span style="width:110px;color:var(--text-secondary)" class="font-mono">technical</span><div style="flex:1;height:8px;border-radius:4px;background:#E5E7EB;overflow:hidden"><div style="width:11%;height:100%;background:#94A3B8"></div></div><span class="font-mono" style="width:44px;text-align:right">0.11</span></div>
+          <div style="display:flex;align-items:center;gap:10px;font-size:12px"><span style="width:110px;color:var(--text-secondary)" class="font-mono">account</span><div style="flex:1;height:8px;border-radius:4px;background:#E5E7EB;overflow:hidden"><div style="width:8%;height:100%;background:#CBD5E1"></div></div><span class="font-mono" style="width:44px;text-align:right">0.08</span></div>
+          <div style="font-size:11px;color:var(--text-secondary);margin-top:6px">Probability distribution per option · confidence 0.94</div>
+        </div>
+      </div>
+
+      <div style="border:1px solid var(--border);border-radius:6px;margin-bottom:14px">
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:12px 16px;border-bottom:1px solid var(--border);flex-wrap:wrap;gap:8px">
+          <div><span class="font-mono" style="font-size:12px;background:#EFF6FF;color:#1D4ED8;padding:2px 8px;border-radius:4px">q_urgency</span> <span class="chip chip-amber">Score</span></div>
+          <div><strong>4 / 5</strong> <span class="chip chip-gray">integer</span></div>
+        </div>
+        <div style="padding:12px 16px;font-size:12px;color:var(--text-secondary)">Legend: 1=Routine · 2=Minor inconvenience · 3=Degraded workflow · 4=Blocking, workaround exists · 5=Critical / outage · confidence 0.92</div>
+      </div>
+
+      <div style="border:1px solid var(--border);border-radius:6px;margin-bottom:14px">
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:12px 16px;border-bottom:1px solid var(--border);flex-wrap:wrap;gap:8px">
+          <div><span class="font-mono" style="font-size:12px;background:#EFF6FF;color:#1D4ED8;padding:2px 8px;border-radius:4px">q_needs_refund</span> <span class="chip chip-gray">Noul</span></div>
+          <div><strong>✅ Yes</strong> <span class="chip chip-gray">boolean</span></div>
+        </div>
+        <div style="padding:12px 16px">
+          <div style="display:flex;align-items:center;gap:10px;font-size:12px"><div style="flex:1;max-width:480px;height:8px;border-radius:4px;background:#E5E7EB;overflow:hidden"><div style="width:86%;height:100%;background:#15803D"></div></div><span class="font-mono">p = 0.86</span></div>
+          <div style="font-size:11px;color:var(--text-secondary);margin-top:6px">Yes/no with probability · confidence 0.86</div>
+        </div>
+      </div>
+
+      <div style="background:#F0FDF4;border:1px solid #86EFAC;color:#15803D;border-radius:6px;padding:14px 18px;display:flex;gap:12px;align-items:center">
+        <span style="font-size:20px">✅</span>
+        <div><strong>Act automatically</strong> — confidence 0.94 ≥ act threshold 0.90 (confirm 0.70). Result dispatched to the SOP without human review. Below confirm the tool escalates; between confirm and act it recommends review.</div>
+      </div>
+    </div>
+  </div><!-- /results-decision-panel -->
+</div>
 
 <!-- ═══════════════════════════════ VIEW: AGENT MANAGEMENT PANEL (agent-management-panel) ═══════════════════════════════ -->
 <div id="view-agent-management-panel" class="view">
@@ -6127,6 +6254,60 @@ function oidcRunTestLogin() {
 })();
 </script>
 
+<!-- ═══════════════════════════════ MODAL: OPTIMIZED PLAN (Software 3.0 — workflow compilation) ═══════════════════════════════
+     Surfaces the compiled-script registry where it lives in the product: the Agent Type's Optimized Plan.
+     No standalone script admin page exists (script-first execution with unconditional LLM fallback is fixed behaviour). -->
+<div id="modal-optimized-plan" class="modal-overlay" onclick="closeModalIfOverlay(event,'modal-optimized-plan')">
+  <div class="modal modal-lg">
+    <div class="modal-header">
+      <h3 id="opt-title">Optimized Plan — report-generator</h3>
+      <button class="modal-close" onclick="closeModal('modal-optimized-plan')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:12px">
+        <span class="text-secondary" style="font-size:12px">Status</span>
+        <span id="opt-status-chip" class="chip chip-green">ready</span>
+        <span id="opt-mode-chip" class="chip chip-blue">fully scripted</span>
+        <span style="flex:1"></span>
+        <button id="opt-retire-btn" class="btn btn-xs btn-secondary" onclick="optRetirePlan()">Retire plan</button>
+      </div>
+      <div id="opt-retire-success" class="alert alert-success" style="display:none">Optimized plan retired — the next run will offer optimization again.</div>
+      <div id="opt-needs-feedback" class="alert alert-warning" style="display:none">Verification could not produce a passing workflow script. Describe what to change below and submit feedback — it will guide the next regeneration.</div>
+      <div id="opt-flow" class="flow-map" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:12px;margin:8px 0 4px"></div>
+      <h4 style="font-size:13px;margin:14px 0 4px">Composition Steps</h4>
+      <div id="opt-steps"></div>
+      <hr style="border:none;border-top:1px solid var(--border);margin:16px 0">
+      <h4 style="font-size:13px;margin-bottom:6px">Feedback</h4>
+      <div id="opt-feedback-list"></div>
+      <textarea id="opt-feedback-input" class="form-control" rows="2" style="margin-top:8px" placeholder="Describe what to change about this optimized plan…"></textarea>
+      <div style="display:flex;gap:8px;align-items:center;margin-top:8px">
+        <button class="btn btn-xs btn-secondary" onclick="optSubmitFeedback()">✈ Submit feedback</button>
+        <span id="opt-feedback-saved" class="text-sm" style="color:var(--success);display:none">Feedback saved — it will be incorporated when the plan is regenerated.</span>
+      </div>
+      <div class="alert alert-info" style="margin:14px 0 0">Scripts run inside Agent Runtime under the agent's dual identities; MCP tool calls are the only external access. Any script failure unconditionally falls back to the LLM path and triggers bounded self-repair.</div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════ MODAL: SCRIPT VIEWER (Software 3.0) ═══════════════════════════════ -->
+<div id="modal-opt-script" class="modal-overlay" onclick="closeModalIfOverlay(event,'modal-opt-script')">
+  <div class="modal">
+    <div class="modal-header">
+      <h3 id="opt-script-title">Script version v4</h3>
+      <button class="modal-close" onclick="closeModal('modal-opt-script')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px">
+        <span id="opt-script-name" class="chip chip-gray"></span>
+        <span id="opt-script-version" class="chip chip-green">Serving Version: v4</span>
+      </div>
+      <p id="opt-script-desc" class="text-secondary text-sm" style="margin-bottom:10px"></p>
+      <pre id="opt-script-source" style="background:#F1F5F9;border:1px solid var(--border);border-radius:4px;padding:12px;font-family:'SF Mono','Roboto Mono',monospace;font-size:12px;white-space:pre-wrap;word-break:break-word;overflow:auto;max-height:420px;line-height:1.6"></pre>
+    </div>
+    <div class="modal-actions"><button class="btn btn-secondary" onclick="closeModal('modal-opt-script')">Close</button></div>
+  </div>
+</div>
+
 <script>
 // ═══════════════════════════════ STATE ═══════════════════════════════
 var currentView = 'dashboard';
@@ -6757,6 +6938,13 @@ function showSuccess(mode, data) {
 }
 
 // ═══════════════════════════════ TABS ═══════════════════════════════
+/* Decision Results detail (system-one-decision-skills): expand the sample
+   execution answer panel inside the Decision Results tab. */
+function drExpand() {
+  var d = document.getElementById('drDetail');
+  if (d) { d.style.display = 'block'; d.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); }
+}
+
 function switchTab(tabEl, panelId) {
   var parent = tabEl.closest('.view') || tabEl.parentElement.closest('div');
   // Deactivate all tabs/panels in this view
@@ -7814,6 +8002,7 @@ window.exSwitchTab = exSwitchTab;
     </div>
     <div class="tabs" style="margin-bottom:0; padding:0 24px;">
       <div class="tab active" onclick="switchTab(this,'atd-details-panel')">Details</div>
+      <div class="tab" onclick="switchTab(this,'atd-topo-panel');UT.ensure()">Topology</div>
       <div class="tab" onclick="switchTab(this,'atd-plan-panel')">Plan Preview</div>
       <div class="tab" onclick="switchTab(this,'atd-logs-panel')">Execution Logs</div>
     </div>
@@ -7836,26 +8025,52 @@ window.exSwitchTab = exSwitchTab;
           <div><div class="summary-key">Default SOP</div><div class="summary-value">github-pr-workflow</div></div>
         </div>
         <div class="form-row">
-          <div><div class="summary-key">Input Type</div><div class="summary-value">typed</div></div>
-          <div><div class="summary-key">Output Type</div><div class="summary-value">json</div></div>
+          <div><div class="summary-key">Input Type</div><div class="summary-value">typed · AnalysisRequest</div></div>
+          <div><div class="summary-key">Output Type</div><div class="summary-value">Auto</div></div>
         </div>
+        <div class="ut-note"><span>★</span><span><b>Unified topology:</b> the topology tab is the <b>same PanelTopologyCanvas</b> used in the Agent Management Panel — contract slots are labelled like this editor dialog ("None" / "Conversation" / "Auto" as solid nodes; only genuinely unfilled slots stay dashed placeholders).</span></div>
+      </div>
+
+      <!-- Topology tab — unified PanelTopologyCanvas (all agent types) -->
+      <div id="atd-topo-panel" class="tab-panel">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;gap:10px;flex-wrap:wrap">
+          <span class="chip chip-blue">Shared component · PanelTopologyCanvas</span>
+          <span class="text-xs" style="color:var(--text-secondary)">Fullscreen zoom 0.5×–3× · fonts plateau at the 1.6× cap — zooming reveals more content</span>
+        </div>
+        <div style="height:480px;position:relative" id="atd-topo-canvas"></div>
+        <div class="ut-note"><span>ℹ</span><span>Click a Role / Skill / SOP / Tool node to open its entity view. Hub and placeholder clicks are no-ops. For typed agents the plan steps remain below the canvas (Plan Preview tab); the old plan-based topology diagram has been removed.</span></div>
       </div>
       
       <div id="atd-plan-panel" class="tab-panel">
-        <div class="h6">Implementation Steps</div>
-        <ul class="plan-list" style="margin-bottom:24px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;gap:10px;flex-wrap:wrap">
+          <div class="h6" style="margin:0">Implementation Steps</div>
+          <button class="btn btn-secondary btn-sm" onclick="UT.regeneratePlan()" title="Generate a fresh plan from the agent type configuration">↻ Regenerate plan</button>
+        </div>
+        <ul class="plan-list" style="margin-bottom:16px;">
           <li class="plan-item">
             <div class="plan-item-num">1.</div>
             <div class="plan-item-content">
               <div class="plan-item-header">
                 <span class="chip chip-blue chip-border">sop_invocation</span>
                 <span class="plan-item-title">Execute PR Review</span>
+                <a class="plan-script" onclick="showToast('Opens script: sop/github_pr_workflow.md','info')">📜 github_pr_workflow.md</a>
               </div>
               <span class="plan-item-desc">Load SOP context and required steps.</span>
             </div>
           </li>
           <li class="plan-item">
             <div class="plan-item-num">2.</div>
+            <div class="plan-item-content">
+              <div class="plan-item-header">
+                <span class="chip chip-purple chip-border">skill_invocation</span>
+                <span class="plan-item-title">Apply PR Analysis Skill</span>
+                <a class="plan-script" onclick="showToast('Opens script: skills/pr_analysis.py','info')">📜 pr_analysis.py</a>
+              </div>
+              <span class="plan-item-desc">Analyze recent github changes data.</span>
+            </div>
+          </li>
+          <li class="plan-item">
+            <div class="plan-item-num">3.</div>
             <div class="plan-item-content">
               <div class="plan-item-header">
                 <span class="chip chip-yellow chip-border">agent_delegation</span>
@@ -7865,25 +8080,7 @@ window.exSwitchTab = exSwitchTab;
             </div>
           </li>
         </ul>
-        <div class="topology-container">
-          <svg viewBox="0 0 520 260" width="100%" height="260" aria-label="agent topology">
-            <rect x="20" y="26" width="120" height="40" rx="6" fill="#fce4ec" stroke="#d32f2f" stroke-width="1.5"></rect>
-            <text x="80" y="50" text-anchor="middle" font-size="12">pr-reviewer</text>
-
-            <rect x="180" y="26" width="130" height="40" rx="6" fill="#EDE9FE" stroke="#6D28D9" stroke-width="1.5"></rect>
-            <text x="245" y="50" text-anchor="middle" font-size="12">github-pr-workflow</text>
-
-            <rect x="180" y="98" width="130" height="40" rx="6" fill="#DBEAFE" stroke="#1D4ED8" stroke-width="1.5"></rect>
-            <text x="245" y="122" text-anchor="middle" font-size="12">github-pr-analysis</text>
-
-            <rect x="350" y="98" width="130" height="40" rx="6" fill="#ECEFF1" stroke="#455a64" stroke-width="1.5"></rect>
-            <text x="415" y="122" text-anchor="middle" font-size="12">agent-sop</text>
-
-            <line x1="140" y1="46" x2="180" y2="46" stroke="#64748B" stroke-width="2"></line>
-            <line x1="245" y1="66" x2="245" y2="98" stroke="#64748B" stroke-width="2"></line>
-            <line x1="310" y1="118" x2="350" y2="118" stroke="#64748B" stroke-width="2"></line>
-          </svg>
-        </div>
+        <div class="ut-note"><span>ℹ</span><span>The plan-based topology diagram that used to render here has been <b>removed</b> (<span class="font-mono">hideTopology</span>) — the unified canvas in the <b>Topology</b> tab is the single diagram for all agent types. This matches <span class="font-mono">AgentPlanContent</span> inside <span class="font-mono">AgentTypeDetailsDialog</span>; <span class="font-mono">PlanPreviewModal</span> (opened from elsewhere) keeps its own plan topology.</span></div>
       </div>
       
       <div id="atd-logs-panel" class="tab-panel">
@@ -8120,6 +8317,186 @@ window.exSwitchTab = exSwitchTab;
     const modal = document.getElementById('planModal');
     modal.classList.add('open');
   }
+</script>
+
+<script>
+/* ═══════════════════════════════════════════════════════════════
+   UT — Unified topology canvas for the Agent Type Details dialog.
+   Mirrors PanelTopologyCanvas + TopologyDiagramRenderer: shared with
+   the Agent Management Panel, zoom 0.5×–3× (step 1.2) with the 1.6×
+   font-size cap (TOPOLOGY_MAX_FONT_SCALE) in fullscreen, contract
+   slots labelled "None" / "Conversation" / "Auto" as solid nodes,
+   dashed placeholders only for genuinely unfilled slots. Node clicks
+   open entity views; hub & placeholder clicks are no-ops.
+   ═══════════════════════════════════════════════════════════════ */
+var UT = (function(){
+  var FONT_CAP = 1.6, ZOOM_MIN = 0.5, ZOOM_MAX = 3, ZOOM_STEP = 1.2, NODE_H = 52;
+  var mounted = false, zoom = 1, tx = 24, ty = 24, fs = false, host = null;
+
+  /* pr-reviewer composition: hub → agent → role/SOP → skills → tools → output
+     Input slot deliberately set to typed schema (solid); output type unset → "Auto" (solid). */
+  var NODES = [
+    {id:'hub',   x:20,  y:200, w:120, label:'Communication Hub', sub:'Hub', kind:'hub', color:'#475569', noClick:true},
+    {id:'input', x:190, y:200, w:180, label:'AnalysisRequest',   sub:'Input · typed schema', kind:'input', color:'#0E7490'},
+    {id:'agent', x:430, y:200, w:180, label:'pr-reviewer',       sub:'Agent Type', kind:'agent', color:'#2563EB'},
+    {id:'role',  x:680, y:80,  w:190, label:'Developer',         sub:'Agent Role', kind:'role', color:'#7C3AED', entity:'role'},
+    {id:'sop',   x:680, y:320, w:190, label:'github-pr-workflow',sub:'SOP', kind:'sop', color:'#0E7490', entity:'sop'},
+    {id:'sk1',   x:930, y:80,  w:180, label:'pr-analysis',       sub:'Skill', kind:'skill', color:'#B45309', entity:'skill'},
+    {id:'sk2',   x:930, y:320, w:180, label:'github-reader',     sub:'Skill', kind:'skill', color:'#B45309', entity:'skill'},
+    {id:'t1',    x:1170,y:80,  w:170, label:'github.read_pr',    sub:'MCP Tool', kind:'tool', color:'#15803D', entity:'tool'},
+    {id:'t2',    x:1170,y:320, w:170, label:'repo.comment',      sub:'MCP Tool', kind:'tool', color:'#15803D', entity:'tool'},
+    {id:'output',x:1400,y:200, w:180, label:'Auto',              sub:'Output', kind:'output', color:'#DB2777'}
+  ];
+  var EDGES = [
+    ['hub','agent'],['input','agent'],['agent','role'],['agent','sop'],
+    ['role','sk1'],['sop','sk2'],['sk1','t1'],['sk2','t2'],['t1','output']
+  ];
+  var KIND_LABEL = {hub:'Hub', input:'Input Slot', agent:'Agent Type', role:'Agent Role', sop:'SOP', skill:'Skill', tool:'MCP Tool', output:'Output Slot'};
+
+  function ensure(){
+    if(mounted) return;
+    host = document.getElementById('atd-topo-canvas');
+    if(!host) return;
+    host.innerHTML =
+      '<div class="ut-wrap">' +
+        '<div class="ut-fs-head"><b>pr-reviewer</b><span>fullscreen · zoom reveals more content — text plateaus at 160%</span></div>' +
+        '<svg class="ut-svg" width="1700" height="600"><g class="ut-edges"></g><g class="ut-nodes"></g></svg>' +
+        '<div class="ut-toolbar">' +
+          '<button class="ut-btn" data-a="in" title="Zoom in">+</button>' +
+          '<button class="ut-btn" data-a="out" title="Zoom out">−</button>' +
+          '<button class="ut-btn" data-a="fit" title="Fit to view">⛶</button>' +
+          '<button class="ut-btn" data-a="reset" title="Reset zoom">1:1</button>' +
+          '<button class="ut-btn" data-a="fs" title="Fullscreen (Esc exits)">⬜</button>' +
+        '</div>' +
+        '<div class="ut-zoom">100%</div>' +
+        '<div class="ut-legend">' +
+          '<span><i style="background:#2563EB"></i>Agent</span>' +
+          '<span><i style="background:#7C3AED"></i>Role</span>' +
+          '<span><i style="background:#0E7490"></i>SOP</span>' +
+          '<span><i style="background:#B45309"></i>Skill</span>' +
+          '<span><i style="background:#15803D"></i>Tool</span>' +
+          '<span><i style="background:#DB2777"></i>Output</span>' +
+          '<span><i style="background:#fff;border:1.5px dashed #94A3B8"></i>Unfilled slot</span>' +
+        '</div>' +
+      '</div>';
+    var wrap = host.querySelector('.ut-wrap');
+    var svg = host.querySelector('svg');
+    var zoomEl = host.querySelector('.ut-zoom');
+    var NS = 'http://www.w3.org/2000/svg';
+
+    EDGES.forEach(function(e){
+      var A = NODES.find(function(n){return n.id===e[0];}), B = NODES.find(function(n){return n.id===e[1];});
+      var x1=A.x+A.w, y1=A.y+NODE_H/2, x2=B.x, y2=B.y+NODE_H/2, mx=(x1+x2)/2;
+      var p = document.createElementNS(NS,'path');
+      p.setAttribute('d','M '+x1+' '+y1+' C '+mx+' '+y1+', '+mx+' '+y2+', '+x2+' '+y2);
+      p.setAttribute('class','ut-edge'+(B.placeholder?' dashed':''));
+      p.setAttribute('stroke', B.color || A.color);
+      svg.querySelector('.ut-edges').appendChild(p);
+    });
+
+    NODES.forEach(function(n){
+      var g = document.createElementNS(NS,'g');
+      g.setAttribute('class','ut-node'+(n.placeholder?' placeholder':''));
+      g.setAttribute('transform','translate('+n.x+','+n.y+')');
+      var rect = document.createElementNS(NS,'rect');
+      rect.setAttribute('class','n-box');
+      rect.setAttribute('width',n.w); rect.setAttribute('height',NODE_H); rect.setAttribute('rx',9);
+      rect.setAttribute('stroke', n.placeholder ? '#94A3B8' : n.color);
+      var dot = document.createElementNS(NS,'rect');
+      dot.setAttribute('x',14); dot.setAttribute('y',14); dot.setAttribute('width',24); dot.setAttribute('height',24); dot.setAttribute('rx',7);
+      if(n.placeholder){ dot.setAttribute('fill','none'); dot.setAttribute('stroke','#94A3B8'); dot.setAttribute('stroke-dasharray','3 2'); }
+      else dot.setAttribute('fill', n.color);
+      var kt = document.createElementNS(NS,'text');
+      kt.setAttribute('x',48); kt.setAttribute('y',22);
+      kt.setAttribute('style','font-weight:700;letter-spacing:.6px;text-transform:uppercase;fill:'+(n.placeholder?'#94A3B8':n.color));
+      kt.textContent = n.sub; kt.dataset.fs = 8.5;
+      var lt = document.createElementNS(NS,'text');
+      lt.setAttribute('x',48); lt.setAttribute('y',38);
+      lt.setAttribute('style','font-weight:600;fill:#212121');
+      lt.textContent = n.label; lt.dataset.fs = 12;
+      g.append(rect,dot,kt,lt);
+      g.addEventListener('click', function(ev){
+        ev.stopPropagation();
+        if(n.noClick || n.placeholder) return; /* hub & placeholder clicks are no-ops */
+        host.querySelectorAll('.ut-node').forEach(function(x){x.classList.remove('selected');});
+        g.classList.add('selected');
+        if(n.entity==='role'){ openRoleView(); return; }
+        var detail = {
+          agent:'Agent Type · pr-reviewer — full configuration stays on the Details tab.',
+          sop:'SOP · github-pr-workflow — 4 sequenced steps open in the SOP entity view.',
+          skill:'Skill · '+n.label+' — resolves its MCP tools (see connected nodes).',
+          tool:'MCP Tool · '+n.label+' — invoked under the tenant-namespaced hub slug.',
+          input:'Input slot · AnalysisRequest — deliberately set typed schema (solid node).',
+          output:'Output slot · Auto — deliberately set / unset output renders as the editor dialog\u2019s \u201cAuto\u201d label (solid node, not a dashed placeholder).'
+        }[n.kind];
+        showToast(detail, 'info');
+      });
+      svg.querySelector('.ut-nodes').appendChild(g);
+    });
+
+    function applyFontCap(){
+      var factor = zoom > FONT_CAP ? FONT_CAP/zoom : 1;
+      svg.querySelectorAll('text').forEach(function(t){ t.style.fontSize=(parseFloat(t.dataset.fs)*factor)+'px'; });
+    }
+    function apply(){
+      svg.style.transform = 'translate('+tx+'px,'+ty+'px) scale('+zoom+')';
+      zoomEl.textContent = Math.round(zoom*100)+'%' + (zoom > FONT_CAP ? ' · text capped at 160%' : '');
+      zoomEl.classList.toggle('capped', zoom > FONT_CAP);
+      host.querySelector('[data-a="in"]').disabled = zoom >= ZOOM_MAX;
+      host.querySelector('[data-a="out"]').disabled = zoom <= ZOOM_MIN;
+      applyFontCap();
+    }
+    function clamp(z){ return Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, z)); }
+    function setZoom(z, cx, cy){
+      z = clamp(z);
+      var r = wrap.getBoundingClientRect();
+      cx = cx==null ? r.width/2 : cx; cy = cy==null ? r.height/2 : cy;
+      tx = cx-(cx-tx)*(z/zoom); ty = cy-(cy-ty)*(z/zoom);
+      zoom = z; apply();
+    }
+    function fit(){
+      var r = wrap.getBoundingClientRect();
+      var maxX = Math.max.apply(null, NODES.map(function(n){return n.x+n.w;}))+30;
+      var maxY = Math.max.apply(null, NODES.map(function(n){return n.y+NODE_H;}))+30;
+      zoom = clamp(Math.min(r.width/maxX, r.height/maxY, 1.4));
+      tx = (r.width-maxX*zoom)/2; ty = (r.height-maxY*zoom)/2;
+      apply();
+    }
+    host.querySelector('[data-a="in"]').onclick = function(){ setZoom(zoom*ZOOM_STEP); };
+    host.querySelector('[data-a="out"]').onclick = function(){ setZoom(zoom/ZOOM_STEP); };
+    host.querySelector('[data-a="fit"]').onclick = fit;
+    host.querySelector('[data-a="reset"]').onclick = function(){ zoom=1; tx=24; ty=24; apply(); };
+    host.querySelector('[data-a="fs"]').onclick = function(){
+      fs = !fs;
+      wrap.classList.toggle('ut-fs', fs);
+      document.body.style.overflow = fs ? 'hidden' : '';
+      this.textContent = fs ? '✕' : '⬜';
+      if(fs){ zoom = 1; fit(); showToast('Fullscreen — zoom past 160% and fonts stop growing while more content is revealed.','info'); }
+      else fit();
+    };
+    document.addEventListener('keydown', function(e){ if(e.key==='Escape' && fs){ host.querySelector('[data-a="fs"]').click(); } });
+    wrap.addEventListener('wheel', function(e){
+      e.preventDefault();
+      var r = wrap.getBoundingClientRect();
+      if(e.ctrlKey || e.metaKey){ setZoom(zoom*(e.deltaY<0?1.1:0.9), e.clientX-r.left, e.clientY-r.top); }
+      else { tx -= e.deltaX; ty -= e.deltaY; apply(); }
+    }, {passive:false});
+    var pan = null;
+    wrap.addEventListener('mousedown', function(e){ if(e.target.closest('.ut-node'))return; pan={x:e.clientX,y:e.clientY,tx:tx,ty:ty}; });
+    window.addEventListener('mousemove', function(e){ if(!pan)return; tx=pan.tx+e.clientX-pan.x; ty=pan.ty+e.clientY-pan.y; apply(); });
+    window.addEventListener('mouseup', function(){ pan=null; });
+
+    apply();
+    requestAnimationFrame(fit);
+    mounted = true;
+  }
+
+  function regeneratePlan(){
+    showToast('Plan regeneration requested — a fresh plan will be generated from the agent type configuration.','success');
+  }
+
+  return { ensure: ensure, regeneratePlan: regeneratePlan };
+})();
 </script>
 
 <!-- ═══════════════════════════════ MODALS ═══════════════════════════════ -->
@@ -13461,6 +13838,135 @@ function tpClose(){document.getElementById('tenantPickerModal').style.display='n
 document.addEventListener('keydown',function(e){
   if(e.key==='Escape'){['tenantPickerModal','dctDialog','soDialog'].forEach(function(id){var el=document.getElementById(id);if(el)el.style.display='none';});}
 });
+// ═══════════════════════ OPTIMIZED PLAN — Software 3.0 workflow compilation ═══════════════════════
+var OPT_PLANS = {
+  'report-generator': {
+    status: 'ready', fullyScripted: true,
+    flow: ['plan','MCP: query-metrics','transform / filter','MCP: post-report','Semantic Bridge'],
+    steps: [
+      { name: 'Query metrics', desc: 'MCP tool call — query-metrics (permissions inherited from agent identity, dual identities per call)', modelBacked: false,
+        script: { name: 'daily-report-gen', version: 'v4', desc: 'Queries the operations metrics store, filters the last 24h window, and posts the formatted daily report to the operations channel.',
+          source: 'def run(ctx):\n    metrics = ctx.tools["query-metrics"](window="24h")\n    recent = ops.select_keys(metrics, ["latency", "errors", "throughput"])\n    summary = ctx.tools["post-report"](template=REPORT_TPL, data=recent)\n    return ops.passthrough(summary)' } },
+      { name: 'Filter & aggregate', desc: 'Local data processing — select_keys / count / sum transforms (no external I/O)', modelBacked: false,
+        script: { name: 'daily-report-gen', version: 'v4', desc: 'Same compiled script — inline transform inside the step graph.',
+          source: 'recent = ops.select_keys(metrics, ["latency", "errors", "throughput"])\ntotals = ops.merge(ops.count(recent["errors"]), ops.sum(recent["throughput"]))' } },
+      { name: 'Post report', desc: 'MCP tool call — post-report', modelBacked: false,
+        script: { name: 'daily-report-gen', version: 'v4', desc: 'Same compiled script — final output step.',
+          source: 'summary = ctx.tools["post-report"](template=REPORT_TPL, data=totals)\nreturn ops.passthrough(summary)' } },
+      { name: 'Executive summary', desc: 'Semantic Bridge sub-agent — model-backed step (unstructured → structured)', modelBacked: true, script: null }
+    ],
+    feedback: [ { summary: 'Keep the executive summary generated by the Semantic Bridge — do not script it.', date: 'Oct 24, 2026, 14:02' } ]
+  },
+  'data-analyst': {
+    status: 'needs_feedback', fullyScripted: false,
+    flow: ['plan','MCP: read-analyze-file','System One decision'],
+    steps: [
+      { name: 'Read dataset', desc: 'MCP tool call — read-analyze-file', modelBacked: false,
+        script: { name: 'db-report', version: 'v2 (draft)', desc: 'Reads the analysis dataset and computes per-group aggregates. Verification mismatch recorded — repair pending.',
+          source: 'def run(ctx):\n    rows = ctx.tools["read-analyze-file"](path=ctx.input["dataset"])\n    return ops.merge(ops.count(rows), ops.pluck(rows, "region"))' } },
+      { name: 'Interpret results', desc: 'System One decision tool — model-backed judgment step (confidence carried downstream)', modelBacked: true, script: null }
+    ],
+    feedback: [ { summary: 'Aggregation must respect the region filter from the input, not all rows.', date: 'Oct 26, 2026, 10:41' } ]
+  },
+  'file-manager': { status: 'none', fullyScripted: false, flow: [], steps: [], feedback: [] },
+  'incident-bot': { status: 'ready', fullyScripted: true,
+    flow: ['plan','MCP: fetch-alerts','transform','MCP: page-oncall'],
+    steps: [
+      { name: 'Fetch alerts', desc: 'MCP tool call — fetch-alerts', modelBacked: false,
+        script: { name: 'incident-response', version: 'v1', desc: 'Fetches unresolved alerts, deduplicates, and pages the on-call engineer for critical severities.',
+          source: 'def run(ctx):\n    alerts = ctx.tools["fetch-alerts"](state="unresolved")\n    critical = [a for a in alerts if a["severity"] == "critical"]\n    return ctx.tools["page-oncall"](alerts=critical)' } },
+      { name: 'Deduplicate & page', desc: 'Local dedup transform + MCP tool call — page-oncall', modelBacked: false,
+        script: { name: 'incident-response', version: 'v1', desc: 'Same compiled script — dedup and paging steps.',
+          source: 'critical = [a for a in alerts if a["severity"] == "critical"]\nreturn ctx.tools["page-oncall"](alerts=critical)' } }
+    ],
+    feedback: []
+  },
+  'pr-reviewer': { status: 'none', fullyScripted: false, flow: [], steps: [], feedback: [] }
+};
+var optCurrentKey = 'report-generator';
+
+function openOptimizedPlan(key) {
+  if (typeof key !== 'string') return; // guard against stray handlers
+  if (!OPT_PLANS[key]) { showToast('No optimized plan for "' + key + '" yet — the next run offers optimization.', 'info'); return; }
+  optCurrentKey = key;
+  optRenderPlan();
+  openModal('modal-optimized-plan');
+}
+
+function optRenderPlan() {
+  var plan = OPT_PLANS[optCurrentKey];
+  document.getElementById('opt-title').textContent = 'Optimized Plan — ' + optCurrentKey;
+  var statusChip = document.getElementById('opt-status-chip');
+  var modeChip = document.getElementById('opt-mode-chip');
+  var colors = { ready: ['chip-green','ready'], needs_feedback: ['chip-orange','needs_feedback'], none: ['chip-gray','none'] };
+  var c = colors[plan.status] || colors.none;
+  statusChip.className = 'chip ' + c[0];
+  statusChip.textContent = c[1];
+  var showPlanUI = (plan.status === 'ready' || plan.status === 'needs_feedback');
+  modeChip.style.display = showPlanUI ? '' : 'none';
+  document.getElementById('opt-retire-btn').style.display = showPlanUI ? '' : 'none';
+  modeChip.className = 'chip ' + (plan.fullyScripted ? 'chip-blue' : 'chip-gray');
+  modeChip.textContent = plan.fullyScripted ? 'fully scripted' : 'tool mode';
+  document.getElementById('opt-retire-success').style.display = 'none';
+  document.getElementById('opt-needs-feedback').style.display = (plan.status === 'needs_feedback') ? 'block' : 'none';
+  var flowEl = document.getElementById('opt-flow');
+  flowEl.innerHTML = plan.flow.length
+    ? plan.flow.map(function(n, i){ return '<span class="flow-node" style="background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:4px 10px;font-weight:500">' + n + '</span>' + (i < plan.flow.length - 1 ? '<span style="color:var(--text-secondary)">→</span>' : ''); }).join('')
+    : '';
+  flowEl.style.display = plan.flow.length ? 'flex' : 'none';
+  var wrap = document.getElementById('opt-steps');
+  wrap.innerHTML = '';
+  if (!plan.steps.length) {
+    wrap.innerHTML = '<p class="text-secondary text-sm">No verified optimized plan exists. The next time you run this agent, you will be offered the option to run with optimization — that run authors and verifies workflow scripts against real executions and saves the plan for reuse.</p>';
+  } else {
+    plan.steps.forEach(function(s, i) {
+      var row = document.createElement('div');
+      row.style.cssText = 'display:flex;align-items:flex-start;gap:12px;padding:10px 4px;border-bottom:1px solid var(--border)';
+      var kind = s.modelBacked ? '<span class="chip chip-purple" style="font-size:11px">model-backed</span>' : '<span class="chip chip-blue" style="font-size:11px">scriptable</span>';
+      var link = s.script ? '<button class="btn btn-xs btn-secondary" onclick="optOpenScript(' + i + ')">View script</button>' : '';
+      row.innerHTML = '<div style="width:24px;height:24px;border-radius:50%;background:var(--primary-light);color:var(--primary-dark);font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:2px">' + (i + 1) + '</div>' +
+        '<div style="flex:1"><div style="font-size:13px;font-weight:600">' + s.name + '</div><div class="text-sm text-secondary">' + s.desc + '</div></div>' + kind + link;
+      wrap.appendChild(row);
+    });
+  }
+  var fb = document.getElementById('opt-feedback-list');
+  fb.innerHTML = '';
+  (plan.feedback || []).forEach(function(cm) {
+    var d = document.createElement('div');
+    d.style.cssText = 'padding:8px 0;border-bottom:1px solid var(--border);font-size:13px';
+    d.innerHTML = '<div style="font-weight:500">' + cm.summary + '</div><div class="text-sm text-secondary">' + cm.date + '</div>';
+    fb.appendChild(d);
+  });
+}
+
+function optOpenScript(i) {
+  var s = OPT_PLANS[optCurrentKey].steps[i].script;
+  if (!s) return;
+  document.getElementById('opt-script-title').textContent = 'Script version ' + s.version.split(' ')[0];
+  document.getElementById('opt-script-name').textContent = s.name;
+  document.getElementById('opt-script-version').textContent = 'Serving Version: ' + s.version;
+  document.getElementById('opt-script-desc').textContent = s.desc;
+  document.getElementById('opt-script-source').textContent = s.source;
+  openModal('modal-opt-script');
+}
+
+function optRetirePlan() {
+  OPT_PLANS[optCurrentKey].status = 'none';
+  document.getElementById('opt-retire-success').style.display = 'block';
+  showToast('Optimized plan retired — the next run will offer optimization again.', 'success');
+  setTimeout(optRenderPlan, 900);
+}
+
+function optSubmitFeedback() {
+  var input = document.getElementById('opt-feedback-input');
+  if (!input.value.trim()) return;
+  OPT_PLANS[optCurrentKey].feedback.unshift({ summary: input.value.trim(), date: 'just now (LLM-summarized)' });
+  input.value = '';
+  document.getElementById('opt-feedback-saved').style.display = 'inline';
+  optRenderPlan();
+  setTimeout(function(){ document.getElementById('opt-feedback-saved').style.display = 'none'; }, 3500);
+}
+
 dctRender();soRender();
 </script>
 </body>

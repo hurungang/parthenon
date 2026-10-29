@@ -40,6 +40,10 @@ Agent identity management in Parthenon is centralized in the Control Center as a
 - Compliance officers can demonstrate boundary enforcement using evidence of permitted and blocked identity access paths
 - Platform administrators can sign in / provision a new agent identity inline from the Agent Management Panel while configuring an agent; this reuses the existing identity sign-in/provisioning flow and does not change standalone identity management behaviour
 
+## Token Health States
+
+Each agent identity exposes a visible credential health state: **valid**, **expiring within 7 days**, or **expired**. Identity pages serve as the remediation target for dashboard token-expiry warnings — an administrator clicking a dashboard warning lands here to refresh/re-authenticate the identity. Warnings clear automatically once the identity credential is refreshed. (See [Token Expiry Alerting](token-expiry-alerting.md).)
+
 ## Out of Scope
 - Technical implementation details, code, or architecture diagrams
 - Legacy identity management models without certificate-based security

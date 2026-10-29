@@ -66,6 +66,21 @@ def _build_test_app() -> FastAPI:
     return app
 
 
+@pytest.fixture(autouse=True)
+def _mock_preflight_gate():
+    """Default to a PROCEED preflight so these tests exercise forwarding.
+
+    The token preflight gate (token-expiry-alerting) calls the Control
+    Center preflight endpoint before forwarding; individual tests that
+    verify gate behaviour patch it themselves.
+    """
+    with patch(
+        "app.services.gateway.preflight_gate.enforce_execution_preflight",
+        new=AsyncMock(return_value=[]),
+    ):
+        yield
+
+
 def _payload() -> dict:
     return {
         "session_id": str(uuid.uuid4()),

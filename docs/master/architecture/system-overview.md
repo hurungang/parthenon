@@ -187,6 +187,28 @@ The Control Center establishes the tenant context once per request (fail-closed 
 
 Decision tooling generalises the former single "System One Provider" into multiple **Decision Model Providers** (vendors). Provider configuration, encrypted credentials, model enablement, guardrails, budgets, and usage metering live **only in Control Center** — the sole database-connected service. Each Decision Tool references one enabled Decision Model; the Decision Engine resolves that per-tool selection at execution time, and execution logs capture provider/model identity for audit. Decision model evaluations pass the **same pre-call guardrail and budget/spend checks as regular agent model calls** (including guardrails attached via `model_guardrail_configurations` with the `decision_provider` config source); Agent Runtime and Communication Hub never touch provider credentials or the database — decision execution routes through Control Center internal endpoints. For the full module architecture, see [Decision Models Architecture](modules/decision-models/architecture.md).
 
+### Decision Tools as a Second Decision-Making Pathway
+
+Decision tools are the second decision-making pathway in Parthenon, alongside LLM-backed skills: instead of routing a judgment to an LLM inside a skill, a skill (or an agent, or an external MCP client) calls a user-definable **decision tool** that behaves exactly like a built-in system tool. Decision tools are authored per tenant (names unique per tenant), resolve through the same system-tool registry, permission model, and grants, and are exposed over MCP with the canonical `decision____<name>` prefix — sharing the `server____tool` four-underscore convention with `system____` tools. `decision` is a reserved MCP server slug alongside `system`, so no external MCP server can collide with the namespace. Skills themselves are unchanged by this pathway. The TypeSafe System One API (and future decision vendors) is an external system reachable **only from Control Center**, for both execution calls and the lightweight test-connection probe; the provider API key is decrypted at call time in Control Center only and is never returned by any API.
+
+```mermaid
+flowchart LR
+    FE[Frontend Authoring UI]
+    CH[Communication Hub<br/>MCP tools/list + tools/call]
+    AR[Agent Runtime]
+    MCP[External MCP Clients]
+    CC[Control Center]
+    DB[(PostgreSQL)]
+    TS[TypeSafe API]
+
+    FE -->|author decision tools,<br/>attach to skills| CC
+    AR -->|call decision____tool| CH
+    MCP -->|tools/call decision____tool| CH
+    CH -->|forward via system-tools path| CC
+    CC -->|tool + provider config, results| DB
+    CC -->|Bearer key, call-time decrypt| TS
+```
+
 ```mermaid
 flowchart LR
     subgraph CC["Control Center (sole DB owner)"]
@@ -212,9 +234,32 @@ flowchart LR
     MMGMT --> DB
 ```
 
+## Token Expiry Alerting
+
+Control Center owns token expiry state end to end via the **Token Health Service** — the sole DB reader of token metadata — classifying agent identity tokens and MCP sessions as `expired` / `expiring-within-7-days` / `healthy`. A **preflight gate** in the Communication Hub Agent Gateway validates every token an execution (including subagents) will use before it starts: expired **blocks** (422, re-auth message), expiring-soon **warns** without blocking. The dashboard shows token health cards, and the topology view is enriched client-side with warning/error badges via the dashboard token-health endpoint. Agents never receive tokens; the Gateway Lifecycle Handler in Control Center is unchanged.
+
+```mermaid
+flowchart LR
+    subgraph CC["Control Center (sole DB reader)"]
+        THS[Token Health Service]
+        DB[(Platform DB)]
+    end
+    CH[Communication Hub<br/>Agent Gateway preflight]
+    AR[Agent Runtime]
+    FE[Dashboard + Topology<br/>health cards and badges]
+
+    THS --> DB
+    CH -->|preflight check| THS
+    CH -->|proceed / warn| AR
+    FE -->|token health API| THS
+    THS -.->|expiry classification| CH
+```
+
+See [Token Refresh Service](modules/token-refresh.md), [Communication Hub Architecture](modules/communication-hub/architecture.md), and [Dashboard](modules/dashboard.md).
+
 ## Key Responsibilities
 
-- **Control Center** — Central authority for configuration, authentication, tenant resolution and enforcement (sole database gateway, including tenant-scoped queries and quota usage counting), per-tenant OIDC provider registry, permission resolution, certificate authority, API key management, agent data type registry, agent outputs, and scheduling. Validates infrastructure dependencies at startup and fails fast. It is the **only signing origin** for internal tenant headers and the only issuer of new tenant bindings on internal calls.
-- **Agent Runtime** — Deep agent execution via LangChain with tool call orchestration through Communication Hub. Enforces delegation depth limits, performs typed output validation, and emits delegation status events. Executes strictly within the signed tenant context received from Control Center — the tenant is resolved once from the signed execution context (fail-closed) and applied to **all** tool, MCP, and A2A resolution and every downstream internal call during the run; scope cannot be widened, and no quota logic runs here. Agents never hold identity tokens.
+- **Control Center** — Central authority for configuration, authentication, tenant resolution and enforcement (sole database gateway, including tenant-scoped queries and quota usage counting), per-tenant OIDC provider registry, permission resolution, certificate authority, API key management, agent data type registry, agent outputs, the Software 3.0 **script registry** (lifecycle, lineage, serving of validated compositions to Agent Runtime), and scheduling. Validates infrastructure dependencies at startup and fails fast. It is the **only signing origin** for internal tenant headers and the only issuer of new tenant bindings on internal calls.
+- **Agent Runtime** — Deep agent execution via LangChain with tool call orchestration through Communication Hub. Executes workflows **script-first with unconditional LLM fallback**: a fresh, sandbox-validated optimized composition runs as a sandboxed script; any sandbox violation or resource-cap breach falls back to the LLM path with a recorded reason (see [Sandboxed Scripting](modules/sandboxed-scripting.md)). Enforces delegation depth limits, performs typed output validation, and emits delegation status events. Executes strictly within the signed tenant context received from Control Center — the tenant is resolved once from the signed execution context (fail-closed) and applied to **all** tool, MCP, and A2A resolution and every downstream internal call during the run; scope cannot be widened, and no quota logic runs here. Agents never hold identity tokens.
 - **Communication Hub** — Message broker and agent gateway supporting dual authentication (mTLS cert + tenant-bound API key). Exposes a standard MCP protocol endpoint (SSE + Streamable HTTP) in addition to the REST skills-loading endpoint; the MCP protocol server's `tools/list` / `tools/call` are **per-tenant** — an API-key-authenticated MCP client sees and calls only its tenant's namespaced tools. Routes tool calls, agent sessions, and A2A messages strictly within the tenant context received from Control Center; cross-tenant routing is impossible. Handles conversation intervention routing and WebSocket connections for real-time chat — WS chat authenticates both OIDC and platform-account tokens, binds the tenant from the token's tenant claim, and delegates to Agent Runtime with forwarded signed tenant headers.
 - **Setup Tool** — Operator-invoked CLI (outside running system) for Keycloak provisioning, certificate authority bootstrap, and database seeding. All operations are idempotent.

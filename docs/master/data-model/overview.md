@@ -374,6 +374,11 @@ erDiagram
         string identity_subject
         json identity_binding
         json credential_config
+        datetime oauth_expires_at
+        datetime oauth_refresh_expires_at
+        datetime last_token_refresh_at "nullable; last CC OAuth refresh of this session"
+        enum last_token_refresh_outcome "success | failure (nullable)"
+        enum token_health_state "healthy | expiring | expired | unknown (computed, nullable)"
         boolean is_active
         boolean is_default
         datetime created_at
@@ -396,7 +401,11 @@ erDiagram
     McpServer ||--o{ McpSession : "has"
     McpServer ||--o{ McpTool : "provides"
     McpTool ||--o{ ToolPermission : "governed by"
+    Tenant ||--o{ TokenHealthCheck : "scopes"
+    McpSession ||--o{ TokenHealthCheck : "preflighted as"
 ```
+
+> **Token expiry health tracking:** agent identities and MCP sessions carry a computed `token_health_state` (`healthy | expiring ≤7 days | expired | unknown`), refreshed on token refresh and dashboard read; every pre-execution evaluation is audited in `TokenHealthCheck` (see Agent Management and Agent Runtime Security sections).
 
 **Business rules:**
 - `passthrough` sessions forward the executing agent's identity to the MCP server at call time; no credentials are stored or required.
@@ -405,7 +414,7 @@ erDiagram
 - Tool **permission grants** resolve within the granting tenant: a grant in tenant A never authorizes a tool in tenant B (roles and tools share the same tenant scope).
 - At most one `McpSession` per `McpServer` may be marked `is_default = true`; a sole session is automatically treated as default. Sessions inherit tenant scope through their server.
 
-**Source**: `backend/app/db/models/mcp_hub.py`
+**Source**: `backend/app/db/models/mcp_hub.py`, `backend/app/db/models/token_health.py`
 
 ---
 
@@ -544,10 +553,25 @@ erDiagram
         string encrypted_refresh_token
         datetime token_expiry
         datetime last_token_refresh_at
+        datetime refresh_token_expires_at "nullable; drives expiring (≤7d) vs expired"
+        enum last_token_refresh_outcome "success | failure (nullable)"
+        enum token_health_state "healthy | expiring | expired | unknown (computed, nullable)"
         enum status
         enum token_status
         datetime created_at
         datetime updated_at
+    }
+    TokenHealthCheck {
+        uuid id
+        uuid tenant_id "mandatory; tenant-scoped"
+        uuid agent_type_id "execution being preflighted"
+        uuid session_id "agent execution session, nullable if blocked pre-submission"
+        enum target_kind "agent_identity | mcp_session"
+        uuid target_id "polymorphic reference, no DB-level FK"
+        enum health_state "healthy | expiring | expired | unknown"
+        enum check_outcome "passed | blocked"
+        string message
+        datetime checked_at
     }
     AgentType {
         uuid id
@@ -672,6 +696,9 @@ erDiagram
     AgentTypeSopBinding }o--|| Sop : "references"
     AgentTypeSkillBinding }o--|| Skill : "references"
     AgentIdentity ||--o{ TokenRefreshLog : "logs"
+    Tenant ||--o{ TokenHealthCheck : "scopes"
+    AgentType ||--o{ TokenHealthCheck : "preflight before execution"
+    AgentIdentity ||--o{ TokenHealthCheck : "preflighted as"
     AgentType ||--o{ AgentData : "saves named data"
     AgentSession ||--o{ AgentData : "contains saved records"
     AgentType ||--o{ AgentOutput : "produces final output"
@@ -680,7 +707,7 @@ erDiagram
     AgentType }o--|| AgentDataType : "output schema defined by"
 ```
 
-**Sources**: `backend/app/db/models/agents.py`, `backend/app/db/models/agent_data.py`, `backend/app/db/models/agent_output.py`, `backend/app/db/models/agent_data_type.py`, `backend/app/db/models/agent_security.py`
+**Sources**: `backend/app/db/models/agents.py`, `backend/app/db/models/token_health.py`, `backend/app/db/models/agent_data.py`, `backend/app/db/models/agent_output.py`, `backend/app/db/models/agent_data_type.py`, `backend/app/db/models/agent_security.py`
 
 **Tenant containment:** `AgentRole`, `AgentIdentity`, `AgentType`, `ModelConfig`, `AgentData`, `AgentOutput`, and `AgentDataType` carry a **mandatory** tenant reference; names and slugs are unique per tenant only (NULL-tenant global variants retired). Bindings resolve within the tenant: agent type → skill/SOP bindings and role grants on tools/skills/SOPs are same-tenant only; SOP delegation steps and A2A delegation **by name** resolve the target agent type by **(tenant, name)** — a name collision across tenants never routes to the wrong tenant's agent. Agent data saves and typed output queries (`get_data`, `get_output`, `query_result`) match the calling tenant only.
 
@@ -773,9 +800,10 @@ erDiagram
     ScriptVersion ||--o{ ScriptExecutionRecord : "executed as"
     ScriptExecutionRecord ||--o{ FallbackEvent : "falls back via"
     FallbackEvent ||--o{ RepairAttempt : "repaired by"
+    RepairAttempt }o--o| ScriptVersion : "produces repaired candidate"
     ScriptVersion |o--o| ScriptVersion : "repaired_from"
-    AgentSession |o--o{ ScriptExecutionRecord : "ran within"
-    AgentSession |o--o{ LLMMockRecording : "recorded in"
+    AgentJob |o--o{ ScriptExecutionRecord : "ran within"
+    AgentJob |o--o{ LLMMockRecording : "recorded in"
 
     ScriptDefinition {
         string name "unique per tenant"
@@ -822,6 +850,12 @@ erDiagram
     FallbackEvent {
         enum trigger_reason "includes sandbox_violation, resource_limit_exceeded"
         enum resulting_action
+    }
+    RepairAttempt {
+        text defect_diagnosis
+        string diff_applied
+        enum retry_outcome "pending|succeeded|failed"
+        uuid repaired_version_id "successor candidate; must re-verify before promotion"
     }
     LLMMockRecording {
         string recording_key "deterministic SHA-256 of the request"
@@ -970,7 +1004,8 @@ erDiagram
     }
     TokenRefreshLog {
         uuid id
-        uuid agent_identity_id
+        uuid agent_identity_id "nullable; exactly one of identity/session per row"
+        uuid mcp_session_id "nullable; exactly one of identity/session per row"
         datetime attempted_at
         enum outcome
         string error_message
@@ -978,6 +1013,16 @@ erDiagram
         datetime next_retry_at
         json metadata
         datetime created_at
+    }
+    TokenHealthCheck {
+        uuid id
+        uuid tenant_id
+        uuid agent_type_id
+        enum target_kind "agent_identity | mcp_session"
+        uuid target_id "polymorphic reference, no DB-level FK"
+        enum health_state
+        enum check_outcome "passed | blocked"
+        datetime checked_at
     }
     CertificateValidationLog {
         uuid id
@@ -1001,9 +1046,14 @@ erDiagram
 
     AgentType ||--o{ AgentInstanceCertificate : "issues"
     AgentIdentity ||--o{ TokenRefreshLog : "logs"
+    McpSession ||--o{ TokenRefreshLog : "logs (exactly one ref per row)"
+    Tenant ||--o{ TokenHealthCheck : "scopes"
+    AgentType ||--o{ TokenHealthCheck : "preflight before execution"
+    AgentIdentity ||--o{ TokenHealthCheck : "preflighted as"
+    McpSession ||--o{ TokenHealthCheck : "preflighted as"
 ```
 
-**Sources**: `backend/app/db/models/agent_security.py`
+**Sources**: `backend/app/db/models/agent_security.py`, `backend/app/db/models/token_health.py`
 
 ### API Key Access
 
@@ -1207,6 +1257,29 @@ erDiagram
         string content_type
         json payload
     }
+    DecisionExecutionResult {
+        uuid id
+        uuid tenant_id "mandatory; append-only history, always tenant-filtered"
+        uuid decision_tool_id "FK to DecisionTool"
+        uuid conversation_session_id "FK to ConversationSession, nullable"
+        json input_state_snapshot
+        json answers "per question: typed value, probabilities, confidence"
+        enum outcome "act | confirm | escalate"
+        enum status "completed | failed"
+        string error_message
+        string provider_model "e.g. jev-latest"
+        datetime created_at
+    }
+    DecisionTool {
+        uuid id
+        uuid tenant_id "mandatory; name unique per tenant"
+        string name
+        enum status
+    }
+    ConversationSession {
+        uuid id
+        enum status
+    }
     ScheduledJob {
         uuid id
         uuid tenant_id "mandatory at creation; dispatch never falls back cross-tenant"
@@ -1289,6 +1362,8 @@ erDiagram
 
     ScheduledJob ||--o{ JobExecution : "has executions"
     Identity ||--o{ ScheduledJob : "scheduled by"
+    DecisionTool ||--o{ DecisionExecutionResult : "produces"
+    ConversationSession |o--o{ DecisionExecutionResult : "records"
     NotificationChannel ||--o{ ChannelProperty : "configured via"
     NotificationChannel ||--o{ GroupChannelMapping : "assigned to"
     RecipientGroup ||--o{ GroupChannelMapping : "delivered via"
@@ -1297,6 +1372,7 @@ erDiagram
 ```
 
 **Entity notes:**
+- `DecisionExecutionResult` — append-only audit record of each decision-tool execution: input state snapshot, per-question typed answers with probabilities and confidence, and the computed gate outcome (`act` / `confirm` / `escalate`). Tenant-scoped and always tenant-filtered; produced by a `DecisionTool` (see Decision Tools) and optionally linked to the conversation session that triggered it.
 - `NotificationChannel` — a configured outbound destination (SMTP relay, Email API, webhook endpoint, or Instant Messenger connector). One channel can serve multiple recipient groups.
 - `ChannelProperty` — individual key-value configuration for a channel. Secret properties (`is_secret=true`) are encrypted at rest and never returned in API responses.
 - `RecipientGroup` — a named, addressable audience. Agents and SOPs target a group by `slug`; the platform resolves all assigned channels and delivers to each.
@@ -1305,7 +1381,7 @@ erDiagram
 
 **Dispatch tenant binding:** recipient groups, channels, and their mappings are tenant-bound; dispatch resolves the group and its channel mappings within the calling tenant only. The global NULL-tenant "shared slot" is no longer a dispatch target, and channel lookup by id also verifies tenant containment.
 
-**Sources**: `backend/app/db/models/results.py`, `backend/app/db/models/scheduling.py`, `backend/app/db/models/notifications.py`, `backend/app/db/models/identity.py`
+**Sources**: `backend/app/db/models/results.py`, `backend/app/db/models/scheduling.py`, `backend/app/db/models/notifications.py`, `backend/app/db/models/decision_tools.py`, `backend/app/db/models/identity.py`
 
 ---
 

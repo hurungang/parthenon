@@ -68,12 +68,39 @@ erDiagram
         boolean is_enabled
         datetime last_login_at
     }
+    AgentIdentity {
+        uuid id
+        uuid tenant_id "mandatory; name unique per tenant"
+        string name
+        enum identity_type
+        string realm_name
+        datetime token_expires_at
+        datetime refresh_token_expires_at "nullable; drives expiring (≤7d) vs expired"
+        datetime last_token_refresh_at
+        enum last_token_refresh_outcome "success | failure (nullable)"
+        enum token_health_state "healthy | expiring | expired | unknown (computed, nullable)"
+        enum status
+        enum token_status
+    }
+    TokenHealthCheck {
+        uuid id
+        uuid tenant_id "mandatory; tenant-scoped"
+        uuid agent_type_id "execution being preflighted"
+        uuid session_id "agent execution session, nullable if blocked pre-submission"
+        enum target_kind "agent_identity | mcp_session"
+        uuid target_id "polymorphic reference, no DB-level FK"
+        enum health_state "healthy | expiring | expired | unknown"
+        enum check_outcome "passed | blocked"
+        string message
+        datetime checked_at
+    }
 
     Identity }o--|| Role : "assigned to"
     Role ||--o{ RolePermission : "grants"
     Permission ||--o{ RolePermission : "is granted via"
     IdentityProviderConfig ||--o{ IdentityProviderConfigAudit : "audits"
     IdentityProviderSetupState ||--o| Identity : "completed_by"
+    AgentIdentity ||--o{ TokenHealthCheck : "preflighted as"
 ```
 
 > **Tenant scoping:** `Identity`, `Role`, `IdentityProviderConfig`, and `IdentityProviderConfigAudit` carry a direct tenant reference. **Per-tenant OIDC, strict containment**: each (tenant, scope) slot holds at most one identity provider (`UNIQUE (tenant_id, provider_scope)`); the legacy shared NULL-tenant slot is retired — existing NULL-tenant rows are adopted into the root tenant, and a credential issued by tenant A's provider is rejected outside tenant A (only exact tenant matching remains). `Permission` remains a **global catalogue** (not tenant-scoped) — grants are tenant-local via roles. `IdentityProviderSetupState` and `SuperAdminCredentials` remain platform-level. **Legacy global roles are migrated to the root tenant** (workspace `root`, `is_root_tenant = true`), so every business role is tenant-owned and the **permission containment invariant** holds: grants never cross tenant boundaries; `platform::` grants exist only in the root tenant's role space.
@@ -213,7 +240,7 @@ erDiagram
 
 > **Tenant scoping:** `Role`, `PolicyStatement`, `PolicyAction`, `PolicyResource`, `Group`, `AccessRequest`, `AccessRequestBatch`, and `TagDefinition` carry a **mandatory** direct tenant reference (no NULL rows after adoption); `UserRole`, `GroupRole`, `UserGroup`, and `PolicyTagCondition` inherit scope via their parents. **Legacy global roles are migrated to the root tenant** (workspace `root`) at adoption — no global (tenant-less) roles remain. The **containment invariant** applies to every grant, including wildcards: `agent::*`, `module::*`, and `*::*` are shorthand *within* one tenant's role space and never cross tenant boundaries; tag keys resolve only within their owning tenant; `platform::` grants exist only in the root tenant's role space.
 
-**Sources**: `backend/app/db/models/tag_definition.py`, `backend/app/db/models/tag_value.py`, `backend/app/db/models/role.py`, `backend/app/db/models/policy_statement.py`, `backend/app/db/models/policy_action.py`, `backend/app/db/models/policy_resource.py`, `backend/app/db/models/policy_tag_condition.py`, `backend/app/db/models/platform_user.py`, `backend/app/db/models/user_role.py`, `backend/app/db/models/group.py`, `backend/app/db/models/group_role.py`, `backend/app/db/models/user_group.py`, `backend/app/db/models/access_request_batch.py`, `backend/app/db/models/access_request.py`
+**Sources**: `backend/app/db/models/identity.py`, `backend/app/db/models/identity_provider_config.py`, `backend/app/db/models/identity_provider_config_audit.py`, `backend/app/db/models/identity_provider_setup_state.py`, `backend/app/db/models/super_admin_credentials.py`, `backend/app/db/models/tag_definition.py`, `backend/app/db/models/tag_value.py`, `backend/app/db/models/role.py`, `backend/app/db/models/policy_statement.py`, `backend/app/db/models/policy_action.py`, `backend/app/db/models/policy_resource.py`, `backend/app/db/models/policy_tag_condition.py`, `backend/app/db/models/platform_user.py`, `backend/app/db/models/user_role.py`, `backend/app/db/models/group.py`, `backend/app/db/models/group_role.py`, `backend/app/db/models/user_group.py`, `backend/app/db/models/access_request_batch.py`, `backend/app/db/models/access_request.py`, `backend/app/db/models/agents.py`, `backend/app/db/models/token_health.py`
 
 | Entity | Description |
 |--------|-------------|

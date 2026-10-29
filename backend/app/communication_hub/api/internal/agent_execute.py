@@ -40,6 +40,9 @@ class AgentExecuteResponse(BaseModel):
     
     session_id: uuid.UUID
     status: str
+    # Expiring-soon token notices (token-expiry-alerting) — user-facing
+    # warnings only; never token material.
+    warnings: list[str] = []
 
 
 @router.post("/execute", response_model=AgentExecuteResponse)
@@ -55,24 +58,50 @@ async def trigger_agent_execution(
     Flow:
     1. Control Center creates AgentJob (status=queued)
     2. Control Center → Communication Hub: POST /internal/agent/execute
-    3. Communication Hub → Agent Runtime: POST /execute (with mTLS cert, with retry)
-    4. Agent Runtime executes session immediately
+    3. Token preflight gate (token-expiry-alerting): CH → CC preflight —
+       BLOCKED stops the execution here with an actionable message naming
+       the identity/session to refresh; unreachable preflight fails closed.
+    4. Communication Hub → Agent Runtime: POST /execute (with mTLS cert, with retry)
+    5. Agent Runtime executes session immediately
     
     Args:
         body: Execution request with session_id, agent_type_id, input_data
         request: FastAPI request (for accessing certificate manager)
         
     Returns:
-        Response confirming session was accepted
+        Response confirming session was accepted (with any expiring-token
+        warnings as user-facing notices)
         
     Raises:
-        HTTPException: 502 if Agent Runtime is unavailable after retries or rejects request
+        HTTPException: 422 when the token preflight verdict is BLOCKED
+            (actionable message naming the identity/session); 503 when the
+            preflight endpoint is unreachable (fail closed); 502 if Agent
+            Runtime is unavailable after retries or rejects request
     """
     logger.info(
         "Agent execution trigger: session=%s agent_type=%s",
         body.session_id,
         body.agent_type_id,
     )
+
+    # ── Token preflight gate (token-expiry-alerting) ─────────────────────────
+    # Fail closed: no execution starts when preflight is BLOCKED or
+    # unreachable. Agents observe only the outcome — no token material.
+    from app.services.gateway.preflight_gate import (
+        AgentPreflightBlocked,
+        AgentPreflightUnavailable,
+        enforce_execution_preflight,
+    )
+
+    try:
+        preflight_warnings = await enforce_execution_preflight(
+            agent_type_id=body.agent_type_id,
+            session_id=body.session_id,
+        )
+    except AgentPreflightBlocked as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+    except AgentPreflightUnavailable as exc:
+        raise HTTPException(status_code=503, detail=str(exc))
     
     # Get Agent Runtime URL
     ar_base = settings.agent_runtime_url or "http://localhost:8001"
@@ -172,6 +201,7 @@ async def trigger_agent_execution(
                 return AgentExecuteResponse(
                     session_id=uuid.UUID(result["session_id"]),
                     status=result["status"],
+                    warnings=preflight_warnings,
                 )
         
         except httpx.HTTPStatusError as exc:

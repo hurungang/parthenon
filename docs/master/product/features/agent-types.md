@@ -20,6 +20,7 @@ Agent Types define how organizations standardize agent behavior, governance, and
 - The configured `output_type` (`auto`, `markdown`, `typed`) is actively enforced for non-conversational agents via system prompt injection — markdown agents receive formatting instructions, typed agents receive schema-driven JSON instructions, auto agents receive no extra guidance
 - Supports binding multiple SOPs and skills to an Agent Type as an ordered list of entries, where each entry references either an SOP or a skill; bindings define the curated capability set used for system instruction generation and Agent Plan Mode
 - Non-conversational agent types can optionally be assigned an output data type from the [Agent Data Type Registry](./agent-data-types.md). When a data type is selected, the agent type's output is validated against that schema at execution time, stored with the schema reference, and rendered as a structured field-by-field view in execution logs. Conversational agent types do not support data type assignment
+- The agent type details dialog preview shows the unified agent topology view — the same presentation used in the agent management panel — for ALL agent types (both typed and conversational). There is no separate or divergent preview topology diagram; users see one identical composition graph in both locations, including zoom in/out. Text size is capped, so zooming and fullscreen reveal more topology content rather than magnifying text, and input/output slots display the same editor-dialog labels (None/Auto) instead of empty placeholders
 
 ## SOP & Skill Binding
 - Agent Types store an ordered list of binding entries, each referencing either an SOP or a skill
@@ -63,6 +64,10 @@ Agent Types define how organizations standardize agent behavior, governance, and
 - **Conversational agent types do not show the output data type field**
 - **When an output data type is assigned, the agent type's output type badge in list views displays the data type name**
 - **After selecting a data type, the output type is set to `typed` and the schema is linked for validation at execution time**
+- **The agent type details dialog preview displays the unified agent topology view, identical to the management panel topology, for all agent types (typed and conversational)**
+- **Zoom in and out is available in the details dialog preview topology and behaves the same as in the management panel**
+- **Input and output slots in the topology show the editor-dialog labels (None/Auto) rather than empty placeholders**
+- **No separate preview-specific topology diagram appears anywhere in the UI — the preview shows the unified view only**
 
 ## Out of Scope
 - Technical implementation design or service internals

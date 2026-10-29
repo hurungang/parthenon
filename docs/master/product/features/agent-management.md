@@ -34,7 +34,7 @@ Agent Management enables organizations to define, configure, and govern AI agent
 - Keeps guardrail editing compact by default so governance updates remain efficient in high-volume administration workflows
 - Clicking an agent type row opens a comprehensive dialog with:
 	- Agent type details (basic info)
-	- Plan preview tab (shows saved agent plan; the topology includes the Communication Hub as a connected node)
+	- Plan preview tab (shows the unified agent topology view — identical to the management panel topology, with zoom in/out; includes the Communication Hub as a connected node; available for all agent types, typed and conversational)
 	- Execution logs tab (filtered by agent type)
 	- Sessions tab (visible only for conversation-type agents) — lists all conversation sessions with title, status, and last active time
 	- Role and Identity names as clickable links, opening the corresponding view dialogs
@@ -60,8 +60,10 @@ The Agent Management Panel is a unified management module in the **Agents group*
 - **Inline create-and-assign**: missing roles, identities (sign-in/provisioning), skills, SOPs, data types, and model configurations can be created directly from the panel using the exact same dialogs as their source modules — no duplicated forms, and no change to the standalone module pages
 - **Searchable, paginated resource picker**: "Assign existing" opens a searchable, paginated selection dialog (single or multi-select per slot) with currently equipped resources pre-selected and an inline "Create new" action
 - **Draft-until-save model**: every edit is held as a draft and summarized in a pending-changes tray with Save and Discard actions; a confirmation protects unsaved changes when switching agents or navigating away
-- **Live agent topology**: a visual composition graph (equipped roles, identity, skills, SOPs, data types, model, tools) updates instantly as equipment changes — before saving — and re-renders when switching agents; the Communication Hub is shown as a connected platform element (a hub bar between capabilities and tools, with connectors crossing it)
-- **Fullscreen and zoom**: the topology can be expanded fullscreen with zoom in/out/fit and pan; the view auto-fits when entering or leaving fullscreen
+- **Live agent topology — the single, canonical topology view**: a visual composition graph (equipped roles, identity, skills, SOPs, data types, model, tools) updates instantly as equipment changes — before saving — and re-renders when switching agents; the Communication Hub is shown as a connected platform element (a hub bar between capabilities and tools, with connectors crossing it). This is the one and only agent topology presentation in the product: it is presented identically in the agent management panel and in the agent type details dialog preview, for all agent types (both typed and conversational)
+- **Fullscreen and zoom**: the topology can be expanded fullscreen with zoom in/out/fit and pan in both the management panel and the agent type details dialog preview; the view auto-fits when entering or leaving fullscreen. Text size is capped, so zooming and fullscreen reveal more of the topology content rather than simply magnifying text
+- **Slot labels in the topology**: input and output slots in the topology show the same human-readable labels used in the editor dialogs (e.g., "None" or "Auto") rather than empty placeholders, so the diagram is always self-explanatory
+- **Token health badges in the topology**: container nodes display a warning badge when a bound identity or MCP session expires within 7 days and an error badge when expired, so credential risk is visible while designing or reviewing agents (see [Token Expiry Alerting](token-expiry-alerting.md))
 - **Permission-aware equipment slots**: actions a user lacks permission for are disabled with a clear explanation; read-only users can browse and review compositions
 
 ### Acceptance criteria (panel)
@@ -72,7 +74,7 @@ The Agent Management Panel is a unified management module in the **Agents group*
 - Administrator can delete an agent with confirmation; it disappears from the list immediately, related counts update, and a new agent can be created with the same name afterwards
 - Inline-created resources become immediately assignable in their slot without leaving the panel and behave identically (same fields, validation, error handling) to the source-module dialogs
 - Validation errors are surfaced clearly (required fields, invalid names, binding conflicts); permission errors are shown gracefully inside dialogs and slots rather than failing silently
-- The Communication Hub appears as a connected node in both the panel topology and the existing agent preview topology (Plan preview tab)
+- The Communication Hub appears as a connected node in the topology, both in the management panel and in the agent type details dialog preview — which show the identical, unified topology view
 
 ## Key Concepts
 - **Agents Group**: A sidebar navigation group containing all agent-related modules for streamlined access
@@ -104,7 +106,7 @@ The Agent Management Panel is a unified management module in the **Agents group*
 - Supports both traditional and passthrough session types for MCP servers; passthrough enables direct agent identity propagation without explicit session selection
 - Clicking an agent type row opens a dialog with:
 	- Agent type details (basic info)
-	- Tab: Plan preview (shows saved agent plan; the topology includes the Communication Hub as a connected node)
+	- Tab: Plan preview (shows the unified agent topology view — identical to the management panel topology, with zoom in/out; includes the Communication Hub as a connected node; available for all agent types, typed and conversational)
 	- Tab: Execution logs (list of executions for this agent type)
 	- Tab: Sessions (visible only for conversation-type agents) — lists all user's conversation sessions with:
 		- Session title (auto-generated from first user prompt)

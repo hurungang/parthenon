@@ -52,7 +52,7 @@ The dashboard metrics feature provides a permission-aware operational metrics ov
 
 | Symbol | Type | Description | File |
 |--------|------|-------------|------|
-| `DashboardRouter` | APIRouter | FastAPI APIRouter exposing `GET /dashboard/summary` with optional `start_time`/`end_time` query params | `backend/app/api/v1/dashboard.py` |
+| `DashboardRouter` | APIRouter | FastAPI APIRouter exposing `GET /dashboard/summary` with optional `start_time`/`end_time` query params; extended with `GET /dashboard/token-health` | `backend/app/api/v1/dashboard.py` |
 | `router` (v1) | APIRouter | Updated to include `DashboardRouter` via `include_router()` | `backend/app/api/v1/__init__.py` |
 
 ### Backend Dependencies (Existing, Unchanged)
@@ -99,6 +99,10 @@ The dashboard metrics feature provides a permission-aware operational metrics ov
 
 | Symbol | Type | Description | File |
 |--------|------|-------------|------|
+| `DashboardPage` | React component (extended) | Adds token-health cards for identities and MCP sessions | `frontend/src/pages/DashboardPage.tsx` |
+| `StatCard` | React component | Reused snapshot card; token-health cards follow its permission-denied placeholder pattern | `frontend/src/components/dashboard/StatCard.tsx` |
+| `TimeSensitiveCard` | React component | Reused time-sensitive card wrapper for token-health indicators | `frontend/src/components/dashboard/TimeSensitiveCard.tsx` |
+| `TokenHealthDashboard.test` | test (new) | Dashboard cards tests | `frontend/src/__tests__/TokenHealthDashboard.test.tsx` |
 | `DashboardPage` | component | Top-level dashboard view; renders operational metrics grid of `StatCard` components, time-sensitive section with `DateRangePicker` and `TimeSensitiveCard` components, and retained identity provider status section; all labels use i18next `t()` | `frontend/src/pages/DashboardPage.tsx` |
 | `StatCard` | component | Snapshot metric card with icon, label, numeric value, sub-breakdown chips; handles four visual states: normal, zero (muted), loading (skeleton), permission-denied (dashed border, lock icon, "Permission Denied" label) | `frontend/src/components/dashboard/StatCard.tsx` |
 | `TimeSensitiveCard` | component | Time-filtered metric card supporting single-value and dual-value (completed/failed) variants; left-border accent, date range label; handles same four visual states as `StatCard` | `frontend/src/components/dashboard/TimeSensitiveCard.tsx` |

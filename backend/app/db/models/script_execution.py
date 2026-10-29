@@ -34,6 +34,7 @@ class ScriptExecutionOutcome(str, enum.Enum):
     success = "success"
     validation_failure = "validation_failure"
     fell_back = "fell_back"
+    partial_failure = "partial_failure"
 
 
 # ── ScriptExecutionRecord ─────────────────────────────────────────────────────

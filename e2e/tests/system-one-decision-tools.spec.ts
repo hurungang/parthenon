@@ -659,6 +659,13 @@ test.describe('Decision Model Providers (mocked)', () => {
         body: JSON.stringify(HIERARCHY),
       }),
     )
+    await page.route(/\/api\/v1\/system-one\/preview-models$/, (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ models: ['jev-latest', 'jev-mini'] }),
+      }),
+    )
 
     await standardSetup(page)
     await page.goto('/system/system-one')
@@ -671,6 +678,9 @@ test.describe('Decision Model Providers (mocked)', () => {
     await expect(dialog.getByText('Add Provider')).toBeVisible()
     await dialog.getByLabel('Display Name').fill('E2E Second Vendor')
     await dialog.getByLabel('API Key', { exact: false }).fill('sk-e2e-provider-key')
+    // Step 1 → step 2: fetch the vendor catalogue with the typed key, then confirm.
+    await dialog.getByRole('button', { name: 'Next' }).click()
+    await expect(dialog.getByText('Confirm Models')).toBeVisible()
     await dialog.getByRole('button', { name: 'Save' }).click()
 
     await expect(dialog).not.toBeVisible({ timeout: 10_000 })
@@ -980,6 +990,13 @@ test.describe('Decision Model Providers (mocked)', () => {
         body: JSON.stringify(HIERARCHY),
       }),
     )
+    await page.route(/\/api\/v1\/system-one\/preview-models$/, (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ models: ['jev-latest', 'jev-mini'] }),
+      }),
+    )
     await page.route(/\/api\/v1\/system-one\/providers$/, async (route) => {
       if (route.request().method() === 'POST') {
         return route.fulfill({
@@ -1005,6 +1022,8 @@ test.describe('Decision Model Providers (mocked)', () => {
     await expect(dialog).toBeVisible()
     await dialog.getByLabel('Display Name').fill('E2E Primary Vendor')
     await dialog.getByLabel('API Key', { exact: false }).fill('sk-duplicate-key')
+    await dialog.getByRole('button', { name: 'Next' }).click()
+    await expect(dialog.getByText('Confirm Models')).toBeVisible()
     await dialog.getByRole('button', { name: 'Save' }).click()
 
     // Error is surfaced INSIDE the dialog; the dialog stays open (no silent failure).
@@ -1062,6 +1081,13 @@ test.describe('Decision Model Providers (mocked)', () => {
         body: JSON.stringify(HIERARCHY),
       }),
     )
+    await page.route(/\/api\/v1\/system-one\/preview-models$/, (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ models: ['jev-latest', 'jev-mini'] }),
+      }),
+    )
 
     await standardSetup(page)
     await page.goto('/system/system-one')
@@ -1087,6 +1113,8 @@ test.describe('Decision Model Providers (mocked)', () => {
     await expect(dialog).toBeVisible()
     await dialog.getByLabel('Display Name').fill('E2E Primary Vendor')
     await dialog.getByLabel('API Key', { exact: false }).fill('sk-recreated-key')
+    await dialog.getByRole('button', { name: 'Next' }).click()
+    await expect(dialog.getByText('Confirm Models')).toBeVisible()
     await dialog.getByRole('button', { name: 'Save' }).click()
     await expect(dialog).not.toBeVisible({ timeout: 10_000 })
     await expect(page.getByText('E2E Primary Vendor')).toBeVisible({ timeout: 10_000 })

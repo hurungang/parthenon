@@ -101,11 +101,14 @@ export function TimeSensitiveCard({
         sx={{
           p: '12px 16px !important',
           pb: '12px !important',
+          height: '100%',
+          display: 'flex',
+          flexDirection: 'column',
           filter: isPermissionDenied ? 'blur(2px)' : undefined,
           pointerEvents: isPermissionDenied ? 'none' : undefined,
         }}
       >
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.75 }}>
+        <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1, mb: 0.75, minHeight: 40 }}>
           {isLoading ? (
             <Skeleton variant="circular" width={24} height={24} />
           ) : (
@@ -118,6 +121,7 @@ export function TimeSensitiveCard({
                 color: iconColor,
                 flexShrink: 0,
                 lineHeight: 0,
+                mt: 0.25,
               }}
             >
               {icon}
@@ -141,7 +145,7 @@ export function TimeSensitiveCard({
           )}
         </Box>
 
-        <Box>
+        <Box sx={{ mt: 'auto' }}>
           {isLoading ? (
             <Skeleton width={variant === 'dual' ? 90 : 48} height={28} />
           ) : !isPermissionDenied ? (

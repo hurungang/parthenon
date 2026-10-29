@@ -29,13 +29,15 @@ Model-authored Python scripting with a RestrictedPython sandbox executed exclusi
 | Fallback Controller | Adds `sandbox_violation` / `resource_limit_exceeded` trigger reasons; unconditional LLM fallback (a run never fails solely because a script failed); `sandbox_fields()` on fell-back records |
 | Verification Engine | Shadow-runs sandbox-compliant candidates; records `sandbox_check_passed` evidence |
 | Capture/Autocompile/Repair | Generate → test → refine loop: compositions tested against recorded run data (`_RecordedToolReplayClient`), failures fed (with the capability contract) to the injectable repair generator for ≤ `MAX_SCRIPT_REFINEMENT_ATTEMPTS` (3); first passing script promoted, exhaustion promotes NOTHING; autocompile promotion gate — candidate stays draft while a fresh optimized plan exists |
+| Self-improvement repair loop | Bounded defect-repair after automation failure (`MAX_REPAIR_ATTEMPTS` = 2): failure diagnosis → LLM-produced repaired candidate submitted as a new draft version with `repaired_from` lineage + a `RepairAttempt` record in CC → re-verification → bounded retry; exhaustion degrades to the LLM path. Reported to CC via the internal repairs endpoints |
+| Provenance tagging | AR marks each tool call with `provenance: "script" \| "llm"` + `script_version` (script-path calls excluded from capture); carried through the CH client into CC audit records |
 | AR script-tool endpoint | `POST /internal/script-tools/execute` — resolves `script____<name>` via `get_script_tool` and runs its `python_source` (or declarative graph) in the sandbox with a session-bound MCP-only client; returns `{"result": ...}` / `{"error": ...}` (never a 502) |
 
 ### Control Center
 
 | Component | Description |
 |-----------|-------------|
-| Script Registry Service | Persists `python_source` + caps + validation fields; `get_serving_version` exposes `script_definition_name` + `source_optimized_plan_id` (prefers the optimized-plan-linked definition); `retire_serving_versions(agent_type_id)` called from `regenerate-plan` |
+| Script Registry Service | Persists `python_source` + caps + validation fields; `get_serving_version` exposes `script_definition_name` + `source_optimized_plan_id` (prefers the optimized-plan-linked definition); `retire_serving_versions(agent_type_id)` called from `regenerate-plan`; repair bookkeeping (`create_repaired_candidate`, `record_repair_attempt`, `update_repair_outcome`, `list_repairs`); `link_plan_steps_to_version` stamps `script_definition_id`/`script_version_id` onto matching `AgentPlan.plan_steps` entries when a version is compiled from the definition's source plan; lifecycle transitions (`transition_version`) enforce verification-passing guards with 409 on illegal moves |
 | Optimized Plan Service | Thin persistence + association layer behind the `optimize-and-verify` command; authored-plan normalization (consecutive scripted segments collapse into ONE chained "Execute workflow script" step; `LLM` bridge steps segment; dict results merge into `context`); **verification-gated chaining** (`_split_failed_chain`: passing prefix re-collapses, failing+later segments become tool-mode script tools, plan demoted to tool mode); feedback memory (all stored feedback summaries included in the authoring prompt); `retire_optimized_plan` MARKS rows `retired` (kept for reference, never deleted; exactly one active record per agent type; `get_fresh_optimized_plan` serves only `ready`) |
 | Optimization System Tools | `get_implementation_plan`, `get_optimized_implementation_plan`, `generate_optimized_plan`, `generate_script`, `execute_script`, `list_scripts`, `get_scripts`, `get_script`, `get_execution_log` — registered as standard system tools routed by CH; `execute_script` accepts FULL inline `python_source` (no save required) and routes EVERY execution through `CommunicationHubClient.forward_sandboxed_script` (CC → CH `/internal/script-tools/forward` → AR `/internal/script-tools/execute`; the old CC→CH `/internal/tools/call` path was rejected — `ControlPlaneMiddleware` only accepts AR certs there); **malformed tool-name validation**: every literal `tools.call('name', ...)` AST-checked against the agent's actual allowed tool names; mismatch → `validation_error` with valid names; `generate_script` only after a successful `execute_script` (save-on-success) |
 | Command Prompts | Stored mission text for the `optimize-and-verify` command (seeded idempotently with in-code fallback); mandates self-reflection FIRST, verification against REAL tool executions, and a mandatory "Final answer" section (the final message IS the business result — no meta-commentary); `COMMAND_TOKEN_BUDGET` (default 2,000,000, env-overridable) guarantees command runs a generous dedicated token budget |
@@ -57,14 +59,16 @@ Model-authored Python scripting with a RestrictedPython sandbox executed exclusi
 |-----------|-------------|
 | `AgentOptimizedPlanTab.tsx` | "Optimized Plan" tab (panel index 4): steps list with per-step "View script" links (open the reusable inline `ScriptViewDialog` — python_source + description + version), status/error surfacing, feedback textarea + submit (one-shot-LLM-summarized), "Retire plan" action (marks rows `retired`; invalidates the whole agent-type query scope so the launch dialog immediately re-offers optimization); absent/retired state shows the "next run offers optimization" hint |
 | `AgentJobLaunchDialog.tsx` (pages/agents) | Optimized-plan existence check + opt-in dialog ("Run with optimization" / "Skip optimization"); `optimize` passed through the launch call; a `ready` plan launches directly without the dialog |
-| `AgentTypeDetailsDialog.tsx` | 4 tabs (standalone Scripts tab removed; "View agent" header link opens the dialog on the default tab) |
-| Types / Scripts tab chips | `frontend/src/types/scripts.ts`: `python_source` presence + sandbox-validation fields; `AgentJob.output_data` widened to `Record \| string` (raw string output rendered as text) |
+| `AgentTypeDetailsDialog.tsx` | 5 tabs (Details=0, Preview=1, Execution Logs=2, Sessions=3 conversation-only, Optimized Plan=4); no standalone Scripts tab; "View agent" header link opens the dialog on the default tab |
+| Plan-step script links | `AgentPlanContent.tsx` renders a per-step "View script" link for steps carrying `script_version_id` (opens the inline `ScriptViewDialog`, or switches the parent dialog to the Optimized Plan tab); backed by `PlanStepRead.script_definition_id`/`script_version_id` on the plan response |
+| Registry hooks | `frontend/src/hooks/useScripts.ts`: `useScripts`, `useScriptVersions`, `useScriptVerifications`, `useScriptFallbacks`, `useScriptRepairs`, `useScriptHealth`, `usePromoteScriptVersion`, `useRetireScriptVersion` — consume the CC `/api/v1/scripts` REST surface; i18n keys under `agents.scripts.*`; resource type `agent::scripts` registered in both `backend/app/core/resource_types.py` and `frontend/src/constants/resourceTypes.ts` |
+| Types / chips | `frontend/src/types/scripts.ts`: `python_source` presence + sandbox-validation fields; `AgentJob.output_data` widened to `Record \| string` (raw string output rendered as text) |
 
 ---
 
 ## Code Reference Map
 
-All paths verified in the workspace (2026-10-25).
+All paths verified in the workspace (2026-10-27).
 
 ### Agent Runtime (`backend/app/agent_runtime/`)
 
@@ -77,7 +81,8 @@ All paths verified in the workspace (2026-10-25).
 | `run_session_script_first` | function | Optimized-plan preference, command bypass via `input_data["__command"]`, always-fresh lookups, lineage-based artifact detection | `backend/app/agent_runtime/scripts/dispatch.py` |
 | Fallback classification | module | `sandbox_violation`/`resource_limit_exceeded`; `sandbox_fields()` | `backend/app/agent_runtime/scripts/fallback.py` |
 | Verification shadow runs | module | `sandbox_check_passed` evidence | `backend/app/agent_runtime/scripts/verification.py` |
-| Generate→test→refine loop | module | `_RecordedToolReplayClient`, `set_script_repair_generator`, promotion gate | `backend/app/agent_runtime/scripts/capture.py`, `autocompile.py`, `repair.py` |
+| Generate→test→refine loop | module | `_RecordedToolReplayClient`, `set_script_repair_generator`, promotion gate | `backend/app/agent_runtime/scripts/capture.py`, `autocompile.py` (`schedule_autocompile`, OTEL span `script.autocompile`), `repair.py` (`MAX_REPAIR_ATTEMPTS`, `repaired_from` lineage candidates) |
+| Post-run autocompile hook | function | Fire-and-forget `schedule_autocompile` launched on LLM-path completion from `backend/app/agent_runtime/api/execute.py`; duplicate-protected, eligibility-checked, auto-promotion on shadow-verification match | `backend/app/agent_runtime/scripts/autocompile.py` |
 | Mock-recording + script-tool client | module | `submit_mock_recordings`/`get_mock_recording` (mTLS `/internal/llm-mock/*`); `get_script_tool` | `backend/app/agent_runtime/scripts/cc_client.py` |
 | AR script-tool execute endpoint | module | `POST /internal/script-tools/execute` with session-bound client | `backend/app/agent_runtime/api/script_tools.py` (registered in `backend/app/agent_runtime/main.py`) |
 | Execution trigger | module | Threads `input_data` through to the dispatcher (command marker) | `backend/app/agent_runtime/api/execute.py` |
@@ -93,11 +98,14 @@ All paths verified in the workspace (2026-10-25).
 | Optimized plan service | module | Normalization/chaining/split, feedback memory, `retire_optimized_plan` | `backend/app/services/agents/optimized_plan_service.py` |
 | Command prompts + budget | module | `optimize-and-verify` mission, "Final answer" section, `COMMAND_TOKEN_BUDGET` | `backend/app/services/agents/command_prompts.py`, `backend/app/db/models/command_prompt.py` |
 | Optimization system tools | module | `execute_script`/`generate_script` tool-name validation + sandbox-segregated forward | `backend/app/api/v1/internal/optimization_tools.py` + `backend/app/services/agents/system_tool_registry.py` |
-| Script registry service | module | New ScriptVersion/Verification fields, `retire_serving_versions` | `backend/app/services/script_registry/service.py` |
-| DB models | module | ScriptVersion (+6 fields), ScriptExecutionRecord accounting, `LLMMockRecording`, `OptimizedImplementationPlan` | `backend/app/db/models/script_registry.py`, `script_execution.py`, `llm_mocking.py`, `optimized_plan.py` |
+| Script registry service | module | New ScriptVersion/Verification fields, `retire_serving_versions`, repair bookkeeping, `link_plan_steps_to_version` | `backend/app/services/script_registry/service.py` |
+| DB models | module | ScriptDefinition/ScriptVersion (+ `repaired_from_id` lineage), VerificationRun, FallbackEvent, **RepairAttempt**; ScriptExecutionRecord accounting (`identity_parity_confirmed`, no execution-mode column); `LLMMockRecording`, `OptimizedImplementationPlan` | `backend/app/db/models/script_registry.py`, `script_execution.py`, `llm_mocking.py`, `optimized_plan.py` |
+| Registry REST API | module | CRUD, versions + diff, promote/retire transitions, verifications/fallbacks/**repairs**/health listings, executions, compilation + cost-savings reports; no execution-mode endpoints | `backend/app/api/v1/scripts.py`, `backend/app/schemas/scripts.py` |
+| CC internal scripts API | module | `GET /serving-version`, `GET /versions/{vid}` (compiled graph), `POST /candidates`, `/verifications`, `/fallbacks`, `/executions`, `/repairs`, `GET/POST /repairs`, `POST /promote`, `GET /llm-reference/{session_id}`; AR service-cert only | `backend/app/api/v1/internal/scripts.py` |
+| Plan-step script links | module | `PlanStepRead.script_definition_id`/`script_version_id` on plan responses; stamps applied via `link_plan_steps_to_version` | `backend/app/schemas/agents.py` |
 | REST APIs | module | Script fields on create/read; optimized-plan get/feedback/retire; launch `optimize` opt-in flag | `backend/app/api/v1/scripts.py`, `backend/app/schemas/scripts.py`, `backend/app/api/v1/agents.py` |
 | CC internal APIs | module | Mock recordings upsert/lookup; semantic-bridge mock routing; string `output_data` | `backend/app/api/v1/internal/llm_mocking.py`, `backend/app/api/v1/internal/system_tools.py`, `backend/app/api/v1/internal/session_data.py` |
-| Migrations | applied | Sandbox/mock fields; optimized plan + verification log + `retired` status | `backend/alembic/versions/7d0fe5f1308d_*`, `4108dac629ef_*`, `93d25e577411_*`, `a1dbc4760d9a_*`, `c2d3e4f5a6b7_*` |
+| Migrations | applied | Sandbox/mock fields; optimized plan + verification log + `retired` status; script registry + execution tables (`a1b2c3d4f5e6`); execution-mode drop + repair tables + `repaired_from_id` + `identity_parity_confirmed` (`b2c3d4e5f6a7`); script session FK repoint to agent jobs (`c3d4e5f6a7b8`) | `backend/alembic/versions/7d0fe5f1308d_*`, `4108dac629ef_*`, `93d25e577411_*`, `a1dbc4760d9a_*`, `c2d3e4f5a6b7_*`, `a1b2c3d4f5e6_*`, `b2c3d4e5f6a7_*`, `c3d4e5f6a7b8_*` |
 | Dependency | pyproject | `RestrictedPython~=7.0` | `backend/pyproject.toml` |
 
 ### Communication Hub (`backend/app/communication_hub/`)
@@ -112,9 +120,11 @@ All paths verified in the workspace (2026-10-25).
 |---|---|---|---|
 | Optimized Plan tab | component | Steps, "View script" (`ScriptViewDialog`), feedback, retire, absent/retired hint | `frontend/src/components/agents/AgentOptimizedPlanTab.tsx` |
 | Script view dialog | component | Inline python_source/description/version viewer | `frontend/src/components/agents/ScriptViewDialog.tsx` |
-| Agent type dialog (4 tabs) | component | Scripts tab removed; "View agent" header link | `frontend/src/components/agents/AgentTypeDetailsDialog.tsx` |
+| Agent type dialog (5 tabs) | component | Details, Preview, Execution Logs, Sessions, Optimized Plan; no Scripts tab; "View agent" header link | `frontend/src/components/agents/AgentTypeDetailsDialog.tsx` |
+| Plan-step script links | component | Per-step "View script" for `script_version_id`-backed plan steps | `frontend/src/components/agents/AgentPlanContent.tsx`, `frontend/src/components/agents/ScriptViewDialog.tsx` |
+| Registry hooks | hooks | `useScripts`, `useScriptVersions`, `useScriptVerifications`, `useScriptFallbacks`, `useScriptRepairs`, `useScriptHealth`, `usePromoteScriptVersion`, `useRetireScriptVersion` | `frontend/src/hooks/useScripts.ts` |
 | Launch dialog | component | Opt-in "Run with optimization" flow | `frontend/src/pages/agents/AgentJobLaunchDialog.tsx` |
-| Types + i18n | module | `python_source`/sandbox fields; `output_data: Record \| string`; all strings via `t()` | `frontend/src/types/scripts.ts`, `frontend/src/i18n/locales/en.json` |
+| Types + i18n | module | `python_source`/sandbox fields; `output_data: Record \| string`; `agents.scripts.*` keys; `agent::scripts` in both resource-type manifests (`backend/app/core/resource_types.py`, `frontend/src/constants/resourceTypes.ts`); all strings via `t()` | `frontend/src/types/scripts.ts`, `frontend/src/i18n/locales/en.json`, `frontend/src/constants/resourceTypes.ts` |
 
 > **Removed (stale references cleaned):** `frontend/src/components/agents/AgentScriptsTab.tsx` (DELETED — standalone Scripts registry tab removed), `AgentOptimizeLogDialog.tsx` (DELETED — verification-log UI surface retired with migration `a1dbc4760d9a`), the standalone `POST /agents/types/{id}/optimize-plan` endpoint and its 180s-bound side execution (optimization moved into the launch path).
 

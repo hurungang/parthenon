@@ -169,6 +169,20 @@ class VendorModelImportRequest(BaseModel):
     models: Annotated[list[str], Field(min_length=1)]
 
 
+class VendorModelPreviewRequest(BaseModel):
+    """Preview payload: discover a vendor's models with a not-yet-persisted
+    API key (bearer auth, call time only). Used by the create wizard's
+    model-confirmation step before the provider is saved."""
+
+    base_url: Annotated[str, StringConstraints(min_length=1, max_length=2048)]
+    api_key: Annotated[str, StringConstraints(min_length=1)]
+
+    @field_validator("base_url")
+    @classmethod
+    def _check_base_url(cls, value: str) -> str:
+        return _validate_base_url(value)
+
+
 class DecisionEnabledModelRead(BaseModel):
     """Flat enabled-models entry feeding the authoring selector."""
 

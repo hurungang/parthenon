@@ -1,0 +1,533 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Parthenon — Software 3.0 Agent Framework (Workflow Compilation) Prototype</title>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --primary:#2563EB;--primary-dark:#1D4ED8;--primary-light:#DBEAFE;
+  --sidebar-bg:#FFFFFF;--sidebar-text:#424242;--sidebar-active-bg:rgba(0,0,0,0.06);
+  --sidebar-hover-bg:rgba(0,0,0,0.03);--sidebar-active-text:#2563EB;
+  --surface:#FFFFFF;--bg:#FAFAFA;--border:#E0E0E0;
+  --success:#4CAF50;--warning:#FF9800;--error:#F44336;--info:#2196F3;--purple:#7C3AED;
+  --text-primary:#212121;--text-secondary:#757575;
+  --shadow:0 1px 2px 0 rgba(60,64,67,.3),0 1px 3px 1px rgba(60,64,67,.15);
+  --shadow-md:0 4px 6px 0 rgba(60,64,67,.3),0 4px 8px 3px rgba(60,64,67,.15);
+  --radius:8px;--radius-sm:4px;--radius-lg:12px;
+  --sidebar-w:256px;--topbar-h:64px;--transition:.2s ease;
+}
+html,body{height:100%;font-family:'Inter','Roboto',system-ui,sans-serif;background:var(--bg);color:var(--text-primary);font-size:14px;line-height:1.5}
+button{cursor:pointer;font-family:inherit;font-size:14px}
+input,select,textarea{font-family:inherit;font-size:14px}
+
+/* ── APP SHELL ── */
+.app-shell{display:flex;height:100vh;overflow:hidden}
+.sidebar{width:var(--sidebar-w);background:var(--sidebar-bg);border-right:1px solid var(--border);display:flex;flex-direction:column;flex-shrink:0;overflow-y:auto}
+.sidebar-logo{padding:20px 20px 16px;border-bottom:1px solid var(--border)}
+.sidebar-logo h1{font-size:18px;font-weight:700;letter-spacing:-.5px}
+.sidebar-logo small{font-size:11px;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.5px}
+.nav-group-label{padding:14px 14px 4px;font-size:11px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.5px}
+.nav-item{display:flex;align-items:center;gap:8px;padding:8px 14px;cursor:pointer;border-radius:var(--radius);margin:1px 6px;color:var(--sidebar-text);font-size:13px;user-select:none;white-space:nowrap}
+.nav-item:hover{background:var(--sidebar-hover-bg)}
+.nav-item.active{background:var(--sidebar-active-bg);color:var(--sidebar-active-text);font-weight:500}
+.nav-item.sub-item{padding-left:32px;font-size:11px;margin:0 6px;padding-top:5px;padding-bottom:5px;color:var(--text-secondary)}
+.nav-item .nav-icon{font-size:14px;width:18px;text-align:center;flex-shrink:0}
+.prototype-note{margin:auto 12px 14px;padding:10px 12px;background:var(--primary-light);border-radius:var(--radius);font-size:11px;color:var(--primary-dark)}
+
+/* ── MAIN ── */
+.main{flex:1;display:flex;flex-direction:column;overflow:hidden}
+.topbar{height:var(--topbar-h);background:var(--surface);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 24px;flex-shrink:0;gap:10px}
+.topbar h2{font-size:16px;font-weight:600}
+.main-content{flex:1;overflow-y:auto;padding:24px}
+.view-desc{font-size:13px;color:var(--text-secondary);margin-top:2px}
+.screen{display:none}.screen.active{display:block}
+
+/* ── COMPONENTS ── */
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);padding:16px;margin-bottom:16px}
+.btn{display:inline-flex;align-items:center;gap:6px;padding:7px 14px;border-radius:var(--radius);border:1px solid transparent;font-size:13px;font-weight:500}
+.btn-primary{background:var(--primary);color:#fff}.btn-primary:hover{background:var(--primary-dark)}
+.btn-secondary{background:var(--surface);border-color:var(--border);color:var(--text-primary)}.btn-secondary:hover{background:var(--bg)}
+.btn-xs{padding:3px 8px;font-size:12px}
+.btn-icon-sm{background:none;border:none;border-radius:var(--radius-sm);padding:4px 6px;font-size:13px}.btn-icon-sm:hover{background:var(--bg)}
+.chip{display:inline-flex;align-items:center;gap:4px;padding:2px 10px;border-radius:999px;font-size:11px;font-weight:600;line-height:1.6}
+.chip-green{background:#E8F5E9;color:#2E7D32}
+.chip-blue{background:#E3F2FD;color:#1565C0}
+.chip-gray{background:#EEEEEE;color:#616161}
+.chip-orange{background:#FFF3E0;color:#E65100}
+.chip-red{background:#FFEBEE;color:#C62828}
+.chip-purple{background:#F3E5F5;color:#6A1B9A}
+.chip-outline{background:transparent;border:1px solid var(--border);color:var(--text-secondary)}
+.table-wrap{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{text-align:left;padding:8px 12px;color:var(--text-secondary);font-weight:600;font-size:12px;border-bottom:1px solid var(--border);white-space:nowrap}
+td{padding:10px 12px;border-bottom:1px solid var(--border);vertical-align:middle}
+tr:hover td{background:var(--bg)}
+.actions-cell{white-space:nowrap;text-align:right}
+.font-mono{font-family:'SF Mono','Roboto Mono',monospace}
+.text-sm{font-size:12px}
+.text-secondary{color:var(--text-secondary)}
+.link-btn{background:none;border:none;color:var(--primary);font-size:13px;padding:0;text-decoration:underline;text-underline-offset:2px}
+.link-btn:hover{color:var(--primary-dark)}
+
+/* ── MODALS ── */
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.45);display:none;align-items:flex-start;justify-content:center;z-index:1000;padding:48px 16px;overflow-y:auto}
+.modal-overlay.open{display:flex}
+.modal{background:var(--surface);border-radius:var(--radius-lg);box-shadow:var(--shadow-md);width:100%;max-width:720px;animation:pop .15s ease}
+.modal.modal-lg{max-width:900px}
+@keyframes pop{from{transform:translateY(8px);opacity:0}to{transform:none;opacity:1}}
+.modal-header{display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid var(--border)}
+.modal-header h3{font-size:15px;font-weight:600}
+.modal-close{background:none;border:none;font-size:15px;color:var(--text-secondary);padding:4px 8px;border-radius:var(--radius-sm)}.modal-close:hover{background:var(--bg)}
+.modal-body{padding:20px}
+.modal-actions{display:flex;justify-content:flex-end;gap:8px;padding:14px 20px;border-top:1px solid var(--border)}
+
+/* ── DIALOG TABS ── */
+.dialog-tabs{display:flex;gap:2px;border-bottom:1px solid var(--border);padding:0 20px}
+.dialog-tab{padding:10px 14px;font-size:13px;color:var(--text-secondary);cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px}
+.dialog-tab:hover{color:var(--text-primary)}
+.dialog-tab.active{color:var(--primary);border-bottom-color:var(--primary);font-weight:500}
+.dialog-panel{display:none}.dialog-panel.active{display:block}
+
+/* ── SCRIPT VIEWER ── */
+.code-block{background:#F5F5F5;border:1px solid var(--border);border-radius:var(--radius-sm);padding:12px;font-family:'SF Mono','Roboto Mono',monospace;font-size:12px;white-space:pre-wrap;word-break:break-word;overflow:auto;max-height:420px;line-height:1.6}
+
+/* ── STEPS LIST ── */
+.step-row{display:flex;align-items:flex-start;gap:12px;padding:10px 4px;border-bottom:1px solid var(--border)}
+.step-row:last-child{border-bottom:none}
+.step-num{width:24px;height:24px;border-radius:50%;background:var(--primary-light);color:var(--primary-dark);font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:2px}
+.step-body{flex:1}
+.step-name{font-size:13px;font-weight:600}
+.step-desc{font-size:12px;color:var(--text-secondary)}
+.step-kind{font-size:11px;flex-shrink:0}
+
+/* ── MISC ── */
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.spacer{flex:1}
+.alert{padding:10px 14px;border-radius:var(--radius);font-size:13px;margin-bottom:12px}
+.alert-info{background:#E3F2FD;color:#0D47A1}
+.alert-warn{background:#FFF3E0;color:#E65100}
+.alert-success{background:#E8F5E9;color:#2E7D32}
+.kv{display:grid;grid-template-columns:160px 1fr;gap:6px 12px;font-size:13px}
+.kv dt{color:var(--text-secondary)}
+textarea.form-control,input.form-control,select.form-control{width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:13px;background:var(--surface)}
+textarea.form-control:focus,input.form-control:focus,select.form-control:focus{outline:2px solid var(--primary-light);border-color:var(--primary)}
+.feedback-item{padding:8px 0;border-bottom:1px solid var(--border);font-size:13px}
+.feedback-item:last-child{border-bottom:none}
+.feedback-item .fb-summary{font-weight:500}
+.feedback-item .fb-date{font-size:11px;color:var(--text-secondary)}
+.flow-map{display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:12px;margin:8px 0 4px}
+.flow-node{background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-sm);padding:4px 10px;font-weight:500}
+.flow-arrow{color:var(--text-secondary)}
+.toast{position:fixed;bottom:24px;right:24px;background:#323232;color:#fff;padding:12px 18px;border-radius:var(--radius);font-size:13px;box-shadow:var(--shadow-md);display:none;z-index:2000;max-width:380px}
+</style>
+</head>
+<body>
+<div class="app-shell">
+
+  <!-- ═══════════ SIDEBAR ═══════════ -->
+  <aside class="sidebar">
+    <div class="sidebar-logo"><h1>Parthenon</h1><small>Enterprise AI Harness</small></div>
+    <div class="nav-group-label">Agents</div>
+    <div class="nav-item sub-item"><span class="nav-icon">👤</span>Agent Roles</div>
+    <div class="nav-item sub-item"><span class="nav-icon">🆔</span>Agent Identities</div>
+    <div class="nav-item sub-item active"><span class="nav-icon">🤖</span>Agent Types</div>
+    <div class="nav-item sub-item"><span class="nav-icon">▶️</span>Agent Executions</div>
+    <div class="nav-item sub-item"><span class="nav-icon">🕸️</span>Agent Runtime Monitor</div>
+    <div class="nav-item sub-item"><span class="nav-icon">⚖️</span>Decision Tools</div>
+    <div class="prototype-note">
+      <strong>Prototype — Software 3.0 Workflow Compilation.</strong>
+      Scripts are owned by agent types and surface through the <em>Optimized Plan</em> tab of the
+      Agent Type details dialog. There is no standalone script admin page.
+    </div>
+  </aside>
+
+  <!-- ═══════════ MAIN ═══════════ -->
+  <div class="main">
+    <div class="topbar"><h2 id="topbar-title">Agent Types</h2></div>
+    <div class="main-content">
+
+      <!-- ── SCREEN: AGENT TYPES ── -->
+      <div id="screen-agents" class="screen active">
+        <div class="view-desc" style="margin-bottom:16px">
+          Configure, test, and deploy agent types. Verified workflows compile into deterministic
+          scripts — script-first execution with unconditional LLM fallback is fixed platform behaviour
+          (nothing to configure).
+        </div>
+        <div class="card" style="padding:0">
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Name</th><th>Type</th><th>Model</th><th>Optimized Plan</th><th>Scripts</th><th>Actions</th></tr></thead>
+              <tbody>
+                <tr>
+                  <td><strong>report-generator</strong></td>
+                  <td><span class="chip chip-blue">sop-agent</span></td>
+                  <td><span class="chip chip-gray">claude-3-5-sonnet</span></td>
+                  <td><span class="chip chip-green">ready · fully scripted</span></td>
+                  <td>3</td>
+                  <td class="actions-cell">
+                    <button class="btn btn-xs btn-secondary" onclick="openDetails('report-generator','ready')">Details</button>
+                    <button class="btn btn-xs btn-primary" onclick="openRunDialog(true)">▶ Run</button>
+                  </td>
+                </tr>
+                <tr>
+                  <td><strong>data-analyst</strong></td>
+                  <td><span class="chip chip-green">skillful-agent</span></td>
+                  <td><span class="chip chip-gray">gpt-4o-mini</span></td>
+                  <td><span class="chip chip-orange">needs_feedback</span></td>
+                  <td>2</td>
+                  <td class="actions-cell">
+                    <button class="btn btn-xs btn-secondary" onclick="openDetails('data-analyst','needs_feedback')">Details</button>
+                    <button class="btn btn-xs btn-primary" onclick="openRunDialog(true)">▶ Run</button>
+                  </td>
+                </tr>
+                <tr>
+                  <td><strong>file-manager</strong></td>
+                  <td><span class="chip chip-green">skillful-agent</span></td>
+                  <td><span class="chip chip-gray">claude-3-haiku</span></td>
+                  <td><span class="chip chip-gray">none</span></td>
+                  <td>0</td>
+                  <td class="actions-cell">
+                    <button class="btn btn-xs btn-secondary" onclick="openDetails('file-manager','none')">Details</button>
+                    <button class="btn btn-xs btn-primary" onclick="openRunDialog(false)">▶ Run</button>
+                  </td>
+                </tr>
+                <tr>
+                  <td><strong>support-chat</strong></td>
+                  <td><span class="chip chip-purple">conversational</span></td>
+                  <td><span class="chip chip-gray">gpt-4o</span></td>
+                  <td><span class="chip chip-gray">n/a — never compiled</span></td>
+                  <td>0</td>
+                  <td class="actions-cell">
+                    <button class="btn btn-xs btn-secondary" onclick="openDetails('support-chat','conversational')">Details</button>
+                    <button class="btn btn-xs btn-primary" onclick="toast('Conversational agents run the LLM path — compilation is never offered (E6).')">▶ Run</button>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════ MODAL: AGENT TYPE DETAILS (tabs) ═══════════ -->
+<div id="modal-details" class="modal-overlay" onclick="closeModalIfOverlay(event,'modal-details')">
+  <div class="modal modal-lg">
+    <div class="modal-header">
+      <h3 id="details-title">Agent Type: report-generator</h3>
+      <button class="modal-close" onclick="closeModal('modal-details')">✕</button>
+    </div>
+    <div class="dialog-tabs">
+      <div class="dialog-tab" onclick="switchDialogTab(this,'dp-details')">Details</div>
+      <div class="dialog-tab" onclick="switchDialogTab(this,'dp-preview')">Preview</div>
+      <div class="dialog-tab" onclick="switchDialogTab(this,'dp-logs')">Logs</div>
+      <div class="dialog-tab active" onclick="switchDialogTab(this,'dp-plan')">Optimized Plan</div>
+    </div>
+
+    <!-- Details tab (context only) -->
+    <div id="dp-details" class="dialog-panel modal-body">
+      <dl class="kv">
+        <dt>Identity</dt><dd class="font-mono text-sm">agent-reporter@parthenon</dd>
+        <dt>Model</dt><dd>claude-3-5-sonnet</dd>
+        <dt>Input / Output</dt><dd>typed / markdown</dd>
+        <dt>Default SOP</dt><dd><span class="chip chip-purple">daily-report-gen</span></dd>
+        <dt>Description</dt><dd class="text-secondary">Generates the daily operations report from data sources and posts it to the operations channel.</dd>
+      </dl>
+    </div>
+
+    <!-- Preview / Logs placeholders -->
+    <div id="dp-preview" class="dialog-panel modal-body">
+      <p class="text-secondary text-sm">Preview of the agent type's rendered output for the current SOP. (Existing master-prototype surface — not part of this change.)</p>
+    </div>
+    <div id="dp-logs" class="dialog-panel modal-body">
+      <p class="text-secondary text-sm">Execution logs with per-run provenance (script vX vs LLM run). (Existing master-prototype surface — provenance badges from this change shown on each entry.)</p>
+      <div style="margin-top:10px">
+        <div class="feedback-item"><span class="fb-summary"><span class="chip chip-green" style="margin-right:6px">script v4</span>Run completed via compiled script — 12,400 tokens saved</span><div class="fb-date">today 09:14 · 1.8s</div></div>
+        <div class="feedback-item"><span class="fb-summary"><span class="chip chip-orange" style="margin-right:6px">fallback → LLM</span>Script v4 failed output validation — LLM path completed the run</span><div class="fb-date">yesterday 17:02 · 21.3s</div></div>
+        <div class="feedback-item"><span class="fb-summary"><span class="chip chip-green" style="margin-right:6px">script v3</span>Run completed via compiled script</span><div class="fb-date">yesterday 09:14 · 1.9s</div></div>
+      </div>
+    </div>
+
+    <!-- ── Optimized Plan tab (this change's core surface) ── -->
+    <div id="dp-plan" class="dialog-panel modal-body active">
+      <!-- Status row -->
+      <div class="row" style="margin-bottom:12px">
+        <span class="text-secondary text-sm">Status</span>
+        <span class="chip chip-green" id="plan-status-chip">ready</span>
+        <span class="chip chip-blue chip-outline" id="plan-mode-chip" style="border-color:#1565C0;color:#1565C0">fully scripted</span>
+        <span class="spacer"></span>
+        <button class="btn btn-xs btn-secondary" onclick="retirePlan()">Retire plan</button>
+      </div>
+      <div id="retire-success" class="alert alert-success" style="display:none">
+        Optimized plan retired — the next run will offer optimization again.
+      </div>
+      <div id="plan-needs-feedback" class="alert alert-warn" style="display:none">
+        Verification could not produce a passing workflow script. Describe what to change below and
+        submit feedback — it will guide the next regeneration.
+      </div>
+
+      <div class="flow-map" id="plan-flow">
+        <span class="flow-node">plan</span><span class="flow-arrow">→</span>
+        <span class="flow-node">MCP: query-metrics</span><span class="flow-arrow">→</span>
+        <span class="flow-node">transform / filter</span><span class="flow-arrow">→</span>
+        <span class="flow-node">MCP: post-report</span><span class="flow-arrow">→</span>
+        <span class="flow-node">Semantic Bridge</span>
+      </div>
+
+      <h4 style="font-size:13px;margin:14px 0 4px">Composition Steps</h4>
+      <div id="plan-steps"><!-- rendered by JS --></div>
+
+      <hr style="border:none;border-top:1px solid var(--border);margin:16px 0">
+      <h4 style="font-size:13px;margin-bottom:6px">Feedback</h4>
+      <div id="feedback-list"></div>
+      <textarea id="feedback-input" class="form-control" rows="2" style="margin-top:8px"
+        placeholder="Describe what to change about this optimized plan…"></textarea>
+      <div class="row" style="margin-top:8px">
+        <button class="btn btn-secondary btn-xs" onclick="submitFeedback()">✈ Submit feedback</button>
+        <span id="feedback-saved" class="text-sm" style="color:var(--success);display:none">Feedback saved — it will be incorporated when the plan is regenerated.</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════ MODAL: SCRIPT VIEWER ═══════════ -->
+<div id="modal-script" class="modal-overlay" onclick="closeModalIfOverlay(event,'modal-script')">
+  <div class="modal">
+    <div class="modal-header">
+      <h3 id="script-title">Script version v4</h3>
+      <button class="modal-close" onclick="closeModal('modal-script')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="row" style="margin-bottom:8px">
+        <span class="chip chip-outline" id="script-name">daily-report-gen</span>
+        <span class="chip chip-green chip-outline" id="script-version" style="border-color:#2E7D32;color:#2E7D32">Serving Version: v4</span>
+      </div>
+      <p class="text-secondary text-sm" id="script-desc" style="margin-bottom:10px"></p>
+      <pre class="code-block" id="script-source"></pre>
+      <div class="alert alert-info" style="margin:12px 0 0">
+        Sandboxed Python executed inside Agent Runtime under the agent's dual identities. MCP tool
+        calls are the only external access — no network, database, or credential access (E7, E8, SEC1–SEC3).
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" onclick="closeModal('modal-script')">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════ MODAL: RUN AGENT — OPTIMIZATION OPT-IN ═══════════ -->
+<div id="modal-run" class="modal-overlay" onclick="closeModalIfOverlay(event,'modal-run')">
+  <div class="modal" style="max-width:560px">
+    <div class="modal-header">
+      <h3>Run report-generator</h3>
+      <button class="modal-close" onclick="closeModal('modal-run')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div id="run-optimize-offer">
+        <div class="alert alert-info">
+          No verified optimized plan exists for this agent type. You can run with optimization —
+          that run authors and verifies workflow scripts against real executions and saves the plan
+          for reuse (script-first execution with unconditional LLM fallback afterwards).
+        </div>
+        <div class="row">
+          <button class="btn btn-primary" onclick="runOptimized()">⚡ Run with optimization</button>
+          <button class="btn btn-secondary" onclick="runPlain()">Run without optimization</button>
+        </div>
+      </div>
+      <div id="run-progress" style="display:none">
+        <div class="row" style="margin-bottom:10px"><span class="chip chip-blue">capturing tool calls</span><span class="text-sm text-secondary">LLM execution in progress…</span></div>
+        <div class="step-row"><div class="step-num">1</div><div class="step-body"><div class="step-name">MCP tool call — query-metrics</div><div class="step-desc">identity: agent-reporter@parthenon + user session (dual identities)</div></div></div>
+        <div class="step-row"><div class="step-num">2</div><div class="step-body"><div class="step-name">MCP tool call — post-report</div><div class="step-desc">recorded for candidate script generation (C2)</div></div></div>
+        <div class="step-row"><div class="step-num">3</div><div class="step-body"><div class="step-name">Auto-compile after run</div><div class="step-desc">candidate step graph → shadow verification against this run → auto-promote on match</div></div></div>
+        <div class="row" style="margin-top:12px">
+          <button class="btn btn-primary btn-xs" onclick="finishOptimizedRun()">Simulate run + auto-compile</button>
+        </div>
+      </div>
+      <div id="run-done" style="display:none">
+        <div class="alert alert-success">
+          Run completed via the LLM path. A candidate script was generated, verified against this
+          execution (match within tolerance), and promoted — <strong>v1 is now serving</strong>.
+          Future runs execute the script without an LLM (E1).
+        </div>
+        <button class="btn btn-primary btn-xs" onclick="closeModal('modal-run');openDetails('file-manager','ready')">Open Optimized Plan tab</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ── Placeholder data (mirrors implemented frontend contracts) ──
+var PLANS = {
+  'report-generator': {
+    status: 'ready', fullyScripted: true,
+    steps: [
+      { name: 'Query metrics', desc: 'MCP tool call — query-metrics (permissions inherited from agent identity)', scriptable: true,
+        script: { name: 'daily-report-gen', version: 'v4', desc: 'Queries the operations metrics store, filters the last 24h window, and posts the formatted daily report to the operations channel.',
+          source: 'def run(ctx):\n    metrics = ctx.tools["query-metrics"](window="24h")\n    recent = ops.select_keys(metrics, ["latency", "errors", "throughput"])\n    summary = ctx.tools["post-report"](template=REPORT_TPL, data=recent)\n    return ops.passthrough(summary)' } },
+      { name: 'Filter & aggregate', desc: 'Local data processing — select_keys / count / sum transforms (E8: no external I/O)', scriptable: true,
+        script: { name: 'daily-report-gen', version: 'v4', desc: 'Same compiled script — this step is an inline transform inside the step graph.', source: '# transform step inside the compiled step graph\nrecent = ops.select_keys(metrics, ["latency", "errors", "throughput"])\ntotals = ops.merge(ops.count(recent["errors"]), ops.sum(recent["throughput"]))' } },
+      { name: 'Post report', desc: 'MCP tool call — post-report', scriptable: true,
+        script: { name: 'daily-report-gen', version: 'v4', desc: 'Same compiled script — final output step.', source: 'summary = ctx.tools["post-report"](template=REPORT_TPL, data=totals)\nreturn ops.passthrough(summary)' } },
+      { name: 'Executive summary', desc: 'Semantic Bridge sub-agent — model-backed step (unstructured → structured, S1/S3)', scriptable: false, modelBacked: true, script: null }
+    ],
+    feedback: [
+      { summary: 'Keep the executive summary generated by the Semantic Bridge — do not script it.', date: 'Oct 24, 2026, 14:02' }
+    ]
+  },
+  'data-analyst': {
+    status: 'needs_feedback', fullyScripted: false,
+    steps: [
+      { name: 'Read dataset', desc: 'MCP tool call — read-analyze-file', scriptable: true,
+        script: { name: 'db-report', version: 'v2 (draft — verification mismatch)', desc: 'Reads the analysis dataset and computes per-group aggregates.',
+          source: 'def run(ctx):\n    rows = ctx.tools["read-analyze-file"](path=ctx.input["dataset"])\n    return ops.merge(ops.count(rows), ops.pluck(rows, "region"))' } },
+      { name: 'Interpret results', desc: 'System One decision tool — model-backed judgment step (S2)', scriptable: false, modelBacked: true, script: null }
+    ],
+    feedback: [
+      { summary: 'Aggregation must respect the region filter from the input, not all rows.', date: 'Oct 26, 2026, 10:41' }
+    ]
+  },
+  'file-manager': { status: 'none', fullyScripted: false, steps: [], feedback: [] },
+  'support-chat': { status: 'conversational', fullyScripted: false, steps: [], feedback: [] }
+};
+
+var currentPlanKey = 'report-generator';
+
+// ── Navigation / modals ──
+function openModal(id){ document.getElementById(id).classList.add('open'); }
+function closeModal(id){ document.getElementById(id).classList.remove('open'); }
+function closeModalIfOverlay(e, id){ if (e.target === e.currentTarget) closeModal(id); }
+
+function switchDialogTab(tabEl, panelId){
+  var modal = tabEl.closest('.modal');
+  modal.querySelectorAll('.dialog-tab').forEach(function(t){ t.classList.remove('active'); });
+  tabEl.classList.add('active');
+  modal.querySelectorAll('.dialog-panel').forEach(function(p){ p.classList.remove('active'); });
+  document.getElementById(panelId).classList.add('active');
+}
+
+function openDetails(key, tab){
+  currentPlanKey = key;
+  document.getElementById('details-title').textContent = 'Agent Type: ' + key;
+  renderPlan(key);
+  openModal('modal-details');
+  // jump straight to the Optimized Plan tab
+  var tabs = document.querySelectorAll('#modal-details .dialog-tab');
+  tabs.forEach(function(t){ t.classList.remove('active'); });
+  tabs[3].classList.add('active');
+  document.querySelectorAll('#modal-details .dialog-panel').forEach(function(p){ p.classList.remove('active'); });
+  document.getElementById('dp-plan').classList.add('active');
+}
+
+function toast(msg){
+  var t = document.getElementById('toast');
+  t.textContent = msg; t.style.display = 'block';
+  clearTimeout(t._h); t._h = setTimeout(function(){ t.style.display = 'none'; }, 4200);
+}
+
+// ── Optimized Plan tab rendering ──
+function renderPlan(key){
+  var plan = PLANS[key];
+  var statusChip = document.getElementById('plan-status-chip');
+  var modeChip = document.getElementById('plan-mode-chip');
+  var retireBtn = document.querySelector('#dp-plan .btn-secondary');
+  var warn = document.getElementById('plan-needs-feedback');
+  var flow = document.getElementById('plan-flow');
+  document.getElementById('retire-success').style.display = 'none';
+  warn.style.display = (plan.status === 'needs_feedback') ? 'block' : 'none';
+
+  var colors = { ready: ['chip-green','ready'], needs_feedback: ['chip-orange','needs_feedback'],
+                 none: ['chip-gray','none'], conversational: ['chip-purple','conversational — never compiled'] };
+  statusChip.className = 'chip ' + colors[plan.status][0];
+  statusChip.textContent = colors[plan.status][1];
+  modeChip.style.display = (plan.status === 'ready' || plan.status === 'needs_feedback') ? '' : 'none';
+  modeChip.textContent = plan.fullyScripted ? 'fully scripted' : 'tool mode';
+  retireBtn.style.display = (plan.status === 'ready' || plan.status === 'needs_feedback') ? '' : 'none';
+  flow.style.display = plan.steps.length ? '' : 'none';
+
+  var wrap = document.getElementById('plan-steps');
+  wrap.innerHTML = '';
+  if (!plan.steps.length) {
+    var empty = plan.status === 'conversational'
+      ? 'Conversational and interactive agents are never compiled (E6). No optimized plan exists.'
+      : 'No verified optimized plan exists. The next time you run this agent, you will be offered the option to run with optimization.';
+    wrap.innerHTML = '<p class="text-secondary text-sm">' + empty + '</p>';
+  } else {
+    plan.steps.forEach(function(s, i){
+      var row = document.createElement('div'); row.className = 'step-row';
+      var kind = s.modelBacked
+        ? '<span class="chip chip-purple step-kind">model-backed</span>'
+        : '<span class="chip chip-blue step-kind">scriptable</span>';
+      var link = (s.script && plan.status === 'ready')
+        ? '<button class="link-btn" onclick="openScript(' + i + ')">View script</button>'
+        : (s.script ? '<button class="link-btn" onclick="openScript(' + i + ')">View script (draft)</button>' : '');
+      row.innerHTML = '<div class="step-num">' + (i + 1) + '</div>' +
+        '<div class="step-body"><div class="step-name">' + s.name + '</div><div class="step-desc">' + s.desc + '</div></div>' +
+        kind + '<div style="flex-shrink:0;margin-left:8px">' + link + '</div>';
+      wrap.appendChild(row);
+    });
+  }
+
+  var fb = document.getElementById('feedback-list');
+  fb.innerHTML = '';
+  plan.feedback.forEach(function(c){
+    var d = document.createElement('div'); d.className = 'feedback-item';
+    d.innerHTML = '<div class="fb-summary">' + c.summary + '</div><div class="fb-date">' + c.date + '</div>';
+    fb.appendChild(d);
+  });
+}
+
+function openScript(i){
+  var s = PLANS[currentPlanKey].steps[i].script;
+  document.getElementById('script-title').textContent = 'Script version ' + s.version.split(' ')[0];
+  document.getElementById('script-name').textContent = s.name;
+  document.getElementById('script-version').textContent = 'Serving Version: ' + s.version;
+  document.getElementById('script-desc').textContent = s.desc;
+  document.getElementById('script-source').textContent = s.source;
+  openModal('modal-script');
+}
+
+function retirePlan(){
+  document.getElementById('retire-success').style.display = 'block';
+  PLANS[currentPlanKey].status = 'none';
+  setTimeout(function(){ renderPlan(currentPlanKey); }, 900);
+  toast('Optimized plan retired — the next run will offer optimization again.');
+}
+
+function submitFeedback(){
+  var input = document.getElementById('feedback-input');
+  if (!input.value.trim()) return;
+  PLANS[currentPlanKey].feedback.unshift({ summary: input.value.trim(), date: 'just now (LLM-summarized)' });
+  input.value = '';
+  document.getElementById('feedback-saved').style.display = 'inline';
+  renderPlan(currentPlanKey);
+  setTimeout(function(){ document.getElementById('feedback-saved').style.display = 'none'; }, 3500);
+}
+
+// ── Run Agent flow ──
+function openRunDialog(hasPlan){
+  document.getElementById('run-optimize-offer').style.display = hasPlan ? 'none' : 'block';
+  document.getElementById('run-progress').style.display = 'none';
+  document.getElementById('run-done').style.display = 'none';
+  openModal('modal-run');
+}
+function runOptimized(){
+  document.getElementById('run-optimize-offer').style.display = 'none';
+  document.getElementById('run-progress').style.display = 'block';
+}
+function runPlain(){
+  closeModal('modal-run');
+  toast('Run completed via the LLM path — no optimization requested (E3).');
+}
+function finishOptimizedRun(){
+  document.getElementById('run-progress').style.display = 'none';
+  document.getElementById('run-done').style.display = 'block';
+}
+</script>
+</body>
+</html>

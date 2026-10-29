@@ -123,6 +123,10 @@ flowchart TB
     RIB --> OUT
 ```
 
+## Token Preflight Outcome
+
+Agent Runtime receives executions only after the Communication Hub's preflight gate has cleared them. If any token the execution (including subagents) would use is expired, the run never reaches Agent Runtime — the Gateway blocks it and the agent surfaces only the blocked outcome with a re-auth message. Expiring-soon executions start with a warning flag. Agents never see identity tokens, before or after preflight.
+
 ## Sandboxed Scripting & Model-Authored Composition
 
 Agent Runtime also executes **sandboxed, model-authored Python scripts**

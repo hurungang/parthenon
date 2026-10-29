@@ -11,6 +11,7 @@ SOP Management enables the creation and orchestration of Standard Operating Proc
 
 ## What It Does
 - Allows composition of SOPs from multiple Skills with defined sequencing
+- Supports [decision tools](decision-tools.md) as SOP steps alongside skills and system tools — steps invoking a decision tool receive structured typed answers (values, probabilities, confidence) that downstream steps can act on
 - Supports AI-assisted workflow draft generation from selected steps and author-provided descriptions
 - Provides preview of final formatted SOP workflow content prior to save or publish
 - Supports branching and conditional logic within SOPs

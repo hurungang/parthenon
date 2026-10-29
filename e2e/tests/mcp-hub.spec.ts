@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test'
-import { standardSetup } from './_helpers'
+import { standardSetup, mockApiCatchAllProxyAware } from './_helpers'
 
 const MOCK_SERVERS = [
   {
@@ -301,6 +301,53 @@ test.describe('MCP OAuth Session Creation Flow', () => {
     await page.goto('/mcp')
     await page.waitForLoadState('load')
     await expect(page.getByText('OAuth Tool Server')).toBeVisible()
+  })
+})
+
+test.describe('MCP Session re-auth state', () => {
+  const SERVER_ID = 'srv-1'
+  const REAUTH_SESSION = {
+    id: 'sess-reauth',
+    server_id: SERVER_ID,
+    name: 'Expired OAuth Session',
+    description: 'Token refresh failed',
+    auth_type: 'oauth2',
+    identity_subject: null,
+    is_active: true,
+    is_default: false,
+    identity_binding: null,
+    credential_config: null,
+    oauth_expires_at: '2026-01-01T00:00:00Z',
+    oauth_refresh_expires_at: '2026-01-01T00:00:00Z',
+    requires_reauth: true,
+    last_refresh_error: 'No such refresh token found',
+    created_at: '2026-05-01T10:00:00Z',
+    updated_at: '2026-05-01T10:00:00Z',
+  }
+
+  test.beforeEach(async ({ page }) => {
+    // Proxy-aware catch-all first, then specific mocks, so the re-auth state
+    // test works against both the same-origin dev server (/api/v1) and the
+    // cross-origin E2E build (http://localhost:8000/api/v1).
+    await mockApiCatchAllProxyAware(page)
+    await standardSetup(page)
+    await page.route(/\/api\/v1\/mcp\/servers(\?.*)?$/, (route) =>
+      route.fulfill({ status: 200, body: JSON.stringify(MOCK_SERVERS) })
+    )
+    await page.route(new RegExp(`/api/v1/mcp/servers/${SERVER_ID}/sessions(\\?.*)?$`), (route) =>
+      route.fulfill({ status: 200, body: JSON.stringify([REAUTH_SESSION]) })
+    )
+  })
+
+  test('shows a "Needs re-authentication" status for a session flagged requires_reauth', async ({ page }) => {
+    const errors: string[] = []
+    page.on('pageerror', (err) => errors.push(err.message))
+    await page.goto('/mcp')
+    await page.waitForLoadState('load')
+    // Open the session manager for the (non-system) server.
+    await page.locator('button:has(svg[data-testid="StorageIcon"])').first().click()
+    await expect(page.getByText('Needs re-authentication')).toBeVisible({ timeout: 5000 })
+    expect(errors.filter((e) => !e.includes('ResizeObserver'))).toHaveLength(0)
   })
 })
 

@@ -29,3 +29,7 @@ flowchart TB
     CHP --> TOK
     ARP --> DENY
 ```
+
+## Sandboxed Scripts
+
+Sandboxed scripts (Software 3.0) introduce **no new certificates**. Script executions run inside Agent Runtime under the executing agent's existing agent-instance certificate and mTLS channel; the script's only egress is the injected session-bound tool client, so every script-originated call reuses the same certificate-authenticated path. Scripts never hold, receive, or reference certificates or tokens.

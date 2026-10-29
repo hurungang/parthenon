@@ -100,6 +100,24 @@ The hub also maintains a bidirectional tool-to-skill index, enabling both skill 
 
 Admin-registered tool servers that implement the Model Context Protocol. Each server exposes one or more tools. The MCP Hub proxies requests to the appropriate server under the correct named session and returns the tool result back up the chain.
 
+## Script-Initiated Tool Calls (Software 3.0)
+
+Sandboxed scripts in Agent Runtime call tools through the **same chain** as the LLM agent loop — Skill Engine → MCP Hub → External MCP Server — via the injected session-bound tool client. There is no separate script tool path: identical permission resolution, identical per-call token injection, and the same dual identities as the owning agent session. Each script-originated call carries a **provenance tag** (`script` vs `llm`) and, where applicable, the script version, recorded for audit.
+
+```mermaid
+sequenceDiagram
+    participant SR as Sandboxed Script
+    participant SE as Skill Engine
+    participant MCP as MCP Hub
+    participant EXT as MCP Server
+
+    SR->>SE: Tool call (provenance=script,<br/>session identities)
+    SE->>MCP: Invoke tool (same resolution path)
+    MCP->>EXT: Per-call token injection
+    EXT-->>MCP: Result
+    MCP-->>SR: Result (audit: script provenance)
+```
+
 ## Multi-Turn Tool Use
 
 The sequence above shows a single tool-call round-trip. In practice, the LLM may request multiple tool calls in succession — each one traverses the same Skill Engine → MCP Hub → MCP Server chain before the final response is returned to the user.

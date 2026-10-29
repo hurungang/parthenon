@@ -79,10 +79,14 @@ test.describe('Agent Management Panel — live topology', () => {
     // ("panel____search") across the Hub like any directly bound skill.
     await expect(svg.getByText('panel-e2e-sop-skill')).toBeVisible()
     await expect(svg.getByText('panel____search')).toBeVisible()
-    // Empty slots render dashed placeholder nodes.
+    // Empty slots render dashed placeholder nodes (identity is genuinely
+    // unfilled), while the deliberately-set input type `none` and output
+    // type `auto` show the editor dialog's labels instead of placeholders.
     await expect(svg.getByText('Identity (empty)')).toBeVisible()
-    await expect(svg.getByText(/Input Data Type \(e.*…/)).toBeVisible()
-    await expect(svg.getByText(/Output Data Type \(e.*…/)).toBeVisible()
+    await expect(svg.getByText('Input Data Type (e')).toHaveCount(0)
+    await expect(svg.getByText('Output Data Type (e')).toHaveCount(0)
+    await expect(svg.getByText('None', { exact: true })).toBeVisible()
+    await expect(svg.getByText('Auto', { exact: true })).toBeVisible()
     // Communication Hub renders as a vertical bar between Capabilities and
     // Tools (zone ③ renamed from Runtime) — no "executes via" fan edge.
     await expect(svg.getByText('Communication Hub')).toBeVisible()
@@ -156,8 +160,10 @@ test.describe('Agent Management Panel — live topology', () => {
     // Re-assign via assign-existing → real node returns instantly.
     const roleSlot = slot(page, 'Role')
     await roleSlot.getByRole('button', { name: 'Assign existing' }).click()
-    await roleSlot.getByRole('combobox').click()
-    await page.getByRole('option', { name: 'panel-e2e-role' }).click()
+    const rolePicker = page.getByRole('dialog')
+    await expect(rolePicker.getByRole('heading', { name: 'Assign Role' })).toBeVisible()
+    await rolePicker.getByRole('button', { name: /panel-e2e-role/ }).click()
+    await rolePicker.getByRole('button', { name: 'Assign', exact: true }).click()
     await expect(svg.getByText('panel-e2e-role')).toBeVisible()
     await expect(svg.getByText('Role (empty)')).toBeHidden()
 
@@ -208,8 +214,10 @@ test.describe('Agent Management Panel — live topology', () => {
     // Beta has no model — assign one (draft-only).
     const modelSlot = slot(page, 'Model')
     await modelSlot.getByRole('button', { name: 'Assign existing' }).click()
-    await modelSlot.getByRole('combobox').click()
-    await page.getByRole('option', { name: 'gpt-4o (Panel E2E GPT)' }).click()
+    const modelPicker = page.getByRole('dialog')
+    await expect(modelPicker.getByRole('heading', { name: 'Assign Model' })).toBeVisible()
+    await modelPicker.getByRole('button', { name: /gpt-4o \(Panel E2E GPT\)/ }).click()
+    await modelPicker.getByRole('button', { name: 'Assign', exact: true }).click()
     // Truncated model label appears (the full text is on the node's <title>,
     // which lacks the ellipsis — the regex matches the visible text only).
     await expect(svg.getByText(/gpt-4o \(Panel E2E G…/)).toBeVisible()
@@ -264,17 +272,21 @@ test.describe('Agent Management Panel — Communication Hub in existing preview 
     await dialog.getByRole('tab', { name: 'Agent Preview' }).click()
 
     const svg = dialog.getByLabel('Agent Topology')
+    // Unified canvas (unify-agent-topology-diagram): the same PanelTopologyCanvas
+    // as the management panel — hub BAR, not the old divergent preview's dashed
+    // "platform messaging" conversation edge.
     await expect(svg.getByText('Communication Hub')).toBeVisible()
-    await expect(svg.getByText('platform messaging')).toBeVisible()
+    await expect(svg.getByText('platform messaging')).toHaveCount(0)
     // The agent's role resolves into the preview topology as well.
     await expect(svg.getByText('panel-e2e-role')).toBeVisible()
   })
 
-  test('Agent Types details dialog shows the hub in a typed agent plan preview topology', async ({
+  test('Agent Types details dialog shows the unified topology canvas for a typed agent', async ({
     page,
   }) => {
-    // Typed agent whose persisted plan already carries topology nodes — the
-    // hub is appended client-side at render time (AgentPlanContent).
+    // Typed agent whose persisted plan carries topology nodes — the details
+    // dialog now renders the unified panel topology canvas for ALL agent
+    // types; the plan step list is kept but the plan-based diagram is gone.
     const withPlan = seedAgents().map((a) =>
       a.id === 'at-a'
         ? {
@@ -316,13 +328,13 @@ test.describe('Agent Management Panel — Communication Hub in existing preview 
     const dialog = page.getByRole('dialog')
     await dialog.getByRole('tab', { name: 'Agent Preview' }).click()
 
+    // Unified panel canvas renders for the typed agent — hub bar present,
+    // no trace of the old plan-based diagram rendering.
     const svg = dialog.getByLabel('Agent Topology')
-    // Plan topology nodes render, plus the client-appended hub node + edge.
-    await expect(svg.getByText('panel-e2e-plan-agent')).toBeVisible()
-    await expect(svg.getByText('panel-e2e-role')).toBeVisible()
     await expect(svg.getByText('Communication Hub')).toBeVisible()
-    await expect(svg.getByText('platform messaging')).toBeVisible()
-    // Hub is present exactly once (helper idempotence in the rendered graph).
-    await expect(svg.getByText('Communication Hub')).toHaveCount(1)
+    await expect(svg.getByText('panel-e2e-role')).toBeVisible()
+    await expect(svg.getByText('platform messaging')).toHaveCount(0)
+    // The plan step list is preserved alongside the unified canvas.
+    await expect(dialog.getByText('Do the thing')).toBeVisible()
   })
 })

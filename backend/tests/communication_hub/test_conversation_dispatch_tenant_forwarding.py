@@ -255,8 +255,12 @@ class TestAgentExecuteTriggerForwarding:
         )
 
         with patch("app.communication_hub.main._load_certificate", _async_noop()):
-            with patch.object(agent_execute.httpx, "AsyncClient", factory):
-                resp = await agent_execute.trigger_agent_execution(
+            with patch(
+                "app.services.gateway.preflight_gate.enforce_execution_preflight",
+                _async_noop_returning([]),
+            ):
+                with patch.object(agent_execute.httpx, "AsyncClient", factory):
+                    resp = await agent_execute.trigger_agent_execution(
                     agent_execute.AgentExecuteRequest(
                         session_id=uuid.uuid4(),
                         agent_type_id=uuid.uuid4(),
@@ -289,8 +293,12 @@ class TestAgentExecuteTriggerForwarding:
         )
 
         with patch("app.communication_hub.main._load_certificate", _async_noop()):
-            with patch.object(agent_execute.httpx, "AsyncClient", factory):
-                await agent_execute.trigger_agent_execution(
+            with patch(
+                "app.services.gateway.preflight_gate.enforce_execution_preflight",
+                _async_noop_returning([]),
+            ):
+                with patch.object(agent_execute.httpx, "AsyncClient", factory):
+                    await agent_execute.trigger_agent_execution(
                     agent_execute.AgentExecuteRequest(
                         session_id=uuid.uuid4(),
                         agent_type_id=uuid.uuid4(),
@@ -313,6 +321,12 @@ def _async_return(value):
 
 async def _async_append(**kwargs):
     return {"title": "T"}
+
+
+def _async_noop_returning(value):
+    async def _fn(*args, **kwargs):
+        return value
+    return _fn
 
 
 def _async_noop():

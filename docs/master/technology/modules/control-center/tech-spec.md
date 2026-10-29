@@ -130,11 +130,11 @@ The Control Center is the authoritative security and identity hub for agent exec
 
 | Symbol | Type | Description | File |
 |--------|------|-------------|------|
-| `TokenRefreshServiceV2` | class | On-demand token refresh with exponential backoff; called by permission resolution flow | `backend/app/services/token_refresh.py` |
+| `TokenRefreshServiceV2` | class | On-demand token refresh with exponential backoff; called by permission resolution flow; extended to propagate health fields | `backend/app/services/token_refresh.py` |
 | `TokenRefreshError` | exception | Raised when token refresh fails after all retry attempts | `backend/app/services/token_refresh.py` |
-| `check_token_expiration` | function | Return `True` if token is expired or expires within 5 minutes | `backend/app/services/token_refresh.py` |
-| `refresh_oauth_token` | function | Call OAuth provider refresh endpoint; implements exponential backoff | `backend/app/services/token_refresh.py` |
-| `store_refreshed_token` | function | Persist new access token (AES-256 encrypted) to `agent_identity` table | `backend/app/services/token_refresh.py` |
+| `check_token_expiration` | function (extended) | Return `True` if token is expired or expires within 5 minutes; extended to evaluate refresh-token expiry window | `backend/app/services/token_refresh.py` |
+| `refresh_oauth_token` | function (extended) | Call OAuth provider refresh endpoint; implements exponential backoff; now persists health state and refresh outcome | `backend/app/services/token_refresh.py` |
+| `store_refreshed_token` | function (extended) | Persist new access token (AES-256 encrypted) to `agent_identity` table; captures `refresh_token_expires_at` | `backend/app/services/token_refresh.py` |
 | `log_refresh_attempt` | function | Write refresh attempt outcome to `token_refresh_log` audit table | `backend/app/services/token_refresh.py` |
 
 ### Permission Resolution Service (`backend/app/services/permission_resolution.py`)
@@ -150,6 +150,12 @@ The Control Center is the authoritative security and identity hub for agent exec
 | `check_tool_permission` | function | Return `True` if the requested tool is in the resolved allowed set | `backend/app/services/permission_resolution.py` |
 | `resolve_permissions_from_api_key` | function (async) | Resolves agent permissions starting from an API key (key → identity → role → permissions) | `backend/app/services/permission_resolution.py` |
 
+### Token Health Service (`backend/app/services/token_health.py`)
+
+| Symbol | Type | Description | File |
+|--------|------|-------------|------|
+| `TokenHealthService` | class (new) | Computes/persists health classification for identities and sessions; 7-day constant | `backend/app/services/token_health.py` |
+
 ### API Endpoints
 
 | Symbol | Type | Description | File |
@@ -159,6 +165,10 @@ The Control Center is the authoritative security and identity hub for agent exec
 | `revoke_certificate` | endpoint | `POST /certificates/revoke` — admin-authenticated revocation | `backend/app/api/v1/certificates.py` |
 | `validate_certificate_internal` | endpoint | `POST /internal/certificates/validate` — service-to-service validation | `backend/app/api/v1/internal/certificates.py` |
 | `authorize_tool_call_internal` | endpoint | `POST /internal/authorize/tool-call` — service-to-service authorisation; returns identity token on success | `backend/app/api/v1/internal/authorization.py` |
+| `Token Health Dashboard endpoint` | endpoint (new) | `GET /dashboard/token-health` — expired/expiring counts + itemized details per category with permission flags | `backend/app/api/v1/dashboard.py` |
+| `InternalTokenHealthRouter` | router (new) | `POST /internal/token-health/preflight` — signed internal calls only, fail-closed 401 | `backend/app/api/v1/internal/token_health.py` (registered in `backend/app/api/v1/__init__.py`) |
+| `refresh_token` (identity) | endpoint (existing reused) | `POST /agents/identities/{identity_id}/refresh-token` | `backend/app/api/v1/agents.py` |
+| `refresh_token` (MCP session) | endpoint (existing reused) | `POST /mcp/servers/{server_id}/sessions/{session_id}/refresh-token` | `backend/app/api/v1/mcp_hub.py` |
 
 ### Schemas (`backend/app/schemas/certificates.py`)
 
@@ -171,6 +181,7 @@ The Control Center is the authoritative security and identity hub for agent exec
 | `CACertificateResponse` | schema | `certificate_pem`, `expires_at`, `serial_number` | `backend/app/schemas/certificates.py` |
 | `CertificateIssueResponse` | schema | `certificate_pem`, `private_key_pem`, `serial_number`, `expires_at` | `backend/app/schemas/certificates.py` |
 | `AuthorizeToolCallResponse` | schema | `authorized: bool`, `identity_token`, `identity_id`, `agent_type_id` (on success); `reason`, `required_permission`, `agent_type` (on denial) | `backend/app/schemas/certificates.py` |
+| Token health schemas | Pydantic models (new) | Dashboard summary/items + preflight request/result (PROCEED / PROCEED+WARN / BLOCKED) | `backend/app/schemas/token_health.py` |
 
 ### Database Models (`backend/app/db/models/agent_security.py`)
 
@@ -178,7 +189,7 @@ The Control Center is the authoritative security and identity hub for agent exec
 |--------|------|-------------|------|
 | `AgentInstanceCertificate` | model | Issued agent certificate record; `serial_number` unique; `agent_type_id`, `instance_id`, `certificate_pem`, `issued_at`, `expires_at`, `revoked` | `backend/app/db/models/agent_security.py` |
 | `CertificateRevocationEntry` | model | CRL entry: `serial_number`, `revoked_at`, `reason`; checked on every validation | `backend/app/db/models/agent_security.py` |
-| `TokenRefreshLog` | model | Refresh audit entry: `identity_id`, `outcome`, `error`, `attempted_at` | `backend/app/db/models/agent_security.py` |
+| `TokenRefreshLog` | model | Refresh audit entry: `agent_identity_id` (nullable), `mcp_session_id` (nullable), `outcome`, `error`, `attempted_at`; exactly-one-target check constraint | `backend/app/db/models/agent_security.py` |
 | `CertificateValidationLog` | model | Validation audit entry: `serial_number`, `tool_name`, `outcome`, `validated_at` | `backend/app/db/models/agent_security.py` |
 
 ### Application Startup (`backend/app/main.py`)
@@ -285,6 +296,8 @@ The Control Center is the authoritative security and identity hub for agent exec
 | `test_remote_revocation_check_allows_dev_opt_in_fallback` | integration test | Verifies revocation fallback is available only behind explicit development opt-in | `backend/tests/integration/test_internal_revocation_fail_closed.py` |
 | `test_check_revocation_status_calls_correct_url` | integration test | Verifies client uses Control Center `revoked/{serial}` endpoint contract | `backend/tests/integration/test_data_clients.py` |
 | `test_check_revocation_status_fail_closed_on_error` | integration test | Verifies data client treats revocation lookup errors as revoked by default | `backend/tests/integration/test_data_clients.py` |
+| `test_token_health_service` | unit test | Token health classification/persistence/preflight service tests | `backend/tests/services/test_token_health_service.py` |
+| `test_token_health_api` | API test | Dashboard + preflight API tests | `backend/tests/api/v1/test_token_health_api.py` |
 
 ---
 

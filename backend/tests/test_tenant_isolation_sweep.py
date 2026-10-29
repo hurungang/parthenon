@@ -60,17 +60,22 @@ from app.db.models.agents import (  # noqa: E402
     AgentIdentity,
     AgentInstance,
     AgentJob,
+    AgentPlan,
+    AgentPlanStatus,
     AgentRole,
     AgentType,
     ModelConfig,
 )
+from app.db.models.command_prompt import CommandPrompt  # noqa: E402
 from app.db.models.conversations import ConversationSession  # noqa: E402
+from app.db.models.decision_model_availability import DecisionModelAvailability  # noqa: E402
 from app.db.models.group import Group  # noqa: E402
 from app.db.models.guardrail_threshold_event import GuardrailThresholdEvent  # noqa: E402
 from app.db.models.identity import Identity, Role  # noqa: E402
 from app.db.models.identity_provider_config import IdentityProviderConfig  # noqa: E402
 from app.db.models.identity_provider_config_audit import IdentityProviderConfigAudit  # noqa: E402
 from app.db.models.intervene import InterveneRequest  # noqa: E402
+from app.db.models.llm_mocking import LLMMockRecording, MockInteractionKind  # noqa: E402
 from app.db.models.mcp_hub import McpServer, McpTool  # noqa: E402
 from app.db.models.model_availability import ModelAvailability  # noqa: E402
 from app.db.models.model_guardrail_configuration import ModelGuardrailConfiguration  # noqa: E402
@@ -86,6 +91,7 @@ from app.db.models.notifications import (  # noqa: E402
     RecipientGroup,
     SourceType,
 )
+from app.db.models.optimized_plan import OptimizedImplementationPlan  # noqa: E402
 from app.db.models.platform_user import PlatformUser  # noqa: E402
 from app.db.models.policy_action import PolicyAction  # noqa: E402
 from app.db.models.policy_resource import PolicyResource  # noqa: E402
@@ -94,6 +100,18 @@ from app.db.models.results import DecisionExecutionResult, DecisionOutcome, Resu
 from app.db.models.system_one_provider_config import SystemOneProviderConfig  # noqa: E402
 from app.db.models.decision_tools import DecisionTool  # noqa: E402
 from app.db.models.scheduling import ScheduledJob  # noqa: E402
+from app.db.models.script_execution import ScriptExecutionOutcome, ScriptExecutionRecord  # noqa: E402
+from app.db.models.script_registry import (  # noqa: E402
+    FallbackEvent,
+    FallbackResultingAction,
+    FallbackTriggerReason,
+    RepairAttempt,
+    ScriptDefinition,
+    ScriptVersion,
+    VerificationComparisonOutcome,
+    VerificationRun,
+    VerificationVerdict,
+)
 from app.db.models.session_logs import ExecutionLogEntry  # noqa: E402
 from app.db.models.skills import Skill, Sop  # noqa: E402
 from app.db.models.tag_definition import TagDefinition, TagScope  # noqa: E402
@@ -109,6 +127,7 @@ from app.db.models.tenant_membership import TenantUserMembership  # noqa: E402
 from app.db.models.tenant_quota_usage import QuotaType, TenantQuotaUsage  # noqa: E402
 from app.db.models.termination_request import TerminationRequest  # noqa: E402
 from app.db.models.tool_calls import RuntimeToolCall  # noqa: E402
+from app.db.models.token_health import TokenHealthCheck  # noqa: E402
 from app.db.session import Base  # noqa: E402
 from app.db.tenant_scoping import apply_tenant_scope, register_tenant_scope_listener  # noqa: E402
 
@@ -155,6 +174,10 @@ TENANT_AGNOSTIC_REGISTRY: dict[str, str] = {
     "certificate_validation_logs": (
         "platform-level certificate validation audit trail (mTLS boundary "
         "telemetry, attributed to services not tenants)"
+    ),
+    "command_prompts": (
+        "platform-level reference data — seeded command prompt templates "
+        "(e.g. the optimize-and-verify mission); not tenant business rows"
     ),
     # ── Join/child tables — inherit scope via their tenant-scoped parents ────
     "agent_instance_certificates": "join/child table — inherits scope via agent_types (agent_type_id)",
@@ -302,6 +325,26 @@ _OWN_KWARGS = {
     AgentData: lambda t, s: {"data_name": f"data-{s}", "data_value": {"sweep": s}},
     AgentDataType: lambda t, s: {"name": f"adtype-{s}", "slug": f"adtype-{s}", "fields": []},
     ResultRecord: lambda t, s: {"payload": {"sweep": s}},
+    # ── Software 3.0 / scripting models (own scalars only) ─────────────────
+    ScriptDefinition: lambda t, s: {"name": f"script-{s}"},
+    ScriptVersion: lambda t, s: {"version_label": f"v-{s}"},
+    ScriptExecutionRecord: lambda t, s: {"outcome": ScriptExecutionOutcome.success},
+    VerificationRun: lambda t, s: {
+        "comparison_outcome": VerificationComparisonOutcome.match,
+        "verdict": VerificationVerdict.promoted,
+    },
+    FallbackEvent: lambda t, s: {
+        "trigger_reason": FallbackTriggerReason.execution_error,
+        "resulting_action": FallbackResultingAction.llm_completed,
+    },
+    RepairAttempt: lambda t, s: {"defect_diagnosis": f"sweep-{s}"},
+    OptimizedImplementationPlan: lambda t, s: {},
+    LLMMockRecording: lambda t, s: {
+        "recording_key": f"key-{s}",
+        "model_identifier": f"model-{s}",
+        "interaction_kind": MockInteractionKind.agent_loop,
+    },
+    DecisionModelAvailability: lambda t, s: {"model_name": f"dmodel-{s}"},
     # ── Models with required FK parents (own scalars only) ──────────────────
     PlatformUser: lambda t, s: {
         "sub": f"sub-{s}",
@@ -319,6 +362,13 @@ _OWN_KWARGS = {
     AgentInstance: lambda t, s: {},
     AgentJob: lambda t, s: {},
     AgentOutput: lambda t, s: {"validation_status": "valid"},
+    TokenHealthCheck: lambda t, s: {
+        "target_kind": "agent_identity",
+        "target_id": uuid.uuid4(),
+        "health_state": "healthy",
+        "check_outcome": "passed",
+        "message": f"sweep-{s}",
+    },
     AgentRunRelationship: lambda t, s: {"relationship_type": "delegation"},
     ExecutionLogEntry: lambda t, s: {"event_type": "sweep", "message": "sweep"},
     PolicyStatement: lambda t, s: {"effect": "allow", "module": "system::permissions"},
@@ -397,6 +447,8 @@ async def _parent_fks(db, ctx, cls, tenant_id, suffix) -> dict:
             "parent_agent_job_id": (await parent(AgentJob, slot="parent")).id,
             "child_agent_job_id": (await parent(AgentJob, slot="child")).id,
         }
+    if cls is TokenHealthCheck:
+        return {"agent_type_id": (await parent(AgentType)).id}
     if cls is ExecutionLogEntry:
         return {"session_id": (await parent(AgentJob)).id}
     if cls is PolicyStatement:
@@ -435,6 +487,29 @@ async def _parent_fks(db, ctx, cls, tenant_id, suffix) -> dict:
         return {"server_id": (await parent(McpServer)).id}
     if cls is DecisionExecutionResult:
         return {"decision_tool_id": (await parent(DecisionTool)).id}
+    if cls is DecisionModelAvailability:
+        return {"decision_model_provider_id": (await parent(SystemOneProviderConfig)).id}
+    if cls is ScriptDefinition:
+        return {"agent_type_id": (await parent(AgentType)).id}
+    if cls is ScriptVersion:
+        return {"script_definition_id": (await parent(ScriptDefinition)).id}
+    if cls is VerificationRun:
+        return {"script_version_id": (await parent(ScriptVersion)).id}
+    if cls is FallbackEvent:
+        return {"execution_record_id": (await parent(ScriptExecutionRecord)).id}
+    if cls is RepairAttempt:
+        return {"fallback_event_id": (await parent(FallbackEvent)).id}
+    if cls is OptimizedImplementationPlan:
+        agent_type = await parent(AgentType)
+        # AgentPlan is tenant-agnostic (platform-level join/child) — build it
+        # directly rather than through _ensure/_OWN_KWARGS.
+        plan = AgentPlan(
+            agent_type_id=agent_type.id,
+            generation_status=AgentPlanStatus.success,
+        )
+        db.add(plan)
+        await db.flush()
+        return {"agent_type_id": agent_type.id, "agent_plan_id": plan.id}
     if cls is TerminationRequest:
         return {
             "requested_by_user_id": (await parent(Identity)).id,

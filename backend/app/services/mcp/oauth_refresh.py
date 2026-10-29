@@ -17,6 +17,7 @@ except ImportError:
     _ssl_context = None
 
 from app.db.models.mcp_hub import McpSession
+from app.db.models.agent_security import TokenRefreshOutcome
 from app.core.credential_vault import get_vault
 
 logger = logging.getLogger(__name__)
@@ -96,6 +97,20 @@ class OAuthRefreshService:
                 if now >= session.oauth_refresh_expires_at:
                     logger.error("Refresh token expired for session %s", session.id)
                     session.is_active = False
+                    from app.services.token_health import (
+                        log_session_refresh,
+                        persist_session_health_state,
+                    )
+
+                    persist_session_health_state(
+                        session, refresh_outcome=TokenRefreshOutcome.failure
+                    )
+                    log_session_refresh(
+                        db,
+                        mcp_session_id=session.id,
+                        outcome=TokenRefreshOutcome.failure,
+                        error_message="refresh token expired",
+                    )
                     await db.flush()
                     await db.commit()
                     return False
@@ -124,9 +139,40 @@ class OAuthRefreshService:
                             response.status_code,
                             response.text,
                         )
-                        # If refresh fails with 400/401, mark session inactive
+                        # If refresh fails with 400/401
                         if response.status_code in (400, 401):
-                            session.is_active = False
+                            error_text = response.text or ""
+                            error_lower = error_text.lower()
+                            unrecoverable_indicators = [
+                                "invalid_grant",
+                                "no such refresh token",
+                                "refresh token is invalid",
+                                "refresh token revoked",
+                                "token is invalid",
+                                "token revoked",
+                            ]
+                            if any(ind in error_lower for ind in unrecoverable_indicators):
+                                try:
+                                    session.requires_reauth = True
+                                    session.last_refresh_error = error_text[:500] if error_text else f"HTTP {response.status_code}"
+                                except Exception:
+                                    pass
+                            else:
+                                session.is_active = False
+                            from app.services.token_health import (
+                                log_session_refresh,
+                                persist_session_health_state,
+                            )
+
+                            persist_session_health_state(
+                                session, refresh_outcome=TokenRefreshOutcome.failure
+                            )
+                            log_session_refresh(
+                                db,
+                                mcp_session_id=session.id,
+                                outcome=TokenRefreshOutcome.failure,
+                                error_message=error_text[:200] if error_text else f"HTTP {response.status_code}",
+                            )
                             await db.flush()
                             await db.commit()
                         return False
@@ -173,6 +219,28 @@ class OAuthRefreshService:
                         session.oauth_refresh_expires_at = now + timedelta(seconds=int(refresh_expires_in))
                     except (ValueError, TypeError):
                         logger.warning("Invalid refresh_expires_in in refresh response: %s", refresh_expires_in)
+
+                # Token-expiry-alerting: persist health state and write a
+                # session-targeted refresh audit row (mcp_session_id set).
+                from app.services.token_health import (
+                    log_session_refresh,
+                    persist_session_health_state,
+                )
+
+                persist_session_health_state(
+                    session, refresh_outcome=TokenRefreshOutcome.success
+                )
+                log_session_refresh(
+                    db,
+                    mcp_session_id=session.id,
+                    outcome=TokenRefreshOutcome.success,
+                )
+                # Clear reauth flags on successful refresh
+                try:
+                    session.requires_reauth = False
+                    session.last_refresh_error = None
+                except Exception:
+                    pass
 
                 await db.flush()
                 await db.commit()

@@ -266,9 +266,10 @@
 
       <div class="card" style="padding:8px 16px;">
         <table class="table">
-          <thead><tr><th>Tool name</th><th>Description</th><th>Questions</th><th>Status</th><th></th></tr></thead>
+          <thead><tr><th style="width:210px;">Tool name</th><th>Purpose</th><th>Generated description</th><th style="width:170px;">Decision model</th><th style="width:100px;">Status</th><th style="width:110px;"></th></tr></thead>
           <tbody id="dt-tbody"></tbody>
         </table>
+        <div style="margin-top:10px;"><a class="btn btn-text btn-small" onclick="showResult()">📊 View decision results →</a></div>
       </div>
 
       <div class="card">
@@ -288,76 +289,24 @@
         <div><strong>System One models</strong> evaluate predefined typed questions against a state and return structured answers — typed values, probability distributions, and confidence — without generating text. All calls originate from Control Center-managed flows; agents never hold credentials.</div>
       </div>
 
-      <div class="card">
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
-          <h2>Provider</h2>
-          <span id="so-status-chip" class="chip warning"><span class="dot"></span>Not configured</span>
+      <div class="card" style="padding:8px 16px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; padding:8px 8px 12px;">
+          <h2 style="margin:0;">Providers</h2>
+          <button class="btn btn-primary btn-small" onclick="openProviderEditor()">＋ Add Provider</button>
         </div>
-
-        <div class="row">
-          <div>
-            <label class="field">System One Provider</label>
-            <select id="so-provider" onchange="renderProviderInfo()">
-              <option value="typesafe" selected>TypeSafe AI (Jev)</option>
-              <option value="future" disabled>Other System One provider (coming later)</option>
-            </select>
-            <div class="hint">Only TypeSafe AI is available in this release.</div>
-          </div>
-          <div>
-            <label class="field">Model</label>
-            <select disabled>
-              <option>jev-latest (only model supported)</option>
-            </select>
-          </div>
-        </div>
-
-        <div class="divider"></div>
-
-        <div class="row">
-          <div style="flex:2;">
-            <label class="field">Base URL</label>
-            <input type="text" id="so-baseurl" value="https://api.typesafe.ai/v1" readonly style="background:#f5f6f8; color:var(--text2); cursor:not-allowed;">
-            <div class="hint">🔗 Preset for Jev — <code class="inline">https://api.typesafe.ai/v1</code> is fixed for this release and cannot be edited.</div>
-          </div>
-          <div></div>
-        </div>
-
-        <div class="divider"></div>
-
-        <div class="row" style="align-items:flex-end;">
-          <div style="flex:2;">
-            <label class="field">TypeSafe AI API Key</label>
-            <div style="display:flex; gap:8px;">
-              <input type="password" id="so-apikey" placeholder="Paste API key (tsk-…)" style="flex:1;" oninput="onApiKeyInput()">
-              <button class="btn btn-outline" id="so-test-btn" onclick="testConnection()" disabled>Test connection</button>
-            </div>
-            <div class="hint">Stored encrypted (AES-256), same pattern as MCP server credentials. The saved key is never returned in plaintext.</div>
-          </div>
-          <div>
-            <label class="field">Enabled</label>
-            <div style="display:flex; align-items:center; gap:10px; height:38px;">
-              <label class="switch">
-                <input type="checkbox" id="so-enabled" checked>
-                <span class="slider"></span>
-              </label>
-              <span class="hint" style="margin:0;" id="so-enabled-label">System One decision-making enabled</span>
-            </div>
-          </div>
-        </div>
-
-        <div id="so-test-result" style="margin-top:12px;"></div>
-
-        <div class="divider"></div>
-
-        <div style="display:flex; justify-content:flex-end; gap:8px;">
-          <button class="btn btn-danger-text" id="so-remove-btn" onclick="removeKey()" style="display:none;">Remove key</button>
-          <button class="btn btn-primary" onclick="saveConfig()">Save configuration</button>
+        <table class="table">
+          <thead><tr><th>Display name</th><th>Vendor</th><th>Base URL</th><th>Default model</th><th>Enabled models</th><th>API key</th><th>Enabled</th><th style="width:220px;"></th></tr></thead>
+          <tbody id="so-tbody"></tbody>
+        </table>
+        <div class="alert info" style="margin:12px 8px 8px;">
+          <span>ℹ️</span>
+          <div><strong>Multi-provider model.</strong> Credentials are encrypted at rest and <strong>write-only</strong> — never returned in read responses. The base URL is preset to <code class="inline">https://api.typesafe.ai/v1</code> and non-editable in this release. Enabled models are managed inside the provider editor; only enabled models appear in the decision-tool authoring model selector.</div>
         </div>
       </div>
 
       <div class="card">
         <h2>Recent decision executions</h2>
-        <p class="card-sub">Logged and auditable like all tool/skill executions.</p>
+        <p class="card-sub">Logged and auditable like all tool/skill executions. Browse persisted results under <strong>Results → Decision Results</strong>.</p>
         <table class="table">
           <thead><tr><th>Time</th><th>Tool</th><th>Trigger</th><th>Confidence</th><th>Outcome</th></tr></thead>
           <tbody>
@@ -373,8 +322,8 @@
     <section id="page-result" style="display:none;">
       <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:4px;">
         <div>
-          <h1>Decision Execution</h1>
-          <p class="subtitle mono">decision____tool_a · exec-7f3a-21 · 2026-10-03 10:42:07 · triggered by SOP step 3</p>
+          <h1>Results — Decision Results</h1>
+          <p class="subtitle mono">Decision Results tab of the results repository · decision____tool_a · exec-7f3a-21 · 2026-10-03 10:42:07 · triggered by SOP step 3</p>
         </div>
         <button class="btn btn-text" onclick="nav('decisiontools')">← Back to decision tools</button>
       </div>
@@ -391,7 +340,6 @@
         </div>
         <span class="chip info">3 questions evaluated</span>
       </div>
-
       <div class="card">
         <h2>Answers</h2>
         <p class="card-sub">Typed values with probability distributions per question.</p>
@@ -433,12 +381,7 @@
       <!-- Confidence-gated outcome -->
       <div class="card">
         <h2>Outcome gating</h2>
-        <p class="card-sub">Thresholds configured on the tool: ≥ 0.80 act automatically · 0.50–0.79 confirm · &lt; 0.50 escalate.</p>
-        <div style="display:flex; gap:12px; align-items:center; margin-bottom:8px;">
-          <label class="field" style="margin:0;">Confidence threshold</label>
-          <input type="range" min="30" max="95" value="80" id="rv-threshold" style="width:260px;" oninput="renderGate()">
-          <span class="mono" id="rv-threshold-val" style="font-weight:600;">0.80</span>
-        </div>
+        <p class="card-sub">Thresholds configured on the tool: ≥ 0.90 act automatically · 0.70–0.89 proceed with caution / confirm · &lt; 0.70 escalate to a human.</p>
         <div id="rv-gate"></div>
       </div>
     </section>
@@ -502,13 +445,13 @@
         <div>
           <label class="field">Tool name</label>
           <input type="text" id="tool-name" placeholder="e.g. tool_a" oninput="onToolNameInput()">
-          <div class="hint" id="tool-name-hint">Exposed as <code class="inline">decision____&lt;name&gt;</code> (four underscores, like <code class="inline">system____</code>). Must be unique within tenant <strong>acme-corp</strong>.</div>
+          <div class="hint" id="tool-name-hint">Exposed as <code class="inline">decision____&lt;name&gt;</code> (four underscores, like <code class="inline">system____</code>). Unique within tenant <strong>acme-corp</strong> only. Immutable once saved — renaming creates a new tool.</div>
           <div class="error-text" id="tool-name-error" style="display:none;"></div>
         </div>
-        <div>
-          <label class="field">Description (purpose)</label>
-          <input type="text" id="tool-desc" placeholder="What judgment does this tool make?" oninput="updateToolDescription()">
-        </div>
+      </div>
+      <div style="margin-top:10px;">
+        <label class="field">Description (purpose)</label>
+        <textarea id="tool-desc" rows="2" placeholder="What judgment does this tool make?" oninput="updateToolDescription()"></textarea>
       </div>
 
       <div class="divider"></div>
@@ -519,30 +462,28 @@
           <label class="field">Input data type</label>
           <div style="display:flex; gap:8px; align-items:center;">
             <select id="tool-input-type" style="flex:1;" onchange="onDataTypeChange('input')">
-              <option value="">Select or create an Agent Data Type…</option>
-              <option value="customer_message">customer_message</option>
-              <option value="support_ticket">support_ticket</option>
-              <option value="routing_decision">routing_decision</option>
-              <option value="__create__">＋ Create new Agent Data Type…</option>
+              <option value="">— none —</option>
+              <option value="customer_message">customer_message (customer-message)</option>
+              <option value="support_ticket">support_ticket (support-ticket)</option>
+              <option value="routing_decision">routing_decision (routing-decision)</option>
             </select>
-            <button class="btn btn-outline btn-small" onclick="viewDataType('tool-input-type')">View</button>
+            <button class="btn btn-outline btn-small" title="View read-only definition" onclick="viewDataType('tool-input-type')">👁 View</button>
           </div>
-          <div class="hint">Select an existing Agent Data Type from the registry, or create a new one. Its fields become the tool's input schema and populate the state-mapping property selectors.</div>
+          <div class="hint">Select an existing Agent Data Type from the registry. Its fields populate the state-mapping property selectors. Referenced types are protected from deletion.</div>
         </div>
         <!-- 4. Output data type -->
         <div>
           <label class="field">Output data type</label>
           <div style="display:flex; gap:8px; align-items:center;">
             <select id="tool-output-type" style="flex:1;" onchange="onDataTypeChange('output')">
-              <option value="">Select or create an Agent Data Type…</option>
-              <option value="customer_message">customer_message</option>
-              <option value="support_ticket">support_ticket</option>
-              <option value="routing_decision" selected>routing_decision</option>
-              <option value="__create__">＋ Create new Agent Data Type…</option>
+              <option value="">— none —</option>
+              <option value="customer_message">customer_message (customer-message)</option>
+              <option value="support_ticket">support_ticket (support-ticket)</option>
+              <option value="routing_decision" selected>routing_decision (routing-decision)</option>
             </select>
-            <button class="btn btn-outline btn-small" onclick="viewDataType('tool-output-type')">View</button>
+            <button class="btn btn-outline btn-small" title="View read-only definition" onclick="viewDataType('tool-output-type')">👁 View</button>
           </div>
-          <div class="hint">The Agent Data Type describing what this tool returns (alongside per-question typed answers and confidence).</div>
+          <div class="hint">The Agent Data Type describing what this tool returns. With no manual questions authored, questions are derived from this type at execution time.</div>
         </div>
       </div>
 
@@ -556,63 +497,85 @@
 
       <!-- 5. Questions builder -->
       <h2 style="margin:12px 0 4px;">Questions</h2>
-      <div class="alert info" style="padding:8px 12px;">
+      <div class="alert info" id="tool-questions-empty" style="padding:8px 12px;">
         <span>💡</span>
-        <div>Each question is an <strong>atomic snap judgment</strong>. Compose complex judgments as multiple questions; composition happens at the consumer level. Reference state paths in backticks (e.g. <code class="inline">`input.tier`</code>) — they can be auto-mapped below.</div>
+        <div>No questions authored — they are <strong>auto-generated from the output data type</strong> at execution time. Manual questions here override the generated ones.</div>
+      </div>
+      <div class="alert info" style="padding:8px 12px;">
+        <span>🧩</span>
+        <div>Each question is an <strong>atomic snap judgment</strong>. Reference state paths in backticks (e.g. <code class="inline">`input.tier`</code>) — they are auto-detected and offered as suggested mappings below.</div>
       </div>
       <div id="tool-questions"></div>
       <button class="btn btn-outline" onclick="addQuestion()">＋ Add question</button>
 
-      <!-- 6. State mapping -->
-      <h2 style="margin:20px 0 4px;">State mapping</h2>
-      <div class="alert info" style="padding:8px 12px;">
-        <span>🧩</span>
-        <div><strong>State injection.</strong> Each row maps a path in the <code class="inline">state</code> JSON sent to jev-latest to a source value. Once an input data type is selected, the property selector lists that type's fields (<code class="inline">input.&lt;field&gt;</code>); agent and data context sources are also available. Use <strong>Auto-detect placeholders</strong> to scan question instructions for backtick-quoted state paths and pre-create matching rows.</div>
-      </div>
-      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
-        <span class="hint" style="margin:0;">Mapping rows (state path ← source)</span>
-        <button class="btn btn-outline btn-small" onclick="autoDetectPlaceholders()">🔍 Auto-detect placeholders</button>
-      </div>
-      <div id="tool-mappings"></div>
-      <button class="btn btn-outline" onclick="addMapping()">＋ Add mapping</button>
-      <div style="margin-top:12px;">
-        <label class="field">Additional static state (JSON)</label>
-        <textarea id="tool-static-state" rows="3" class="mono">{ "locale": "en-US" }</textarea>
+      <!-- 6. State preset (Advanced) -->
+      <div style="margin:20px 0 0; border:1px solid var(--border); border-radius:var(--radius); background:#fafbfc;">
+        <div style="display:flex; align-items:center; gap:10px; padding:12px 16px; cursor:pointer; user-select:none;" onclick="toggleAdvanced()">
+          <span id="adv-caret" style="font-size:11px; color:var(--text2); transition:transform .2s;">▶</span>
+          <h2 style="margin:0;">State preset</h2>
+          <span class="chip neutral">Advanced</span>
+        </div>
+        <div id="tool-advanced" style="display:none; padding:4px 16px 16px; border-top:1px solid var(--border);">
+          <div class="hint" style="margin-bottom:8px;">State is built from the input data type automatically. Map backtick-quoted state paths in question instructions here only when names differ.</div>
+          <div class="alert info" style="padding:8px 12px;">
+            <span>🧩</span>
+            <div><strong>State injection.</strong> Keys that equal an input property auto-match silently. Unmatched placeholders appear as one mapping row each — map them to an input property.</div>
+          </div>
+          <div style="margin-bottom:8px;" id="tool-matched"></div>
+          <div id="tool-mappings"></div>
+          <button class="btn btn-outline" onclick="addMapping()">＋ Add mapping</button>
+        </div>
       </div>
 
-      <!-- 7. Confidence thresholds -->
-      <h2 style="margin:20px 0 4px;">Confidence thresholds</h2>
-      <p class="card-sub" style="margin-bottom:12px;">Every execution returns a confidence score. Thresholds decide what consumers should do with the result.</p>
-      <div style="display:flex; gap:12px; align-items:center; margin-bottom:14px;">
-        <label class="field" style="margin:0; width:220px;">Act automatically ≥</label>
-        <input type="range" min="50" max="99" value="80" id="tool-thresh-auto" style="width:260px;" oninput="onThresholdInput()">
-        <span class="mono" id="tool-thresh-auto-val" style="font-weight:600;">0.80</span>
+      <!-- 7. Thresholds, model & flags -->
+      <h2 style="margin:20px 0 4px;">Thresholds &amp; flags</h2>
+      <div class="alert warning" id="tool-readiness" style="display:none; padding:8px 12px;">
+        <span>⚠</span>
+        <div><strong>Enabling requires an input data type and an output data type.</strong> Assign both to make the tool executable — Save stays disabled until then (inline pre-validation instead of a raw 422).</div>
       </div>
-      <div style="display:flex; gap:12px; align-items:center;">
-        <label class="field" style="margin:0; width:220px;">Escalate to human &lt;</label>
-        <input type="range" min="10" max="70" value="50" id="tool-thresh-escalate" style="width:260px;" oninput="onThresholdInput()">
-        <span class="mono" id="tool-thresh-escalate-val" style="font-weight:600;">0.50</span>
+      <div class="row" style="align-items:flex-end;">
+        <div style="min-width:150px;">
+          <label class="field">Act threshold</label>
+          <input type="text" id="tool-thresh-auto" value="0.9" oninput="onThresholdInput()">
+        </div>
+        <div style="min-width:170px;">
+          <label class="field">Confirm threshold</label>
+          <input type="text" id="tool-thresh-escalate" value="0.7" oninput="onThresholdInput()">
+        </div>
+        <div style="min-width:240px;">
+          <label class="field">Decision model</label>
+          <select id="tool-model">
+            <option value="">— Select an enabled decision model —</option>
+            <option value="jev-latest" selected>jev-latest — TypeSafe AI</option>
+          </select>
+          <div class="hint">Only enabled models are listed; a stored-but-disabled selection renders as an unavailable option — re-select before saving.</div>
+        </div>
+        <div style="min-width:130px;">
+          <label class="field">Status</label>
+          <select id="tool-status">
+            <option value="draft">draft</option>
+            <option value="active" selected>active</option>
+            <option value="disabled">disabled</option>
+          </select>
+        </div>
+        <div>
+          <label class="field">Enabled</label>
+          <div style="display:flex; align-items:center; gap:10px; height:38px;">
+            <label class="switch">
+              <input type="checkbox" id="tool-enabled" onchange="onThresholdInput()">
+              <span class="slider"></span>
+            </label>
+          </div>
+        </div>
       </div>
-      <div class="alert info" style="margin:16px 0 0;">
-        <span>🎚</span>
-        <div id="tool-thresh-summary">Between 0.50 and 0.80 the consumer should <strong>proceed with caution / confirm</strong> before applying the outcome.</div>
-      </div>
+      <div class="hint">act ≥ confirm. Below confirm the tool escalates; between confirm and act it recommends review.</div>
 
       <!-- 8. Auto-generated tool description -->
-      <h2 style="margin:20px 0 4px;">Auto-generated tool description</h2>
+      <h2 style="margin:20px 0 4px;">Generated description</h2>
       <p class="card-sub" style="margin-bottom:12px;">The platform generates the tool description from your definition. This is exactly what skills, agents, and MCP clients see — no manual documentation needed.</p>
-      <div class="preview-grid">
-        <div>
-          <label class="field">Tool description (exposed to skills &amp; MCP)</label>
-          <pre class="json" id="tool-desc-preview"></pre>
-        </div>
-        <div>
-          <label class="field">Request → jev-latest (derived)</label>
-          <pre class="json" id="tool-preview-request"></pre>
-        </div>
-      </div>
-      <div style="margin-top:12px; display:flex; justify-content:flex-end;">
-        <button class="btn btn-outline" onclick="updateToolDescription(); toast('Tool description regenerated');">↻ Regenerate</button>
+      <pre class="json" id="tool-desc-preview" style="background:#fafbfc; color:var(--text); border:1px solid var(--border);"></pre>
+      <div style="margin-top:10px;">
+        <span class="chip decision"><span class="dot"></span><span class="mono" id="tool-chip" style="font-weight:600;">decision____…</span></span>
       </div>
 
     </div>
@@ -647,11 +610,75 @@
   </div>
 </div>
 
+<!-- ===== DIALOG: SYSTEM ONE PROVIDER EDITOR ===== -->
+<div class="overlay" id="dlg-provider">
+  <div class="dialog">
+    <div class="dialog-header">
+      <span id="pv-title">Add Provider</span>
+      <button class="close-x" onclick="closeDialog('dlg-provider')">✕</button>
+    </div>
+    <div class="dialog-body">
+      <div class="row">
+        <div>
+          <label class="field">Provider type</label>
+          <select id="pv-type">
+            <option value="typesafe" selected>TypeSafe AI (Jev)</option>
+            <option value="future" disabled>Other System One provider (coming later)</option>
+          </select>
+        </div>
+        <div>
+          <label class="field">Display name</label>
+          <input type="text" id="pv-name" placeholder="e.g. Production TypeSafe">
+        </div>
+      </div>
+      <div style="margin-top:12px;">
+        <label class="field">Base URL</label>
+        <input type="text" id="pv-baseurl" value="https://api.typesafe.ai/v1" readonly style="background:#f5f6f8; color:var(--text2); cursor:not-allowed;">
+        <div class="hint">🔗 Preset for Jev — non-editable in this release.</div>
+      </div>
+      <div class="row" style="margin-top:12px;">
+        <div>
+          <label class="field">Default model</label>
+          <select id="pv-default-model"><option>jev-latest</option></select>
+        </div>
+        <div>
+          <label class="field">Enabled models</label>
+          <div style="display:flex; flex-wrap:wrap; gap:6px; padding:8px 0;" id="pv-models">
+            <label style="display:flex; align-items:center; gap:4px; font-size:13px;"><input type="checkbox" checked onchange="pvSyncModel(this)"> jev-latest</label>
+          </div>
+          <div class="hint">Only enabled models across providers are selectable on decision tools. <a onclick="toast('Vendor model sync discovers available models from the provider API')">↻ Sync vendor models</a></div>
+        </div>
+      </div>
+      <div class="row" style="margin-top:12px; align-items:flex-end;">
+        <div style="flex:2;">
+          <label class="field">API key</label>
+          <div style="display:flex; gap:8px;">
+            <input type="password" id="pv-apikey" placeholder="Paste API key (tsk-…)" style="flex:1;">
+            <button class="btn btn-outline" id="pv-test-btn" onclick="testConnection()">Test connection</button>
+          </div>
+          <div class="hint">Write-only: never prefilled from fetched data, never returned in plaintext. Stored encrypted (same vault pattern as MCP credentials).</div>
+        </div>
+        <div>
+          <label class="field">Enabled</label>
+          <div style="height:38px; display:flex; align-items:center;">
+            <label class="switch"><input type="checkbox" id="pv-enabled" checked><span class="slider"></span></label>
+          </div>
+        </div>
+      </div>
+      <div id="pv-test-result" style="margin-top:12px;"></div>
+    </div>
+    <div class="dialog-actions">
+      <button class="btn btn-text" onclick="closeDialog('dlg-provider')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveProvider()">Save provider</button>
+    </div>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <script>
 /* ===================== state ===================== */
-let soConfigured = false;   // System One configured?
+let soConfigured = true;   // System One configured? (seeded provider below)
 let questions = [];
 let mappings = [];
 let qSeq = 0;
@@ -681,19 +708,27 @@ const CONTEXT_SOURCES = [
   { value: '{{data.invoices.count}}',      label: 'data context — open invoice count' }
 ];
 
-/* User-defined decision tools of this tenant */
+/* User-defined decision tools of this tenant. Status mirrors the as-built
+   DecisionToolsPage: enabled → Active, disabled → Disabled draft, and a
+   tool whose selected decision model is unavailable → Not Ready. */
 let decisionTools = [
   {
     name: 'tool_a',
-    description: 'Triages an inbound support request: category, urgency, refund eligibility.',
+    purpose: 'Triages an inbound support request: category, urgency, refund eligibility.',
+    description: "Decision tool 'tool_a': Triages an inbound support request: category, urgency, refund eligibility.\n\nInput data type: customer_message (customer-message). Fields: text, channel, received_at.\nOutput data type: routing_decision (routing-decision).\n\nQuestions:\n- `q_category` (choice): Classify the support request into exactly one category. Options: billing, technical, account.\n- `q_urgency` (score): Rate urgency 1 (low) – 5 (critical) against the SLA rubric.\n- `q_needs_refund` (noul): Does the request plausibly qualify for a refund?\n\nReturns per-question typed answers with probabilities and an overall gate outcome (act >= 0.9, confirm >= 0.7, else escalate).",
+    model: 'jev-latest — TypeSafe AI',
     questions: 3,
-    enabled: true
+    enabled: true,
+    ready: true
   },
   {
     name: 'priority_score_doc',
-    description: 'Scores documentation tickets for priority against the release rubric.',
+    purpose: 'Scores documentation tickets for priority against the release rubric.',
+    description: "Decision tool 'priority_score_doc': Scores documentation tickets for priority against the release rubric.",
+    model: 'jev-pro — TypeSafe AI',
     questions: 2,
-    enabled: true
+    enabled: true,
+    ready: true
   }
 ];
 
@@ -741,18 +776,27 @@ function renderMcpList(){
   $('dt-mcp').innerHTML = syntaxJson(JSON.stringify(list, null, 2));
 }
 function renderDecisionTools(){
-  $('dt-tbody').innerHTML = decisionTools.map((t,i) =>
-    '<tr>' +
-    '<td><span class="mono" style="font-weight:600;">decision____' + esc(t.name) + '</span> ' + decisionBadge() + '</td>' +
-    '<td style="max-width:420px;">' + esc(t.description) + '</td>' +
-    '<td>' + t.questions + '</td>' +
-    '<td>' + (t.enabled ? '<span class="chip success"><span class="dot"></span>Enabled</span>' : '<span class="chip warning"><span class="dot"></span>Disabled</span>') + '</td>' +
+  $('dt-tbody').innerHTML = decisionTools.map((t,i) => {
+    let status;
+    if(t.ready === false){
+      status = '<span class="chip warning" title="Not Ready: the selected decision model is disabled — evaluations are blocked until an enabled model is selected"><span class="dot"></span>Not Ready</span>';
+    } else if(t.enabled){
+      status = '<span class="chip success"><span class="dot"></span>Active</span>';
+    } else {
+      status = '<span class="chip neutral"><span class="dot"></span>Disabled</span>';
+    }
+    return '<tr>' +
+    '<td><span class="mono" style="font-weight:600;" title="decision____' + esc(t.name) + '">decision____' + esc(t.name) + '</span></td>' +
+    '<td style="max-width:260px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="' + esc(t.purpose) + '">' + esc(t.purpose || '—') + '</td>' +
+    '<td style="max-width:300px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--text2);" title="' + esc(t.description) + '">' + esc(t.description || '—') + '</td>' +
+    '<td><span class="chip neutral mono" style="max-width:160px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">' + esc(t.model || '—') + '</span></td>' +
+    '<td>' + status + '</td>' +
     '<td style="white-space:nowrap;">' +
       '<button class="btn btn-text btn-small" onclick="openToolEditor(' + i + ')">Edit</button>' +
-      '<button class="btn btn-text btn-small" onclick="showResult()">Run</button>' +
       '<button class="btn btn-danger-text btn-small" onclick="removeTool(' + i + ')">Delete</button>' +
-    '</td></tr>').join('') ||
-    '<tr><td colspan="5" class="card-sub" style="text-align:center; padding:24px;">No decision tools yet in tenant ' + TENANT + '.</td></tr>';
+    '</td></tr>';
+  }).join('') ||
+    '<tr><td colspan="6" class="card-sub" style="text-align:center; padding:24px;">No decision tools yet in tenant ' + TENANT + '.</td></tr>';
   renderToolsContext();
   renderMcpList();
 }
@@ -762,47 +806,81 @@ function removeTool(i){
   toast('Decision tool deleted');
 }
 
-/* ===================== System One config ===================== */
-function onApiKeyInput(){
-  const has = $('so-apikey').value.trim().length > 0;
-  $('so-test-btn').disabled = !has;
-  $('so-test-result').innerHTML = '';
+/* ===================== System One providers (as-built list + dialog) ===================== */
+let providers = [
+  { name: 'Production TypeSafe', vendor: 'typesafe', baseUrl: 'https://api.typesafe.ai/v1', defaultModel: 'jev-latest', models: ['jev-latest'], enabled: true }
+];
+function renderProviders(){
+  $('so-tbody').innerHTML = providers.map((p,i) =>
+    '<tr>' +
+    '<td><strong>' + esc(p.name) + '</strong></td>' +
+    '<td><span class="chip neutral">' + esc(p.vendor) + '</span></td>' +
+    '<td class="mono" style="font-size:12.5px;">' + esc(p.baseUrl) + '</td>' +
+    '<td class="mono">' + esc(p.defaultModel) + '</td>' +
+    '<td>' + p.models.map(m => '<span class="chip info" style="margin:0 4px 4px 0;"><span class="dot"></span>' + esc(m) + '</span>').join('') + '</td>' +
+    '<td><span class="chip success" title="Stored encrypted — write-only, never returned"><span class="dot"></span>••••' + esc(p.keyHint) + '</span></td>' +
+    '<td>' + (p.enabled ? '<span class="chip success"><span class="dot"></span>Enabled</span>' : '<span class="chip neutral"><span class="dot"></span>Disabled</span>') + '</td>' +
+    '<td style="white-space:nowrap;">' +
+      '<button class="btn btn-text btn-small" onclick="testConnectionById(' + i + ', this)">Test connection</button>' +
+      '<button class="btn btn-text btn-small" onclick="openProviderEditor(' + i + ')">Edit</button>' +
+      '<button class="btn btn-danger-text btn-small" onclick="removeProvider(' + i + ')">Delete</button>' +
+    '</td></tr>').join('') ||
+    '<tr><td colspan="8" class="card-sub" style="text-align:center; padding:24px;">No System One provider configured — decision tool authoring is blocked until one is added.</td></tr>';
+}
+function openProviderEditor(idx){
+  const p = idx !== undefined ? providers[idx] : null;
+  $('pv-title').textContent = p ? 'Edit Provider — ' + p.name : 'Add Provider';
+  $('pv-name').value = p ? p.name : '';
+  $('pv-apikey').value = ''; // write-only: never prefilled
+  $('pv-enabled').checked = p ? p.enabled : true;
+  $('pv-test-result').innerHTML = '';
+  $('dlg-provider').dataset.editIdx = idx !== undefined ? idx : '';
+  openDialog('dlg-provider');
+}
+function pvSyncModel(cb){
+  toast(cb.checked ? 'Model enabled — now selectable on decision tools' : 'Model disabled — tools selecting it become Not Ready');
+}
+function testConnectionById(i, btn){
+  const p = providers[i];
+  const old = btn.textContent;
+  btn.disabled = true; btn.textContent = 'Testing…';
+  setTimeout(() => {
+    btn.disabled = false; btn.textContent = old;
+    toast('Connection successful — ' + p.defaultModel + ' reachable at ' + p.baseUrl);
+  }, 700);
 }
 function testConnection(){
-  const btn = $('so-test-btn');
+  const btn = $('pv-test-btn');
   btn.disabled = true; btn.textContent = 'Testing…';
   setTimeout(() => {
     btn.disabled = false; btn.textContent = 'Test connection';
-    const ok = $('so-apikey').value.trim().length >= 8;
-    $('so-test-result').innerHTML = ok
-      ? '<div class="alert success" style="margin:0;"><span>✓</span><div>Connection successful — <strong>jev-latest</strong> reachable at <code class="inline">https://api.typesafe.ai/v1</code> (latency 187 ms). Key and endpoint validated; key will be stored encrypted at rest.</div></div>'
-      : '<div class="alert error" style="margin:0; background:var(--error-bg); color:#b71c1c;"><span>⚠</span><div>Connection failed — the key looks invalid. TypeSafe AI keys look like <code class="inline">tsk-…</code>. Endpoint <code class="inline">https://api.typesafe.ai/v1</code> was reached but rejected the credential.</div></div>';
+    const ok = $('pv-apikey').value.trim().length >= 8;
+    $('pv-test-result').innerHTML = ok
+      ? '<div class="alert success" style="margin:0;"><span>✓</span><div>Connection successful — <strong>jev-latest</strong> reachable at <code class="inline">https://api.typesafe.ai/v1</code> (latency 187 ms). Status only — the stored key is never returned.</div></div>'
+      : '<div class="alert warning" style="margin:0; background:var(--error-bg); color:#b71c1c;"><span>⚠</span><div>Connection failed — the key looks invalid. TypeSafe AI keys look like <code class="inline">tsk-…</code>. The endpoint was reached but rejected the credential.</div></div>';
   }, 700);
 }
-function saveConfig(){
-  const key = $('so-apikey').value.trim();
-  if(!key){ toast('Enter an API key first'); return; }
-  soConfigured = true;
-  $('so-status-chip').className = 'chip success';
-  $('so-status-chip').innerHTML = '<span class="dot"></span>Active · jev-latest';
-  const pc = $('dt-provider-chip');
-  pc.className = 'chip info';
-  pc.innerHTML = '<span class="dot"></span>Provider: TypeSafe AI · jev-latest';
-  $('so-apikey').value = '••••••••••••••••' + key.slice(-4);
-  $('so-apikey').readOnly = true;
-  $('so-remove-btn').style.display = '';
-  toast('Configuration saved — key stored encrypted');
+function saveProvider(){
+  const key = $('pv-apikey').value.trim();
+  const idx = $('dlg-provider').dataset.editIdx;
+  const p = idx !== '' ? providers[+idx] : { vendor: 'typesafe', models: [] };
+  p.name = $('pv-name').value.trim() || 'TypeSafe AI';
+  p.baseUrl = 'https://api.typesafe.ai/v1';
+  p.defaultModel = $('pv-default-model').value;
+  p.models = ['jev-latest'];
+  p.enabled = $('pv-enabled').checked;
+  if(key) p.keyHint = key.slice(-4); else if(!p.keyHint) p.keyHint = '••••';
+  if(idx === '') providers.push(p);
+  renderProviders();
+  soConfigured = providers.some(x => x.enabled);
+  closeDialog('dlg-provider');
+  toast('Provider saved — key stored encrypted' + (key ? '' : ' (existing key unchanged)'));
 }
-function removeKey(){
-  soConfigured = false;
-  $('so-status-chip').className = 'chip warning';
-  $('so-status-chip').innerHTML = '<span class="dot"></span>Not configured';
-  const pc = $('dt-provider-chip');
-  pc.className = 'chip warning';
-  pc.innerHTML = '<span class="dot"></span>Provider: not configured';
-  $('so-apikey').value = ''; $('so-apikey').readOnly = false;
-  $('so-remove-btn').style.display = 'none';
-  toast('Key removed');
+function removeProvider(i){
+  providers.splice(i,1);
+  soConfigured = providers.some(x => x.enabled);
+  renderProviders();
+  toast('Provider removed');
 }
 
 /* ===================== Skill editor (simple — no decision type) ===================== */
@@ -841,18 +919,27 @@ function openToolEditor(existingIdx){
     nav('systemone');
     return;
   }
-  $('dt-title').textContent = existingIdx !== undefined ? 'Edit Decision Tool — decision____' + decisionTools[existingIdx].name : 'Create Decision Tool';
-  $('tool-name').value = existingIdx !== undefined ? decisionTools[existingIdx].name : '';
-  $('tool-desc').value = existingIdx !== undefined ? decisionTools[existingIdx].description : '';
-  $('tool-input-type').value = existingIdx !== undefined && decisionTools[existingIdx].inputType ? decisionTools[existingIdx].inputType : 'customer_message';
-  $('tool-output-type').value = existingIdx !== undefined && decisionTools[existingIdx].outputType ? decisionTools[existingIdx].outputType : 'routing_decision';
-  onToolNameInput(existingIdx !== undefined ? decisionTools[existingIdx].name : '');
+  const t = existingIdx !== undefined ? decisionTools[existingIdx] : null;
+  $('dt-title').textContent = t ? 'Edit Decision Tool — decision____' + t.name : 'Create Decision Tool';
+  $('tool-name').value = t ? t.name : '';
+  $('tool-name').readOnly = !!t; // immutable once saved
+  $('tool-desc').value = t ? t.purpose : '';
+  $('tool-input-type').value = 'customer_message';
+  $('tool-output-type').value = 'routing_decision';
+  $('tool-thresh-auto').value = '0.9';
+  $('tool-thresh-escalate').value = '0.7';
+  $('tool-model').value = 'jev-latest';
+  $('tool-status').value = t && !t.enabled ? 'disabled' : 'active';
+  $('tool-enabled').checked = t ? t.enabled : false; // new tools start as disabled drafts
+  onToolNameInput();
   seedQuestions();
   renderQuestions();
   mappings = [];
   renderMappings();
-  onThresholdInput();
+  $('tool-advanced').style.display = 'none';
+  $('adv-caret').style.transform = '';
   updateToolDescription();
+  onThresholdInput();
   openDialog('dlg-tool');
 }
 function toolNameTaken(name, ignoreCurrent){
@@ -873,7 +960,9 @@ function onToolNameInput(currentName){
     err.style.display = 'none';
     $('tool-name').classList.remove('invalid');
   }
-  $('tool-save').disabled = !!problem || !$('tool-desc').value.trim() || questions.length === 0;
+  // Questions are optional (auto-derived from the output data type);
+  // Save is gated on name validity, purpose, configured model and readiness.
+  $('tool-save').disabled = !!problem || !$('tool-desc').value.trim() || readinessBlocked() || !soConfigured;
 }
 
 /* ---- Agent Data Type selection (input/output) ---- */
@@ -903,11 +992,11 @@ function viewDataType(selectId){
 function seedQuestions(){
   qSeq = 0;
   questions = [
-    { id:'q_category', type:'choice', instructions:'Classify the support request into exactly one category. Consider `input.channel` and the tone of `input.text`.', criteria:[
+    { id:'q_category', type:'choice', instructions:'Classify the support request into exactly one category. Consider `channel` and the tone of `text`.', criteria:[
       {key:'billing', value:'Charges, invoices, refunds'},{key:'technical', value:'Errors, bugs, outages'},{key:'account', value:'Login, access, profile'} ]},
     { id:'q_urgency', type:'score', instructions:'Rate urgency 1 (low) – 5 (critical) against the SLA rubric.', criteria:[
       {level:1, label:'Routine'}, {level:2, label:'Minor inconvenience'}, {level:3, label:'Degraded workflow'}, {level:4, label:'Blocking, workaround exists'}, {level:5, label:'Critical / outage'} ]},
-    { id:'q_needs_refund', type:'noul', instructions:'Does the request plausibly qualify for a refund? Check `input.channel` for prior promises.', criteria:{ clarification:'If unsure, should we ask the customer for order details? (yes/no)' } }
+    { id:'q_needs_refund', type:'noul', instructions:'Does the request plausibly qualify for a refund? Check `channel` for prior promises.', criteria:{ clarification:'If unsure, should we ask the customer for order details? (yes/no)' } }
   ];
 }
 function typeChip(t){
@@ -932,9 +1021,8 @@ function renderQuestions(){
           '<input type="text" value="'+esc(c.label)+'" placeholder="level label" oninput="setCrit('+i+','+ci+',\'label\',this.value)">' +
           '<button class="btn btn-danger-text btn-small" onclick="removeCrit('+i+','+ci+')">✕</button></div>').join('') +
         '<button class="btn btn-text btn-small" onclick="addCrit('+i+')">＋ Add level</button>';
-    } else { // noul
-      crit = '<label class="field" style="margin-top:10px;">Clarification (optional yes/no follow-up when unsure)</label>' +
-        '<input type="text" value="'+esc(q.criteria.clarification||'')+'" placeholder="Clarification prompt…" oninput="setNoulClar('+i+',this.value)">';
+    } else { // noul — no criteria; free-form yes/no with probability
+      crit = '<div class="hint" style="margin-top:10px;">Noul questions take no criteria — the model returns a yes/no answer with a probability.</div>';
     }
     return '<div class="qcard">' +
       '<div class="qcard-header">' +
@@ -946,7 +1034,7 @@ function renderQuestions(){
       '</div>' +
       '<div class="qcard-body">' +
         '<div class="row">' +
-          '<div style="max-width:240px;"><label class="field">Question ID</label>' +
+          '<div style="max-width:240px;"><label class="field">Question key</label>' +
           '<input type="text" value="'+esc(q.id)+'" oninput="setQ('+i+',\'id\',this.value)"></div>' +
           '<div style="max-width:180px;"><label class="field">Type</label>' +
           '<select onchange="setQ('+i+',\'type\',this.value)">' +
@@ -956,7 +1044,8 @@ function renderQuestions(){
           '<textarea rows="2" oninput="setQ('+i+',\'instructions\',this.value)">'+esc(q.instructions)+'</textarea></div>' +
         '</div>' + crit +
       '</div></div>';
-  }).join('') || '<p class="card-sub" style="margin-bottom:12px;">No questions yet — add at least one.</p>';
+  }).join('') || '';
+  $('tool-questions-empty').style.display = questions.length ? 'none' : '';
   onToolNameInput($('tool-name').value.trim());
 }
 function setQ(i,f,v){
@@ -986,46 +1075,18 @@ function addCrit(i){
 function removeCrit(i,ci){ questions[i].criteria.splice(ci,1); renderQuestions(); }
 function setNoulClar(i,v){ questions[i].criteria.clarification=v; updateToolDescription(); }
 
-/* ---- State mapping ---- */
-function renderMappings(){
-  if(!mappings.length){
-    mappings = [
-      { state:'input.text', source:'{{input.text}}' },
-      { state:'input.channel', source:'{{input.channel}}' },
-      { state:'customer.tier', source:'{{agent.customer_data.plan}}' }
-    ];
-  }
-  $('tool-mappings').innerHTML = mappings.map((m,i) =>
-    '<div class="mapping-row">' +
-    '<input type="text" value="'+esc(m.state)+'" placeholder="state path (e.g. input.text)" oninput="setMap('+i+',\'state\',this.value)">' +
-    '<span class="arrow">←</span>' +
-    '<select onchange="setMap('+i+',\'source\',this.value)">' + sourceOptions(m.source) + '</select>' +
-    '<button class="btn btn-danger-text btn-small" onclick="removeMap('+i+')">✕</button>' +
-    '</div>').join('');
+/* ---- State preset (as-built guided mapper) ----
+   Placeholders = explicit mapping keys + backtick paths detected live in
+   question instructions (detectStatePlaceholdersFromQuestions). Keys that
+   equal an input property auto-match silently; the rest render as one
+   mapper row each. Only explicit rows are saved. */
+function toggleAdvanced(){
+  const body = $('tool-advanced'), caret = $('adv-caret');
+  const open = body.style.display === 'none';
+  body.style.display = open ? '' : 'none';
+  caret.style.transform = open ? 'rotate(90deg)' : '';
 }
-function sourceOptions(selected){
-  let opts = '';
-  const inName = $('tool-input-type') ? $('tool-input-type').value : '';
-  if(inName && DATA_TYPES[inName]){
-    opts += DATA_TYPES[inName].fields.map(f => {
-      const v = '{{input.' + f.name + '}}';
-      return '<option value="'+esc(v)+'"'+(selected===v?' selected':'')+'>'+esc(v)+' — input.'+esc(f.name)+' ('+esc(f.type)+')</option>';
-    }).join('');
-  }
-  CONTEXT_SOURCES.forEach(s => {
-    opts += '<option value="'+esc(s.value)+'"'+(selected===s.value?' selected':'')+'>'+esc(s.value)+' — '+esc(s.label)+'</option>';
-  });
-  if(selected && opts.indexOf('value="'+esc(selected)+'"') === -1){
-    opts += '<option value="'+esc(selected)+'" selected>'+esc(selected)+' — custom</option>';
-  }
-  return opts;
-}
-function addMapping(){ mappings.push({state:'',source:''}); renderMappings(); }
-function removeMap(i){ mappings.splice(i,1); renderMappings(); updateToolDescription(); }
-function setMap(i,f,v){ mappings[i][f]=v; updateToolDescription(); }
-
-/* Scan question instructions for backtick-quoted state paths and pre-create mapping rows */
-function autoDetectPlaceholders(silent){
+function detectPaths(){
   const found = [];
   questions.forEach(q => {
     const re = /`([^`]+)`/g; let m;
@@ -1034,20 +1095,71 @@ function autoDetectPlaceholders(silent){
       if(p && found.indexOf(p) === -1) found.push(p);
     }
   });
-  let added = 0;
-  found.forEach(path => {
-    if(!mappings.some(mp => mp.state === path)){
-      mappings.push({ state: path, source: '{{' + path + '}}' });
-      added++;
-    }
-  });
-  renderMappings();
-  updateToolDescription();
-  if(!silent) toast(added ? 'Auto-detected ' + added + ' placeholder(s) — mapping rows created' : 'No new placeholders found in question instructions');
+  return found;
 }
+function inputFieldNames(){
+  const inName = $('tool-input-type') ? $('tool-input-type').value : '';
+  return inName && DATA_TYPES[inName] ? DATA_TYPES[inName].fields.map(f => f.name) : [];
+}
+function renderMappings(){
+  const inName = $('tool-input-type') ? $('tool-input-type').value : '';
+  if(!inName){
+    $('tool-matched').innerHTML = '';
+    $('tool-mappings').innerHTML = '<div class="alert info" style="padding:8px 12px;"><span>ℹ️</span><div>Select an input data type first — its properties populate the mapping selectors.</div></div>';
+    return;
+  }
+  const fields = inputFieldNames();
+  // placeholders: explicit keys first, then detected backtick paths
+  const keys = [];
+  mappings.forEach(m => { const k = m.state.trim(); if(k && keys.indexOf(k) === -1) keys.push(k); });
+  detectPaths().forEach(p => { if(keys.indexOf(p) === -1) keys.push(p); });
+  // matched (1:1 with input field) → silent green chips
+  const matched = keys.filter(k => fields.indexOf(k) !== -1);
+  $('tool-matched').innerHTML = matched.length
+    ? matched.map(k => '<span class="chip success" style="margin:0 6px 6px 0;"><span class="dot"></span>' + esc(k) + ' → ' + esc(k) + '</span>').join('') +
+      ' <span class="hint" style="display:inline;">auto-matched from the input data type</span>'
+    : '';
+  // unmatched → one mapper row each
+  const unmatched = keys.filter(k => fields.indexOf(k) === -1);
+  $('tool-mappings').innerHTML = unmatched.map(k => {
+    const row = mappings.find(m => m.state.trim() === k);
+    const val = row ? row.key : '';
+    return '<div style="display:flex; gap:8px; align-items:center; margin-bottom:8px;">' +
+      '<span class="mono" style="min-width:200px; font-size:12.5px;">' + esc(k) + '</span>' +
+      '<select style="flex:1;" onchange="setMapKey(\'' + esc(k) + '\', this.value)">' +
+        '<option value="">— select input property —</option>' +
+        fields.map(f => '<option value="'+esc(f)+'"'+(val===f?' selected':'')+'>'+esc(f)+'</option>').join('') +
+      '</select></div>';
+  }).join('');
+  // explicit added rows (editable state key) — rows whose key is not a detected placeholder
+  const detected = detectPaths();
+  const explicit = mappings.filter(m => m.state.trim() && detected.indexOf(m.state.trim()) === -1 && fields.indexOf(m.state.trim()) === -1);
+  $('tool-mappings').innerHTML += explicit.map(m => {
+    const i = mappings.indexOf(m);
+    return '<div class="mapping-row">' +
+      '<input type="text" value="' + esc(m.state) + '" placeholder="state key" oninput="setMap(' + i + ',\'state\',this.value)">' +
+      '<span class="arrow">←</span>' +
+      '<select onchange="setMap(' + i + ',\'key\',this.value)">' +
+        '<option value="">— select input property —</option>' +
+        fields.map(f => '<option value="'+esc(f)+'"'+(m.key===f?' selected':'')+'>'+esc(f)+'</option>').join('') +
+      '</select>' +
+      '<button class="btn btn-danger-text btn-small" onclick="removeMap('+i+')">✕</button>' +
+      '</div>';
+  }).join('');
+}
+function setMapKey(stateKey, val){
+  const row = mappings.find(m => m.state.trim() === stateKey);
+  if(row) row.key = val; else mappings.push({ state: stateKey, key: val });
+  updateToolDescription();
+}
+function addMapping(){ mappings.push({state:'',key:''}); renderMappings(); }
+function removeMap(i){ mappings.splice(i,1); renderMappings(); updateToolDescription(); }
+function setMap(i,f,v){ mappings[i][f]=v; updateToolDescription(); }
 
-/* Simulated AI generation of questions + state mappings */
+/* Simulated AI generation of questions + state mappings (reuses the skill
+   editor's workflow-authoring mechanism in the real product) */
 function aiGenerate(){
+  if(!$('tool-desc').value.trim()){ toast('Enter a description first — generation drafts from it'); return; }
   const btn = $('tool-ai-btn');
   btn.disabled = true; btn.textContent = '🪄 Analyzing description & data types…';
   setTimeout(() => {
@@ -1055,101 +1167,71 @@ function aiGenerate(){
     seedQuestions();
     renderQuestions();
     mappings = [];
-    autoDetectPlaceholders(true);
-    const inName = $('tool-input-type').value;
-    if(inName && DATA_TYPES[inName] && !mappings.some(mp => mp.state === 'input.' + DATA_TYPES[inName].fields[0].name)){
-      mappings.unshift({ state: 'input.' + DATA_TYPES[inName].fields[0].name, source: '{{input.' + DATA_TYPES[inName].fields[0].name + '}}' });
-      renderMappings();
-    }
     updateToolDescription();
-    toast('AI draft ready — review the generated questions and state mappings');
+    renderMappings();
+    toast('AI draft ready — review the generated questions and state mapping');
   }, 900);
 }
 
-/* ---- Confidence thresholds ---- */
+/* ---- Thresholds & readiness (as-built number inputs + flags) ---- */
+function readinessBlocked(){
+  return $('tool-enabled').checked && (!$('tool-input-type').value || !$('tool-output-type').value);
+}
 function onThresholdInput(){
-  const a = +$('tool-thresh-auto').value, e = +$('tool-thresh-escalate').value;
-  $('tool-thresh-auto-val').textContent = (a/100).toFixed(2);
-  $('tool-thresh-escalate-val').textContent = (e/100).toFixed(2);
-  $('tool-thresh-summary').innerHTML =
-    '≥ <strong>' + (a/100).toFixed(2) + '</strong> → act automatically · <strong>' + (e/100).toFixed(2) + '–' + (a/100).toFixed(2) +
-    '</strong> → proceed with caution / confirm · &lt; <strong>' + (e/100).toFixed(2) + '</strong> → escalate to a human.';
+  $('tool-readiness').style.display = readinessBlocked() ? '' : 'none';
+  $('tool-save').disabled = readinessBlocked() || !soConfigured;
   updateToolDescription();
 }
 
-/* ---- Auto-generated tool description ---- */
-function resolvePlaceholder(p){
-  const m = /^\{\{input\.([a-z_]+)\}\}$/.exec(p);
-  const inName = $('tool-input-type') ? $('tool-input-type').value : '';
-  if(m && inName && DATA_TYPES[inName]){
-    const f = DATA_TYPES[inName].fields.find(f => f.name === m[1]);
-    if(f) return f.type + ' — input.' + f.name;
-  }
-  const samples = {
-    '{{agent.customer_data.plan}}': 'string — the customer plan tier',
-    '{{data.invoices.count}}': 'integer — open invoice count'
-  };
-  return samples[p] !== undefined ? samples[p] : '"' + p.replace(/[{}]/g,'') + '"';
-}
+/* ---- Auto-generated tool description (mirrors generate_tool_description) ---- */
 function buildState(){
+  const fields = inputFieldNames();
   const st = {};
-  mappings.forEach(m => { if(m.state) st[m.state] = resolvePlaceholder(m.source.trim()); });
-  try { Object.assign(st, JSON.parse($('tool-static-state').value||'{}')); } catch(e){}
+  // 1:1 keys auto-match from the input data type and are omitted from the
+  // saved preset; only explicit mappings are stored.
+  const detected = detectPaths();
+  detected.forEach(k => { if(fields.indexOf(k) !== -1) st[k] = '<input.' + k + '>'; });
+  mappings.forEach(m => { if(m.state.trim() && m.key.trim()) st[m.state.trim()] = '<input.' + m.key.trim() + '>'; });
   return st;
-}
-function schemaFromType(name, fallbackNote){
-  if(name && DATA_TYPES[name]){
-    const dt = DATA_TYPES[name];
-    return Object.assign({ $agent_data_type: dt.label, type: 'object' }, {
-      properties: Object.fromEntries(dt.fields.map(f => [f.name, { type: f.type, description: f.description }])),
-      required: dt.fields.map(f => f.name)
-    });
-  }
-  return { note: fallbackNote };
 }
 function updateToolDescription(){
   if(!$('tool-desc-preview')) return;
-  const name = $('tool-name').value.trim() || '<name>';
-  const desc = $('tool-desc').value.trim() || '<purpose>';
+  const name = $('tool-name').value.trim() || '…';
+  const purpose = $('tool-desc').value.trim();
   const inName = $('tool-input-type') ? $('tool-input-type').value : '';
   const outName = $('tool-output-type') ? $('tool-output-type').value : '';
-  const state = buildState();
-  const auto = (+$('tool-thresh-auto').value/100).toFixed(2);
-  const esc2 = (+$('tool-thresh-escalate').value/100).toFixed(2);
-  const doc = {
-    name: 'decision____' + name,
-    description: desc + ' Evaluates ' + questions.length + ' predefined question(s) against the state in a single System One (jev-latest) evaluation and returns structured typed answers with probabilities and confidence, plus the output defined by the "' + (outName || '<output data type>') + '" Agent Data Type.',
-    tenant: TENANT,
-    input_schema: schemaFromType(inName, 'select an input Agent Data Type'),
-    state_preset: state,
-    output_schema: schemaFromType(outName, 'select an output Agent Data Type'),
-    answers: Object.fromEntries(questions.map(q => [q.id, {
-      type: q.type === 'choice' ? 'string' : (q.type === 'score' ? 'integer' : 'boolean'),
-      probabilities: 'object',
-      description: q.instructions || ''
-    }])),
-    confidence_gate: { confidence: 'number (0–1)', gate: 'auto ≥ ' + auto + ' · confirm ' + esc2 + '–' + auto + ' · escalate < ' + esc2 },
-    exposed_to: ['skills', 'agents', 'SOPs', 'MCP clients (tool name: decision____' + name + ')']
-  };
-  $('tool-desc-preview').innerHTML = syntaxJson(JSON.stringify(doc, null, 2));
-
-  const req = {
-    model: 'jev-latest',
-    provider: 'typesafe',
-    endpoint: 'https://api.typesafe.ai/v1',
-    input: inName && DATA_TYPES[inName]
-      ? Object.fromEntries(DATA_TYPES[inName].fields.map(f => [f.name, '<' + f.type + '>']))
-      : { note: 'select an input Agent Data Type' },
-    state: state,
-    questions: questions.map(q => {
-      const base = { id:q.id, type:q.type, instructions:q.instructions };
-      if(q.type==='choice') base.options = q.criteria.map(c=>c.key).filter(Boolean);
-      if(q.type==='score') base.levels = q.criteria.map(c=>c.label).filter(Boolean);
-      if(q.type==='noul' && q.criteria.clarification) base.clarification = q.criteria.clarification;
-      return base;
-    })
-  };
-  $('tool-preview-request').innerHTML = syntaxJson(JSON.stringify(req, null, 2));
+  const act = $('tool-thresh-auto').value.trim() || '0.9';
+  const confirm = $('tool-thresh-escalate').value.trim() || '0.7';
+  const lines = [];
+  const title = "Decision tool '" + name + "'";
+  lines.push(purpose ? title + ': ' + purpose : title + ': evaluates predefined questions against a constructed state and returns structured typed answers with confidence.');
+  if(inName && DATA_TYPES[inName]){
+    const dt = DATA_TYPES[inName];
+    lines.push('', 'Input data type: ' + dt.label + ' (' + dt.label.replace(/_/g,'-') + '). Fields: ' + dt.fields.map(f => f.name).join(', ') + '.');
+  }
+  if(outName && DATA_TYPES[outName]){
+    lines.push('Output data type: ' + DATA_TYPES[outName].label + ' (' + DATA_TYPES[outName].label.replace(/_/g,'-') + ').');
+  }
+  const qs = questions.filter(q => q.id.trim());
+  if(qs.length > 0){
+    lines.push('', 'Questions:');
+    qs.forEach(q => {
+      let desc = '- `' + q.id + '` (' + q.type + ')';
+      if(q.instructions && q.instructions.trim()) desc += ': ' + q.instructions.trim();
+      if(q.type === 'choice'){
+        const opts = q.criteria.map(c => c.key).filter(Boolean);
+        if(opts.length) desc += ' Options: ' + opts.join(', ') + '.';
+      } else if(q.type === 'score'){
+        desc += ' Rubric: ' + JSON.stringify(q.criteria.map(c => c.label)) + '.';
+      }
+      lines.push(desc);
+    });
+  }
+  const stateKeys = Object.keys(buildState());
+  if(stateKeys.length > 0) lines.push('', 'State fields sent to the model: ' + stateKeys.join(', ') + '.');
+  lines.push('', 'Returns per-question typed answers with probabilities and an overall gate outcome (act >= ' + act + ', confirm >= ' + confirm + ', else escalate).');
+  $('tool-desc-preview').textContent = lines.join('\n');
+  $('tool-chip').textContent = 'decision____' + name;
   onToolNameInput($('tool-name').value.trim());
 }
 function syntaxJson(s){
@@ -1163,13 +1245,15 @@ function syntaxJson(s){
 function saveTool(){
   const name = $('tool-name').value.trim();
   const existingIdx = decisionTools.findIndex(t => $('dt-title').textContent === 'Edit Decision Tool — decision____' + t.name);
+  const modelSel = $('tool-model');
   const record = {
     name: name,
-    description: $('tool-desc').value.trim(),
-    inputType: $('tool-input-type').value,
-    outputType: $('tool-output-type').value,
+    purpose: $('tool-desc').value.trim(),
+    description: $('tool-desc-preview').textContent,
+    model: modelSel.value ? modelSel.options[modelSel.selectedIndex].text : '—',
     questions: questions.length,
-    enabled: true
+    enabled: $('tool-enabled').checked,
+    ready: !!modelSel.value
   };
   if(existingIdx >= 0) decisionTools[existingIdx] = record;
   else decisionTools.push(record);
@@ -1203,20 +1287,20 @@ function renderResult(){
 }
 function renderGate(){
   const conf = 0.94;
-  const t = $('rv-threshold').value/100;
-  $('rv-threshold-val').textContent = t.toFixed(2);
   const gate = $('rv-gate');
   const ring = $('rv-ring');
-  if(conf >= t){
+  // As-built gate: act >= tool.act_threshold, confirm >= confirm_threshold, else escalate.
+  const act = 0.9, confirm = 0.7;
+  if(conf >= act){
     ring.style.background = 'var(--success)';
-    gate.innerHTML = '<div class="gate-banner auto"><span style="font-size:20px;">✅</span><div><strong>Act automatically</strong> — confidence 0.94 ≥ threshold '+t.toFixed(2)+'. Result dispatched to the SOP without human review.</div></div>';
-  } else if(conf >= t-0.3){
+    gate.innerHTML = '<div class="gate-banner auto"><span style="font-size:20px;">✅</span><div><strong>Act automatically</strong> — confidence 0.94 ≥ act threshold 0.90. Result dispatched to the SOP without human review.</div></div>';
+  } else if(conf >= confirm){
     ring.style.background = 'var(--warning)';
-    gate.innerHTML = '<div class="gate-banner confirm"><span style="font-size:20px;">🖐</span><div><strong>Confirm required</strong> — confidence 0.94 is below the act-automatically threshold '+t.toFixed(2)+' but within the confirm band. A human must approve before the outcome is applied.</div>' +
+    gate.innerHTML = '<div class="gate-banner confirm"><span style="font-size:20px;">🖐</span><div><strong>Confirm required</strong> — confidence 0.94 is below the act threshold 0.90 but within the confirm band. A human must approve before the outcome is applied.</div>' +
       '<div class="actions"><button class="btn btn-outline btn-small" onclick="toast(\'Confirmed — outcome applied\')">Confirm</button><button class="btn btn-danger-text btn-small" onclick="toast(\'Rejected — escalated\')">Reject</button></div></div>';
   } else {
     ring.style.background = 'var(--error)';
-    gate.innerHTML = '<div class="gate-banner escalate"><span style="font-size:20px;">🚨</span><div><strong>Escalated to human</strong> — confidence 0.94 is far below threshold '+t.toFixed(2)+'. Routed to the review queue.</div>' +
+    gate.innerHTML = '<div class="gate-banner escalate"><span style="font-size:20px;">🚨</span><div><strong>Escalated to human</strong> — confidence is below the confirm threshold 0.70. Routed to the review queue.</div>' +
       '<div class="actions"><button class="btn btn-outline btn-small" onclick="toast(\'Reassigned to reviewer\')">Assign reviewer</button></div></div>';
   }
 }
@@ -1225,6 +1309,7 @@ function renderGate(){
 renderQuestions();
 renderMappings();
 renderDecisionTools();
+renderProviders();
 </script>
 </body>
 </html>

@@ -88,6 +88,8 @@ class McpSessionRead(BaseModel):
     credential_config: dict[str, Any] | None
     oauth_expires_at: datetime | None = None
     oauth_refresh_expires_at: datetime | None = None
+    requires_reauth: bool = False
+    last_refresh_error: str | None = None
     created_at: datetime
     updated_at: datetime
     # Connection test result (only present during creation/update)

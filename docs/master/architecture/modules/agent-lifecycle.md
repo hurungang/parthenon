@@ -92,6 +92,10 @@ composition (`OptimizedImplementationPlan`):
 
 See [Sandboxed Scripting](sandboxed-scripting.md).
 
+### 3b. Token Preflight (Execution Gate)
+
+Before any execution is dispatched (including delegated subagents), the Communication Hub Agent Gateway runs a token-health preflight against Control Center: expired tokens **block** the execution (422, re-auth message), tokens expiring within 7 days **warn** without blocking, healthy tokens proceed. No token material ever reaches Agent Runtime. See [Communication Hub Architecture](communication-hub/architecture.md#execution-preflight-gate) and [Token Refresh Service](token-refresh.md).
+
 ### 4. Execution Log Capture
 
 Before the first LLM inference call, the Agent Runtime writes the full system instruction and user prompt to the Execution Log Store, keyed by `session_id`. This ensures the log reflects exactly what was sent to the model. Subsequent reasoning steps and tool calls are appended throughout the LangChain executor loop.

@@ -141,10 +141,10 @@ Paths follow `docs/config.yaml` `source.tests` (`frontend/src/__tests__/`, `e2e/
 | `frontend/src/__tests__/AgentManagementPanelPage.test.tsx` | Three-region layout, selection state, header CRUD wiring, dialog error display; sidebar search/selection/empty/error states |
 | `frontend/src/__tests__/EquipmentSlots.test.tsx` | Seven slots: assign/unassign/inline-create contract, gating, conversational output lock |
 | `frontend/src/__tests__/PendingChangesTray.test.tsx` | Inert-while-pristine, save, discard, error surfacing |
-| `frontend/src/__tests__/PanelTopologyCanvas.test.tsx` | Live re-render on draft mutation, no API calls, hub node present; `buildPanelTopology` pure-builder coverage (idempotence, node/edge shape, placeholder handling) |
+| `frontend/src/__tests__/PanelTopologyCanvas.test.tsx` | Live re-render on draft mutation, no API calls, hub node present; `buildPanelTopology` pure-builder coverage (idempotence, node/edge shape, placeholder handling); **extended** (unify-agent-topology-diagram): optional `onNodeClick` forwarded when provided, absent by default — panel behavior unchanged; zoom/fullscreen/Escape logic unchanged |
 | `frontend/src/__tests__/ResourcePickerDialog.test.tsx` | Shared picker: label/sublabel rows, debounced client-side search, empty state, pagination, single-replace vs multi-reconcile selection, create-new pre-selection, 403 degradation via permission alert, long-name tooltip; slot picker configs (role replace semantics, skill order-preserving reconcile, typed input schema composition/resolution, typed output switch, model selection mapping) |
 | `frontend/src/__tests__/TopologyDiagramRenderer.test.tsx` | **Extended**: `communication_hub` node type + localized legend + hub-helper idempotence |
-| `frontend/src/__tests__/AgentTypeDetailsDialog.test.tsx` | **Extended**: hub node in the agent preview topology |
+| `frontend/src/__tests__/AgentTypeDetailsDialog.test.tsx` | **Extended** (unify-agent-topology-diagram): preview renders the unified `PanelTopologyCanvas` via the agent-type → draft mapping; data accuracy; draft re-mapping on agent switch; `handleNodeClick` entity views; hub/placeholder click no-ops; permission-denied alert; dirty-state affordance suppressed |
 | `frontend/src/__tests__/PlanPreviewModal.test.tsx` | **Extended**: hub node in the plan preview topology |
 | `frontend/src/__tests__/AppShell.test.tsx` | **Extended**: `/agents/panel` sidebar nav entry |
 
@@ -157,7 +157,7 @@ All mocked via the shared per-change mock world (`mockApiCatchAllProxyAware` + `
 | `e2e/tests/_agent_panel_world.ts` | Shared mock world: stateful agents/roles/skills/SOPs/data-types/model-configs endpoints, MUI-select locators, request observer |
 | `e2e/tests/agent-management-panel.spec.ts` | Full CRUD lifecycle (create → read → edit → delete → recreate same name), parent auto-refresh (no-reload), unsaved-changes guard, single-PUT save tray, sidebar search, empty-slot placeholders; **gated real-backend (unmocked) CRUD variant** that skips cleanly when the stack is unavailable |
 | `e2e/tests/agent-management-panel-slots.spec.ts` | Inline create-and-assign per slot with timestamped data (per-test mocked world = self-cleaning); identical-dialog equivalence; assign-existing + unassign round-trip; conversational output lock; identity 403 surfaced via the Dialog Error Handling Standard |
-| `e2e/tests/agent-management-panel-topology.spec.ts` | Live topology updates with zero API requests (route observer), agent-switch re-render with guard, discard-no-leak, hub node + dashed edge in panel topology AND existing preview topologies (conversational + typed/plan branches) |
+| `e2e/tests/agent-management-panel-topology.spec.ts` | Live topology updates with zero API requests (route observer), agent-switch re-render with guard, discard-no-leak, hub node in panel topology; existing preview topologies updated (unify-agent-topology-diagram): typed-branch dialog now asserts the unified topology canvas (renamed from the "typed agent plan preview topology" test), conversational branch unchanged |
 | `e2e/tests/agent-management-panel-permissions.spec.ts` | Slot degradation on structured 403, sidebar 403 without auth-redirect, read-only browsing with zero write actions, 403 on save kept in the tray with draft dirty |
 
 ### Regression set (must keep passing after dialog relocation)

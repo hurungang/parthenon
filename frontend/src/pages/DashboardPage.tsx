@@ -14,6 +14,7 @@ import GppBadIcon from '@mui/icons-material/GppBad'
 import EmailIcon from '@mui/icons-material/Email'
 import AdminPanelSettingsIcon from '@mui/icons-material/AdminPanelSettings'
 import { useDashboardMetrics } from '../hooks/useDashboardMetrics'
+import { useTokenHealth } from '../hooks/useTokenHealth'
 import { StatCard } from '../components/dashboard/StatCard'
 import { TimeSensitiveCard } from '../components/dashboard/TimeSensitiveCard'
 import { DateRangePicker } from '../components/dashboard/DateRangePicker'
@@ -30,6 +31,11 @@ export function DashboardPage() {
     setDateRange,
     refetch,
   } = useDashboardMetrics()
+
+  const {
+    data: tokenHealthData,
+    isLoading: tokenHealthLoading,
+  } = useTokenHealth()
 
   const snapshot = dashboardData?.snapshot_counts
   const timeData = dashboardData?.time_sensitive
@@ -179,6 +185,56 @@ export function DashboardPage() {
             isPermissionDenied={flags?.permission_requests ?? false}
             colorVariant="slate"
             navigateTo="/permissions/access-requests"
+          />
+        </Grid>
+      </Grid>
+
+      {/* ═══════ TOKEN HEALTH (token-expiry-alerting) ═══════ */}
+      <Typography
+        variant="overline"
+        sx={{
+          fontWeight: 600, letterSpacing: 0.5, color: 'text.secondary',
+          borderBottom: '1px solid', borderColor: 'divider',
+          display: 'block', pb: 0.75, mb: 1.5, mt: 1,
+        }}
+      >
+        {t('dashboard.tokenHealthSection')}
+      </Typography>
+
+      <Grid container spacing={1.5} mb={3}>
+        <Grid size={{ xs: 12, sm: 6, md: 6, lg: 3 }}>
+          <StatCard
+            icon={<GppBadIcon fontSize="inherit" />}
+            label={t('dashboard.tokenHealthIdentities')}
+            value={tokenHealthData?.identities.expired_count ?? 0}
+            subBreakdowns={[
+              {
+                label: `${tokenHealthData?.identities.expiring_count ?? 0} ${t('dashboard.expiringWithin7Days')}`,
+                color: '#C2410C',
+              },
+            ]}
+            isLoading={tokenHealthLoading}
+            isPermissionDenied={tokenHealthData?.permission_flags.identities ?? false}
+            colorVariant="red"
+            navigateTo="/agents/identities"
+          />
+        </Grid>
+
+        <Grid size={{ xs: 12, sm: 6, md: 6, lg: 3 }}>
+          <StatCard
+            icon={<WarningAmberIcon fontSize="inherit" />}
+            label={t('dashboard.tokenHealthMcpSessions')}
+            value={tokenHealthData?.mcp_sessions.expired_count ?? 0}
+            subBreakdowns={[
+              {
+                label: `${tokenHealthData?.mcp_sessions.expiring_count ?? 0} ${t('dashboard.expiringWithin7Days')}`,
+                color: '#C2410C',
+              },
+            ]}
+            isLoading={tokenHealthLoading}
+            isPermissionDenied={tokenHealthData?.permission_flags.mcp_sessions ?? false}
+            colorVariant="orange"
+            navigateTo="/mcp"
           />
         </Grid>
       </Grid>

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
@@ -47,6 +47,7 @@ import {
   listSystemOneProviderTypes,
   listVendorModels,
   importVendorModels,
+  previewVendorModels,
   SYSTEM_ONE_PRESET_BASE_URL,
 } from '../../api/systemOneApi'
 import type {
@@ -104,6 +105,8 @@ export function SystemOneProviderConfigPage() {
   const [syncError, setSyncError] = useState<unknown>(null)
   /** Models available for the default-model select (refreshed by sync). */
   const [dialogModels, setDialogModels] = useState<string[]>([])
+  // Create wizard step: 0 = details + API key, 1 = confirm models.
+  const [createStep, setCreateStep] = useState<0 | 1>(0)
   // Embedded guardrail section (FIX-20261014-003000): collapsible, fed with
   // decision-scoped data for the selected provider.
   const [guardrailsOpen, setGuardrailsOpen] = useState(false)
@@ -160,6 +163,7 @@ export function SystemOneProviderConfigPage() {
     setFormError(null)
     setSyncError(null)
     setDialogModels([])
+    setCreateStep(0)
     setDialogOpen(true)
   }
 
@@ -189,18 +193,80 @@ export function SystemOneProviderConfigPage() {
     clearDialogError()
   }
 
-  const validate = (): string | null => {
+  // Provider identity fields (shared by edit save + create wizard step 1).
+  const validateIdentity = (): string | null => {
     if (!effectiveFormType) return t('systemOne.validation.providerTypeRequired')
     if (!form.display_name.trim()) return t('systemOne.validation.displayNameRequired')
     if (!form.base_url.trim()) return t('systemOne.validation.baseUrlRequired')
-    if (!form.default_model.trim()) return t('systemOne.validation.defaultModelRequired')
-    // API key required on create only; on edit empty means "unchanged".
-    if (!editing && !form.api_key) return t('systemOne.validation.apiKeyRequired')
     return null
   }
 
+  // Edit save: identity + default model (API key optional on edit).
+  const validateEdit = (): string | null => {
+    const identityError = validateIdentity()
+    if (identityError) return identityError
+    if (!form.default_model.trim()) return t('systemOne.validation.defaultModelRequired')
+    return null
+  }
+
+  // Create wizard step 1 (provider details + API key).
+  const validateCreateDetails = (): string | null => {
+    const identityError = validateIdentity()
+    if (identityError) return identityError
+    if (!form.api_key) return t('systemOne.validation.apiKeyRequired')
+    return null
+  }
+
+  // Create wizard step 2 (confirm the fetched models + default).
+  const validateCreateModels = (): string | null => {
+    if (!form.default_model.trim()) return t('systemOne.validation.defaultModelRequired')
+    return null
+  }
+
+  /**
+   * Create wizard: step 1 → step 2. Fetch the vendor's model catalogue with
+   * the typed (not-yet-persisted) API key, pre-select the models for
+   * confirmation, and advance to the model-confirmation step.
+   */
+  const handleNext = async () => {
+    const validationError = validateCreateDetails()
+    if (validationError) {
+      setFormError(validationError)
+      return
+    }
+    try {
+      clearDialogError()
+      setFormError(null)
+      setSyncError(null)
+      setSyncing(true)
+      const { models } = await previewVendorModels(
+        form.base_url.trim(),
+        form.api_key,
+      )
+      if (models.length === 0) {
+        setSyncError(new Error(t('systemOne.previewEmpty')))
+        return
+      }
+      setDialogModels(models)
+      // Pre-select every discovered model and pick a sensible default so the
+      // user only needs to confirm/adjust before saving.
+      setForm((f) => ({
+        ...f,
+        enabled_models: models,
+        default_model: models.includes(f.default_model)
+          ? f.default_model
+          : (models[0] ?? ''),
+      }))
+      setCreateStep(1)
+    } catch (err) {
+      setSyncError(err)
+    } finally {
+      setSyncing(false)
+    }
+  }
+
   const handleSave = async () => {
-    const validationError = validate()
+    const validationError = editing ? validateEdit() : validateCreateModels()
     if (validationError) {
       setFormError(validationError)
       return
@@ -224,7 +290,8 @@ export function SystemOneProviderConfigPage() {
         if (form.api_key) body.api_key = form.api_key
         await updateSystemOneProvider(editing.id, body)
       } else {
-        // Create: base_url defaults to the preset in the form; sent explicitly.
+        // Create: details + key were collected in step 1, models confirmed in
+        // step 2 — persist everything in a single create call.
         const body = {
           provider_type: effectiveFormType,
           display_name: form.display_name.trim(),
@@ -327,6 +394,37 @@ export function SystemOneProviderConfigPage() {
     }
   }
 
+  /**
+   * Auto-fetch the vendor's model catalogue when the edit dialog opens —
+   * discovery only (no import, no backend mutation, no auto-select). It
+   * populates the enabled-models options so the user picks from the list
+   * instead of typing model names. Failures surface in-dialog; an empty
+   * catalogue is a no-op.
+   */
+  const autoFetchModels = async (provider: SystemOneProvider) => {
+    try {
+      setSyncError(null)
+      setSyncing(true)
+      const { models } = await listVendorModels(provider.id)
+      if (editing?.id === provider.id) {
+        setDialogModels((prev) => Array.from(new Set([...prev, ...models])))
+      }
+    } catch (err) {
+      setSyncError(err)
+    } finally {
+      setSyncing(false)
+    }
+  }
+
+  // Trigger the catalogue fetch automatically when the edit dialog opens for
+  // a provider with a stored API key (without one the vendor lookup fails).
+  useEffect(() => {
+    if (dialogOpen && editing?.has_api_key) {
+      void autoFetchModels(editing)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dialogOpen, editing?.id])
+
   const statusLabel = useMemo(() => {
     const enabled = (providers ?? []).some((p) => p.enabled)
     return enabled
@@ -339,6 +437,170 @@ export function SystemOneProviderConfigPage() {
     guardrailProviderId ??
     ((providers ?? [])[0]?.id as string | undefined) ??
     null
+
+  // ── Reusable dialog field blocks (edit + create wizard) ─────────────────
+  const identityFields = (
+    <>
+      <TextField
+        select
+        SelectProps={{ native: true }}
+        label={t('systemOne.vendorType')}
+        value={effectiveFormType}
+        onChange={(e) => setForm((f) => ({ ...f, provider_type: e.target.value }))}
+        fullWidth
+        margin="normal"
+        required
+        // Vendor type is locked on edit: changing it would invalidate the
+        // provider's models and credentials.
+        disabled={!!editing}
+        helperText={
+          editing
+            ? t('systemOne.providerTypeLockedHint')
+            : t('systemOne.providerTypeHint')
+        }
+      >
+        {typeOptions.map((opt) => (
+          <option key={opt.value} value={opt.value}>
+            {opt.label}
+          </option>
+        ))}
+      </TextField>
+      <TextField
+        label={t('systemOne.displayName')}
+        value={form.display_name}
+        onChange={(e) => setForm((f) => ({ ...f, display_name: e.target.value }))}
+        fullWidth
+        margin="normal"
+        required
+      />
+      <TextField
+        label={t('systemOne.baseUrl')}
+        value={form.base_url}
+        onChange={(e) => setForm((f) => ({ ...f, base_url: e.target.value }))}
+        fullWidth
+        margin="normal"
+        required
+        placeholder={SYSTEM_ONE_PRESET_BASE_URL}
+        helperText={t('systemOne.baseUrlHint')}
+      />
+    </>
+  )
+
+  const modelFields = (
+    <>
+      {/* Enabled models multi-select — chips ARE the enabled models sent in
+          the payload. List-only: models are fetched from the vendor (edit
+          auto-fetch / create wizard preview), never typed. */}
+      <Autocomplete
+        multiple
+        options={modelOptions}
+        value={form.enabled_models}
+        onChange={(_, v) => {
+          const selected = (v as (string | undefined)[]).filter(
+            (m): m is string => typeof m === 'string' && m.length > 0,
+          )
+          setForm((f) => ({
+            ...f,
+            enabled_models: selected,
+            // Never leave a stale default: prune when the previous
+            // default is no longer among the selected models.
+            default_model: selected.includes(f.default_model)
+              ? f.default_model
+              : '',
+          }))
+        }}
+        renderInput={(params) => (
+          <TextField
+            {...params}
+            label={t('systemOne.enabledModels')}
+            margin="normal"
+            helperText={
+              editing
+                ? t('systemOne.enabledModelsEditHint')
+                : t('systemOne.enabledModelsSelectHint')
+            }
+          />
+        )}
+      />
+      <TextField
+        select
+        SelectProps={{ native: true }}
+        label={t('systemOne.defaultModel')}
+        value={form.enabled_models.includes(form.default_model)
+          ? form.default_model
+          : ''}
+        onChange={(e) => setForm((f) => ({ ...f, default_model: e.target.value }))}
+        fullWidth
+        margin="normal"
+        required
+        // Gated on the enabled-models chips: with none selected there is
+        // nothing valid to pick — the user must select/fetch first.
+        disabled={form.enabled_models.length === 0}
+        helperText={
+          form.enabled_models.length === 0
+            ? t('systemOne.defaultModelSyncFirst')
+            : t('systemOne.defaultModelHint')
+        }
+      >
+        {/* Blank entry so the cleared state is representable when the
+            current default is no longer among the enabled models. */}
+        {!form.enabled_models.includes(form.default_model) && (
+          <option value=""></option>
+        )}
+        {form.enabled_models.map((m) => (
+          <option key={m} value={m}>
+            {m}
+          </option>
+        ))}
+      </TextField>
+    </>
+  )
+
+  const apiKeyField = (
+    <Box>
+      <TextField
+        label={t('systemOne.apiKey')}
+        type="password"
+        value={form.api_key}
+        onChange={(e) => setForm((f) => ({ ...f, api_key: e.target.value }))}
+        fullWidth
+        margin="normal"
+        required={!editing}
+        placeholder={
+          editing && editing.has_api_key
+            ? t('systemOne.apiKeySavedPlaceholder')
+            : '••••'
+        }
+        helperText={
+          editing
+            ? t('systemOne.apiKeyUnchangedHint')
+            : t('systemOne.apiKeyWriteOnlyHint')
+        }
+        autoComplete="new-password"
+      />
+      {editing && editing.has_api_key && (
+        <Chip
+          label={t('systemOne.apiKeyConfigured')}
+          color="success"
+          size="small"
+          sx={{ mt: -1 }}
+        />
+      )}
+    </Box>
+  )
+
+  const enabledSwitchField = (
+    <FormControlLabel
+      control={
+        <Switch
+          checked={form.enabled}
+          onChange={(e) => setForm((f) => ({ ...f, enabled: e.target.checked }))}
+        />
+      }
+      label={t('systemOne.enabled')}
+      sx={{ mt: 1 }}
+    />
+  )
 
   return (
     <Box>
@@ -547,7 +809,11 @@ export function SystemOneProviderConfigPage() {
         maxWidth="sm"
       >
         <DialogTitle>
-          {editing ? t('systemOne.editProvider') : t('systemOne.addProvider')}
+          {editing
+            ? t('systemOne.editProvider')
+            : createStep === 0
+              ? t('systemOne.addProvider')
+              : t('systemOne.addProviderModels')}
         </DialogTitle>
         <DialogContent>
           {dialogError != null && (
@@ -569,171 +835,78 @@ export function SystemOneProviderConfigPage() {
               {formError}
             </Alert>
           )}
-          <TextField
-            select
-            SelectProps={{ native: true }}
-            label={t('systemOne.vendorType')}
-            value={effectiveFormType}
-            onChange={(e) => setForm((f) => ({ ...f, provider_type: e.target.value }))}
-            fullWidth
-            margin="normal"
-            required
-            // Vendor type is locked on edit: changing it would invalidate the
-            // provider's models and credentials.
-            disabled={!!editing}
-            helperText={
-              editing
-                ? t('systemOne.providerTypeLockedHint')
-                : t('systemOne.providerTypeHint')
-            }
-          >
-            {typeOptions.map((opt) => (
-              <option key={opt.value} value={opt.value}>
-                {opt.label}
-              </option>
-            ))}
-          </TextField>
-          <TextField
-            label={t('systemOne.displayName')}
-            value={form.display_name}
-            onChange={(e) => setForm((f) => ({ ...f, display_name: e.target.value }))}
-            fullWidth
-            margin="normal"
-            required
-          />
-          <TextField
-            label={t('systemOne.baseUrl')}
-            value={form.base_url}
-            onChange={(e) => setForm((f) => ({ ...f, base_url: e.target.value }))}
-            fullWidth
-            margin="normal"
-            required
-            placeholder={SYSTEM_ONE_PRESET_BASE_URL}
-            helperText={t('systemOne.baseUrlHint')}
-          />
-          {/* Enabled models multi-select — chips ARE the enabled models
-              sent in the payload; typed entries still allowed (freeSolo). */}
-          <Autocomplete
-            multiple
-            freeSolo
-            options={modelOptions}
-            value={form.enabled_models}
-            onChange={(_, v) => {
-              const selected = (v as (string | undefined)[]).filter(
-                (m): m is string => typeof m === 'string' && m.length > 0,
-              )
-              setForm((f) => ({
-                ...f,
-                enabled_models: selected,
-                // Never leave a stale default: prune when the previous
-                // default is no longer among the selected models.
-                default_model: selected.includes(f.default_model)
-                  ? f.default_model
-                  : '',
-              }))
-            }}
-            renderInput={(params) => (
-              <TextField
-                {...params}
-                label={t('systemOne.enabledModels')}
-                margin="normal"
-                helperText={t('systemOne.enabledModelsSelectHint')}
-              />
-            )}
-          />
-          <TextField
-            select
-            SelectProps={{ native: true }}
-            label={t('systemOne.defaultModel')}
-            value={form.enabled_models.includes(form.default_model)
-              ? form.default_model
-              : ''}
-            onChange={(e) => setForm((f) => ({ ...f, default_model: e.target.value }))}
-            fullWidth
-            margin="normal"
-            required
-            // Gated on the enabled-models chips: with none selected there is
-            // nothing valid to pick — the user must select/sync first.
-            disabled={form.enabled_models.length === 0}
-            helperText={
-              form.enabled_models.length === 0
-                ? t('systemOne.defaultModelSyncFirst')
-                : t('systemOne.defaultModelHint')
-            }
-          >
-            {/* Blank entry so the cleared state is representable when the
-                current default is no longer among the enabled models. */}
-            {!form.enabled_models.includes(form.default_model) && (
-              <option value=""></option>
-            )}
-            {form.enabled_models.map((m) => (
-              <option key={m} value={m}>
-                {m}
-              </option>
-            ))}
-          </TextField>
-          <Box display="flex" justifyContent="flex-end" sx={{ mt: -0.5 }}>
-            <Button
-              size="small"
-              disabled={syncing}
-              startIcon={syncing ? <CircularProgress size={16} /> : undefined}
-              onClick={() => {
-                if (editing) void handleSyncModels(editing)
-              }}
-            >
-              {t('systemOne.syncModels')}
-            </Button>
-          </Box>
-          <Box>
-            <TextField
-              label={t('systemOne.apiKey')}
-              type="password"
-              value={form.api_key}
-              onChange={(e) => setForm((f) => ({ ...f, api_key: e.target.value }))}
-              fullWidth
-              margin="normal"
-              required={!editing}
-              placeholder={
-                editing && editing.has_api_key
-                  ? t('systemOne.apiKeySavedPlaceholder')
-                  : '••••'
-              }
-              helperText={
-                editing
-                  ? t('systemOne.apiKeyUnchangedHint')
-                  : t('systemOne.apiKeyWriteOnlyHint')
-              }
-              autoComplete="new-password"
-            />
-            {editing && editing.has_api_key && (
-              <Chip
-                label={t('systemOne.apiKeyConfigured')}
-                color="success"
-                size="small"
-                sx={{ mt: -1 }}
-              />
-            )}
-          </Box>
-          <FormControlLabel
-            control={
-              <Switch
-                checked={form.enabled}
-                onChange={(e) => setForm((f) => ({ ...f, enabled: e.target.checked }))}
-              />
-            }
-            label={t('systemOne.enabled')}
-            sx={{ mt: 1 }}
-          />
+          {editing ? (
+            <>
+              {identityFields}
+              {modelFields}
+              <Box display="flex" justifyContent="flex-end" sx={{ mt: -0.5 }}>
+                <Button
+                  size="small"
+                  disabled={syncing}
+                  startIcon={syncing ? <CircularProgress size={16} /> : undefined}
+                  onClick={() => void handleSyncModels(editing)}
+                >
+                  {t('systemOne.syncModels')}
+                </Button>
+              </Box>
+              {apiKeyField}
+              {enabledSwitchField}
+            </>
+          ) : createStep === 0 ? (
+            <>
+              {identityFields}
+              {apiKeyField}
+              {enabledSwitchField}
+            </>
+          ) : (
+            <>
+              {modelFields}
+              {enabledSwitchField}
+            </>
+          )}
         </DialogContent>
         <DialogActions>
-          <Button onClick={closeDialog}>{t('app.cancel')}</Button>
-          <Button
-            variant="contained"
-            onClick={() => void handleSave()}
-            disabled={saving}
-          >
-            {saving ? <CircularProgress size={20} /> : t('app.save')}
-          </Button>
+          {editing ? (
+            <>
+              <Button onClick={closeDialog}>{t('app.cancel')}</Button>
+              <Button
+                variant="contained"
+                onClick={() => void handleSave()}
+                disabled={saving}
+              >
+                {saving ? <CircularProgress size={20} /> : t('app.save')}
+              </Button>
+            </>
+          ) : createStep === 0 ? (
+            <>
+              <Button onClick={closeDialog}>{t('app.cancel')}</Button>
+              <Button
+                variant="contained"
+                onClick={() => void handleNext()}
+                disabled={syncing}
+              >
+                {syncing ? <CircularProgress size={20} /> : t('app.next')}
+              </Button>
+            </>
+          ) : (
+            <>
+              <Button
+                onClick={() => setCreateStep(0)}
+                disabled={saving || syncing}
+              >
+                {t('app.back')}
+              </Button>
+              <Box flexGrow={1} />
+              <Button onClick={closeDialog}>{t('app.cancel')}</Button>
+              <Button
+                variant="contained"
+                onClick={() => void handleSave()}
+                disabled={saving}
+              >
+                {saving ? <CircularProgress size={20} /> : t('app.save')}
+              </Button>
+            </>
+          )}
         </DialogActions>
       </Dialog>
 

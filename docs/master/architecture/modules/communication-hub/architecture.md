@@ -122,6 +122,39 @@ flowchart LR
 
 External agents do not receive identity tokens. The MCP Protocol Endpoint accepts the standard MCP handshake (SSE + Streamable HTTP) and fronts the API Key Validator, which calls Control Center's internal validation endpoint over mTLS, receives a resolved identity token, and holds it internally. CH injects the token only when proxying MCP tool requests to downstream servers.
 
+## Execution Preflight Gate
+
+Before Communication Hub starts **any** execution (including delegated subagents), the Agent Gateway performs a token-health preflight: it calls Control Center's internal preflight endpoint through the shared `internal_httpx_client` (signed tenant headers, mandatory — fail-closed without them). Control Center resolves every token the execution will use and returns an outcome:
+
+| Token state | Outcome |
+|---|---|
+| `expired` | Execution **blocked** (HTTP 422) with a re-auth message to the caller |
+| `expiring-within-7-days` | Execution starts **with an expiring-soon warning** |
+| `healthy` | Execution proceeds |
+
+No token material crosses the CH/AR boundary — agents receive only the outcome.
+
+```mermaid
+sequenceDiagram
+    participant U as User / Scheduler
+    participant GW as Agent Gateway (CH)
+    participant CC as Control Center
+    participant AR as Agent Runtime
+
+    U->>GW: Execute agent (incl. subagents)
+    GW->>CC: Preflight check (signed tenant headers)
+    alt Any token expired
+        CC-->>GW: BLOCKED (422)
+        GW-->>U: Blocked with re-auth message
+    else Expiring within 7 days
+        CC-->>GW: PROCEED + WARN
+        GW->>AR: Start execution with warning
+    else All healthy
+        CC-->>GW: PROCEED
+        GW->>AR: Start execution
+    end
+```
+
 ## Responsibilities
 
 - **Message Broker**: Routes agent execution, tool calls, and delegation requests between Web UI, Agent Runtime, and Control Center. Detects intervention requests originating from delegated sub-agents within a conversation session and routes them to the parent conversation's UI via the Intervention Router.

@@ -6,6 +6,12 @@
 > **strict-tenant-isolation (2026-10): contributed no E2E scenarios.** This was a backend-only change (signed internal tenant headers, DB tenant predicates, migrations) with no UI changes, so no Playwright specs or grep patterns were added. Isolation coverage lives in the backend integration suites — see `docs/master/qa/test-plans/multi-tenancy-test-plan.md`.
 >
 > **sandboxed-scripting-and-llm-mocking (2026-10-25): no demo-cases.md merge — the change directory contains no `demo-cases.md`.** The change's coverage lives in backend suites (`backend/tests/` — sandbox engine, validator, LLM mock layer, optimized plan, dispatcher, command execution, allowlist guard) and one zero-LLM Playwright spec (`e2e/tests/agent-zero-llm-execution.spec.ts`, not a UI demo journey); see `docs/master/qa/test-plans/sandboxed-scripting-test-plan.md`. No existing patterns referenced the since-removed Scripts tab / optimize-log dialog, so no stale patterns were removed.
+>
+> **software-3.0-agent-framework (2026-10-27): merged 7 demo scenarios** from the change's `demo-cases.md`. All 7 grep patterns verified against `e2e/tests/agent-type-scripts-tab.spec.ts` test titles (suite `Agent Type Scripts tab — agent-owned script governance`); no stale patterns removed. Caveat: the spec's Scripts-tab journey conflicts with the current `AgentTypeDetailsDialog` UI (Scripts tab removed in the sandboxed-scripting architecture) — see `test-plans/software-3.0-agent-framework-test-plan.md`.
+>
+> **token-expiry-alerting (2026-10-27): merged 4 demo scenarios** from the change's `demo-cases.md`. All 4 grep patterns verified against `e2e/tests/token-expiry-*.spec.ts` test titles (dashboard remediation, execution preflight, topology badges); no stale patterns removed.
+>
+> **system-one-decision-skills (2026-10-27): merged 4 demo scenarios** from the change's `demo-cases.md` (patterns 211–214 in the index). All 4 grep patterns verified against `e2e/tests/system-one-decision-tools.spec.ts` test titles; no stale patterns removed.
 
 ## Grep Patterns
 <!-- Matches Playwright test titles and Vitest describe > it names (same format) -->
@@ -188,7 +194,11 @@
 - Agent Management Panel — CRUD lifecycle > creates an agent from the panel and shows it in sidebar + header immediately (no reload)
 - Agent Management Panel — equipment slots (inline create-and-assign) > role slot: create-new mounts the real Agent Role dialog and assigns the created role
 - Agent Management Panel — live topology > topology updates immediately on draft mutations with zero network requests
-- Agent Management Panel — Communication Hub in existing preview topologies > Agent Types details dialog shows the hub in a typed agent plan preview topology
+- Agent Type preview — unified panel topology canvas > preview shows the unified zoned panel topology canvas with hub bar
+- Agent Type preview — unified panel topology canvas > zoom controls work in the preview fullscreen (parity with panel)
+- Agent Type preview — unified panel topology canvas > clicking a topology node opens the entity view dialog
+- Agent Management Panel — live topology > panel topology renders every equipped node plus the Communication Hub
+- Agent Management Panel — Communication Hub in existing preview topologies > Agent Types details dialog shows the unified topology canvas for a typed agent
 - Agent Management Panel — permissions > 403 on the roles list disables only the role slot with a localized explanation
 - Agent Management Panel — CRUD lifecycle > pending-changes tray saves the draft with exactly one agent-type PUT
 - Decision Model Providers (mocked) > settings > navigation and page header show "Decision Model Providers" with no trace of "System One Providers"
@@ -196,6 +206,17 @@
 - Decision Model Providers (mocked) > settings > admin deletes an unreferenced provider and can recreate the same name afterwards
 - Decision Model Providers (mocked) > decision tools > model selector lists only enabled models and submits the availability id
 - Real Backend Integration - Decision Model Providers > multi-provider CRUD, availability cascade, delete blocking, DB persistence
+- System One Decision Tools (mocked) > provider config journey enables the decision tool authoring gate
+- System One Decision Tools (mocked) > round-2 form journey: data types → mapping properties → placeholders → AI generate → save
+- System One Decision Tools (mocked) > duplicate tool name shows a structured error and keeps the dialog open
+- System One Decision Tools (mocked) > decision results API contract: persisted result keyed to the tool
+- Agent Type Scripts tab — agent-owned script governance > Scripts tab lists the agent type script with description, lifecycle and health
+- Agent Type Scripts tab — agent-owned script governance > version lineage with repaired_from and verification evidence are visible
+- Agent Type Scripts tab — agent-owned script governance > Repairs list shows repair attempts recorded after fallback (E10)
+- Agent Type Scripts tab — agent-owned script governance > operator promotes a version from the Scripts tab (asserted payload)
+- Agent Type Scripts tab — agent-owned script governance > operator retires a version from the Scripts tab
+- Agent Type Scripts tab — agent-owned script governance > plan review shows a script link on the script-backed step and opens the Scripts tab (E4a)
+- Agent Type Scripts tab — agent-owned script governance > permission-gated promote surfaces via the dialog error pattern without crashing
 
 ## Scenario Index table
 | # | Feature | What it Shows | Change | Spec File |
@@ -408,12 +429,30 @@
 | 200 | Agent CRUD lifecycle | Admin fills the Create Agent dialog (name, role, SOP binding); the saved agent appears in the sidebar and header immediately with the agent count updated and no page reload | agent-management-panel | agent-management-panel.spec.ts |
 | 201 | Inline create-and-assign (role slot) | "Create new" in the role slot mounts the real Agent Role dialog (same title/fields as the source module); the persisted role lands on the draft instantly without leaving the panel | agent-management-panel | agent-management-panel-slots.spec.ts |
 | 202 | Live topology without saving | Unassigning and re-assigning the role re-renders the topology canvas instantly, proving zero network requests are fired until save | agent-management-panel | agent-management-panel-topology.spec.ts |
-| 203 | Communication Hub in preview topologies | The Agent Types details dialog (Agent Preview tab) appends the Communication Hub node with its dashed "platform messaging" edge to a typed agent's persisted plan topology, exactly once | agent-management-panel | agent-management-panel-topology.spec.ts |
+| 203 | Communication Hub in existing preview topologies | The Agent Types details dialog shows the unified topology canvas for a typed agent — the same zoned panel canvas as the management panel, including the Communication Hub bar (the old plan-topology "platform messaging" edge branch is removed) | agent-management-panel, unify-agent-topology-diagram | agent-management-panel-topology.spec.ts |
 | 204 | Permission degradation (403 slot disable) | A 403 on the roles list disables only the role slot with a localized explanation while every other slot keeps working and no error alert appears | agent-management-panel | agent-management-panel-permissions.spec.ts |
 | 205 | Unsaved-changes tray / single-PUT save | Assigning a model dirties the draft with zero write calls and the tray lists the pending change; Save Changes issues exactly one agent-type PUT and flips the tray to saved | agent-management-panel | agent-management-panel.spec.ts |
+| 211 | Unified topology in agent preview | Opening an agent preview renders the same zoned panel canvas as the management panel — hub bar, zones, placeholders — instead of the old conversation topology | unify-agent-topology-diagram | agent-type-preview-topology.spec.ts |
+| 212 | Zoom in/out in preview | User zooms in/out within the preview fullscreen with the same limits and behavior as the management panel | unify-agent-topology-diagram | agent-type-preview-topology.spec.ts |
+| 213 | Node interaction in preview | Clicking a topology node opens the matching entity view dialog — a real user interaction on the unified canvas | unify-agent-topology-diagram | agent-type-preview-topology.spec.ts |
+| 214 | Panel topology unchanged | Regression: panel still renders every equipped node plus the Communication Hub exactly as before the change | unify-agent-topology-diagram | agent-management-panel-topology.spec.ts |
 | 206 | Decision Providers — Terminology | Settings nav, page header, and rendered UI use "Decision Model Providers" with zero occurrences of the legacy "System One Providers" string | decision-model-providers | system-one-decision-tools.spec.ts |
 | 207 | Decision Providers — Create | Admin fills the create dialog (vendor, display name, endpoint, credential) and the new provider row appears in the table immediately without a page reload, with correct vendor chip and credentials-set indicator | decision-model-providers | system-one-decision-tools.spec.ts |
 | 208 | Decision Providers — Delete & Recreate | Admin deletes an unreferenced provider and can recreate one with the same display name/vendor afterwards — proves true deletion, not soft-hide | decision-model-providers | system-one-decision-tools.spec.ts |
 | 209 | Decision Tools — Model Selection | Decision tool authoring form lists only enabled models across providers and submits the availability id as the selection | decision-model-providers | system-one-decision-tools.spec.ts |
 | 210 | Decision Providers — Real Backend | Live backend (no mocks): multi-provider CRUD, availability cascade, referenced-provider delete blocking, and DB persistence against the actual API + PostgreSQL — validates migration applied | decision-model-providers | decision-model-providers-real-backend.spec.ts |
-
+| 211 | System One Provider Config | Admin saves the TypeSafe API key via the dialog (preset read-only base URL); the decision-tool authoring gate opens once a model is configured | system-one-decision-skills | system-one-decision-tools.spec.ts |
+| 212 | Decision Tool Authoring (Data Types + AI) | Guided form: select input/output Agent Data Types (with View dialogs) → state mapping properties auto-populate → auto-detect placeholders → Generate-with-AI fills questions → save as `decision____<name>` | system-one-decision-skills | system-one-decision-tools.spec.ts |
+| 213 | Tenant-Contained Naming | Defining a second tool with the same name in one tenant shows a structured conflict error and keeps the dialog open (names unique per tenant, reusable across tenants) | system-one-decision-skills | system-one-decision-tools.spec.ts |
+| 214 | Decision Results | Execution result is keyed to the decision tool with typed answers, probabilities, confidence, and gate outcome | system-one-decision-skills | system-one-decision-tools.spec.ts |
+| 215 | Scripts tab browsing | Operator opens the Agent Type detail dialog's Scripts tab and sees the agent-owned script with its description, lifecycle chip and health chip | software-3.0-agent-framework | agent-type-scripts-tab.spec.ts |
+| 216 | Version lineage & verification evidence | Version list with `repaired_from` lineage badges; Verifications sub-tab shows the promoted verdict; Fallbacks sub-tab explains the tool-schema-mismatch trigger | software-3.0-agent-framework | agent-type-scripts-tab.spec.ts |
+| 217 | Repairs history (self-improvement) | Repairs sub-tab shows repair attempts after fallback: defect diagnosis, retry outcome and the applied diff | software-3.0-agent-framework | agent-type-scripts-tab.spec.ts |
+| 218 | Lifecycle promotion | Operator promotes a version from the Scripts tab; the promote request sends `target_status: verified` | software-3.0-agent-framework | agent-type-scripts-tab.spec.ts |
+| 219 | Lifecycle retire | Operator retires a version from the Scripts tab; the version leaves active resolution | software-3.0-agent-framework | agent-type-scripts-tab.spec.ts |
+| 220 | Plan-step script link navigation | Plan review shows a Script link on the script-backed step only; clicking it lands in the Scripts tab | software-3.0-agent-framework | agent-type-scripts-tab.spec.ts |
+| 221 | Permission gating | A permission-denied promote surfaces the Permission Denied alert inside the dialog instead of crashing | software-3.0-agent-framework | agent-type-scripts-tab.spec.ts |
+| 222 | Token expiry — dashboard alerts & remediation | Warnings disappear after remediation (refetch returns healthy) | token-expiry-alerting | e2e/tests/token-expiry-dashboard-remediation.spec.ts |
+| 223 | Token expiry — execution preflight | Expired token (including a subagent) BLOCKS execution with a named identity | token-expiry-alerting | e2e/tests/token-expiry-execution-preflight.spec.ts |
+| 224 | Token expiry — execution preflight | Expiring token (≤7 days) WARNS but execution PROCEEDS | token-expiry-alerting | e2e/tests/token-expiry-execution-preflight.spec.ts |
+| 225 | Token expiry — topology badges | Expired identity renders an error badge on its container | token-expiry-alerting | e2e/tests/token-expiry-topology-badges.spec.ts |

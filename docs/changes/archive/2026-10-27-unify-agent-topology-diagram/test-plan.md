@@ -23,8 +23,8 @@ Test data uses identifiable fixtures (agent types with roles, skills, SOPs, comp
 3. **Data accuracy in preview** — nodes, relationships, and labels (role/identity/skill/SOP/data-type names, model labels, tool names + server slugs) reflect the selected agent, including composed-SOP skill trees (requires SOP details to be loaded).
 4. **Zoom parity** — zoom in/out works in the preview with the same limits/step as the panel (min 0.5, max 3, step 1.2); auto-fit at zoom = 1; text fitting and hit targets stay valid at extreme zooms.
 5. **Fullscreen behavior** — toggle available, zoom resets to auto-fit on fullscreen enter/exit, Escape exits fullscreen, nothing clipped within dialog height constraints.
-6. **Dirty-state suppression** — read-only preview suppresses the panel canvas's dirty-state affordance via new optional props (defaults keep panel behavior intact).
-7. **Node interaction** — `handleNodeClick` opens the detail bubble (`AgentDetailBubble`) in the preview as in the panel.
+6. **Dirty-state suppression** — the read-only preview passes `isDirty={false}` so the panel canvas's dirty-state affordance renders neutral; the only optional prop added to `PanelTopologyCanvas` is `onNodeClick` (omitted by the panel, keeping panel behavior intact).
+7. **Node interaction** — `handleNodeClick` (extended to resolve the canvas's `type_id`-prefixed node ids) opens the entity view dialogs (role/identity/SOP/skill) in the preview; hub and empty-slot placeholder clicks are safe no-ops.
 8. **Localization** — all visible text in the unified view uses i18n keys (`agents.panel.*` reuse plus any new preview keys present in **all** locales); no hardcoded strings.
 9. **Permission handling** — a user without permission sees the existing graceful permission error alert, not an empty diagram or crash.
 10. **Management panel regression** — `PanelTopologyCanvas` and `AgentManagementPanelPage` behavior identical to before the change.
@@ -35,7 +35,7 @@ Test data uses identifiable fixtures (agent types with roles, skills, SOPs, comp
 1. **WHEN** an authorized user opens the agent preview for a fully configured agent type (role, skills, SOPs incl. composed skills, tools, model), **THEN** the topology renders through the panel canvas with the same zoned composition, Communication Hub bar, and node/edge content as the management panel shows for the equivalent configuration.
 2. **WHEN** the user clicks zoom in / zoom out in the preview, **THEN** zoom steps between 0.5× and 3× (step factor 1.2), labels remain readable and nodes remain clickable at both extremes, matching panel behavior exactly.
 3. **WHEN** the user toggles fullscreen in the preview (and presses Escape), **THEN** fullscreen enters/exits, zoom resets to auto-fit on each transition, and no control or diagram content is clipped by the dialog.
-4. **WHEN** the user clicks a topology node in the preview, **THEN** the detail bubble appears with the same content/behavior as in the management panel.
+4. **WHEN** the user clicks a topology node in the preview, **THEN** the matching entity view dialog opens (role/identity/SOP/skill); clicks on the Communication Hub bar and empty-slot placeholders do nothing.
 5. **WHEN** the loaded agent type changes (user opens preview for a different agent), **THEN** the diagram re-derives via the pure draft mapping (`useMemo`) and shows the new agent's topology accurately — no stale nodes from the previous agent.
 6. **WHEN** a user lacking permission opens the preview, **THEN** the graceful permission error alert is shown and no topology diagram (empty or broken) is rendered.
 7. **WHEN** the management panel is opened after the change, **THEN** topology rendering, zoom, fullscreen, and dirty-state affordance are identical to pre-change behavior.
@@ -68,15 +68,21 @@ Test data uses identifiable fixtures (agent types with roles, skills, SOPs, comp
 
 ## Test File References
 
-All under `frontend/src/__tests__/` (per `docs/config.yaml` `source.tests`):
+Frontend component tests under `frontend/src/__tests__/` (per `docs/config.yaml` `source.tests`):
 
 | File | Purpose |
 |---|---|
-| `frontend/src/__tests__/AgentTypeDetailsDialog.test.tsx` | **Update** — assert the preview renders the unified `PanelTopologyCanvas`; data accuracy for the selected agent; `handleNodeClick` detail bubble; permission-denied alert; dirty-state affordance suppressed |
-| `frontend/src/__tests__/agentTypeToDraftComposition.test.ts` | **New** — unit tests for the draft mapping helper (pure mapping, composed SOPs, missing/unknown references, minimal agent type) |
-| `frontend/src/__tests__/PanelTopologyCanvas.test.tsx` | **Extend/keep passing** — regression guards: new optional props default to current behavior; zoom/fullscreen/Escape logic unchanged |
-| `frontend/src/__tests__/AgentManagementPanelPage.test.tsx` | **Keep passing** — management panel regression surface |
-| `frontend/src/__tests__/TopologyDiagramRenderer.test.tsx` (if present; otherwise cover via canvas tests) | Zoom/pan viewBox scaling, text fitting at extreme zoom |
-| `e2e/tests/` (topology preview/panel flow, as available) | E2E sanity: preview vs. panel visual/interaction parity for a representative agent type |
+| `frontend/src/__tests__/AgentTypeDetailsDialog.test.tsx` | **Updated** — asserts the preview renders the unified `PanelTopologyCanvas`; data accuracy for the selected agent; draft re-mapping on agent switch; `handleNodeClick` entity views (identity/role) and hub/placeholder no-ops; typed-agent plan branch untouched; permission-denied alert; dirty-state affordance suppressed |
+| `frontend/src/__tests__/agentTypeToDraftComposition.test.ts` | **New** — unit tests for the draft mapping helper (pure mapping, composed SOPs/bindings ordering, guardrail defaults, minimal agent type, input purity) |
+| `frontend/src/__tests__/PanelTopologyCanvas.test.tsx` | **Extended** — regression guards: new optional `onNodeClick` prop forwarded when provided and absent by default (panel behavior unchanged); zoom/fullscreen/Escape logic unchanged |
+| `frontend/src/__tests__/AgentManagementPanelPage.test.tsx` | Management panel regression surface |
+| `frontend/src/__tests__/TopologyDiagramRenderer.test.tsx` | Zoom/pan viewBox scaling, text fitting at extreme zoom, hub edge semantics |
 
-Execution: run the frontend Vitest suite (JSON reporter per project convention) plus available E2E topology flows; all layers must pass 100% before the change is considered complete.
+E2E (Playwright) under `e2e/tests/`:
+
+| File | Purpose |
+|---|---|
+| `e2e/tests/agent-type-preview-topology.spec.ts` | **New** — preview shows the unified zoned panel canvas (hub bar, composed skill tree, ③ TOOLS zone, placeholders, no old "platform messaging" edge); zoom controls + fullscreen auto-fit parity in the preview; node click opens the entity view dialog; typed-agent `AgentPlanContent` branch regression |
+| `e2e/tests/agent-management-panel-topology.spec.ts` | **Updated** — panel topology regression (live topology, zoom/fullscreen, zero-request draft mutations, agent switching) plus the preview-dialog tests updated to assert the unified canvas |
+
+Execution: run the frontend Vitest suite (JSON reporter per project convention) plus the E2E topology flows (`npx playwright test tests/agent-type-preview-topology.spec.ts tests/agent-management-panel-topology.spec.ts` from `e2e/`); all layers must pass 100% before the change is considered complete.

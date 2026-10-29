@@ -80,15 +80,18 @@ export function StatCard({
         sx={{
           p: '12px 16px !important',
           pb: '12px !important',
+          height: '100%',
+          display: 'flex',
+          flexDirection: 'column',
           filter: isPermissionDenied ? 'blur(2px)' : undefined,
           pointerEvents: isPermissionDenied ? 'none' : undefined,
         }}
       >
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.75 }}>
+        <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1, mb: 0.75, minHeight: 40 }}>
           {isLoading ? (
             <Skeleton variant="circular" width={24} height={24} />
           ) : (
-            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, color: iconColor, flexShrink: 0, lineHeight: 0 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, color: iconColor, flexShrink: 0, lineHeight: 0, mt: 0.25 }}>
               {icon}
             </Box>
           )}
@@ -101,6 +104,7 @@ export function StatCard({
           )}
         </Box>
 
+        <Box sx={{ mt: 'auto' }}>
         {isLoading ? (
           <Skeleton width={48} height={28} />
         ) : !isPermissionDenied ? (
@@ -119,6 +123,7 @@ export function StatCard({
             {subLabel && <Typography variant="caption" color="text.secondary" sx={{ fontSize: 10 }}>{subLabel}</Typography>}
           </Box>
         )}
+        </Box>
       </CardContent>
     </>
   )
