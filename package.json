@@ -1,0 +1,5 @@
+{
+  "dependencies": {
+    "@myaider/easyspec": "^0.1.9"
+  }
+}

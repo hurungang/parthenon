@@ -17,6 +17,7 @@ to a lightweight stub so that the session service and dispatcher still function.
 """
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import re
@@ -3035,20 +3036,158 @@ class AgentRuntimeExecutor:
         # 11. Filter system messages — passed via system_prompt above
         input_messages = [m for m in messages if m.get("role") != "system"]
 
-        # 12. Invoke agent
+        # 12. Invoke agent — bounded by ``conversation_llm_timeout_seconds``
+        # (FIX-20261031-091657): a hanging provider call previously left the
+        # turn awaiting forever; the timeout converts into the existing
+        # ``timeout_or_failed`` status event plus a persisted error message.
+        from app.core.config import get_settings as _get_settings
+
+        _turn_timeout = float(
+            max(5, int(getattr(_get_settings(), "conversation_llm_timeout_seconds", 120)))
+        )
         try:
-            _result = await _agent.ainvoke(
-                {"messages": input_messages},
-                config=_config,
+            # FIX-20261031-091657: the strict conversation_llm_timeout_seconds
+            # bound on a hanging provider call is preserved — the invocation
+            # gets _turn_timeout. FIX-20261031-133253: while a conversational
+            # human_intervene is PENDING (tool legitimately awaiting the
+            # operator inside this invocation), the wait is re-armed up to
+            # conversation_intervention_timeout_seconds total.
+            _intervention_window = float(
+                max(
+                    30,
+                    int(
+                        getattr(
+                            _get_settings(),
+                            "conversation_intervention_timeout_seconds",
+                            240,
+                        )
+                    ),
+                )
             )
-        except GraphInterrupt:
-            # HITL not supported for conversational turns (user input comes via WebSocket)
-            logger.warning("Conversation turn %s received unexpected GraphInterrupt", conv_session_id)
+            _invoke_task: asyncio.Task = asyncio.ensure_future(
+                _agent.ainvoke(
+                    {"messages": input_messages},
+                    config=_config,
+                )
+            )
+            _intervention_wait_started = time.monotonic()
+            from app.agent_runtime import conversation_resume as _conv_resume
+
+            while True:
+                try:
+                    _result = await asyncio.wait_for(
+                        asyncio.shield(_invoke_task),
+                        timeout=_turn_timeout,
+                    )
+                    break
+                except asyncio.TimeoutError:
+                    _pending_now = _conv_resume.is_pending(conv_session_id)
+                    _elapsed_pause = time.monotonic() - _intervention_wait_started
+                    if _pending_now and _elapsed_pause < _intervention_window:
+                        logger.info(
+                            "Conversation turn %s still paused on "
+                            "human_intervene (%.0fs) — extending wait",
+                            conv_session_id, _elapsed_pause,
+                        )
+                        continue
+                    _invoke_task.cancel()
+                    raise
+        except asyncio.TimeoutError:
+            from datetime import datetime as _dt, timezone as _tz
+
+            _timeout_event = {
+                "status": "timeout_or_failed",
+                "timestamp": _dt.now(_tz.utc).isoformat(),
+            }
+            await emit_status_event(_timeout_event)
+            logger.warning(
+                "Conversation turn timed out after %.0fs (session=%s, bound=%s)",
+                _turn_timeout, conv_session_id,
+                getattr(_get_settings(), "conversation_llm_timeout_seconds", 120),
+            )
             return (
-                "I need more information to continue. Please provide additional details.",
+                "Your request timed out because the assistant took too long to "
+                "respond. Please try again.",
                 build_conversation_guardrail_usage(),
                 status_events,
             )
+        except GraphInterrupt:
+            # FIX-20261031-133253: the assistant itself called
+            # ``human_intervene`` (e.g. the mandatory confirmation before a
+            # create/update). Previously the interrupt was swallowed with a
+            # canned message — approval could never resume the turn. Now:
+            # emit ``waiting_for_human``, wait for the AR /internal/resume
+            # call (bounded so the CH turn watchdog still applies), then
+            # resume the SAME graph via Command(resume=response_value).
+            from langgraph.types import Command
+
+            from app.agent_runtime import conversation_resume
+            from app.core.config import get_settings as _get_settings
+
+            _intervention_timeout = float(
+                max(
+                    30,
+                    int(
+                        getattr(
+                            _get_settings(),
+                            "conversation_intervention_timeout_seconds",
+                            240,
+                        )
+                    ),
+                )
+            )
+            await emit_status_event({"status": "waiting_for_human"})
+            logger.info(
+                "Conversation turn %s paused on human_intervene — waiting up "
+                "to %.0fs for operator response",
+                conv_session_id, _intervention_timeout,
+            )
+            response_value = await conversation_resume.wait_for_resume(
+                conv_session_id, timeout_seconds=_intervention_timeout
+            )
+            if response_value is None:
+                await emit_status_event({"status": "timeout_or_failed"})
+                return (
+                    "The confirmation request timed out without a response, "
+                    "so I did NOT execute the operation. Please ask again to "
+                    "restart it.",
+                    build_conversation_guardrail_usage(),
+                    status_events,
+                )
+            try:
+                logger.info(
+                    "Conversation turn %s resuming deep-agent loop after "
+                    "operator response (approval=%s)",
+                    conv_session_id, response_value.get("approval_value"),
+                )
+                _result = await asyncio.wait_for(
+                    _agent.ainvoke(
+                        Command(resume=response_value),
+                        config=_config,
+                    ),
+                    timeout=_turn_timeout,
+                )
+            except asyncio.TimeoutError:
+                await emit_status_event({"status": "timeout_or_failed"})
+                return (
+                    "Your request timed out while resuming after the "
+                    "confirmation. The operation may not have completed.",
+                    build_conversation_guardrail_usage(),
+                    status_events,
+                )
+            except GuardrailStop as exc:
+                logger.warning(
+                    "Conversation guardrail stop (LangGraph, post-resume): "
+                    "session=%s reason=%s",
+                    conv_session_id, exc.reason,
+                )
+                return exc.message, build_conversation_guardrail_usage(), status_events
+            except Exception:
+                logger.exception(
+                    "Conversation turn %s failed to resume after operator "
+                    "response — falling through to result extraction",
+                    conv_session_id,
+                )
         except GuardrailStop as exc:
             logger.warning(
                 "Conversation guardrail stop (LangGraph): session=%s reason=%s",
@@ -3061,12 +3200,80 @@ class AgentRuntimeExecutor:
             _result.get("__interrupt__", []) if isinstance(_result, dict) else []
         )
         if _pending_interrupts:
-            logger.warning("Conversation turn %s interrupted (LangGraph return-based) — not supported", conv_session_id)
-            return (
-                "I need more information to continue. Please provide additional details.",
-                build_conversation_guardrail_usage(),
-                status_events,
+            # FIX-20261031-133253: the assistant called ``human_intervene``
+            # (confirmation-before-write). Previously swallowed — now wait
+            # for the operator response (AR /internal/resume resolves the
+            # in-process registry) and resume the SAME graph via
+            # Command(resume=response_value).
+            from langgraph.types import Command
+
+            from app.agent_runtime import conversation_resume
+            from app.core.config import get_settings as _get_settings
+
+            _intervention_timeout = float(
+                max(
+                    30,
+                    int(
+                        getattr(
+                            _get_settings(),
+                            "conversation_intervention_timeout_seconds",
+                            240,
+                        )
+                    ),
+                )
             )
+            await emit_status_event({"status": "waiting_for_human"})
+            logger.info(
+                "Conversation turn %s paused on human_intervene (return-based "
+                "interrupt) — waiting up to %.0fs for operator response",
+                conv_session_id, _intervention_timeout,
+            )
+            response_value = await conversation_resume.wait_for_resume(
+                conv_session_id, timeout_seconds=_intervention_timeout
+            )
+            if response_value is None:
+                await emit_status_event({"status": "timeout_or_failed"})
+                return (
+                    "The confirmation request timed out without a response, "
+                    "so I did NOT execute the operation. Please ask again to "
+                    "restart it.",
+                    build_conversation_guardrail_usage(),
+                    status_events,
+                )
+            try:
+                logger.info(
+                    "Conversation turn %s resuming deep-agent loop after "
+                    "operator response (approval=%s)",
+                    conv_session_id, response_value.get("approval_value"),
+                )
+                _result = await asyncio.wait_for(
+                    _agent.ainvoke(
+                        Command(resume=response_value),
+                        config=_config,
+                    ),
+                    timeout=_turn_timeout,
+                )
+            except asyncio.TimeoutError:
+                await emit_status_event({"status": "timeout_or_failed"})
+                return (
+                    "Your request timed out while resuming after the "
+                    "confirmation. The operation may not have completed.",
+                    build_conversation_guardrail_usage(),
+                    status_events,
+                )
+            except GuardrailStop as exc:
+                logger.warning(
+                    "Conversation guardrail stop (LangGraph, post-resume): "
+                    "session=%s reason=%s",
+                    conv_session_id, exc.reason,
+                )
+                return exc.message, build_conversation_guardrail_usage(), status_events
+            except Exception:
+                logger.exception(
+                    "Conversation turn %s failed to resume after operator "
+                    "response — falling through to result extraction",
+                    conv_session_id,
+                )
 
         # 14. Extract response text from last AI message
         _final_messages: list[Any] = _result.get("messages", []) if isinstance(_result, dict) else []

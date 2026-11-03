@@ -1,0 +1,33 @@
+[
+  {
+    "match": "live-000319-binding-proof",
+    "response": "The skill live-bound-skill-000319 was created and bound to cc____list_skills."
+  },
+  {
+    "match": "already exists",
+    "response": "The skill live-bound-skill-000319 was created and bound to cc____list_skills (it already existed from a previous run)."
+  },
+  {
+    "match": "create-a-bound-skill-live",
+    "response": "Creating the skill now.",
+    "tool_calls": [
+      {
+        "name": "cc__invoke_management_tool",
+        "args": {
+          "tool_name": "create_skill",
+          "args": {
+            "name": "live-bound-skill-000319",
+            "data": {
+              "description": "live-000319-binding-proof",
+              "tool_names": ["cc____list_skills"]
+            }
+          }
+        }
+      }
+    ]
+  },
+  {
+    "match": "",
+    "response": "Done."
+  }
+]

@@ -100,3 +100,19 @@ For **conversation-type agents**, the module provides persistent, user-named ses
 | `InterventionPendingIndicator` | component | Visual status indicator in chat flow showing "Waiting for your input" during pending interventions | `frontend/src/components/conversations/InterventionPendingIndicator.tsx` |
 | `ConversationDialog` | component | Conversation dialog surface; updated to integrate `InlineInterventionDialog` and `InterventionPendingIndicator`, manage input blocking during pending interventions, and show intervention state in topbar badge and context panel | `frontend/src/components/agents/ConversationDialog.tsx` |
 | `conversations.sessions.*` | i18n namespace | Conversation session labels, live status strings, and delegation snippet panel copy | `frontend/src/i18n/locales/en.json` |
+
+## Sessions Listing API & Sessions View (control-center-chatbot change)
+
+The legacy `GET /conversations` list (unchanged, backward compatible) could not serve a browsable sessions view: no pagination contract, no default time window, and no first-class `active`/`ended` semantics. A dedicated paginated listing was added for the assistant dialog's "View All Sessions" surface.
+
+| Symbol | Type | Description | File |
+|--------|------|-------------|------|
+| `list_conversation_sessions_paged` | endpoint (new) | `GET /conversations/sessions` — paginated, tenant-scoped listing (declared BEFORE `/{session_id}` so the literal path wins); permission `agent::trails:read` | `backend/app/api/v1/conversations.py` |
+| `ConversationSessionsPageParams` | contract (new) | `agent_type_id`, `triggered_by_user_id`, `status` (`active` / `ended` / `all`, default `all`; `ended` = closed/archived/error), `date_from` / `date_to`, `all_time`, `page` / `page_size` (default 1/10, min 1 → 422) | `backend/app/api/v1/conversations.py` |
+| `list_sessions_page` | method (new) | Store query returning `(items, total)`; status semantics, explicit range overrides the default window, ordered `updated_at` DESC | `backend/app/services/conversations/store.py` |
+| `conversation_sessions_default_window_days` | settings field (new) | Default lower bound (`now − N days`, default 7, env `CONVERSATION_SESSIONS_DEFAULT_WINDOW_DAYS`) applied when no explicit range and `all_time` is false | `backend/app/core/config.py` |
+| `ConversationSessionPageRead` | schema (new) | Response envelope `{items, total, page, page_size, default_window_days}` — the window mirrors the backend setting so the UI can default its date inputs | `backend/app/schemas/conversations.py` |
+| `useConversationSessionsPage` / `ConversationSessionsPage` | hook + type (new) | Frontend query for the paginated endpoint (`status`, date range, paging) | `frontend/src/hooks/useConversationSessions.ts` |
+| `SessionSwitcherList` | component (new) | Sessions-tab UI in `ConversationDialog`: show-ended switch, From/To inputs, pagination, time-desc rows, ended chip, in-place resume for active sessions only | `frontend/src/components/agents/ConversationDialog.tsx` |
+| `markAssistantSessionEnded` / `consumeForceNewSessionFlag` | utilities (new) | Explicit End closes the session and forces the next open to start fresh; a plain exit keeps the resume path | `frontend/src/utils/assistantSessionState.ts` |
+| `terminate_in_flight_conversation_execution` | function (new) | `POST /conversations/{id}/end` best-effort terminates any in-flight execution for the session through the CC → CH → AR chain (logged, never fails the end call) | `backend/app/services/conversations/termination.py`, `backend/app/api/v1/conversations.py` |

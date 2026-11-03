@@ -119,9 +119,13 @@ class CommHubCertificateManager:
         if not control_center_url:
             raise CertificateLoadError("CONTROL_CENTER_URL environment variable not set")
 
-        self._cert_path = Path(cert_path_str)
-        self._key_path = Path(key_path_str)
-        self._ca_cert_path = Path(ca_cert_path_str)
+        # CWD-independent resolution (FIX-20261031-131030): relative paths
+        # from .env anchor to the backend root, never the process CWD.
+        from app.core.cert_paths import resolve_cert_path
+
+        self._cert_path = resolve_cert_path(cert_path_str)
+        self._key_path = resolve_cert_path(key_path_str)
+        self._ca_cert_path = resolve_cert_path(ca_cert_path_str)
         self._control_center_url = control_center_url
 
         # Determine if we need to bootstrap or re-bootstrap

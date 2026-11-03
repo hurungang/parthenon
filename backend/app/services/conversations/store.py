@@ -1,9 +1,9 @@
 """Conversation Store — persists conversation sessions, turns, and tool call records."""
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -171,3 +171,85 @@ class ConversationStore:
         query = query.limit(limit).offset(offset)
         result = await db.execute(query)
         return list(result.scalars().all())
+
+    # Status-filter semantics for the paginated sessions view
+    # (FIX-20261101-120618 Work Item 1): "ended" = anything not active
+    # (closed / archived / error); "all" = everything.
+    _ENDED_STATUSES = ("closed", "archived", "error")
+
+    async def list_sessions_page(
+        self,
+        db: AsyncSession,
+        agent_type_id: Any | None = None,
+        triggered_by_user_id: Any | None = None,
+        status: str | None = None,
+        date_from: datetime | None = None,
+        date_to: datetime | None = None,
+        all_time: bool = False,
+        page: int = 1,
+        page_size: int = 10,
+        tenant_id: Any | None = None,
+    ) -> tuple[list[ConversationSession], int]:
+        """Paginated, filterable sessions listing ordered by updated_at DESC.
+
+        FIX-20261101-120618 Work Item 1. When neither ``date_from`` nor
+        ``date_to`` is given and ``all_time`` is False, a default lower bound
+        of ``now − conversation_sessions_default_window_days`` is applied.
+
+        ``status`` semantics: ``"active"`` → status == active; ``"ended"`` →
+        closed/archived/error; ``"all"``/None → everything (None keeps
+        backward-compatible unfiltered behaviour for programmatic callers).
+
+        Returns ``(items, total)`` — ``total`` is the full filtered count so
+        the UI can render pagination.
+        """
+        from app.core.config import get_settings
+
+        query = select(ConversationSession)
+        if agent_type_id:
+            query = query.where(ConversationSession.agent_type_id == agent_type_id)
+        if triggered_by_user_id:
+            query = query.where(ConversationSession.triggered_by_user_id == triggered_by_user_id)
+        if tenant_id:
+            query = query.where(ConversationSession.tenant_id == tenant_id)
+
+        if status == "active":
+            query = query.where(ConversationSession.status == ConversationStatus.active)
+        elif status == "ended":
+            query = query.where(
+                ConversationSession.status.in_(
+                    [ConversationStatus(s) for s in self._ENDED_STATUSES]
+                )
+            )
+        elif status == "all":
+            pass  # no status constraint
+        elif status:
+            raise ValueError(
+                f"Invalid status filter {status!r}; expected active|ended|all"
+            )
+
+        # Time window: explicit range wins; otherwise default window unless
+        # all_time is requested.
+        if not all_time:
+            window_from = date_from
+            if window_from is None and date_to is None:
+                days = get_settings().conversation_sessions_default_window_days
+                window_from = datetime.now(timezone.utc) - timedelta(days=days)
+            if window_from is not None:
+                query = query.where(ConversationSession.updated_at >= window_from)
+            if date_to is not None:
+                query = query.where(ConversationSession.updated_at <= date_to)
+
+        # Total count over the filtered set (before pagination)
+        count_query = select(func.count()).select_from(query.subquery())
+        total = (await db.execute(count_query)).scalar_one()
+
+        page = max(1, page)
+        page_size = max(1, page_size)
+        items_query = (
+            query.order_by(ConversationSession.updated_at.desc())
+            .limit(page_size)
+            .offset((page - 1) * page_size)
+        )
+        result = await db.execute(items_query)
+        return list(result.scalars().all()), total

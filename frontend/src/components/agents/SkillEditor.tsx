@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
   Box,
@@ -17,6 +17,7 @@ import {
   IconButton,
   Stack,
   TextField,
+  Tooltip,
   Typography,
 } from '@mui/material'
 import Autocomplete from '@mui/material/Autocomplete'
@@ -24,6 +25,8 @@ import CloseIcon from '@mui/icons-material/Close'
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore'
 import ExpandLessIcon from '@mui/icons-material/ExpandLess'
 import BuildIcon from '@mui/icons-material/Build'
+import LockIcon from '@mui/icons-material/Lock'
+import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import apiClient from '../../api/apiClient'
 import { useAllTools, useMcpServers } from '../../hooks/useMcpServers'
@@ -34,6 +37,7 @@ import type {
   CreateAndAssignResult,
   McpTool,
   Skill,
+  SkillToolBindingInfo,
   SkillWorkflowGenerateResponse,
   SkillWorkflowPreviewResponse,
 } from '../../types'
@@ -93,6 +97,86 @@ export function buildGeneratedToolSectionFromSelection(
   return lines.join('\n')
 }
 
+/**
+ * One entry of the editor's SINGLE tool-selection surface.
+ *
+ * Entries come from the browsable catalogue when available; bound tools the
+ * caller cannot browse (e.g. Control Center tools referenced by the skill
+ * without ``integration::control_center:read``) are reconstructed from the
+ * skill's ``tool_bindings`` payload and pinned as read-only.
+ */
+export interface SkillToolEntry {
+  id: string
+  /** Canonical ``server____tool`` name. */
+  name: string
+  originalName: string | null
+  serverSlug: string
+  serverName: string | null
+  /** True when the caller cannot browse the tool and must not remove it. */
+  readOnly: boolean
+  /** Read-only because it is a referenced cc tool hidden by the permission gate. */
+  readOnlyCc: boolean
+}
+
+export function buildSkillToolEntries(
+  toolIds: string[],
+  allTools: McpTool[] | undefined,
+  bindings: SkillToolBindingInfo[],
+): SkillToolEntry[] {
+  const catalog = new Map((allTools ?? []).map((tool) => [tool.id, tool]))
+  const catalogReady = allTools !== undefined
+  const bindingByToolId = new Map<string, SkillToolBindingInfo>()
+  for (const binding of bindings) {
+    if (binding.tool_id) bindingByToolId.set(String(binding.tool_id), binding)
+  }
+
+  return toolIds.map((id, index) => {
+    const tool = catalog.get(id)
+    if (tool) {
+      return {
+        id,
+        name: tool.name,
+        originalName: tool.original_name ?? null,
+        serverSlug: tool.server_slug ?? tool.server_id,
+        serverName: tool.server_name ?? null,
+        readOnly: false,
+        readOnlyCc: false,
+      }
+    }
+    // Fall back to the binding payload (authoritative for bound tools that
+    // are hidden from general browsing).  Older payloads lack ``tool_id``;
+    // bindings and tool_ids share the binding order, so index works too.
+    const binding = bindingByToolId.get(id) ?? bindings[index]
+    const serverSlug = binding?.server_slug ?? 'unknown'
+    // Only the permission-gated cc dependency is pinned.  Other unbrowsable
+    // ids (stale/deleted tools) stay visible but removable.
+    const permissionGated = serverSlug === 'cc'
+    return {
+      id,
+      name: binding?.name ?? id,
+      originalName: binding?.original_name ?? null,
+      serverSlug,
+      serverName: binding?.server_name ?? null,
+      // While the catalogue loads, nothing is removable (we cannot prove the
+      // tool is browsable). After load, only the cc dependency stays pinned.
+      readOnly: !catalogReady || permissionGated,
+      readOnlyCc: permissionGated,
+    }
+  })
+}
+
+function groupToolEntries(entries: SkillToolEntry[]): Array<[string, SkillToolEntry[]]> {
+  const groups = new Map<string, SkillToolEntry[]>()
+  for (const entry of entries) {
+    const list = groups.get(entry.serverSlug) ?? []
+    list.push(entry)
+    groups.set(entry.serverSlug, list)
+  }
+  return Array.from(groups.entries())
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([slug, list]) => [slug, list.slice().sort((a, b) => a.name.localeCompare(b.name))])
+}
+
 export function SkillEditor({ open, skill, mode = 'create', onClose, onSaved }: SkillEditorProps) {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
@@ -101,6 +185,8 @@ export function SkillEditor({ open, skill, mode = 'create', onClose, onSaved }: 
 
   const [form, setForm] = useState({ name: '', description: '', instructions: '' })
   const [selectedToolIds, setSelectedToolIds] = useState<string[]>([])
+  const appliedDetailToolIdsRef = useRef<string | null>(null)
+  const toolSelectionDirtyRef = useRef(false)
   const [selectedRoleIds, setSelectedRoleIds] = useState<string[]>([])
   const [editorError, setEditorError] = useState<unknown>(null)
   const [saving, setSaving] = useState(false)
@@ -140,6 +226,8 @@ export function SkillEditor({ open, skill, mode = 'create', onClose, onSaved }: 
 
   // Initialize form when skill changes
   useEffect(() => {
+    appliedDetailToolIdsRef.current = null
+    toolSelectionDirtyRef.current = false
     if (skill) {
       setForm({
         name: skill.name,
@@ -165,6 +253,18 @@ export function SkillEditor({ open, skill, mode = 'create', onClose, onSaved }: 
     if (skillDetail) {
       setForm((f) => ({ ...f, instructions: skillDetail.instructions ?? '' }))
     }
+  }, [skillDetail])
+
+  // FIX-20261102-062047: the detail payload is authoritative for the bound
+  // tools (list rows can be stale).  Apply it ONCE per skill so a refetch
+  // never clobbers in-flight user toggles.
+  useEffect(() => {
+    if (!skillDetail?.id || !Array.isArray(skillDetail.tool_ids)) return
+    if (appliedDetailToolIdsRef.current === skillDetail.id) return
+    appliedDetailToolIdsRef.current = skillDetail.id
+    // Never clobber a selection the user already changed.
+    if (toolSelectionDirtyRef.current) return
+    setSelectedToolIds(skillDetail.tool_ids)
   }, [skillDetail])
 
   // Load existing role memberships when editing
@@ -297,12 +397,15 @@ export function SkillEditor({ open, skill, mode = 'create', onClose, onSaved }: 
   }
 
   const pendingToggleTool = (toolId: string) => {
+    // Read-only (referenced, unbrowsable) tools can never be toggled off.
+    if (lockedToolIds.has(toolId)) return
     setPendingToolIds((prev) =>
       prev.includes(toolId) ? prev.filter((id) => id !== toolId) : [...prev, toolId],
     )
   }
 
   const handleToolSelectorConfirm = () => {
+    toolSelectionDirtyRef.current = true
     setSelectedToolIds(pendingToolIds)
     setToolSelectorOpen(false)
     if (generateAfterSelect) {
@@ -350,6 +453,27 @@ export function SkillEditor({ open, skill, mode = 'create', onClose, onSaved }: 
   const persistedToolSection = useMemo(() => {
     return extractGeneratedToolSection(skillDetail?.instructions_with_tools)
   }, [skillDetail])
+
+  // Full list of bound tools from the API payload (FIX-20261102-015138)
+  const boundToolBindings = skillDetail?.tool_bindings ?? skill?.tool_bindings ?? []
+
+  // FIX-20261102-062047: ONE tool-selection surface.  The selection state is
+  // the single source of truth; entries resolve from the browsable catalogue
+  // and degrade to the binding payload for tools the caller cannot browse.
+  const toolEntries = useMemo(
+    () => buildSkillToolEntries(selectedToolIds, allTools, boundToolBindings),
+    [selectedToolIds, allTools, boundToolBindings],
+  )
+  const toolEntryGroups = useMemo(() => groupToolEntries(toolEntries), [toolEntries])
+  const lockedToolEntries = useMemo(
+    () => toolEntries.filter((entry) => entry.readOnly),
+    [toolEntries],
+  )
+  const lockedToolIds = useMemo(
+    () => new Set(lockedToolEntries.map((entry) => entry.id)),
+    [lockedToolEntries],
+  )
+  const hasReferencedCcTool = lockedToolEntries.some((entry) => entry.readOnlyCc)
 
   // Live preview from current selections so the reference refreshes immediately
   // when tools are checked/unchecked, before saving.
@@ -462,17 +586,86 @@ export function SkillEditor({ open, skill, mode = 'create', onClose, onSaved }: 
                   {t('skills.editor.selectTools')}
                 </Button>
               </Stack>
-              {/* Selected tools summary */}
-              {selectedToolIds.length > 0 && allTools && (
-                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, mt: 0.5 }}>
-                  {selectedToolIds.map((toolId) => {
-                    const tool = allTools.find((t) => t.id === toolId)
-                    return tool ? (
-                      <Chip key={toolId} label={tool.name} size="small" variant="outlined" />
-                    ) : null
-                  })}
-                </Box>
-              )}
+              {/* Bound tools — the SINGLE selection surface (display + editor).
+                  FIX-20261102-062047: replaces the picker chips + the separate
+                  read-only "Bound Tools" card with ONE grouped list. */}
+              <Box sx={{ mt: 0.5 }}>
+                <Typography variant="subtitle2" mb={1}>{t('skills.editor.boundTools')}</Typography>
+                {toolEntries.length === 0 ? (
+                  <Typography variant="caption" color="text.disabled" sx={{ fontStyle: 'italic' }}>
+                    {t('skills.noToolsBound')}
+                  </Typography>
+                ) : (
+                  <Stack spacing={1}>
+                    {toolEntryGroups.map(([slug, entries]) => (
+                      <Box key={slug}>
+                        <Chip
+                          label={entries[0]?.serverName || slug}
+                          size="small"
+                          color="primary"
+                          variant="outlined"
+                          sx={{ mb: 0.5 }}
+                        />
+                        <Stack spacing={0.5}>
+                          {entries.map((entry) => (
+                            <Box
+                              key={entry.id}
+                              display="flex"
+                              alignItems="center"
+                              gap={1}
+                              flexWrap="wrap"
+                            >
+                              <Typography variant="body2" component="span">
+                                <code>{entry.originalName || entry.name}</code>
+                              </Typography>
+                              <Typography variant="caption" color="text.secondary" component="span">
+                                {entry.name}
+                              </Typography>
+                              {entry.readOnly && (
+                                <Tooltip
+                                  title={
+                                    entry.readOnlyCc
+                                      ? t('skills.editor.referencedToolReadOnlyNote')
+                                      : ''
+                                  }
+                                >
+                                  <LockIcon fontSize="small" color="disabled" />
+                                </Tooltip>
+                              )}
+                              {!isViewMode && !entry.readOnly && (
+                                <IconButton
+                                  size="small"
+                                  aria-label={t('skills.editor.removeTool', {
+                                    name: entry.originalName || entry.name,
+                                  })}
+                                  onClick={() => {
+                                    toolSelectionDirtyRef.current = true
+                                    setSelectedToolIds((prev) =>
+                                      prev.filter((id) => id !== entry.id),
+                                    )
+                                  }}
+                                >
+                                  <DeleteOutlineIcon fontSize="small" />
+                                </IconButton>
+                              )}
+                            </Box>
+                          ))}
+                        </Stack>
+                      </Box>
+                    ))}
+                  </Stack>
+                )}
+                {hasReferencedCcTool && (
+                  <Typography
+                    variant="caption"
+                    color="text.secondary"
+                    display="block"
+                    sx={{ mt: 1 }}
+                  >
+                    {t('skills.editor.referencedToolReadOnlyNote')}
+                  </Typography>
+                )}
+              </Box>
 
               {/* Generated Tool Reference (read-only, collapsible) */}
               {skill && (
@@ -676,6 +869,43 @@ export function SkillEditor({ open, skill, mode = 'create', onClose, onSaved }: 
                   ))}
                 </Box>
               ))}
+              {/* FIX-20261102-062047: bound tools the caller cannot browse
+                  (referenced cc tools without the cc permission) stay visible
+                  — checked + disabled — so the dependency is never hidden. */}
+              {lockedToolEntries.length > 0 && (
+                <Box mb={1}>
+                  <Chip
+                    label={t('skills.editor.referencedTools')}
+                    size="small"
+                    color="warning"
+                    variant="outlined"
+                    sx={{ mb: 0.5 }}
+                  />
+                  {lockedToolEntries.map((entry) => (
+                    <FormControlLabel
+                      key={entry.id}
+                      control={<Checkbox size="small" checked disabled />}
+                      label={
+                        <Box display="flex" alignItems="center" gap={1}>
+                          <Typography variant="body2" component="span">
+                            <code>{entry.name}</code>
+                          </Typography>
+                          <Typography variant="caption" color="text.secondary" component="span">
+                            {entry.serverName || entry.serverSlug}
+                          </Typography>
+                          <LockIcon fontSize="small" color="disabled" />
+                        </Box>
+                      }
+                      sx={{ display: 'flex', ml: 1 }}
+                    />
+                  ))}
+                  {hasReferencedCcTool && (
+                    <Typography variant="caption" color="text.secondary" display="block">
+                      {t('skills.editor.referencedToolReadOnlyNote')}
+                    </Typography>
+                  )}
+                </Box>
+              )}
             </>
           )}
         </DialogContent>

@@ -64,6 +64,11 @@ export interface DelegationHistoryHydration {
   cycles: DelegationCycle[]
 }
 
+export interface ChatError {
+  code: string
+  message: string
+}
+
 interface ExecutionLogListEntry {
   id: string
   timestamp: string
@@ -234,11 +239,22 @@ export function useChatSession(sessionId: string | null, convSessionId?: string 
   const [sessionTitle, setSessionTitle] = useState<string | null>(null)
   const [guardrailUsage, setGuardrailUsage] = useState<ConversationalGuardrailUsage | null>(null)
   const [chatStatus, setChatStatus] = useState<ChatStatus | null>(null)
+  const [chatError, setChatError] = useState<ChatError | null>(null)
   const [delegationCycles, setDelegationCycles] = useState<DelegationCycle[]>([])
   const [activeDelegationCycleId, setActiveDelegationCycleId] = useState<string | null>(null)
   const wsRef = useRef<WebSocket | null>(null)
   const outboundQueueRef = useRef<string[]>([])
   const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  // FIX-20261031-071721 (defect 1): live-delivery loss on unexpected WS close.
+  // When the socket drops mid-turn (the reply is generated after the close, so
+  // it is never transmitted and only shows up after exit/reopen), the hook now
+  // (a) reconnects automatically with the SAME session id and (b) bumps
+  // `recoveryEpoch` once reconnected while a turn was in flight, so the
+  // dialog can refetch the persisted history and render the missed reply.
+  const intentionalCloseRef = useRef(false)
+  const reconnectAttemptsRef = useRef(0)
+  const turnInFlightAtDisconnectRef = useRef(false)
+  const [recoveryEpoch, setRecoveryEpoch] = useState(0)
   const chatStatusRef = useRef<ChatStatus | null>(null)
   const delegationCyclesRef = useRef<DelegationCycle[]>([])
   const activeDelegationCycleIdRef = useRef<string | null>(null)
@@ -273,8 +289,22 @@ export function useChatSession(sessionId: string | null, convSessionId?: string 
     }
   }, [])
 
+  /** True when a conversational turn is still being processed (reply not yet received). */
+  const isTurnInFlight = useCallback((): boolean => {
+    const kind = chatStatusRef.current?.kind
+    return (
+      kind === 'thinking' ||
+      kind === 'delegating' ||
+      kind === 'waiting' ||
+      kind === 'using_tool' ||
+      kind === 'waiting_for_human' ||
+      kind === 'delegation_resumed'
+    )
+  }, [])
+
   const connect = useCallback(() => {
     if (!sessionId) return
+    intentionalCloseRef.current = false
 
     const token = localStorage.getItem('access_token')
     let wsUrl = `${API_CONFIG.WS_BASE_URL}/sessions/${sessionId}?token=${token ?? ''}`
@@ -286,7 +316,14 @@ export function useChatSession(sessionId: string | null, convSessionId?: string 
 
     ws.onopen = () => {
       setConnected(true)
+      reconnectAttemptsRef.current = 0
       flushOutboundQueue()
+      // If a turn was in flight while the socket was down, its reply may have
+      // been missed — signal the dialog to refresh persisted history.
+      if (turnInFlightAtDisconnectRef.current) {
+        turnInFlightAtDisconnectRef.current = false
+        setRecoveryEpoch((epoch) => epoch + 1)
+      }
     }
 
     ws.onmessage = (event: MessageEvent<string>) => {
@@ -306,6 +343,8 @@ export function useChatSession(sessionId: string | null, convSessionId?: string 
           choices?: string[]
           delegation_depth?: number
           conversation_session_id?: string
+          code?: string
+          message?: string
         }
 
         // ── Handle intervention messages ───────────────────────────────────
@@ -345,9 +384,28 @@ export function useChatSession(sessionId: string | null, convSessionId?: string 
           return
         }
 
+        if (data.type === 'chat_error') {
+          const code = typeof data.code === 'string' ? data.code : ''
+          if (code) {
+            setChatError({
+              code,
+              message: typeof data.message === 'string' ? data.message : '',
+            })
+          }
+          return
+        }
+
         if (data.type === 'chat_blocked') {
           // Client tried to send a message while intervention is pending
           // The message is silently dropped; the UI blocks input anyway
+          return
+        }
+
+        // FIX-20261031-091657: app-level keepalive from the CH while a turn is
+        // in flight — no-op except refreshing the status timestamp so the
+        // "thinking" indicator stays visibly alive during long turns.
+        if (data.type === 'chat_status' && data.status === 'thinking_heartbeat') {
+          setChatStatus((prev) => (prev ? { ...prev, timestamp: new Date().toISOString() } : prev))
           return
         }
 
@@ -505,8 +563,20 @@ export function useChatSession(sessionId: string | null, convSessionId?: string 
 
     ws.onclose = () => {
       setConnected(false)
-      // Don't auto-reconnect - let the component decide if it needs to reconnect
-      // Auto-reconnect can cause issues when dialog is closed
+      // Unexpected close while a turn is still processing: remember it so the
+      // reconnect can recover the missed reply, and reconnect automatically.
+      // (Auto-reconnect is intentional here — without it a mid-turn disconnect
+      // permanently loses the live response; intentional unmount closes are
+      // marked via intentionalCloseRef and never reconnect.)
+      if (isTurnInFlight()) {
+        turnInFlightAtDisconnectRef.current = true
+      }
+      if (intentionalCloseRef.current || reconnectAttemptsRef.current >= 5) {
+        return
+      }
+      reconnectAttemptsRef.current += 1
+      if (reconnectTimerRef.current) clearTimeout(reconnectTimerRef.current)
+      reconnectTimerRef.current = setTimeout(() => connect(), 1500)
     }
 
     ws.onerror = () => ws.close()
@@ -612,6 +682,9 @@ export function useChatSession(sessionId: string | null, convSessionId?: string 
   useEffect(() => {
     connect()
     return () => {
+      // Mark the close as intentional so onclose never schedules a reconnect
+      // for a torn-down dialog.
+      intentionalCloseRef.current = true
       wsRef.current?.close()
       outboundQueueRef.current = []
       if (reconnectTimerRef.current) clearTimeout(reconnectTimerRef.current)
@@ -648,6 +721,7 @@ export function useChatSession(sessionId: string | null, convSessionId?: string 
       timestamp: new Date().toISOString(),
     })
     setPendingQuestion(null)
+    setChatError(null)
     return true
   }, [])
 
@@ -861,11 +935,15 @@ export function useChatSession(sessionId: string | null, convSessionId?: string 
     delegationCompleted,
     delegationExecutionLogAvailable,
     delegationExecutionSessionId,
+    /** Bumped after a reconnect that happened while a turn was in flight —
+     * consumers should refresh persisted history to recover missed replies. */
+    recoveryEpoch,
     setDelegationSnippetsCollapsed,
     toggleDelegationSnippetsCollapsed,
     hydrateDelegationFromHistory,
     sendMessage,
     clearMessages,
+    chatError,
     // Intervention
     interventionRequest,
     interventionQueueLength,

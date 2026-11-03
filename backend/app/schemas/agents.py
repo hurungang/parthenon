@@ -383,6 +383,20 @@ class WorkflowGenerationModelConfigUpdate(BaseModel):
     model_id: str | None = None
 
 
+# ── Per-tenant Assistant Model Config Schemas ─────────────────────────────────
+
+
+class AssistantModelConfigRead(BaseModel):
+    """Per-tenant assistant model selection (Control Center Assistant)."""
+
+    selected_model_id: str | None = None
+    options: list[WorkflowGenerationModelOption]
+
+
+class AssistantModelConfigUpdate(BaseModel):
+    model_id: str | None = None
+
+
 # ── Agent Job Schemas ──────────────────────────────────────────────────────────
 
 
@@ -855,6 +869,10 @@ class AgentTypeCreate(BaseModel):
     output_data_type_id: uuid.UUID | None = None
     sop_bindings: list[SopBindingCreate] = []
     skill_bindings: list[SkillBindingCreate] = []
+    # System-provided agent types are seeded (never user-created); this
+    # field is surfaced for parity with the read schema but the write path
+    # ignores it (always False for user-driven creates).
+    is_system: bool = False
     guardrail_max_iterations: int = 10
     guardrail_max_delegation_depth: int = 3
     guardrail_max_delegated_steps: int = 20
@@ -913,6 +931,10 @@ class AgentTypeUpdate(BaseModel):
     output_data_type_id: uuid.UUID | None = None
     sop_bindings: list[SopBindingCreate] | None = None
     skill_bindings: list[SkillBindingCreate] | None = None
+    # System-provided agent types are protected from user-driven mutation;
+    # this field is surfaced for schema parity but the write path never
+    # applies it (is_system cannot be toggled via REST).
+    is_system: bool | None = None
     guardrail_max_iterations: int | None = None
     guardrail_max_delegation_depth: int | None = None
     guardrail_max_delegated_steps: int | None = None
@@ -942,6 +964,7 @@ class AgentTypeRead(BaseModel):
     role_id: uuid.UUID | None
     model_id: str | None
     is_active: bool
+    is_system: bool
     system_instruction: str | None
     input_type: AgentInputType
     input_schema: dict[str, Any] | None
@@ -1014,6 +1037,7 @@ class AgentTypeRead(BaseModel):
                 "role_id": obj.role_id,
                 "model_id": obj.model_id,
                 "is_active": obj.is_active,
+                "is_system": obj.is_system,
                 "system_instruction": obj.system_instruction,
                 "input_type": obj.input_type,
                 "input_schema": obj.input_schema,

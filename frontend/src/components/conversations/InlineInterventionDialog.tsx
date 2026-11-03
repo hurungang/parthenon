@@ -4,6 +4,11 @@ import {
   Box,
   Button,
   Chip,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
+  IconButton,
   LinearProgress,
   Paper,
   Radio,
@@ -11,12 +16,16 @@ import {
   FormControlLabel,
   FormControl,
   TextField,
+  Tooltip,
   Typography,
 } from '@mui/material'
 import WarningAmberIcon from '@mui/icons-material/WarningAmber'
 import CheckCircleIcon from '@mui/icons-material/CheckCircle'
 import CancelIcon from '@mui/icons-material/Cancel'
+import OpenInFullIcon from '@mui/icons-material/OpenInFull'
+import CloseFullscreenIcon from '@mui/icons-material/CloseFullscreen'
 import PermissionDeniedAlert from '../permissions/PermissionDeniedAlert'
+import { ContentRenderer } from '../ContentRenderer'
 import type { InterventionType, InterveneRequestMessage } from '../../types'
 
 interface InlineInterventionDialogProps {
@@ -71,6 +80,10 @@ export function InlineInterventionDialog({
   const [selectedChoice, setSelectedChoice] = useState<string>('')
   // Text state
   const [textValue, setTextValue] = useState('')
+  // FIX-20261101-223511: Expand/Maximize toggle — the SAME preview rendered
+  // in a large dialog (state stays in sync: the expanded dialog wires the
+  // SAME onApprove/onDeny handlers as the inline card).
+  const [expanded, setExpanded] = useState(false)
 
   const handleConfirmChoice = async () => {
     if (selectedChoice) {
@@ -138,6 +151,19 @@ export function InlineInterventionDialog({
             sx={{ mt: 0.5, fontWeight: 700, fontSize: '0.7rem' }}
           />
         </Box>
+        {/* FIX-20261101-223511: Expand/Maximize the preview into a large
+            dialog (approval interventions carry the markdown table). */}
+        <Tooltip title={t('conversations.sessions.intervention.expand')}>
+          <IconButton
+            size="small"
+            aria-label={t('conversations.sessions.intervention.expand')}
+            onClick={() => setExpanded(true)}
+            disabled={isSubmitting}
+            sx={{ color: 'warning.dark' }}
+          >
+            <OpenInFullIcon fontSize="small" />
+          </IconButton>
+        </Tooltip>
       </Box>
 
       {/* Body */}
@@ -152,10 +178,13 @@ export function InlineInterventionDialog({
         {/* Loading indicator */}
         {isSubmitting && <LinearProgress sx={{ mb: 2 }} />}
 
-        {/* Question text */}
-        <Typography variant="body2" sx={{ mb: 2, lineHeight: 1.6 }}>
-          {request.reason}
-        </Typography>
+        {/* Question text — rendered through ContentRenderer so markdown
+            preview tables (e.g. FIX-20261031-133253 create/update approval
+            previews) render as real tables. Overflow scrolls horizontally
+            when NOT expanded (the expanded dialog gives the table room). */}
+        <Box sx={{ overflowX: 'auto' }}>
+          <ContentRenderer content={request.reason} />
+        </Box>
 
         {/* Approval type */}
         {interventionType === 'approval' && (
@@ -275,6 +304,72 @@ export function InlineInterventionDialog({
           {t('conversations.sessions.intervention.dismissCancel')}
         </Button>
       </Box>
+
+      {/* FIX-20261101-223511: expanded (maximized) preview dialog — the SAME
+          ContentRenderer preview at full width; Approve/Reject available in
+          BOTH surfaces and wired to the SAME handlers, so approving from
+          either works and state stays in sync. */}
+      <Dialog
+        open={expanded}
+        onClose={() => setExpanded(false)}
+        fullWidth
+        maxWidth={false}
+        PaperProps={{ sx: { width: '90vw', height: '80vh', maxHeight: '80vh' } }}
+      >
+        <DialogTitle
+          sx={{ display: 'flex', alignItems: 'center', gap: 1, pr: 1 }}
+        >
+          <Box flex={1}>{t('conversations.sessions.intervention.previewTitle')}</Box>
+          <Tooltip title={t('conversations.sessions.intervention.collapse')}>
+            <IconButton
+              size="small"
+              aria-label={t('conversations.sessions.intervention.collapse')}
+              onClick={() => setExpanded(false)}
+            >
+              <CloseFullscreenIcon fontSize="small" />
+            </IconButton>
+          </Tooltip>
+        </DialogTitle>
+        <DialogContent
+          dividers
+          sx={{ overflowX: 'auto', '& table': { width: '100%', minWidth: 480 } }}
+        >
+          {dialogError != null && (
+            <Box mb={2}>
+              <PermissionDeniedAlert error={dialogError} fallbackMessage={t('app.error')} />
+            </Box>
+          )}
+          <ContentRenderer content={request.reason} />
+        </DialogContent>
+        <DialogActions>
+          <Button
+            variant="outlined"
+            color="inherit"
+            onClick={() => setExpanded(false)}
+            disabled={isSubmitting}
+          >
+            {t('conversations.sessions.intervention.collapse')}
+          </Button>
+          <Button
+            variant="outlined"
+            color="error"
+            startIcon={<CancelIcon />}
+            onClick={() => void onDeny()}
+            disabled={isSubmitting}
+          >
+            {t('conversations.sessions.intervention.deny')}
+          </Button>
+          <Button
+            variant="contained"
+            color="success"
+            startIcon={<CheckCircleIcon />}
+            onClick={() => void onApprove()}
+            disabled={isSubmitting}
+          >
+            {t('conversations.sessions.intervention.approve')}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Paper>
   )
 }

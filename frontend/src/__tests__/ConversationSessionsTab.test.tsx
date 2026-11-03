@@ -33,6 +33,7 @@ vi.mock('../components/permissions/PermissionDeniedAlert', () => ({
 
 // Mock the hooks used by ConversationSessionsTab
 vi.mock('../hooks/useConversationSessions', () => ({
+  useConversationSessionsPage: vi.fn(() => ({ data: undefined, isLoading: false, error: null })),
   useConversationSessions: vi.fn(),
   useCreateConversationSession: vi.fn(() => ({
     mutate: mockMutate,

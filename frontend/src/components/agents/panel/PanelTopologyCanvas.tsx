@@ -112,6 +112,51 @@ export interface PanelTopologyLabels {
   }
   /** Placeholder label when no MCP tools resolve from the equipped skills. */
   noTools: string
+  /**
+   * Loading label rendered in place of any bound-but-unresolved entity (its
+   * reference request is still in flight) — never a raw id mid-load.
+   */
+  loading: string
+}
+
+/**
+ * Per-entity pending (in-flight) flags for the panel topology. A flag says the
+ * list/detail request that resolves that entity kind has not completed yet;
+ * the composer then renders a loading placeholder for bound entities whose
+ * name is not already cached, instead of falling back to the raw id. Flags are
+ * supplied by the canvas from its react-query states — the composer stays
+ * pure. A bound entity whose kind resolved (flag `false`) but whose id is
+ * absent keeps the historical raw-id fallback (genuinely missing).
+ */
+export interface PanelTopologyPending {
+  /** Agent identities list in flight. */
+  identity: boolean
+  /** Agent roles list in flight. */
+  role: boolean
+  /** Model configurations (available models) in flight. */
+  model: boolean
+  /** Agent data types list in flight (input/output contract slots). */
+  dataTypes: boolean
+  /** Skills list in flight (labels + bound tool ids). */
+  skills: boolean
+  /** SOPs list in flight (SOP labels). */
+  sops: boolean
+  /** Bound SOP details in flight (composition chain unknown). */
+  sopDetails: boolean
+  /** MCP tools / servers in flight (tools zone resolution). */
+  tools: boolean
+}
+
+/** No in-flight requests — resolved-or-missing semantics only. */
+export const NO_PENDING: PanelTopologyPending = {
+  identity: false,
+  role: false,
+  model: false,
+  dataTypes: false,
+  skills: false,
+  sops: false,
+  sopDetails: false,
+  tools: false,
 }
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -209,6 +254,38 @@ export function capabilityColor(nodeId: string): string {
   return CAPABILITY_COLOR_PALETTE[hash % CAPABILITY_COLOR_PALETTE.length]
 }
 
+// ── Reference resolution (pending vs. genuinely missing) ─────────────────────
+
+/** Resolution outcome for a bound entity id. */
+interface ResolvedRef {
+  /** Display name when the reference is resolved, else undefined. */
+  label: string | undefined
+  /** The reference request is in flight and the name is not cached yet. */
+  pending: boolean
+}
+
+/**
+ * Resolves a bound entity id through its name map:
+ * - name found → resolved (never pending — cached names must not flicker);
+ * - name absent + that entity kind's request in flight → pending;
+ * - name absent + request completed → genuinely missing (raw-id fallback).
+ */
+function resolveRef(
+  id: string | null | undefined,
+  namesById: Record<string, string> | undefined,
+  loading: boolean,
+): ResolvedRef {
+  if (!id) return { label: undefined, pending: false }
+  const name = namesById?.[id]
+  if (name != null) return { label: name, pending: false }
+  return { label: undefined, pending: loading }
+}
+
+/** Label for a bound entity: resolved name → loading label → raw id (missing). */
+function refLabel(ref: ResolvedRef, id: string, loadingLabel: string): string {
+  return ref.label ?? (ref.pending ? loadingLabel : id)
+}
+
 // ── Composition ───────────────────────────────────────────────────────────────
 
 /**
@@ -229,15 +306,25 @@ export function capabilityColor(nodeId: string): string {
  * the Skills section, which is omitted entirely when no skill is directly
  * equipped — and the conversational output lock is preserved. Purely
  * client-side composition.
+ *
+ * Pending states (FIX-20261102-100704): `pending` flags say which reference
+ * lists/details are still in flight. Any BOUND entity whose name is not cached
+ * then renders with `pending: true` and the `loading` label — never its raw id.
+ * Cached names are never marked pending, and a resolved-but-absent reference
+ * keeps the historical raw-id fallback (genuinely missing). Deliberately-set
+ * None/Conversation/Auto slots and dashed unfilled placeholders are unaffected.
  */
 export function buildPanelTopology(
   agentName: string,
   draft: AgentDraftComposition,
   names: PanelTopologyNames,
   labels: PanelTopologyLabels,
+  pending: PanelTopologyPending = NO_PENDING,
 ): PanelTopologyGraph {
   const nodes: TopologyNode[] = []
   const edges: TopologyEdge[] = []
+  /** Spread helper: only unresolved nodes carry the flag (node shape stable). */
+  const pendingFlag = (isPending: boolean): { pending?: true } => (isPending ? { pending: true } : {})
 
   // ── Zone ① CONFIGURATION — agent boundary with containment ────────────────
   nodes.push({
@@ -253,35 +340,39 @@ export function buildPanelTopology(
       : {}),
   })
 
+  const identityRef = resolveRef(draft.identityId, names.identityNames, pending.identity)
   nodes.push({
     id: 'identity',
     type: 'identity',
-    label: draft.identityId
-      ? (names.identityNames[draft.identityId] ?? draft.identityId)
-      : labels.empty.identity,
+    label: draft.identityId ? refLabel(identityRef, draft.identityId, labels.loading) : labels.empty.identity,
     zone: 'config',
     containedIn: 'agent',
     caption: labels.sections.signsInAs,
     usage: draft.identityId ? undefined : 'empty',
+    ...pendingFlag(identityRef.pending),
     ...(identityTokenHealthOf(draft.identityId, names)
       ? { tokenHealth: identityTokenHealthOf(draft.identityId, names) }
       : {}),
   })
 
+  const roleRef = resolveRef(draft.roleId, names.roleNames, pending.role)
   nodes.push({
     id: 'role',
     type: 'role',
-    label: draft.roleId ? (names.roleNames[draft.roleId] ?? draft.roleId) : labels.empty.role,
+    label: draft.roleId ? refLabel(roleRef, draft.roleId, labels.loading) : labels.empty.role,
     zone: 'config',
     containedIn: 'agent',
     caption: labels.sections.assumesAs,
     usage: draft.roleId ? undefined : 'empty',
+    ...pendingFlag(roleRef.pending),
   })
 
   // Input slot: a typed slot without a schema is GENUINELY unfilled (empty
   // placeholder); `none` and `conversation` are deliberately-set input
   // types and render the SAME labels the editor dialog shows — solid nodes,
-  // not dashed placeholders.
+  // not dashed placeholders. A typed schema whose registry data type is still
+  // being looked up (data-type list in flight) is a PENDING state: the
+  // resolved name replaces the generic schema label once it arrives.
   const hasInputSchema = draft.inputType === 'typed' && draft.inputSchema != null
   const inputTypeLabel =
     draft.inputType === 'none'
@@ -289,16 +380,18 @@ export function buildPanelTopology(
       : draft.inputType === 'conversation'
         ? labels.inputConversation
         : null
+  const inputPending = hasInputSchema && names.inputDataTypeName == null && pending.dataTypes
   nodes.push({
     id: 'input_data_type',
     type: 'input_data_type',
     label: hasInputSchema
-      ? (names.inputDataTypeName ?? labels.inputSchemaLabel)
+      ? (names.inputDataTypeName ?? (inputPending ? labels.loading : labels.inputSchemaLabel))
       : (inputTypeLabel ?? labels.empty.input_data_type),
     zone: 'config',
     containedIn: 'agent',
     caption: labels.sections.contract,
     usage: hasInputSchema || inputTypeLabel != null ? undefined : 'empty',
+    ...pendingFlag(inputPending),
   })
 
   // Output slot: the conversational lock wins; a typed output without a
@@ -306,28 +399,32 @@ export function buildPanelTopology(
   // output types are deliberately set and show the editor's "Auto" label.
   const outputLocked = draft.inputType === 'conversation'
   const outputUnfilled = !outputLocked && draft.outputType === 'typed' && draft.outputDataTypeId == null
+  const outputRef = resolveRef(draft.outputDataTypeId, names.dataTypeNames, pending.dataTypes)
   nodes.push({
     id: 'output_data_type',
     type: 'output_data_type',
     label: outputLocked
       ? labels.outputLocked
       : draft.outputDataTypeId
-        ? (names.dataTypeNames[draft.outputDataTypeId] ?? draft.outputDataTypeId)
+        ? refLabel(outputRef, draft.outputDataTypeId, labels.loading)
         : outputUnfilled
           ? labels.empty.output_data_type
           : labels.outputAuto,
     zone: 'config',
     containedIn: 'agent',
     usage: outputLocked ? 'locked' : draft.outputDataTypeId ? undefined : outputUnfilled ? 'empty' : undefined,
+    ...pendingFlag(outputRef.pending),
   })
 
+  const modelRef = resolveRef(draft.modelId, names.modelLabels, pending.model)
   nodes.push({
     id: 'model',
     type: 'model',
-    label: draft.modelId ? (names.modelLabels[draft.modelId] ?? draft.modelId) : labels.empty.model,
+    label: draft.modelId ? refLabel(modelRef, draft.modelId, labels.loading) : labels.empty.model,
     zone: 'config',
     containedIn: 'agent',
     usage: draft.modelId ? undefined : 'empty',
+    ...pendingFlag(modelRef.pending),
   })
 
   // ── Zone ② CAPABILITIES — SOPs and Skills sections ────────────────────────
@@ -355,15 +452,17 @@ export function buildPanelTopology(
   for (const binding of sops) {
     const nodeId = `sop_${binding.sop_id}`
     const sopColor = capabilityColor(nodeId)
+    const sopRef = resolveRef(binding.sop_id, names.sopNames, pending.sops)
     nodes.push({
       id: nodeId,
       type: 'sop',
-      label: names.sopNames[binding.sop_id] ?? binding.sop_id,
+      label: refLabel(sopRef, binding.sop_id, labels.loading),
       zone: 'capabilities',
       accentColor: sopColor,
       group: 'sops',
       groupLabel: labels.sections.sops,
       groupColor: SECTION_GROUP_COLOR,
+      ...pendingFlag(sopRef.pending),
     })
     capabilityIds.push(nodeId)
     grantTargets.push(nodeId)
@@ -373,6 +472,23 @@ export function buildPanelTopology(
       sopColor,
       skillIds: names.sopComposedSkillIds?.[binding.sop_id] ?? [],
     })
+    // Composition unknown while the SOP detail request is in flight: render a
+    // pending tree child beneath the SOP (same indented row geometry a real
+    // composed skill uses) so the loading state is visible and the graph does
+    // not jump when the composed skills replace it.
+    if (pending.sopDetails && names.sopComposedSkillIds?.[binding.sop_id] == null) {
+      nodes.push({
+        id: `sop_pending_${binding.sop_id}`,
+        type: 'skill',
+        label: labels.loading,
+        zone: 'capabilities',
+        group: 'sops',
+        groupLabel: labels.sections.sops,
+        groupColor: SECTION_GROUP_COLOR,
+        childOf: nodeId,
+        pending: true,
+      })
+    }
   }
 
   const skills = [...draft.skillBindings].sort((a, b) => a.order - b.order)
@@ -387,15 +503,17 @@ export function buildPanelTopology(
   for (const binding of skills) {
     const nodeId = `skill_${binding.skill_id}`
     routedSkillNodeIds.add(nodeId)
+    const skillRef = resolveRef(binding.skill_id, names.skillNames, pending.skills)
     nodes.push({
       id: nodeId,
       type: 'skill',
-      label: names.skillNames[binding.skill_id] ?? binding.skill_id,
+      label: refLabel(skillRef, binding.skill_id, labels.loading),
       zone: 'capabilities',
       accentColor: capabilityColor(nodeId),
       group: 'skills',
       groupLabel: labels.sections.skills,
       groupColor: SECTION_GROUP_COLOR,
+      ...pendingFlag(skillRef.pending),
     })
     capabilityIds.push(nodeId)
     grantTargets.push(nodeId)
@@ -420,16 +538,18 @@ export function buildPanelTopology(
       seen.add(nodeId)
       if (routedSkillNodeIds.has(nodeId)) continue
       routedSkillNodeIds.add(nodeId)
+      const composedRef = resolveRef(skillId, names.skillNames, pending.skills)
       nodes.push({
         id: nodeId,
         type: 'skill',
-        label: names.skillNames[skillId] ?? skillId,
+        label: refLabel(composedRef, skillId, labels.loading),
         zone: 'capabilities',
         accentColor: capabilityColor(nodeId),
         group: 'sops',
         groupLabel: labels.sections.sops,
         groupColor: SECTION_GROUP_COLOR,
         childOf: composition.sopNodeId,
+        ...pendingFlag(composedRef.pending),
       })
     }
     // Composition edges: SOP → each composed skill, in the SOP's accent
@@ -487,13 +607,22 @@ export function buildPanelTopology(
     }
   }
   if (toolGroups.size === 0) {
-    nodes.push({
-      id: 'tool_empty',
-      type: 'tool',
-      label: labels.noTools,
-      zone: 'tools',
-      usage: 'empty',
-    })
+    // Tools resolution is still in flight: skill tool bindings or the MCP
+    // tool/server catalogue has not arrived yet. The "no tools" placeholder is
+    // reserved for a RESOLVED graph where nothing resolves — showing it here
+    // would wrongly assert the agent has no tools.
+    const routedSkillIds = [...routedSkillNodeIds].map((nodeId) => nodeId.replace(/^skill_/, ''))
+    const hasBoundToolIds = routedSkillIds.some((skillId) => (names.skillToolIds?.[skillId] ?? []).length > 0)
+    const toolsPending =
+      (routedSkillNodeIds.size > 0 && (pending.skills || (pending.tools && hasBoundToolIds))) ||
+      // SOP composition unknown → composed skills (and therefore their tools)
+      // may still appear; the tools zone must not assert "no tools" yet.
+      (pending.sopDetails && sops.length > 0)
+    nodes.push(
+      toolsPending
+        ? { id: 'tool_pending', type: 'tool', label: labels.loading, zone: 'tools', pending: true }
+        : { id: 'tool_empty', type: 'tool', label: labels.noTools, zone: 'tools', usage: 'empty' },
+    )
   }
   for (const [slug, toolIds] of toolGroups) {
     for (const toolId of toolIds) {
@@ -612,28 +741,31 @@ export function PanelTopologyCanvas({ agentName, draft, isDirty, onNodeClick }: 
 
   // Same shared list queries/cache keys as the equipment slots, so requests
   // are deduplicated and label resolution stays consistent with the draft.
-  const { data: roles } = useQuery<AgentRole[]>({
+  // The `isLoading` flags drive the topology's pending (in-flight) states: an
+  // unresolved bound entity renders a spinner + loading label instead of its
+  // raw id until the request completes.
+  const { data: roles, isLoading: rolesLoading } = useQuery<AgentRole[]>({
     queryKey: ['agents', 'roles'],
     queryFn: async () => {
       const { data } = await apiClient.get<AgentRole[]>('/agents/roles')
       return data
     },
   })
-  const { data: identities } = useQuery<AgentIdentity[]>({
+  const { data: identities, isLoading: identitiesLoading } = useQuery<AgentIdentity[]>({
     queryKey: ['agents', 'identities'],
     queryFn: async () => {
       const { data } = await apiClient.get<AgentIdentity[]>('/agents/identities')
       return data
     },
   })
-  const { data: skills } = useQuery<Skill[]>({
+  const { data: skills, isLoading: skillsLoading } = useQuery<Skill[]>({
     queryKey: ['skills'],
     queryFn: async () => {
       const { data } = await apiClient.get<Skill[]>('/skills')
       return data
     },
   })
-  const { data: sops } = useQuery<Sop[]>({
+  const { data: sops, isLoading: sopsLoading } = useQuery<Sop[]>({
     queryKey: ['sops'],
     queryFn: async () => {
       const { data } = await apiClient.get<Sop[]>('/sops')
@@ -644,12 +776,12 @@ export function PanelTopologyCanvas({ agentName, draft, isDirty, onNodeClick }: 
   // detail carries the SOP's `skill_invocation` steps → composed skills).
   // Same react-query pattern/cache key shape as AgentTypeDetailsDialog, so
   // requests are deduplicated with the rest of the app. While details are
-  // loading the SOP nodes render without their composed skills.
+  // loading the SOP nodes render a pending composition placeholder child.
   const boundSopIds = useMemo(
     () => [...new Set(draft.sopBindings.map((binding) => binding.sop_id))].sort(),
     [draft.sopBindings],
   )
-  const { data: sopDetails } = useQuery<SopDetail[]>({
+  const { data: sopDetails, isLoading: sopDetailsLoading } = useQuery<SopDetail[]>({
     queryKey: ['sops', 'details', boundSopIds],
     queryFn: async () => {
       const results = await Promise.all(
@@ -659,11 +791,11 @@ export function PanelTopologyCanvas({ agentName, draft, isDirty, onNodeClick }: 
     },
     enabled: boundSopIds.length > 0,
   })
-  const { data: dataTypesPage } = useDataTypes({ page: 1, page_size: 100 })
-  const { data: availableModels } = useAvailableModels()
+  const { data: dataTypesPage, isLoading: dataTypesLoading } = useDataTypes({ page: 1, page_size: 100 })
+  const { data: availableModels, isLoading: modelsLoading } = useAvailableModels()
   // Tools zone: MCP tools + servers for MCP-server tool grouping.
-  const { data: mcpTools } = useAllTools()
-  const { data: mcpServers } = useMcpServers()
+  const { data: mcpTools, isLoading: mcpToolsLoading } = useAllTools()
+  const { data: mcpServers, isLoading: mcpServersLoading } = useMcpServers()
   // Token health (token-expiry-alerting): expired / expiring states for
   // identities and MCP sessions, from the dashboard token-health API.
   const { data: tokenHealth } = useTokenHealth()
@@ -754,6 +886,21 @@ export function PanelTopologyCanvas({ agentName, draft, isDirty, onNodeClick }: 
           JSON.stringify(dataTypeToInputSchema(dataType)) === draftInputSchemaJson,
       )?.name ?? null
 
+    // In-flight request flags — the composer renders a loading placeholder for
+    // every bound entity whose reference has not resolved yet (never a raw id
+    // mid-load). `isLoading` is false for completed/disabled queries, so a
+    // resolved-but-missing reference keeps its raw-id fallback.
+    const pending: PanelTopologyPending = {
+      identity: identitiesLoading,
+      role: rolesLoading,
+      model: modelsLoading,
+      dataTypes: dataTypesLoading,
+      skills: skillsLoading,
+      sops: sopsLoading,
+      sopDetails: sopDetailsLoading,
+      tools: mcpToolsLoading || mcpServersLoading,
+    }
+
     return buildPanelTopology(
       agentName,
       draft,
@@ -809,9 +956,12 @@ export function PanelTopologyCanvas({ agentName, draft, isDirty, onNodeClick }: 
           },
         },
         noTools: t('agents.plan.noTools'),
+        loading: t('agents.panel.topologyLoading'),
       },
+      pending,
     )
-  }, [agentName, draft, roles, identities, skills, sops, sopDetails, dataTypesPage, availableModels, mcpTools, mcpServers, tokenHealth, t])
+  }, [agentName, draft, roles, identities, skills, sops, sopDetails, dataTypesPage, availableModels, mcpTools, mcpServers, tokenHealth, t,
+      rolesLoading, identitiesLoading, skillsLoading, sopsLoading, sopDetailsLoading, dataTypesLoading, modelsLoading, mcpToolsLoading, mcpServersLoading])
 
   const hubLabel = t('agents.plan.nodeTypes.communication_hub')
   const fullscreenLabel = t('agents.panel.topologyFullscreen')

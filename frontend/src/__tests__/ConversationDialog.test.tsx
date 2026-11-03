@@ -58,6 +58,7 @@ vi.mock('../hooks/useChatSession', () => ({
 }))
 
 vi.mock('../hooks/useConversationSessions', () => ({
+  useConversationSessionsPage: vi.fn(() => ({ data: undefined, isLoading: false, error: null })),
   useEndConversationSession: vi.fn(() => ({
     mutateAsync: endSessionSpy,
     isPending: false,

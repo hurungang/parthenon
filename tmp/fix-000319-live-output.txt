@@ -1,0 +1,16 @@
+RESULT_000319 {
+  "ccServerFound": true,
+  "ccToolCount": 41,
+  "ccToolsIncludeManagement": true,
+  "ccToolsExcludeGeneral": true,
+  "liveTurnFinalReply": "The skill live-bound-skill-000319 was created and bound to cc____list_skills (it already existed from a previous run).",
+  "skillCreatedWithBinding": true,
+  "boundSkillId": "c5c5cafa-37ec-4964-8d04-0d2b107b53c1",
+  "noGrantRole": "decision-role",
+  "noGrantRoleSeesCcTools": false,
+  "statusTimeline": [
+    "thinking@0s",
+    "using_tool@3s"
+  ]
+}
+LIVE-VERIFICATION-PASSED

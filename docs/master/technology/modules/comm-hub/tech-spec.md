@@ -159,3 +159,60 @@ Communication Hub routes `script____<name>` virtual tools to Agent Runtime sandb
 |--------|------|-------------|------|
 | `_route_to_script_tool` | function | Forwards `script____<name>` invocations to AR `POST /internal/script-tools/execute` with the session's agent identity (`session_id` + `agent_type_id` + `tool_args`); unwraps `{"result"}`/`{"error"}` into the `call_tool` contract; provenance tagging unchanged | `backend/app/communication_hub/api/internal/tool_routing.py` |
 | Script forwarding hop | endpoint (new) | `POST /internal/script-tools/forward` — the CC→CH hop; forwards inline `python_source` to AR using CH's own service certificate (ControlPlaneMiddleware only accepts AR certs on `/internal/tools/`, so CC never uses that path for sandboxed execution) | `backend/app/communication_hub/api/internal/tool_routing.py` |
+
+---
+
+## Control Center Assistant — MCP OAuth plane, cc routing and chat hardening (control-center-chatbot change)
+
+The hub gained a second MCP authentication plane and carried the transport-hardening work for the in-app assistant (full details: [agents module](../agents/tech-spec.md)).
+
+**Dual identity plane on `/mcp`.** The existing API-key middleware is unchanged; a parallel OAuth/OIDC Bearer middleware validates the *user's* token, resolves identity, permission scope and tenant, and seeds the MCP session with that context. The identity token stays server-side (never returned to the client), exactly as on the API-key path. Both planes converge on one session-building helper, so both transports share identical authorization semantics.
+
+**Why OAuth.** The same management tool surface serves the in-app assistant (the agent acts with the user's cached JWT scope) and external MCP clients presenting the user's Bearer token. Permission scope is therefore always the user's own — CH stays forward-only, performs no writes and holds no credentials.
+
+### OAuth/OIDC Bearer authentication on `/mcp*`
+
+| Symbol | Type | Description | File |
+|--------|------|-------------|------|
+| `OAuthBearerAuthMiddleware` | middleware (new) | Validates the user's OIDC Bearer token on `/mcp*` (JWT-shaped tokens only — anything else falls through to the API-key plane), resolves `PlatformUser`, permissions and tenant via Control Center, and seeds `request.state` with the resolved auth context | `backend/app/communication_hub/middleware/oauth_bearer_auth.py` |
+| `_extract_bearer` / `_looks_like_jwt` | functions (new) | Header extraction and JWT-shape discrimination so the two middleware planes never claim each other's credentials | `backend/app/communication_hub/middleware/oauth_bearer_auth.py` |
+| `_validate_token` | function (new) | Control Center validation call returning identity, permission scope and tenant; denial leaves the request unauthenticated (the transport gate then fails closed) | `backend/app/communication_hub/middleware/oauth_bearer_auth.py` |
+| `McpSession.auth_method` / `platform_user_id` / `user_sub` | fields (new) | OAuth-plane session context: which plane authenticated the connection and the resolved platform user identity forwarded to Control Center (never the token) | `backend/app/communication_hub/mcp/session_manager.py` |
+| `is_request_authenticated` | function (new) | Fail-closed gate accepting `request.state.auth_method` ∈ {`api_key`, `oauth`} | `backend/app/communication_hub/mcp/session_manager.py` |
+| `build_session_from_request` | function (new) | Seeds an `McpSession` from the resolved auth context on `request.state` — the single session-building path used by both transports | `backend/app/communication_hub/mcp/session_manager.py` |
+| `handle_streamable_http` / `handle_sse_open` / `handle_sse_message` | functions (modified) | Use `build_session_from_request` so Streamable HTTP and SSE share the OAuth/API-key session semantics | `backend/app/communication_hub/mcp/streamable_http.py`, `backend/app/communication_hub/mcp/sse_transport.py` |
+| `ApiKeyAuthMiddleware` | middleware (reference) | Unchanged API-key plane (`client_credentials` agents); the structural parallel for the OAuth plane | `backend/app/communication_hub/middleware/api_key_auth.py` |
+
+### Tool registry bridge — OAuth catalog and `cc____` dispatch
+
+| Symbol | Type | Description | File |
+|--------|------|-------------|------|
+| `ToolRegistryBridge._build_oauth_catalog` | method (new) | OAuth-plane `tools/list`: emits only the permission-filtered **management** tools (`cc____<bare>`) Control Center resolved as permitted for this user; everything else is omitted entirely | `backend/app/communication_hub/mcp/tool_registry_bridge.py` |
+| `ToolRegistryBridge.dispatch` (oauth branch) | method (modified) | OAuth connections dispatch through the management path; API-key connections keep the skill/decision/MCP paths | `backend/app/communication_hub/mcp/tool_registry_bridge.py` |
+| `ToolRegistryBridge._call_management_tool` | method (new) | Routes a management tool to its CC endpoint forwarding the user's `sub` (and conversation session when present) — no identity token crosses the boundary | `backend/app/communication_hub/mcp/tool_registry_bridge.py` |
+| `_management_scope_denial` | function (new) | Defense-in-depth decline of delete verbs and out-of-scope management names (handles the `cc____` prefix) before any dispatch | `backend/app/communication_hub/mcp/tool_registry_bridge.py` |
+| `LOAD_SKILLS_TOOL_NAME` | constant | CH meta tool exposed for skill discovery; reserved and never routed as a management tool | `backend/app/communication_hub/mcp/tool_registry_bridge.py` |
+| `SystemToolRegistry.get_cc_endpoint_map` (consumer) | integration point | Management names resolve to CC endpoint URLs from the shared registry — CH never hardcodes routes | `backend/app/communication_hub/mcp/tool_registry_bridge.py` |
+| `_route_to_system_tool` (cc acceptance) | function (modified) | Accepts both `system____` and `cc____` namespaces (`is_system_tool` handles both), so internal runtime routing treats `cc____` as a built-in system-path call | `backend/app/communication_hub/api/internal/tool_routing.py` |
+| `cache_user_jwt` / `get_user_jwt` | functions | Per-session cache of the signed-in user's JWT, enabling the assistant's tools to act with the user's identity | `backend/app/communication_hub/api/internal/tool_routing.py` |
+
+### WebSocket chat — tenant binding, reply routing, watchdog and error surfacing
+
+| Symbol | Type | Description | File |
+|--------|------|-------------|------|
+| `_bind_connection_tenant_context` / `_resolve_oidc_tenant_slug` | functions (new) | Connect-time tenant binding: the platform-token slug path is unchanged; OIDC tokens carry no `tenant` claim, so the tenant is resolved server-side from the user's active membership (the same mechanism as REST `/auth/tenant-memberships`); unresolvable under multi-tenancy fails closed with 4003 | `backend/app/api/ws/chat.py` |
+| `_send_to_live_socket` | function (new) | All reply/turn sends (agent reply, `chat_status`, `title_update`, `guardrail_update`, `chat_error`, `chat_blocked`, intervene status) resolve the live socket via `ActiveSessionTracker.get_ws(session_id)` at SEND time, so a mid-turn reconnect on the same session id receives the reply; send failures are logged and swallowed — they never crash the turn pipeline | `backend/app/api/ws/chat.py` |
+| `ActiveSessionTracker.unregister` | method (modified) | Identity-checked deregistration so the old connection's cleanup cannot evict a reconnect's registration | `backend/app/api/ws/chat.py` |
+| `run_conversation_turn` | function (new) | Whole-turn watchdog: bounds the entire turn (including the deliberately timeout-free AR streaming delegation) with `agent_question_timeout_seconds`, runs the `thinking_heartbeat` keepalive, delivers the live reply via the `on_reply` hook BEFORE persistence, and on fire/cancellation emits `timeout_or_failed` with at most one persisted error turn (deduped against a delivered reply) | `backend/app/api/ws/chat.py` |
+| `cancel_pending_conversation_turn` | function (new) | Cancels the per-session pending turn task; invoked by CH's `/internal/agent/terminate/{id}` forwarding so ending a session unblocks the WS turn immediately | `backend/app/api/ws/chat.py` |
+| `ConversationTurnError` + `_conversation_turn_error_from_http_status` / `_conversation_turn_error_from_guardrail_stop` / `_persist_and_surface_turn_error` | class + functions (new) | Structured `{"type": "chat_error", "code", "message"}` surfacing: AR's pre-model 400 maps to `assistant_model_not_configured`, guardrail stops to `iteration_limit` / `guardrail_<reason>` with actionable copy, and the error turn is persisted through the structured-error pattern | `backend/app/api/ws/chat.py` |
+| `conversation_sessions_default_window_days` | setting (new) | Default listing window (7 days) mirrored to the sessions API/UI | `backend/app/core/config.py` |
+
+### Tests
+
+| Symbol | Type | Description | File |
+|--------|------|-------------|------|
+| `test_oauth_bearer_auth` | test | OAuth plane on `/mcp*`: JWT discrimination, identity/tenant resolution, fail-closed denial, no token leakage into the session payload | `backend/tests/unit/test_oauth_bearer_auth.py` |
+| `test_cc_tool_registry_bridge` | test | `cc____` catalog listing, per-tool grant filtering, management dispatch with `user_sub`, delete/out-of-scope denial | `backend/tests/unit/test_cc_tool_registry_bridge.py` |
+| `test_mcp_protocol_server` | test | JSON-RPC contract and the shared session/auth gate across both transports | `backend/tests/unit/test_mcp_protocol_server.py` |
+| `conversation-intervention.spec.ts` | E2E test | Conversational HITL round-trip (approval preview → response → resume) over the WS channel | `e2e/tests/conversation-intervention.spec.ts` |

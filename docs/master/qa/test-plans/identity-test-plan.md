@@ -183,3 +183,32 @@ Test files added (verified present):
 - `backend/tests/integration/test_multitenant_auth_chain.py` — per-tenant OIDC provider isolation (token validates against own tenant's provider only, rejected in another tenant's context), `provider_scope` uniqueness enforced at DB level, NULL-tenant rows inert, tenancy-off resolves the root slot only, tenant discovery serves sign-in-ready providers with own user provider only
 
 E2E: N/A — backend-only change.
+
+---
+
+## control-center-chatbot Update (2026-11)
+
+Permission-model delta relevant to identity/auth: one new resource type and its enforcement path.
+
+**Behaviour deltas:**
+- `integration::control_center` (actions: read, manage) is registered in both the backend
+  `ResourceTypeManifest` and the frontend `RESOURCE_TYPE_MANIFEST`, and added to the integration
+  module group (so `integration::*` covers it). Manifest-count and group-membership fixtures were
+  refreshed in both layers.
+- The new type gates the Control Center MCP entity's visibility and mutations (see
+  `mcp-hub-test-plan.md`); unknown-type authorization still fails closed.
+- Management MCP tools reuse the existing `agent::*` / `integration::mcp_hub` resource types —
+  no new agent-scoped types were introduced, and the tool→`(resource_type, action)` map must
+  equal the REST `require_permission` pairs exactly.
+- Every management/MCP action is attributed to the OAuth-authenticated user (never a service or
+  agent-realm identity), which is the attribution guarantee the identity layer must preserve.
+
+**Test files added/updated (verified present):**
+- `backend/tests/unit/test_cc_integration_permission.py` — manifest registration, module-group
+  membership, and enforcement parity for the new type.
+- `backend/tests/unit/test_resource_type_manifest.py` — totals and integration-group membership.
+- `backend/tests/integration/test_namespace_permission_evaluation.py` — refreshed manifest fixtures.
+- `frontend/src/__tests__/ResourceTypeManifestMirror.test.ts` — mirror parity for the mirrored set and 3 integration submodules.
+- `backend/tests/unit/test_management_tool_permission_parity.py` — parity map equals the REST pairs.
+
+See `control-center-assistant-test-plan.md` for the assistant-wide coverage map.

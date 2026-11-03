@@ -78,9 +78,17 @@ class CommunicationHubClient:
             comm_hub_url
             or os.environ.get("COMM_HUB_URL", "http://localhost:8002")
         ).rstrip("/")
-        self._cert_path = cert_path or os.environ.get("CC_CERT_PATH", _DEFAULT_CC_CERT_PATH)
-        self._key_path = key_path or os.environ.get("CC_KEY_PATH", _DEFAULT_CC_KEY_PATH)
-        self._ca_cert_path = ca_cert_path or os.environ.get("CA_CERT_PATH")
+        # CWD-independent resolution (FIX-20261031-131030): explicit absolute
+        # configuration wins; relative paths anchor to the backend root.
+        from app.core.cert_paths import resolve_cert_path
+
+        self._cert_path = resolve_cert_path(
+            cert_path or os.environ.get("CC_CERT_PATH", _DEFAULT_CC_CERT_PATH)
+        )
+        self._key_path = resolve_cert_path(
+            key_path or os.environ.get("CC_KEY_PATH", _DEFAULT_CC_KEY_PATH)
+        )
+        self._ca_cert_path = resolve_cert_path(ca_cert_path or os.environ.get("CA_CERT_PATH"))
 
     def _make_client(self) -> httpx.AsyncClient:
         """Return a client configured for HTTPS mTLS or HTTP header cert auth."""

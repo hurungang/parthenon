@@ -342,3 +342,65 @@ Full details: [sandboxed-scripting module](../sandboxed-scripting/tech-spec.md).
 | String output rendering | type (modified) | `AgentJob.output_data` widened to `Record \| string`; raw script string output rendered as text; sandbox-validation chips via `t()` | `frontend/src/types/scripts.ts` |
 
 > Removed: `AgentScriptsTab.tsx` (standalone Scripts registry tab) and `AgentOptimizeLogDialog.tsx` (verification-log surface retired) — do not reference them.
+
+---
+
+## Control Center Assistant & skill-binding surfaces (control-center-chatbot change)
+
+Frontend work for the seeded assistant plus two supporting surfaces: the single-surface skill tool-binding editor and the topology canvas's pending-state contract. Backend/agent detail: [agents module](../agents/tech-spec.md); MCP entity gating: [mcp-hub module](../mcp-hub/tech-spec.md).
+
+### Assistant entry point and conversation surface
+
+| Symbol | Type | Description | File |
+|--------|------|-------------|------|
+| `openAssistant` | handler (new) | Launcher in the app shell: resolves the seeded `is_system` agent type from the existing agent-types query, honours the per-agent-type force-new-session flag, otherwise resolves the most recent ACTIVE conversation session (`GET /conversations?agent_type_id=…`, `updated_at` desc) and opens the dialog with that `sessionId`; falls back to a new session on empty/error. The dialog is NOT mounted while resolving (no empty-conversation flash) | `frontend/src/app/AppShell.tsx` |
+| Assistant launcher (FAB) | component (new usage) | Floating entry point with a resolving spinner; rendered only when a system assistant exists | `frontend/src/app/AppShell.tsx` |
+| `assistantSessionState` | utility module (new) | `markAssistantSessionEnded` / `consumeForceNewSessionFlag`: closing the dialog only disconnects the socket (the session stays `active` and is re-resolved on reopen); an explicit End sets a per-agent-type flag so the NEXT open starts a new session | `frontend/src/utils/assistantSessionState.ts` |
+| `useAssistantModelConfig` | hook (new) | Typed react-query hook for `GET /agents/model-configs/assistant-model` (`selected_model_id`, `options`); `enabled` flag keeps non-assistant surfaces from querying | `frontend/src/hooks/useAssistantModelConfig.ts` |
+| `ConversationDialog` (`assistantModelConfigCheck`) | component (modified) | When opened for the assistant: renders a guidance MUI Alert inside the chat surface with a "Configure model" action navigating to `/system-config` whenever the selection is null (or the backend surfaces `assistant_model_not_configured` mid-session), and disables input/send. Regular agent types are unaffected | `frontend/src/components/agents/ConversationDialog.tsx` |
+| `ConversationDialog` action bar | component (modified) | Four-option footer for ALL conversational agents: **View All Sessions**, **New Session**, **End Session**, **Exit**. Switch/end are blocked while a turn is streaming (thinking/delegating/waiting/tool/waiting-for-human/delegation-resumed/recovering) | `frontend/src/components/agents/ConversationDialog.tsx` |
+| `resetForSessionSwitch` / `handleStartNewSession` / `handleSwitchToSession` | functions (new) | Clear messages/delegation/guardrail state then `POST /conversations` (previous session stays active — end/archive is never called, no force-new flag); in-place resume via `POST /conversations/{id}/resume` | `frontend/src/components/agents/ConversationDialog.tsx` |
+| `SessionSwitcherList` | component (new) | "View All Sessions" sessions-tab experience: **Show ended sessions** switch (default off → `status=active`), From/To date inputs defaulting to the last-7-days window, pagination (page size 10, `total`-driven), time-desc rows with title/status/updated time; ended sessions carry an "Ended" chip and are never resumable | `frontend/src/components/agents/ConversationDialog.tsx` |
+| `DEFAULT_SESSIONS_WINDOW_DAYS` / `SESSIONS_PAGE_SIZE` | constants (new) | Mirror the backend default window (7 days) and page size (10) | `frontend/src/components/agents/ConversationDialog.tsx` |
+| `useConversationSessionsPage` / `ConversationSessionsPageParams` / `ConversationSessionsPage` | hook + types (new) | Query for the paginated `GET /conversations/sessions` endpoint | `frontend/src/hooks/useConversationSessions.ts` |
+| `mergeUnseenMessages` | function (new) | Merges a resumed turn list into rendered + live messages with dedupe, so a reply generated during a WS outage renders after reconnect | `frontend/src/components/agents/ConversationDialog.tsx` |
+| `useChatSession` | hook (modified) | Parses structured `chat_error` payloads into `chatError` (actionable codes → dedicated guidance UI); unexpected close during a turn auto-reconnects with the SAME session id (max 5 attempts, `intentionalCloseRef` guards unmount) and bumps `recoveryEpoch` on success so consumers re-fetch `/resume` | `frontend/src/hooks/useChatSession.ts` |
+| `ContentRenderer` (assistant messages) | component (reused) | Assistant/agent replies render in `auto` mode (sanitized HTML or formatted markdown — headings, lists, tables, code blocks); user messages stay plain-text bubbles | `frontend/src/components/ContentRenderer.tsx` |
+| `InlineInterventionDialog` | component (modified) | Approval previews render markdown tables via `ContentRenderer`; Expand toggles a 90vw × 80vh dialog rendering the SAME preview full-width (inline preview scrolls horizontally). Approve/Deny share one handler pair across both surfaces — no duplicated state to desync. i18n: `conversations.sessions.intervention.expand` / `.collapse` / `.previewTitle` | `frontend/src/components/conversations/InlineInterventionDialog.tsx` |
+| `SystemConfigPage` (assistant + workflow sections) | page (modified) | Two per-workspace model selectors: workflow-generation (tenant `TenantSetting` row) and assistant model (persisted onto the tenant's assistant agent type). Both offer only the tenant's enabled models with a "not configured" option | `frontend/src/pages/system/SystemConfigPage.tsx` |
+
+### Skill tool bindings — one editor surface
+
+| Symbol | Type | Description | File |
+|--------|------|-------------|------|
+| `SkillEditor` (`selectedToolIds`) | component state (modified) | Single source of truth for bindings: initialises from `skill.tool_ids`; the detail payload is applied once per skill and never overwrites a user edit (`toolSelectionDirtyRef`). Save payload = the union of selected ids | `frontend/src/components/agents/SkillEditor.tsx` |
+| `buildSkillToolEntries` | function (new) | Resolves each id from the browsable catalogue, degrading to the `tool_bindings` payload (`tool_id`, `name`, `original_name`, `server_slug`, `server_name`) when the tool cannot be browsed | `frontend/src/components/agents/SkillEditor.tsx` |
+| `groupToolEntries` | function (new) | Groups entries by server slug (sorted) for the grouped list under the Select Tools button | `frontend/src/components/agents/SkillEditor.tsx` |
+| Grouped binding list | component block (modified) | The grouped list IS both display and editor: `original_name` (falling back to `name`) + owning-server chip + canonical name; edit mode adds a per-entry remove control (explicit unbind — PUT replaces bindings), view mode is the same list without controls. The separate read-only "Bound Tools" card is removed | `frontend/src/components/agents/SkillEditor.tsx` |
+| Referenced read-only group | component block (new) | Permission-gated `cc` entries absent from the catalogue are reconstructed from `tool_bindings`, shown checked + disabled + locked in a "Referenced (read-only)" group, and always included on save — a save can never silently drop a dependency the caller cannot see. Note: `skills.editor.referencedToolReadOnlyNote`. Other unbrowsable ids stay visible but removable | `frontend/src/components/agents/SkillEditor.tsx` |
+| `SkillListPage` tool column | page (modified) | "N tools" count (`skills.toolCountValue`) with a native `title` tooltip listing bound tool names; an explicit muted "No tools bound" chip at zero bindings. Type: `Skill.tool_bindings?: SkillToolBindingInfo[]` | `frontend/src/pages/skills/SkillListPage.tsx` |
+
+### Topology canvas pending states
+
+`PanelTopologyCanvas` is the single canonical topology view (Agent Management Panel and the Agent Type Details preview). On a slow network it previously rendered bound entities as raw ids with no loading feedback. Three states are now strictly distinguished: **pending** (request in flight, name not cached → `pending: true` + loading label + spinner), **genuinely missing** (request completed, row absent → historical raw-id fallback), and **deliberately empty/set** (dashed placeholder or solid None/Conversation/Auto node).
+
+| Symbol | Type | Description | File |
+|--------|------|-------------|------|
+| `PanelTopologyPending` / `NO_PENDING` | types/const (new) | Typed per-entity in-flight flags (`identity`, `role`, `model`, `dataTypes`, `skills`, `sops`, `sopDetails`, `tools`) with an all-resolved default; flags come from each query's `isLoading` (`isPending && isFetching`, false when completed/disabled) | `frontend/src/components/agents/panel/PanelTopologyCanvas.tsx` |
+| `buildPanelTopology` (pending argument) | function (modified) | Gains an optional typed `PanelTopologyPending` argument; a pending bound entity renders the loading label instead of its raw id, a pending SOP composition child renders an indented `sop_pending_<sopId>` placeholder, and a pending tools zone renders `tool_pending` rather than the "No tools" placeholder (which now means a RESOLVED graph with nothing in it) | `frontend/src/components/agents/panel/PanelTopologyCanvas.tsx` |
+| `PanelTopologyLabels.loading` | label (new) | Localized loading label for pending entities (`agents.panel.topologyLoading`) | `frontend/src/components/agents/panel/PanelTopologyCanvas.tsx` |
+| `resolveRef` / `refLabel` | helpers (new) | Resolution order: resolved name (never pending — cached entities must not flicker) → loading label (pending) → raw id (missing) | `frontend/src/components/agents/panel/PanelTopologyCanvas.tsx` |
+| `TopologyNode.pending` | type field (new) | Optional, backwards-compatible pending marker consumed by the renderer; generic layered and plan-based renderers are unaffected | `frontend/src/types/index.ts` |
+| `PendingSpinner` | component (new) | ViewBox-unit SVG spinner in the icon gutter (same `NODE_ICON_SIZE` geometry, so the graph never jumps when data arrives); `role="progressbar"`, localized `aria-label`/`<title>`, SMIL animation, no HTML overlay; pending nodes are inert (`data-pending="true"`, no click handlers, default cursor) | `frontend/src/components/agents/TopologyDiagramRenderer.tsx` |
+| `agents.panel.topologyLoading` | i18n key | "Loading…" | `frontend/src/i18n/locales/en.json` |
+
+### Tests
+
+| Symbol | Type | Description | File |
+|--------|------|-------------|------|
+| `ControlCenterAssistantEntry` / `AppShell.assistantSession` | frontend tests | Launcher resolution, resume of the latest active session, force-new-session after End, no dialog mount while resolving | `frontend/src/__tests__/ControlCenterAssistantEntry.test.tsx`, `frontend/src/__tests__/AppShell.assistantSession.test.tsx` |
+| `ConversationDialog.actionBar` / `.sessionsView` / `.resumeLiveDelivery` | frontend tests | Action-bar lifecycle, sessions-tab filters/pagination/ended chips, reconnect reply recovery | `frontend/src/__tests__/ConversationDialog.actionBar.test.tsx`, `frontend/src/__tests__/ConversationDialog.sessionsView.test.tsx`, `frontend/src/__tests__/ConversationDialog.resumeLiveDelivery.test.tsx` |
+| `AssistantModelConfigGuidance` | frontend test | Guidance alert, disabled input, "Configure model" navigation, mid-session error code mapping | `frontend/src/__tests__/AssistantModelConfigGuidance.test.tsx` |
+| `SkillEditor.singleSurface` / `SkillsToolBindingsVisibility` | frontend tests | Single binding surface, referenced read-only pinning, table tool count and zero-binding chip | `frontend/src/__tests__/SkillEditor.singleSurface.test.tsx`, `frontend/src/__tests__/SkillsToolBindingsVisibility.test.tsx` |
+| `PanelTopologyCanvas.test` / `TopologyDiagramRenderer.test` | frontend tests | Pending vs missing vs empty rendering, spinner accessibility, geometry stability | `frontend/src/__tests__/PanelTopologyCanvas.test.tsx`, `frontend/src/__tests__/TopologyDiagramRenderer.test.tsx` |
+| `conversation-sessions.spec.ts` | E2E test | Sessions listing filters, date window, pagination, resume of active vs ended | `e2e/tests/conversation-sessions.spec.ts` |

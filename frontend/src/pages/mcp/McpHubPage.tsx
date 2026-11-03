@@ -35,7 +35,7 @@ import PermissionDeniedAlert from '../../components/permissions/PermissionDenied
 import { McpSessionManager } from './McpSessionManager'
 import { McpToolBrowser } from './McpToolBrowser'
 import apiClient from '../../api/apiClient'
-import { isReservedServerName } from '../../utils/toolNaming'
+import { isReservedServerName, isControlCenterServer } from '../../utils/toolNaming'
 import { useQueryClient } from '@tanstack/react-query'
 import type { McpServer } from '../../types'
 
@@ -58,6 +58,10 @@ export function McpHubPage() {
   const [form, setForm] = useState({ slug: '', base_url: '', description: '' })
   const [sessionServerId, setSessionServerId] = useState<string | null>(null)
   const [syncWarnings, setSyncWarnings] = useState<string | null>(null)
+  // FIX-20261101-014511: surfaces 403s from row-level actions (e.g. mutating
+  // the protected Control Center entity without integration::control_center:
+  // manage) via the standard PermissionDeniedAlert — never a silent failure.
+  const [actionError, setActionError] = useState<unknown>(null)
   const invalidSlug = !!form.slug && !SLUG_PATTERN.test(form.slug)
 
   const handleOpenCreate = () => {
@@ -96,8 +100,13 @@ export function McpHubPage() {
 
   const handleDelete = async (id: string) => {
     if (confirm(t('app.confirm'))) {
-      await apiClient.delete(`/mcp/servers/${id}`)
-      await queryClient.invalidateQueries({ queryKey: ['mcp', 'servers'] })
+      try {
+        setActionError(null)
+        await apiClient.delete(`/mcp/servers/${id}`)
+        await queryClient.invalidateQueries({ queryKey: ['mcp', 'servers'] })
+      } catch (err) {
+        setActionError(err)
+      }
     }
   }
 
@@ -129,6 +138,9 @@ export function McpHubPage() {
         <>
           {isLoading && <CircularProgress />}
           {error && <PermissionDeniedAlert error={error} fallbackMessage={t('app.error')} />}
+          {actionError && (
+            <PermissionDeniedAlert error={actionError} fallbackMessage={t('app.error')} />
+          )}
 
           {/* System entry contextual info banner */}
           {!error && (
@@ -149,6 +161,14 @@ export function McpHubPage() {
                     // Reserved namespaces (system, decision) are built-in
                     // virtual servers — no base URL, sessions, sync, or edit.
                     const isSystem = isSystemServer(server) || isReservedServerName(server.slug)
+                    // Control Center entity (cc) — a protected integration:
+                    // visible only to roles granted the entity-view
+                    // permission (the API omits it otherwise).
+                    const isCc = isControlCenterServer(server.slug)
+                    // FIX-20261101-090438: cc is system-managed & sessionless
+                    // — prefer the API flag, fall back to the slug.
+                    const systemManaged =
+                      server.is_system_managed === true || isCc
                     const aboutTitle = server.slug === 'decision' ? t('mcp.decision.aboutTitle') : t('mcp.system.aboutTitle')
                     const aboutBody = server.slug === 'decision' ? t('mcp.decision.aboutBody') : t('mcp.system.aboutBody')
                     return (
@@ -164,6 +184,11 @@ export function McpHubPage() {
                               </Box>
                             } arrow placement="top">
                               <Chip label={t('mcp.system.builtIn')} color="error" size="small" variant="outlined" />
+                            </Tooltip>
+                          )}
+                          {isCc && (
+                            <Tooltip title={t('mcp.controlCenter.tooltip')} arrow placement="top">
+                              <Chip label={t('mcp.controlCenter.chip')} color="warning" size="small" variant="outlined" />
                             </Tooltip>
                           )}
                         </Box>
@@ -188,7 +213,7 @@ export function McpHubPage() {
                         />
                       </TableCell>
                       <TableCell>
-                        {isSystem ? '—' : (server.session_count ?? 0)}
+                        {isSystem || systemManaged ? '—' : (server.session_count ?? 0)}
                       </TableCell>
                       <TableCell>
                         {server.last_synced_at
@@ -196,17 +221,17 @@ export function McpHubPage() {
                           : '—'}
                       </TableCell>
                       <TableCell>
-                        {/* Session management button */}
-                        {!isSystem && (
+                        {/* Session management button — hidden for system-managed entities (cc has NO sessions) */}
+                        {!isSystem && !systemManaged && (
                           <Tooltip title={t('mcp.manageSessions')}>
                             <IconButton size="small" onClick={() => setSessionServerId(server.id)}>
                               <StorageIcon />
                             </IconButton>
                           </Tooltip>
                         )}
-                        {/* Sync button */}
-                        {isSystem ? (
-                          <Tooltip title={t('mcp.system.systemManaged')}>
+                        {/* Sync button — disabled for system-managed entities */}
+                        {isSystem || systemManaged ? (
+                          <Tooltip title={isCc ? t('mcp.controlCenter.systemManaged') : t('mcp.system.systemManaged')}>
                             <span>
                               <IconButton size="small" disabled>
                                 <SyncIcon data-testid="SyncIcon" />
@@ -227,12 +252,14 @@ export function McpHubPage() {
                               size="small"
                               onClick={() => {
                                 setSyncWarnings(null)
+                                setActionError(null)
                                 syncServer.mutate(server.id, {
                                   onSuccess: (result) => {
                                     if (result.warnings && result.warnings.length > 0) {
                                       setSyncWarnings(result.warnings.join('; '))
                                     }
                                   },
+                                  onError: (err) => setActionError(err),
                                 })
                               }}
                               disabled={syncServer.isPending && syncServer.variables === server.id}
@@ -241,10 +268,10 @@ export function McpHubPage() {
                             </IconButton>
                           </Tooltip>
                         )}
-                        {/* Edit/Delete — disabled for System */}
-                        {isSystem ? (
+                        {/* Edit/Delete — hidden for system-managed entities */}
+                        {isSystem || systemManaged ? (
                           <Typography variant="caption" color="text.secondary" sx={{ ml: 1 }}>
-                            {t('mcp.system.systemManaged')}
+                            {isCc ? t('mcp.controlCenter.systemManaged') : t('mcp.system.systemManaged')}
                           </Typography>
                         ) : (
                           <>

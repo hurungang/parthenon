@@ -20,6 +20,12 @@ _INTERNAL_DATA_PLANE_EXEMPT_PREFIXES: tuple[str, ...] = (
     "/api/v1/internal/certificates",
     "/api/v1/internal/bootstrap",
     "/api/v1/internal/auth",
+    # Control-plane OAuth session establishment: CH presents only the
+    # OIDC-validated sub + tenant slug (never signed headers — CH is
+    # forward-only).  The endpoint derives and signs the tenant context
+    # itself; the DATA-PLANE /{tool_name} route still fail-closes via
+    # require_internal_tenant_context.
+    "/api/v1/internal/management-tools/resolve",
 )
 
 # In the test environment every async test runs on its own event loop;

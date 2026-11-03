@@ -369,3 +369,25 @@ Agent-execution tests must not depend on real LLM APIs. A deterministic mock lay
 - The same mock-aware path feeds the script generate→test→refine loop (repair generator receives the sandbox capability contract).
 
 Refer to `sandboxed-scripting-test-plan.md` for module-specific coverage and test file references.
+
+### Live verification of streaming & intervention flows
+
+Some behaviours cannot be proven in-process: WebSocket keepalives, whole-turn watchdogs, client
+reconnect/re-merge, approval round-trips and end-session cancellation all depend on the real
+CC → CH → AR hop and the real socket. The established pattern (introduced by
+`control-center-chatbot`) is a **live verification run** rather than a mocked test:
+
+- Run the real stack (frontend dev server + CC + CH + AR) with the LLM mock enabled in
+  `scripted`/`delay`/`hang` mode; drive it through the Vite-proxied WebSocket exactly as the
+  browser would (`scripts/fix-*-live*.cjs` style harnesses), never through a direct service call.
+- `LLM_MOCK_DELAY_SECONDS` (slow model) and `LLM_MOCK_HANG=1` (never-returning model) are the
+  supported fault-injection knobs; a deterministic scripted reply (`tmp/*-scripted*.json`) makes
+  the turn's tool-selection and final text assertable.
+- Assert the transport facts the unit layer cannot: heartbeat cadence, socket survival past the
+  idle boundary, terminal status events, exactly-once persistence of the error turn, prompt
+  cancellation on end-session, and that an approval actually performs the real write (verify the
+  created resource afterwards through the REST API).
+- Live runs are **evidence, not a substitute** for the deterministic suites: they complement the
+  unit/integration tests and are recorded with an explicit PASSED marker in the fix log. They are
+  not wired into CI (they need a live stack and a seeded tenant), so a skipped live run is never
+  reported as a pass.

@@ -141,7 +141,14 @@ async def respond_to_intervene_request(
     # accessing orm_response.request (a lazy relationship that would
     # trigger greenlet_spawn in an async context).
     req = await db.get(InterveneRequest, request_id)
+    # FIX-20261031-133253: conversation-scoped requests (conversational
+    # assistant, no agent_jobs row) resume via the conversation session id —
+    # Agent Runtime resolves it against the in-process conversational HITL
+    # registry first.
     agent_session_id = req.agent_session_id if req else None
+    resume_session_id: uuid.UUID | None = agent_session_id
+    if resume_session_id is None and req is not None:
+        resume_session_id = req.conversation_session_id
     response_value: dict = {}
     if body.approval_value is not None:
         response_value["approval_value"] = body.approval_value
@@ -155,8 +162,9 @@ async def respond_to_intervene_request(
     response_data = InterveneResponseRead.model_validate(orm_response)
     await db.commit()
 
-    # Resume the agent session so execution continues.
-    if agent_session_id is not None:
+    # Resume the agent session (or the paused conversational turn) so
+    # execution continues.
+    if resume_session_id is not None:
         # Multi-tenancy: sign the resolved tenant onto the resume call so
         # the resumed run stays tenant-bound (switch off → no headers,
         # single-tenant behaviour unchanged).
@@ -168,12 +176,12 @@ async def respond_to_intervene_request(
             if _ctx.is_set:
                 _tenant_context = _ctx
         await _resume_agent_session(
-            agent_session_id, response_value, tenant_context=_tenant_context
+            resume_session_id, response_value, tenant_context=_tenant_context
         )
     else:
         logger.warning(
-            "Could not determine agent_session_id for request %s — "
-            "agent execution will not resume",
+            "Could not determine agent_session_id or conversation_session_id "
+            "for request %s — agent execution will not resume",
             request_id,
         )
 

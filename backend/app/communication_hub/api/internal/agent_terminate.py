@@ -82,6 +82,21 @@ async def forward_terminate_session(
         body.reason,
     )
 
+    # FIX-20261031-091657 (Defect B): cancel the Communication Hub-side
+    # pending conversational turn for this session (if any) so a session-end
+    # request unblocks the WS turn immediately; AR's own task is cancelled by
+    # the forwarded terminate below. Best-effort — never blocks forwarding.
+    try:
+        from app.api.ws.chat import cancel_pending_conversation_turn
+
+        cancel_pending_conversation_turn(str(session_id))
+    except Exception as exc:  # noqa: BLE001 — best-effort only
+        logger.warning(
+            "Failed to cancel pending conversation turn for session %s: %s",
+            session_id,
+            exc,
+        )
+
     ar_base = settings.agent_runtime_url or "http://localhost:8001"
     ar_endpoint = f"{ar_base}/terminate/{session_id}"
 

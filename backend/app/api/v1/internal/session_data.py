@@ -1280,5 +1280,10 @@ async def internal_intervene_respond(
     if req.agent_session_id is not None:
         agent_session_id = req.agent_session_id
         await _resume_agent_session(agent_session_id, response_value)
+    elif req.conversation_session_id is not None:
+        # FIX-20261031-133253: conversation-scoped request (conversational
+        # assistant) — resume the paused conversational turn via the
+        # conversation session id (AR conversational HITL registry).
+        await _resume_agent_session(req.conversation_session_id, response_value)
 
     return response_data

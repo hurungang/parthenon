@@ -6,14 +6,15 @@ import logging
 from datetime import datetime, timezone
 
 import httpx
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
-from sqlalchemy import select
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.api.deps import require_permission
+from app.api.deps import require_permission, identity_has_permission
 from app.core.credential_vault import get_vault
-from app.core.resource_types import RT_INTEGRATION_MCP_HUB
+from app.core.resource_types import RT_INTEGRATION_MCP_HUB, RT_INTEGRATION_CONTROL_CENTER
+from app.schemas.errors import PermissionDeniedDetail, RequiredPermission
 from app.db.session import DbSession
 from app.db.models.mcp_hub import McpServer, McpSession, McpTool, ToolPermission, McpSessionAuthType, McpServerStatus
 from app.db.models.skills import Skill, SkillToolBinding
@@ -297,6 +298,34 @@ async def seed_system_tools(db: "AsyncSession") -> None:
                     existing_tool.original_name, entry["name"], entry["id"],
                 )
 
+    # ── Retire legacy system____ management rows (FIX-20261101-000319) ─────
+    # Management + meta tools moved to the per-tenant Control Center (cc)
+    # entity; the global System entity must no longer list or grant them.
+    # Pure SQL (no row hydration — some reserved UUIDs coerce to INTEGER
+    # under the SQLite test engine's NUMERIC affinity).  Idempotent:
+    # nothing matches once retired.
+    from app.db.models.skills import SkillToolBinding as _SkillToolBinding
+    from sqlalchemy import delete as _sa_delete
+
+    _mgmt_names = _STR.get_management_tool_names() | _STR.get_meta_tool_names()
+    _legacy_row_ids = (
+        select(McpTool.id).where(
+            McpTool.name.like("system____%"),
+            McpTool.original_name.in_(_mgmt_names),
+        )
+    ).scalar_subquery()
+    await db.execute(
+        _sa_delete(_SkillToolBinding).where(
+            _SkillToolBinding.tool_id.in_(_legacy_row_ids)
+        )
+    )
+    await db.execute(
+        _sa_delete(McpTool).where(
+            McpTool.name.like("system____%"),
+            McpTool.original_name.in_(_mgmt_names),
+        )
+    )
+
     await db.flush()
     await db.commit()
 
@@ -304,34 +333,159 @@ async def seed_system_tools(db: "AsyncSession") -> None:
 McpServerRouter = APIRouter(prefix="/mcp/servers", tags=["MCP Hub — Servers"])
 
 
+# ── Control Center entity gating (FIX-20261101-014511) ────────────────────────
+#
+# The per-tenant Control Center MCP entity (slug ``cc``, seeded by
+# assistant_seeder) is a PROTECTED integration: ``integration::control_center``
+# read = may see it, manage = may define anything around it.  Ordinary
+# (non-cc) servers keep following the plain ``integration::mcp_hub`` rules.
+
+
+def _is_cc_server(server: McpServer) -> bool:
+    """True when the resolved server row is the Control Center entity."""
+    return getattr(server, "slug", None) == "cc"
+
+
+async def _cc_visible(request: Request, db: AsyncSession) -> bool:
+    """May the calling identity SEE the Control Center entity?"""
+    return await identity_has_permission(
+        request, db, RT_INTEGRATION_CONTROL_CENTER, "read"
+    )
+
+
+async def _require_cc_permission(
+    request: Request, db: AsyncSession, action: str
+) -> None:
+    """Raise a structured 403 unless the caller holds the cc entity action."""
+    if await identity_has_permission(request, db, RT_INTEGRATION_CONTROL_CENTER, action):
+        return
+    raise HTTPException(
+        status_code=403,
+        detail=PermissionDeniedDetail(
+            detail=(
+                f"The Control Center integration requires "
+                f"integration::control_center:{action}."
+            ),
+            required_permission=RequiredPermission(
+                resource_type=RT_INTEGRATION_CONTROL_CENTER,
+                action=action,
+                resource_id=None,
+            ),
+        ).model_dump(),
+    )
+
+
+async def _gate_cc_server(
+    request: Request,
+    db: AsyncSession,
+    server: McpServer,
+    *,
+    mutation: bool = False,
+) -> None:
+    """Enforce entity-view permission when *server* is the cc entity.
+
+    Visibility (read): 404-without-leak for callers without ``read``.
+    Mutations: structured 403 for callers without ``manage``.  Non-cc
+    servers pass through untouched.
+    """
+    if not _is_cc_server(server):
+        return
+    if mutation:
+        await _require_cc_permission(request, db, "manage")
+    elif not await _cc_visible(request, db):
+        raise HTTPException(status_code=404, detail="MCP server not found")
+
+
+def _reject_cc_mutation(server: McpServer, *, sessions: bool = False) -> None:
+    """FIX-20261101-090438: the cc entity is system-managed and sessionless.
+
+    Must be checked BEFORE the FIX-014511 manage-permission gate —
+    immutability is unconditional, not a permission question.  Entity
+    lifecycle/config (update/delete/sync/OAuth) is locked for EVERYONE
+    (including ``integration::control_center:manage`` holders — the seeder
+    is the only writer).  Session operations are rejected as unsupported:
+    MCP sessions don't apply to the cc entity (access flows through
+    role/skill grants only).  Tool GRANTS onto cc tools remain governed
+    solely by the FIX-014511 permission gate.  Non-cc servers pass through.
+    """
+    if not _is_cc_server(server):
+        return
+    if sessions:
+        detail = (
+            "Sessions are not supported for the Control Center integration — "
+            "access flows through role and skill grants."
+        )
+    else:
+        detail = (
+            "The Control Center integration is system-managed and cannot be modified."
+        )
+    raise HTTPException(
+        status_code=403,
+        detail={"code": "system_managed_integration", "detail": detail},
+    )
+
+
 @McpServerRouter.get("", response_model=list[McpServerRead])
 async def list_mcp_servers(
+    request: Request,
     db: DbSession,
+    response: Response,
     _: dict = Depends(require_permission(RT_INTEGRATION_MCP_HUB, "read")),
     limit: int = Query(default=25, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
 ) -> list:
-    result = await db.execute(
-        select(McpServer)
-        .options(selectinload(McpServer.sessions))
-        .order_by(McpServer.name)
-        .offset(offset)
-        .limit(limit)
-    )
-    db_servers_raw = list(result.scalars().all())
-    # Filter out the DB-seeded System server — only the virtual entry appears
-    db_servers: list[McpServer] = [
-        s for s in db_servers_raw if s.id not in (SYSTEM_SERVER_ID, DECISION_SERVER_ID)
+    """List MCP servers with deterministic, permission-correct pagination.
+
+    FIX-20261101-014511: the Control Center entity (slug ``cc``) is only
+    listed for callers holding integration::control_center:read.
+
+    FIX-20261102-062047: the cc filter (and the system/decision exclusion)
+    is applied BEFORE offset/limit so a page is never short or shifted.
+    Pagination runs over the FULL logical ordering — the two virtual
+    servers (``system``, ``decision``) occupy the first two slots, then
+    DB servers ordered by (name, id).  ``X-Total-Count`` carries the true
+    total of that ordering.
+    """
+    cc_visible = await _cc_visible(request, db)
+
+    filters = [McpServer.id.notin_((SYSTEM_SERVER_ID, DECISION_SERVER_ID))]
+    if not cc_visible:
+        # Filter in the query — never post-slice (that shortens pages and
+        # skips rows on the next offset).
+        filters.append(McpServer.slug != "cc")
+
+    db_total = (
+        await db.execute(select(func.count()).select_from(McpServer).where(*filters))
+    ).scalar_one()
+    virtual: list[McpServerRead] = [_system_server_read(), _decision_server_read()]
+    total = int(db_total) + len(virtual)
+    response.headers["X-Total-Count"] = str(total)
+
+    # Virtual rows come first in the full ordering; only fetch the DB rows
+    # the requested window still covers.
+    server_reads: list[McpServerRead] = [
+        virtual[index] for index in range(offset, min(offset + limit, len(virtual)))
     ]
-    # Build schema objects with session_count populated from eager-loaded relationship
-    server_reads: list[McpServerRead] = []
-    for server in db_servers:
-        s_read = McpServerRead.model_validate(server)
-        s_read.session_count = len(server.sessions)
-        server_reads.append(s_read)
-    if offset == 0:
-        server_reads.insert(0, _decision_server_read())
-        server_reads.insert(0, _system_server_read())
+    db_offset = max(0, offset - len(virtual))
+    db_limit = limit - len(server_reads)
+    if db_limit > 0:
+        result = await db.execute(
+            select(McpServer)
+            .options(selectinload(McpServer.sessions))
+            .where(*filters)
+            .order_by(McpServer.name, McpServer.id)
+            .offset(db_offset)
+            .limit(db_limit)
+        )
+        db_rows = list(result.scalars().all())
+        if not cc_visible:
+            # Defense in depth: the query filter is authoritative for
+            # pagination; this must never remove a row in production.
+            db_rows = [server for server in db_rows if not _is_cc_server(server)]
+        for server in db_rows:
+            s_read = McpServerRead.model_validate(server)
+            s_read.session_count = len(server.sessions)
+            server_reads.append(s_read)
     return server_reads
 
 
@@ -341,9 +495,10 @@ async def create_mcp_server(
     db: DbSession,
     _: dict = Depends(require_permission(RT_INTEGRATION_MCP_HUB, "create")),
 ) -> McpServer:
-    # Reject reserved slugs — "system" (built-in system tools) and "decision"
-    # (user-defined decision tools) are namespaces, not registerable servers.
-    if body.slug in ("system", "decision"):
+    # Reject reserved slugs — "system" (built-in system tools), "decision"
+    # (user-defined decision tools) and "cc" (Control Center management
+    # entity) are namespaces, not registerable servers.
+    if body.slug in ("system", "decision", "cc"):
         raise HTTPException(
             status_code=409,
             detail=f"The slug '{body.slug}' is reserved for built-in tools",
@@ -377,12 +532,14 @@ async def create_mcp_server(
 @McpServerRouter.get("/{server_id}", response_model=McpServerRead)
 async def get_mcp_server(
     server_id: uuid.UUID,
+    request: Request,
     db: DbSession,
     _: dict = Depends(require_permission(RT_INTEGRATION_MCP_HUB, "read")),
 ) -> McpServer:
     server = await db.get(McpServer, server_id)
     if not server:
         raise HTTPException(status_code=404, detail="MCP server not found")
+    await _gate_cc_server(request, db, server)
     return server
 
 
@@ -390,12 +547,15 @@ async def get_mcp_server(
 async def update_mcp_server(
     server_id: uuid.UUID,
     body: McpServerUpdate,
+    request: Request,
     db: DbSession,
     _: dict = Depends(require_permission(RT_INTEGRATION_MCP_HUB, "update")),
 ) -> McpServer:
     server = await db.get(McpServer, server_id)
     if not server:
         raise HTTPException(status_code=404, detail="MCP server not found")
+    _reject_cc_mutation(server)
+    await _gate_cc_server(request, db, server, mutation=True)
     # Enforce PER-TENANT slug uniqueness when the slug is being changed —
     # business identity is (tenant_id, slug), so a duplicate check is only
     # meaningful within the server's own tenant.
@@ -426,24 +586,30 @@ async def update_mcp_server(
 @McpServerRouter.delete("/{server_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_mcp_server(
     server_id: uuid.UUID,
+    request: Request,
     db: DbSession,
     _: dict = Depends(require_permission(RT_INTEGRATION_MCP_HUB, "delete")),
 ) -> None:
     server = await db.get(McpServer, server_id)
     if not server:
         raise HTTPException(status_code=404, detail="MCP server not found")
+    _reject_cc_mutation(server)
+    await _gate_cc_server(request, db, server, mutation=True)
     await db.delete(server)
 
 
 @McpServerRouter.post("/{server_id}/sync", response_model=SyncResult)
 async def sync_mcp_server(
     server_id: uuid.UUID,
+    request: Request,
     db: DbSession,
     _: dict = Depends(require_permission(RT_INTEGRATION_MCP_HUB, "execute")),
 ) -> SyncResult:
     server = await db.get(McpServer, server_id)
     if not server:
         raise HTTPException(status_code=404, detail="MCP server not found")
+    _reject_cc_mutation(server)
+    await _gate_cc_server(request, db, server, mutation=True)
 
     # Gate: require at least one session for sync
     session_count_result = await db.execute(
@@ -494,12 +660,14 @@ async def sync_mcp_server(
 @McpServerRouter.get("/{server_id}/tools", response_model=list[McpToolRead])
 async def list_server_tools(
     server_id: uuid.UUID,
+    request: Request,
     db: DbSession,
     _: dict = Depends(require_permission(RT_INTEGRATION_MCP_HUB, "read")),
 ) -> list[McpTool]:
     server = await db.get(McpServer, server_id)
     if not server:
         raise HTTPException(status_code=404, detail="MCP server not found")
+    await _gate_cc_server(request, db, server)
     result = await db.execute(
         select(McpTool)
         .where(McpTool.server_id == server_id)
@@ -511,6 +679,7 @@ async def list_server_tools(
 @McpServerRouter.post("/{server_id}/oauth/authorize")
 async def get_oauth_authorization_url(
     server_id: uuid.UUID,
+    request: Request,
     db: DbSession,
     body: OAuthInitiateRequest | None = None,
     _: dict = Depends(require_permission(RT_INTEGRATION_MCP_HUB, "manage")),
@@ -554,11 +723,16 @@ async def get_oauth_authorization_url(
             )
             logger.info("Using manual OAuth configuration")
 
-    # When no manual config provided, try auto-discovery
+    # When no manual config provided, try auto-discovery.
+    # FIX-20261101-014511: mutating the cc entity's configuration requires
+    # integration::control_center:manage — resolve the server up front so
+    # the gate applies regardless of discovery path.
+    server = await db.get(McpServer, server_id)
+    if not server:
+        raise HTTPException(status_code=404, detail="MCP server not found")
+    _reject_cc_mutation(server)
+    await _gate_cc_server(request, db, server, mutation=True)
     if manual_config is None:
-        server = await db.get(McpServer, server_id)
-        if not server:
-            raise HTTPException(status_code=404, detail="MCP server not found")
         if server.oauth_config:
             oauth_cfg = server.oauth_config
             auth_url = oauth_cfg.get("authorization_url")
@@ -605,12 +779,14 @@ McpSessionRouter = APIRouter(prefix="/mcp/servers", tags=["MCP Hub — Sessions"
 @McpSessionRouter.get("/{server_id}/sessions", response_model=list[McpSessionRead])
 async def list_mcp_sessions(
     server_id: uuid.UUID,
+    request: Request,
     db: DbSession,
     _: dict = Depends(require_permission(RT_INTEGRATION_MCP_HUB, "manage")),
 ) -> list[McpSession]:
     server = await db.get(McpServer, server_id)
     if not server:
         raise HTTPException(status_code=404, detail="MCP server not found")
+    await _gate_cc_server(request, db, server)
     result = await db.execute(
         select(McpSession).where(McpSession.server_id == server_id).order_by(McpSession.name)
     )
@@ -624,12 +800,15 @@ async def list_mcp_sessions(
 async def create_mcp_session(
     server_id: uuid.UUID,
     body: McpSessionCreate,
+    request: Request,
     db: DbSession,
     _: dict = Depends(require_permission(RT_INTEGRATION_MCP_HUB, "manage")),
 ) -> dict:
     server = await db.get(McpServer, server_id)
     if not server:
         raise HTTPException(status_code=404, detail="MCP server not found")
+    _reject_cc_mutation(server, sessions=True)
+    await _gate_cc_server(request, db, server, mutation=True)
 
     # Count existing sessions to determine if this is the first
     existing_count_result = await db.execute(
@@ -706,9 +885,16 @@ async def update_mcp_session(
     server_id: uuid.UUID,
     session_id: uuid.UUID,
     body: McpSessionUpdate,
+    request: Request,
     db: DbSession,
     _: dict = Depends(require_permission(RT_INTEGRATION_MCP_HUB, "manage")),
 ) -> McpSession:
+    # FIX-20261101-014511: gate cc-entity session mutation (manage).
+    parent_server = await db.get(McpServer, server_id)
+    if not parent_server:
+        raise HTTPException(status_code=404, detail="MCP server not found")
+    _reject_cc_mutation(parent_server, sessions=True)
+    await _gate_cc_server(request, db, parent_server, mutation=True)
     update_data = body.model_dump(exclude_unset=True, exclude={"credentials", "is_default"})
     # NOTE: McpSession is a parent-scoped (tenant-agnostic) table — the
     # McpServer join lets the do_orm_execute choke point constrain the
@@ -755,9 +941,16 @@ async def update_mcp_session(
 async def delete_mcp_session(
     server_id: uuid.UUID,
     session_id: uuid.UUID,
+    request: Request,
     db: DbSession,
     _: dict = Depends(require_permission(RT_INTEGRATION_MCP_HUB, "manage")),
 ) -> None:
+    # FIX-20261101-014511: gate cc-entity session mutation (manage).
+    parent_server = await db.get(McpServer, server_id)
+    if not parent_server:
+        raise HTTPException(status_code=404, detail="MCP server not found")
+    _reject_cc_mutation(parent_server, sessions=True)
+    await _gate_cc_server(request, db, parent_server, mutation=True)
     # Parent-scoped table: join the tenant-scoped McpServer parent so a
     # foreign (server_id, session_id) pair cannot be resolved/deleted in
     # tenant context.
@@ -797,6 +990,7 @@ async def delete_mcp_session(
 async def refresh_oauth_token(
     server_id: uuid.UUID,
     session_id: uuid.UUID,
+    request: Request,
     db: DbSession,
     _: dict = Depends(require_permission(RT_INTEGRATION_MCP_HUB, "manage")),
 ) -> McpSession:
@@ -805,6 +999,12 @@ async def refresh_oauth_token(
     
     Returns the updated session with new token expiry times.
     """
+    # FIX-20261101-014511: gate cc-entity session mutation (manage).
+    parent_server = await db.get(McpServer, server_id)
+    if not parent_server:
+        raise HTTPException(status_code=404, detail="MCP server not found")
+    _reject_cc_mutation(parent_server, sessions=True)
+    await _gate_cc_server(request, db, parent_server, mutation=True)
     # Parent-scoped table: join the tenant-scoped McpServer parent so a
     # foreign (server_id, session_id) pair cannot be resolved in tenant
     # context.
@@ -865,10 +1065,27 @@ McpToolRouter = APIRouter(prefix="/mcp/tools", tags=["MCP Hub — Tools"])
 async def list_all_tools(
     request: Request,
     db: DbSession,
+    response: Response,
     _: dict = Depends(require_permission(RT_INTEGRATION_MCP_HUB, "read")),
-    limit: int = Query(50, ge=1, le=200),
+    limit: int = Query(200, ge=1, le=200),
     offset: int = Query(0, ge=0),
 ) -> list[McpToolRead]:
+    """List every tool the caller may browse, deterministically paged.
+
+    FIX-20261102-062047: the previous contract defaulted to ``limit=50``
+    with an implementation-defined order, so tenants with >50 tools
+    silently lost whole MCP servers (``supabase``/``decision``/...) from
+    the picker.  The contract is now:
+
+    - the full set is assembled, permission-filtered, deduplicated and
+      SORTED before any slicing, so pages never lose or duplicate rows;
+    - ordering is stable: ``(server_slug, tool name, id)``;
+    - the default window covers a realistic tenant (200, the max cap) and
+      ``X-Total-Count`` exposes the true total for real paging;
+    - cc tools are hidden from general browsing without
+      ``integration::control_center:read`` (individually resolvable via
+      ``GET /mcp/tools/{tool_id}`` when an entity already references them).
+    """
     from app.core.tenant_context import get_tenant_context
 
     context = get_tenant_context(request)
@@ -890,6 +1107,8 @@ async def list_all_tools(
             tool_read.name = build_tool_name(tool_read.server_slug, bare_name)
         db_tool_reads.append(tool_read)
     all_tools = _system_tool_reads() + await _decision_tool_reads(db, tenant_id) + db_tool_reads
+    if not await _cc_visible(request, db):
+        all_tools = [tool for tool in all_tools if tool.server_slug != "cc"]
     # Deduplicate by tool ID — system tools are both returned as virtual objects
     # AND seeded into the DB, so without dedup they appear twice in the response.
     seen_ids: set[uuid.UUID] = set()
@@ -898,7 +1117,77 @@ async def list_all_tools(
         if tool.id not in seen_ids:
             seen_ids.add(tool.id)
             deduped.append(tool)
+    # Stable deterministic order over the FULL set BEFORE paginating.
+    deduped.sort(key=lambda tool: (tool.server_slug or "", tool.name, str(tool.id)))
+    response.headers["X-Total-Count"] = str(len(deduped))
     return deduped[offset:offset + limit]
+
+
+@McpToolRouter.get("/{tool_id}", response_model=McpToolRead)
+async def get_mcp_tool(
+    tool_id: uuid.UUID,
+    request: Request,
+    db: DbSession,
+    _: dict = Depends(require_permission(RT_INTEGRATION_MCP_HUB, "read")),
+) -> McpToolRead:
+    """Resolve ONE tool by id (FIX-20261102-062047).
+
+    Used by the editors to render tools an entity already depends on that
+    are not part of general browsing.  cc tools stay hidden from the LIST
+    without ``integration::control_center:read``; here they are resolvable
+    ONLY when an existing skill binding references them (404-without-leak
+    otherwise) so the editor can show the dependency read-only.
+    """
+    result = await db.execute(
+        select(McpTool)
+        .options(selectinload(McpTool.server))
+        .where(McpTool.id == tool_id)
+    )
+    tool = result.scalar_one_or_none()
+    if tool is None:
+        # Virtual tools have no mcp_tools row — resolve from their registries.
+        for virtual in _system_tool_reads():
+            if virtual.id == tool_id:
+                return virtual
+        from app.core.tenant_context import get_tenant_context
+
+        context = get_tenant_context(request)
+        tenant_id = context.tenant_id if context.is_set else None
+        for virtual in await _decision_tool_reads(db, tenant_id):
+            if virtual.id == tool_id:
+                return virtual
+        raise HTTPException(status_code=404, detail="MCP tool not found")
+
+    if tool.server is not None and _is_cc_server(tool.server):
+        if not await _cc_visible(request, db):
+            from app.core.tenant_context import get_tenant_context
+
+            context = get_tenant_context(request)
+            tenant_id = context.tenant_id if context.is_set else None
+            if not await _tool_referenced_by_skill(db, tool.id, tenant_id):
+                raise HTTPException(status_code=404, detail="MCP tool not found")
+    return McpToolRead.from_orm_with_server(tool)
+
+
+async def _tool_referenced_by_skill(
+    db: AsyncSession, tool_id: uuid.UUID, tenant_id: uuid.UUID | None
+) -> bool:
+    """True when a skill of the caller's tenant already binds *tool_id*.
+
+    This is the ONLY door through which a cc tool becomes individually
+    visible to an identity lacking ``integration::control_center:read``:
+    the entity depends on it, so hiding it would silently corrupt the
+    entity's definition.  It never exposes the rest of the cc catalogue.
+    """
+    stmt = (
+        select(SkillToolBinding.id)
+        .join(Skill, Skill.id == SkillToolBinding.skill_id)
+        .where(SkillToolBinding.tool_id == tool_id)
+    )
+    if tenant_id is not None:
+        stmt = stmt.where(Skill.tenant_id == tenant_id)
+    return (await db.execute(stmt.limit(1))).first() is not None
+
 
 
 @McpToolRouter.get("/{tool_id}/skills", response_model=list[SkillRead])
@@ -919,15 +1208,36 @@ async def list_tool_skills(
     )
     return list(result.scalars().all())
 
+async def _cc_tool_gate(
+    request: Request,
+    db: AsyncSession,
+    tool: McpTool,
+    *,
+    action: str,
+) -> None:
+    """Gate operations on a Control Center entity tool (FIX-20261101-014511).
+
+    Tools under the cc server are part of the protected integration: listing
+    their grants requires ``read`` (visibility); creating/revoking grants
+    requires ``manage``.  Non-cc tools pass through untouched.
+    """
+    server = await db.get(McpServer, tool.server_id)
+    if server is None:
+        return
+    await _gate_cc_server(request, db, server, mutation=(action == "manage"))
+
+
 @McpToolRouter.get("/{tool_id}/permissions", response_model=list[ToolPermissionRead])
 async def list_tool_permissions(
     tool_id: uuid.UUID,
+    request: Request,
     db: DbSession,
     _: dict = Depends(require_permission(RT_INTEGRATION_MCP_HUB, "manage")),
 ) -> list[ToolPermission]:
     tool = await db.get(McpTool, tool_id)
     if not tool:
         raise HTTPException(status_code=404, detail="MCP tool not found")
+    await _cc_tool_gate(request, db, tool, action="read")
     result = await db.execute(
         select(ToolPermission).where(ToolPermission.tool_id == tool_id)
     )
@@ -942,12 +1252,14 @@ async def list_tool_permissions(
 async def grant_tool_permission(
     tool_id: uuid.UUID,
     body: ToolPermissionCreate,
+    request: Request,
     db: DbSession,
     _: dict = Depends(require_permission(RT_INTEGRATION_MCP_HUB, "manage")),
 ) -> ToolPermission:
     tool = await db.get(McpTool, tool_id)
     if not tool:
         raise HTTPException(status_code=404, detail="MCP tool not found")
+    await _cc_tool_gate(request, db, tool, action="manage")
 
     # Check duplicate
     existing = await db.execute(
@@ -973,12 +1285,16 @@ async def grant_tool_permission(
 async def revoke_tool_permission(
     tool_id: uuid.UUID,
     permission_id: uuid.UUID,
+    request: Request,
     db: DbSession,
     _: dict = Depends(require_permission(RT_INTEGRATION_MCP_HUB, "manage")),
 ) -> None:
     tp = await db.get(ToolPermission, permission_id)
     if not tp or tp.tool_id != tool_id:
         raise HTTPException(status_code=404, detail="Tool permission not found")
+    tool = await db.get(McpTool, tool_id)
+    if tool is not None:
+        await _cc_tool_gate(request, db, tool, action="manage")
     await db.delete(tp)
 
 

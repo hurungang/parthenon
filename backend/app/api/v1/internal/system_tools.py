@@ -258,6 +258,12 @@ async def human_intervene_tool(
         intervention_type_str = body.tool_args.get("intervention_type")
         reason = body.tool_args.get("reason", "")
         choices = body.tool_args.get("choices")
+        # The preview/prompt is not a persisted column — fold it into the
+        # reason so the markdown table preview reaches the WS intervention UI
+        # (FIX-20261031-133253 confirmation previews render as tables).
+        _prompt = body.tool_args.get("prompt")
+        if _prompt and _prompt not in reason:
+            reason = f"{reason}\n\n{_prompt}".strip()
 
         if not intervention_type_str:
             raise HTTPException(
@@ -274,8 +280,13 @@ async def human_intervene_tool(
         )
         job = result.scalar_one_or_none()
 
-        # For conversation-scoped interventions, resolve via ConversationSession
+        # For conversation-scoped interventions, resolve via ConversationSession.
+        # FIX-20261031-133253: a conversational session (e.g. the Control
+        # Center Assistant) may have NO agent_jobs row — the request is then
+        # created with agent_session_id=None and conversation_session_id as
+        # the resume key instead of failing with 404.
         conv_job = job
+        conv_session = None
         if not job and conversation_session_id:
             conv_result = await db.execute(
                 select(ConversationSession).where(
@@ -289,38 +300,113 @@ async def human_intervene_tool(
                 )
                 conv_job = result.scalar_one_or_none()
 
-        if not conv_job:
+        if not conv_job and conv_session is None:
             raise HTTPException(
                 status_code=404, detail=f"Session {session_id} not found"
             )
+        _job_target = conv_job
+        _agent_type_id = (
+            conv_job.agent_type_id if conv_job else conv_session.agent_type_id
+        )
+        _delegation_depth = (
+            (conv_job.delegation_depth or 0)
+            if conv_job
+            else 0
+        )
 
         itype = InterventionType(intervention_type_str)
         store = InterveneRequestStore()
 
+        # FIX-20261031-133253 replay idempotency: on LangGraph resume the
+        # interrupted tool task REPLAYS from its start, so the assistant's
+        # human_intervene call may arrive AGAIN. If a request with the same
+        # conversation + reason already exists:
+        #   - pending  → return it (dedupe; no duplicate WS dispatch)
+        #   - responded → return the operator's response payload as the tool
+        #     result so the replayed tool call completes WITHOUT interrupting
+        #     again and the deep-agent loop continues.
+        from app.db.models.intervene import (
+            InterveneRequest,
+            InterveneRequestStatus,
+        )
+        from sqlalchemy.orm import selectinload as _selectinload
+
+        replay_existing = (
+            await db.execute(
+                select(InterveneRequest)
+                .options(_selectinload(InterveneRequest.response))
+                .where(
+                    InterveneRequest.conversation_session_id == conversation_session_id,
+                    InterveneRequest.reason == reason,
+                )
+                .order_by(InterveneRequest.created_at.desc())
+                .limit(1)
+            )
+        ).scalars().first() if conversation_session_id else None
+        if replay_existing is not None:
+            if replay_existing.status == InterveneRequestStatus.pending:
+                logger.info(
+                    "System tool: human_intervene replay — returning existing "
+                    "pending request %s (no duplicate)",
+                    replay_existing.id,
+                )
+                return SystemToolResponse(
+                    result={
+                        "request_id": str(replay_existing.id),
+                        "status": "pending",
+                    }
+                )
+            if replay_existing.status == InterveneRequestStatus.responded:
+                _resp = replay_existing.response
+                _payload = {
+                    "status": "resolved",
+                    "request_id": str(replay_existing.id),
+                }
+                if _resp is not None:
+                    if _resp.approval_value is not None:
+                        _payload["approval_value"] = _resp.approval_value
+                    if _resp.selected_choice is not None:
+                        _payload["selected_choice"] = _resp.selected_choice
+                    if _resp.text_value is not None:
+                        _payload["text_value"] = _resp.text_value
+                logger.info(
+                    "System tool: human_intervene replay — request %s already "
+                    "responded; returning operator response to the replayed "
+                    "tool call",
+                    replay_existing.id,
+                )
+                return SystemToolResponse(result=_payload)
+
         # Get agent type name for dispatch metadata
         from app.db.models.agents import AgentType
         result_at = await db.execute(
-            select(AgentType).where(AgentType.id == conv_job.agent_type_id)
+            select(AgentType).where(AgentType.id == _agent_type_id)
         )
         agent_type_row = result_at.scalar_one_or_none()
         agent_type_name = agent_type_row.name if agent_type_row else "unknown"
 
         request = await store.create_request(
             db=db,
-            agent_session_id=conv_job.id,
-            agent_type_id=conv_job.agent_type_id,
+            agent_session_id=_job_target.id if _job_target else None,
+            agent_type_id=_agent_type_id,
             intervention_type=itype,
             reason=reason,
             choices=choices,
             conversation_session_id=conversation_session_id,
-            delegation_depth=conv_job.delegation_depth if conv_job.delegation_depth else 0,
+            delegation_depth=_delegation_depth,
         )
 
         # Extract parent session ID from child's input_data BEFORE commit
         # (conv_job is expired by commit, so read what we need now)
         requester_session_id = None
-        child_session_id = str(conv_job.id)
-        input_data = conv_job.input_data if isinstance(conv_job.input_data, dict) else {}
+        child_session_id = str(_job_target.id) if _job_target else (
+            str(conversation_session_id) if conversation_session_id else ""
+        )
+        input_data = (
+            _job_target.input_data
+            if _job_target is not None and isinstance(_job_target.input_data, dict)
+            else {}
+        )
         if isinstance(input_data, dict):
             raw = input_data.get("__requester_session_id")
             if raw:

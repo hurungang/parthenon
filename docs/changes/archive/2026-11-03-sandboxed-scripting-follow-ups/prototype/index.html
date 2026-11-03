@@ -1,0 +1,673 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Parthenon — Sandboxed Scripting Follow-ups (UX Prototype)</title>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --primary:#2563EB;--primary-dark:#1D4ED8;--primary-light:#DBEAFE;
+  --sidebar-bg:#FFFFFF;--sidebar-text:#424242;--sidebar-active-bg:rgba(0,0,0,0.06);
+  --sidebar-hover-bg:rgba(0,0,0,0.03);--sidebar-active-text:#2563EB;
+  --surface:#FFFFFF;--bg:#FAFAFA;--border:#E0E0E0;
+  --success:#4CAF50;--warning:#FF9800;--error:#F44336;--info:#2196F3;
+  --text-primary:#212121;--text-secondary:#757575;
+  --shadow:0 1px 2px 0 rgba(60,64,67,0.3),0 1px 3px 1px rgba(60,64,67,0.15);
+  --shadow-md:0 4px 6px 0 rgba(60,64,67,0.3),0 4px 8px 3px rgba(60,64,67,0.15);
+  --radius:8px;--radius-sm:4px;--radius-lg:12px;
+  --sidebar-w:248px;--topbar-h:64px;
+  --transition:0.2s ease;
+}
+html,body{height:100%;font-family:'Inter','Roboto',system-ui,sans-serif;background:var(--bg);color:var(--text-primary);font-size:14px;line-height:1.5}
+button{cursor:pointer;font-family:inherit;font-size:14px}
+code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;background:#F1F5F9;padding:1px 5px;border-radius:3px}
+
+/* ── SHELL ── */
+.app-shell{display:flex;height:100vh;overflow:hidden}
+.sidebar{width:var(--sidebar-w);background:var(--sidebar-bg);color:var(--sidebar-text);display:flex;flex-direction:column;flex-shrink:0;overflow-y:auto;border-right:1px solid var(--border)}
+.sidebar-logo{padding:20px 20px 16px;border-bottom:1px solid var(--border)}
+.sidebar-logo h1{font-size:18px;font-weight:700;color:var(--text-primary);letter-spacing:-.5px}
+.sidebar-logo small{font-size:11px;color:var(--text-secondary);letter-spacing:.5px;text-transform:uppercase}
+.nav-group-label{padding:14px 20px 4px;font-size:11px;font-weight:600;color:var(--text-secondary)}
+.nav-item{display:flex;align-items:center;gap:8px;padding:8px 14px;cursor:pointer;transition:background var(--transition),color var(--transition);border-radius:var(--radius);margin:1px 6px;color:var(--sidebar-text);font-size:13px;user-select:none;white-space:nowrap}
+.nav-item:hover{background:var(--sidebar-hover-bg)}
+.nav-item.active{background:var(--sidebar-active-bg);color:var(--sidebar-active-text);font-weight:500}
+.nav-item .nav-icon{font-size:14px;width:18px;text-align:center;flex-shrink:0;line-height:1}
+.sidebar-foot{margin-top:auto;padding:14px 18px;border-top:1px solid var(--border);font-size:11px;color:var(--text-secondary);line-height:1.5}
+
+/* ── MAIN ── */
+.main-wrapper{flex:1;display:flex;flex-direction:column;overflow:hidden}
+.topbar{height:var(--topbar-h);background:var(--surface);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 24px;gap:16px;flex-shrink:0}
+.topbar-title{font-size:18px;font-weight:600;flex:1;color:var(--text-primary)}
+.topbar-actions{display:flex;align-items:center;gap:12px}
+.avatar{width:36px;height:36px;border-radius:50%;background:var(--primary);color:#fff;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:600}
+.main-content{flex:1;overflow-y:auto;padding:24px}
+
+/* ── VIEWS ── */
+.view{display:none}.view.active{display:block}
+.view-header{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:20px;gap:16px}
+.view-header h2{font-size:22px;font-weight:600}
+.view-desc{font-size:13px;color:var(--text-secondary);margin-top:2px;max-width:760px}
+
+/* ── BUTTONS ── */
+.btn{display:inline-flex;align-items:center;gap:6px;padding:8px 16px;border-radius:var(--radius-sm);border:none;font-weight:500;transition:all var(--transition);white-space:nowrap;letter-spacing:.25px;background:var(--surface);color:var(--text-primary);border:1px solid var(--border)}
+.btn:hover{background:var(--bg)}
+.btn-primary{background:var(--primary);color:#fff;border-color:var(--primary);box-shadow:var(--shadow)}
+.btn-primary:hover{background:var(--primary-dark)}
+.btn-sm{padding:5px 12px;font-size:12px}
+.btn-xs{padding:3px 9px;font-size:11px}
+.btn-danger-outline{background:#fff;color:#B91C1C;border:1px solid #FECACA}
+.btn-danger-outline:hover{background:#FEF2F2}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.btn-icon-sm{background:none;border:none;padding:6px;border-radius:var(--radius-sm);color:var(--text-secondary);display:inline-flex;align-items:center;justify-content:center;transition:background var(--transition)}
+.btn-icon-sm:hover{background:var(--bg);color:var(--text-primary)}
+.btn-icon-sm:disabled{opacity:.35;cursor:not-allowed}
+.btn-icon-sm.danger{color:var(--error)}
+.btn-icon-sm.danger:hover{background:#FEF2F2}
+
+/* ── CARDS ── */
+.card{background:var(--surface);border-radius:var(--radius);border:1px solid var(--border);box-shadow:var(--shadow)}
+.card-header{padding:14px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:12px}
+.card-header h3{font-size:15px;font-weight:600}
+.card-body{padding:20px}
+
+/* ── TABLE ── */
+.table-wrap{background:var(--surface);border-radius:var(--radius);border:1px solid var(--border);box-shadow:var(--shadow);overflow:hidden}
+table{width:100%;border-collapse:collapse}
+thead{background:#F8FAFC}
+thead th{padding:10px 16px;text-align:left;font-size:12px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.5px;white-space:nowrap;border-bottom:1px solid var(--border)}
+tbody tr{border-bottom:1px solid var(--border);transition:background var(--transition)}
+tbody tr:hover{background:#F8FAFC}
+tbody tr:last-child{border-bottom:none}
+tbody td{padding:12px 16px;vertical-align:middle}
+.actions-cell{display:flex;align-items:center;gap:2px;white-space:nowrap}
+.row-flag{background:#FFFBEB}
+.row-flag:hover{background:#FEF3C7}
+
+/* ── CHIPS ── */
+.chip{display:inline-flex;align-items:center;gap:4px;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:600;white-space:nowrap}
+.chip-blue{background:#DBEAFE;color:#1D4ED8}
+.chip-green{background:#DCFCE7;color:#15803D}
+.chip-red{background:#FEE2E2;color:#B91C1C}
+.chip-yellow{background:#FEF3C7;color:#92400E}
+.chip-orange{background:#FED7AA;color:#C2410C}
+.chip-purple{background:#EDE9FE;color:#6D28D9}
+.chip-gray{background:#F1F5F9;color:#475569}
+.chip-outline{background:transparent;border:1px solid var(--border);color:var(--text-secondary)}
+
+/* ── ALERTS ── */
+.alert{border-radius:6px;padding:12px 16px;font-size:13px;line-height:1.5;margin-bottom:16px;display:flex;gap:10px;align-items:flex-start}
+.alert-info{background:#EFF6FF;color:#1E40AF;border-left:4px solid #3B82F6}
+.alert-warning{background:#FFFBEB;color:#92400E;border-left:4px solid #F59E0B}
+.alert-success{background:#F0FDF4;color:#166534;border-left:4px solid #22C55E}
+.alert-error{background:#FEF2F2;color:#991B1B;border-left:4px solid #EF4444}
+.alert b{font-weight:600}
+
+/* ── TOOLTIP ── */
+.tooltip-wrap{position:relative;display:inline-flex}
+.tooltip-wrap:hover .tooltip{display:block}
+.tooltip{display:none;position:absolute;bottom:calc(100% + 8px);left:50%;transform:translateX(-50%);background:#1E293B;color:#fff;font-size:11px;font-weight:400;line-height:1.45;padding:7px 10px;border-radius:5px;width:250px;z-index:600;pointer-events:none;box-shadow:0 4px 12px rgba(0,0,0,.25);white-space:normal}
+.tooltip::after{content:'';position:absolute;top:100%;left:50%;transform:translateX(-50%);border:5px solid transparent;border-top-color:#1E293B}
+
+/* ── MISC ── */
+.text-secondary{color:var(--text-secondary)}
+.text-sm{font-size:12px}
+.font-mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+.mt-16{margin-top:16px}
+.spacer{flex:1}
+.seg{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:18px}
+.seg button{padding:6px 12px;font-size:12px;font-weight:500;border-radius:20px;border:1px solid var(--border);background:#fff;color:var(--text-secondary)}
+.seg button:hover{border-color:#93C5FD;color:var(--primary-dark)}
+.seg button.active{background:var(--primary-light);border-color:#93C5FD;color:var(--primary-dark);font-weight:600}
+.radio{width:18px;height:18px;border-radius:50%;border:2px solid var(--border);display:inline-block;position:relative;flex-shrink:0}
+.radio.on{border-color:var(--primary);background:var(--primary)}
+.radio.on::after{content:'';position:absolute;width:6px;height:6px;border-radius:50%;background:#fff;top:4px;left:4px}
+.steps{margin:6px 0 4px}
+.step{display:flex;align-items:flex-start;gap:12px;padding:10px 2px;border-bottom:1px solid var(--border)}
+.step:last-child{border-bottom:none}
+.step-num{width:24px;height:24px;border-radius:50%;background:var(--primary-light);color:var(--primary-dark);font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px}
+.step-name{font-size:13px;font-weight:600}
+.step-desc{font-size:12px;color:var(--text-secondary)}
+.flow{display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:12px;margin:10px 0 2px}
+.flow-node{background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:4px 10px;font-weight:500}
+.divider{border:none;border-top:1px solid var(--border);margin:16px 0}
+.feedback-item{padding:8px 0;border-bottom:1px solid var(--border);font-size:13px}
+.feedback-item:last-child{border-bottom:none}
+.form-control{width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);font-family:inherit;font-size:13px;resize:vertical}
+.form-control:focus{outline:2px solid var(--primary-light);border-color:var(--primary)}
+
+/* ── TOAST ── */
+#toast-container{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);display:flex;flex-direction:column;gap:8px;z-index:4000;align-items:center}
+.toast{padding:10px 18px;border-radius:8px;font-size:13px;font-weight:500;box-shadow:0 4px 12px rgba(0,0,0,0.15);animation:toastIn .25s ease;max-width:520px}
+.toast.success{background:#F0FDF4;color:#166534;border:1px solid #BBF7D0}
+.toast.info{background:#EFF6FF;color:#1E40AF;border:1px solid #BFDBFE}
+@keyframes toastIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+
+/* ── OAUTH SIM OVERLAY ── */
+.overlay{position:fixed;inset:0;background:rgba(15,23,42,.45);display:none;align-items:center;justify-content:center;z-index:5000}
+.overlay.open{display:flex}
+.oauth-dialog{width:420px;max-width:92vw;background:#fff;border-radius:var(--radius-lg);box-shadow:var(--shadow-md);overflow:hidden}
+.oauth-head{display:flex;align-items:center;gap:10px;padding:14px 18px;border-bottom:1px solid var(--border);font-size:13px;font-weight:600}
+.oauth-body{padding:20px 18px;font-size:13px;color:var(--text-secondary);line-height:1.6}
+.spinner{width:26px;height:26px;border-radius:50%;border:3px solid #E2E8F0;border-top-color:var(--primary);animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.oauth-foot{padding:12px 18px;border-top:1px solid var(--border);background:#FAFAFA;display:flex;justify-content:flex-end;gap:8px}
+</style>
+</head>
+<body>
+
+<div class="app-shell">
+  <aside class="sidebar">
+    <div class="sidebar-logo">
+      <h1>Parthenon</h1>
+      <small>UX Prototype</small>
+    </div>
+    <div class="nav-group-label">Integrations</div>
+    <div class="nav-item active" data-view="mcp-sessions" onclick="nav(this,'mcp-sessions')">
+      <span class="nav-icon">🔌</span>MCP Sessions
+    </div>
+    <div class="nav-group-label">Agents</div>
+    <div class="nav-item" data-view="optimized-plan" onclick="nav(this,'optimized-plan')">
+      <span class="nav-icon">🧩</span>Optimized Plan
+    </div>
+    <div class="sidebar-foot">
+      sandboxed-scripting-follow-ups<br>
+      Placeholder data only — no backend.
+    </div>
+  </aside>
+
+  <div class="main-wrapper">
+    <div class="topbar">
+      <div class="topbar-title" id="topbar-title">MCP Sessions</div>
+      <div class="topbar-actions">
+        <button class="btn btn-sm" onclick="resetDemo()" title="Restore the prototype's sample data">↺ Reset demo</button>
+        <div class="avatar">OP</div>
+      </div>
+    </div>
+
+    <div class="main-content">
+
+      <!-- ══════════════ VIEW: MCP SESSIONS ══════════════ -->
+      <div id="view-mcp-sessions" class="view active">
+        <div class="view-header">
+          <div>
+            <h2>Sessions — slack-tools</h2>
+            <div class="view-desc">OAuth token state for every session on this server. An unrecoverable token refresh marks the session <b>Needs re-authentication</b> and offers a re-auth action instead of silently breaking the agent.</div>
+          </div>
+          <button class="btn btn-primary btn-sm" onclick="toast('Session form opened (not part of this flow)','info')">＋ Add Session</button>
+        </div>
+
+        <div class="alert alert-info">
+          <span>💡</span>
+          <div>
+            <b>Prototype scenario</b> — four sessions on the same server show the three token states:
+            <div style="margin-top:4px">• <b>Slack OAuth</b> — healthy, <span class="chip chip-green" style="font-size:10px">Valid (34h)</span> with a green refresh action.</div>
+            <div>• <b>Slack OAuth — Reporting</b> — <span class="chip chip-red" style="font-size:10px">Expired</span>, but the refresh token is still valid so a refresh is offered.</div>
+            <div>• <b>Slack OAuth — Incident Channel</b> — <span class="chip chip-red" style="font-size:10px">⚠ Needs re-authentication</span>. Hover the status chip for the stored failure reason, then click the red re-auth button.</div>
+          </div>
+        </div>
+
+        <!-- Re-auth banner (rendered by JS) -->
+        <div id="reauth-banner"></div>
+
+        <div class="table-wrap">
+          <table id="sessions-table">
+            <thead>
+              <tr>
+                <th style="width:36px"></th>
+                <th>Name</th>
+                <th>Auth Type</th>
+                <th>Token Status</th>
+                <th>Status</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="sessions-body"></tbody>
+          </table>
+        </div>
+
+        <div style="display:flex;align-items:center;gap:6px;margin-top:14px">
+          <span style="color:#6D28D9">★</span>
+          <span class="text-sm text-secondary">Default session is used when syncing tools and for tool routing when no specific session is selected.</span>
+        </div>
+      </div>
+
+      <!-- ══════════════ VIEW: OPTIMIZED PLAN ══════════════ -->
+      <div id="view-optimized-plan" class="view">
+        <div class="view-header">
+          <div>
+            <h2>Optimized Plan</h2>
+            <div class="view-desc">The optimized plan tab of an Agent Type. A failed verification persists its reason on the plan and shows it above the content; retiring is never a silent no-op.</div>
+          </div>
+        </div>
+
+        <div class="alert alert-info">
+          <span>💡</span>
+          <div>
+            <b>Prototype scenario</b> — switch agent to see each state: <b>data-analyst</b> (needs_feedback, warning alert with reason), <b>ledger-auditor</b> (failed, error alert), <b>contract-analyst</b> (retired, "Nothing to retire", retire disabled), <b>report-generator</b> (ready — click <b>Retire plan</b> to see the success state).
+          </div>
+        </div>
+
+        <div class="seg" id="plan-seg"></div>
+
+        <div class="card">
+          <div class="card-body" id="plan-body"></div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<div id="toast-container"></div>
+
+<!-- Simulated OAuth re-auth popup -->
+<div class="overlay" id="oauth-overlay">
+  <div class="oauth-dialog" role="dialog" aria-label="Re-authenticate session">
+    <div class="oauth-head"><span>🔐</span><span id="oauth-title">Re-authenticate — Slack OAuth — Incident Channel</span></div>
+    <div class="oauth-body">
+      <div style="display:flex;align-items:center;gap:12px">
+        <div class="spinner"></div>
+        <div>
+          <div style="color:var(--text-primary);font-weight:500" id="oauth-status">Redirecting to slack.com…</div>
+          <div class="text-sm">Completing re-auth updates this session's tokens <b>in place</b> — the session row, its default flag, and its bindings are unchanged.</div>
+        </div>
+      </div>
+    </div>
+    <div class="oauth-foot">
+      <button class="btn btn-sm" onclick="cancelReauth()">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ══════════════════════════════════════════════════════════════════════
+   Sample data — mirrors the shipped shapes (McpSession / OptimizedPlanView)
+   ══════════════════════════════════════════════════════════════════════ */
+
+var SESSIONS_SEED = [
+  { id:'sl1', name:'Slack Webhook', description:'Bot token for #ops-alerts', auth_type:'bearer_token', is_active:true, is_default:true },
+  { id:'sl2', name:'Slack OAuth', description:'OAuth-based Slack access', auth_type:'oauth2', is_active:true, is_default:false,
+    oauth_expires_at: nowPlusHours(34), oauth_refresh_expires_at: nowPlusHours(24*26) },
+  { id:'sl3', name:'Slack OAuth — Reporting', description:'Read-only analytics scope', auth_type:'oauth2', is_active:true, is_default:false,
+    oauth_expires_at: nowPlusHours(-6), oauth_refresh_expires_at: nowPlusHours(24*12) },
+  { id:'sl4', name:'Slack OAuth — Incident Channel', description:'Paging integration for the incident channel', auth_type:'oauth2', is_active:true, is_default:false,
+    requires_reauth:true, last_refresh_error:'No such refresh token found' }
+];
+
+var PLANS_SEED = {
+  'data-analyst': {
+    status:'needs_feedback', fully_scripted:false,
+    error:'Verification failed after 3 repair attempts — step 2 (Aggregate by region) raised NameError: name \'_unpack_sequence_\' is not defined. The compiled script could not be verified against the last 10 executions.',
+    flow:['plan','MCP: read-analyze-file','transform / aggregate','System One decision'],
+    steps:[
+      { name:'Read dataset', description:'MCP tool call — read-analyze-file', scriptable:true },
+      { name:'Aggregate by region', description:'Local transform — count / sum grouped by region', scriptable:true },
+      { name:'Interpret results', description:'System One decision tool — model-backed judgment step', scriptable:false }
+    ],
+    feedback:[ { summary:'Aggregation must respect the region filter from the input, not all rows.', created_at:'Oct 26, 2026, 10:41' } ]
+  },
+  'ledger-auditor': {
+    status:'failed', fully_scripted:false,
+    error:'Optimization run failed: the authoring model returned no scripts for 2 of 3 steps and verification aborted after the retry budget was exhausted. No plan was saved.',
+    flow:['plan','MCP: fetch-ledger','MCP: reconcile'],
+    steps:[
+      { name:'Fetch ledger entries', description:'MCP tool call — fetch-ledger', scriptable:true },
+      { name:'Reconcile balances', description:'MCP tool call — reconcile', scriptable:false }
+    ],
+    feedback:[]
+  },
+  'contract-analyst': {
+    status:'retired', fully_scripted:true,
+    error:null,
+    flow:['plan','MCP: read-contract','transform / extract'],
+    steps:[
+      { name:'Read contract', description:'MCP tool call — read-contract', scriptable:true },
+      { name:'Extract obligations', description:'Local transform — extract clauses and dates', scriptable:true }
+    ],
+    feedback:[ { summary:'Keep termination clauses out of the scripted path.', created_at:'Oct 22, 2026, 09:15' } ]
+  },
+  'report-generator': {
+    status:'ready', fully_scripted:true,
+    error:null,
+    flow:['plan','MCP: query-metrics','transform / filter','MCP: post-report','Semantic Bridge'],
+    steps:[
+      { name:'Query metrics', description:'MCP tool call — query-metrics', scriptable:true },
+      { name:'Filter & aggregate', description:'Local data processing — select_keys / count / sum transforms', scriptable:true },
+      { name:'Post report', description:'MCP tool call — post-report', scriptable:true },
+      { name:'Executive summary', description:'Semantic Bridge sub-agent — model-backed step', scriptable:false }
+    ],
+    feedback:[ { summary:'Keep the executive summary generated by the Semantic Bridge — do not script it.', created_at:'Oct 24, 2026, 14:02' } ]
+  }
+};
+
+var PLAN_ORDER = ['data-analyst','ledger-auditor','contract-analyst','report-generator'];
+
+var SESSIONS, PLANS, currentPlan, reauthTarget = null;
+
+function nowPlusHours(h){ return new Date(Date.now() + h*3600*1000).toISOString(); }
+
+function clone(o){ return JSON.parse(JSON.stringify(o)); }
+
+function resetDemo(silent){
+  SESSIONS = clone(SESSIONS_SEED);
+  // re-anchor relative timestamps
+  SESSIONS[1].oauth_expires_at = nowPlusHours(34);
+  SESSIONS[2].oauth_expires_at = nowPlusHours(-6);
+  PLANS = clone(PLANS_SEED);
+  currentPlan = 'data-analyst';
+  renderSessions();
+  renderPlanSeg();
+  renderPlan();
+  if (!silent) toast('Demo data restored.','info');
+}
+
+/* ══════════════════ NAV ══════════════════ */
+function nav(el, viewId){
+  document.querySelectorAll('.nav-item').forEach(function(n){ n.classList.remove('active'); });
+  if (el) el.classList.add('active');
+  document.querySelectorAll('.view').forEach(function(v){ v.classList.remove('active'); });
+  var v = document.getElementById('view-' + viewId);
+  if (v) v.classList.add('active');
+  document.getElementById('topbar-title').textContent =
+    viewId === 'mcp-sessions' ? 'MCP Sessions' : 'Optimized Plan';
+  document.querySelector('.main-content').scrollTop = 0;
+}
+
+/* ══════════════════ TOAST ══════════════════ */
+function toast(msg, type){
+  var t = document.createElement('div');
+  t.className = 'toast ' + (type || 'info');
+  t.textContent = msg;
+  document.getElementById('toast-container').appendChild(t);
+  setTimeout(function(){
+    t.style.transition = 'opacity .3s';
+    t.style.opacity = '0';
+    setTimeout(function(){ t.remove(); }, 300);
+  }, 3200);
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   MCP SESSIONS — token status + re-auth
+   Mirrors McpSessionManager.getTokenStatus() and the action cell.
+   ══════════════════════════════════════════════════════════════════════ */
+
+var AUTH_LABELS = { api_key:'API Key', bearer_token:'Bearer Token', basic_auth:'Basic Auth', oauth2:'OAuth 2.0', none:'None', passthrough:'Passthrough' };
+
+function isRefreshTokenValid(s){
+  if (!s.oauth_refresh_expires_at) return false;
+  return new Date(s.oauth_refresh_expires_at) > new Date();
+}
+
+/** Shipped label/colour contract. */
+function tokenStatus(s){
+  if (s.auth_type !== 'oauth2') return { label:'N/A', cls:'chip-green', icon:'' };
+  if (s.requires_reauth) return { label:'Needs re-authentication', cls:'chip-red', icon:'⚠' };
+  if (!s.oauth_expires_at) return { label:'Unknown', cls:'chip-yellow', icon:'⚠' };
+  var hours = (new Date(s.oauth_expires_at).getTime() - Date.now()) / 3600000;
+  if (hours < 0) return { label:'Expired', cls:'chip-red', icon:'⚠' };
+  if (hours < 1) return { label:'Expiring Soon', cls:'chip-yellow', icon:'⚠' };
+  var txt = hours < 24 ? Math.floor(hours) + 'h' : Math.floor(hours/24) + 'd';
+  return { label:'Valid (' + txt + ')', cls:'chip-green', icon:'✓' };
+}
+
+function renderSessions(){
+  var body = document.getElementById('sessions-body');
+  body.innerHTML = '';
+  var autoDefault = SESSIONS.length === 1;
+
+  SESSIONS.forEach(function(s){
+    var st = tokenStatus(s);
+    var isDefault = s.is_default || autoDefault;
+    var needsReauth = s.auth_type === 'oauth2' && s.requires_reauth;
+    var tr = document.createElement('tr');
+    if (needsReauth) tr.className = 'row-flag';
+
+    /* token status cell — tooltip carries the stored failure reason */
+    var tokenCell = '<span class="text-secondary">—</span>';
+    if (s.auth_type === 'oauth2'){
+      var chip = '<span class="chip ' + st.cls + '">' + (st.icon ? st.icon + ' ' : '') + st.label + '</span>';
+      if (needsReauth && s.last_refresh_error){
+        tokenCell = '<span class="tooltip-wrap">' + chip +
+          '<span class="tooltip"><b>Refresh failed:</b> ' + s.last_refresh_error + '</span></span>';
+      } else {
+        tokenCell = chip;
+      }
+    }
+
+    /* action cell — green refresh vs. red re-auth */
+    var refreshAction = '';
+    if (s.auth_type === 'oauth2'){
+      if (!s.requires_reauth && isRefreshTokenValid(s)){
+        refreshAction = '<button class="btn-icon-sm" style="color:#15803D" title="Refresh OAuth Token" onclick="refreshToken(\'' + s.id + '\')">🔄</button>';
+      } else {
+        var tip = s.requires_reauth ? 'Needs re-authentication' : 'Re-authenticate (refresh token expired)';
+        refreshAction = '<button class="btn-icon-sm danger" title="' + tip + '" onclick="startReauth(\'' + s.id + '\')">🔑</button>';
+      }
+    }
+
+    tr.innerHTML =
+      '<td><span class="radio ' + (isDefault ? 'on' : '') + '" style="' + (autoDefault ? 'border-color:#C4B5FD' : '') + '" title="' + (isDefault ? 'Current default' : 'Set as default') + '" onclick="setDefault(\'' + s.id + '\')"></span></td>' +
+      '<td><div style="display:flex;align-items:center;gap:6px"><span style="font-weight:500">' + s.name + '</span>' +
+        (isDefault ? '<span class="chip chip-purple" style="font-size:9px;padding:1px 6px">Default</span>' : '') + '</div>' +
+        (s.description ? '<div class="text-sm text-secondary">' + s.description + '</div>' : '') + '</td>' +
+      '<td>' + AUTH_LABELS[s.auth_type] + '</td>' +
+      '<td>' + tokenCell + '</td>' +
+      '<td><span class="chip ' + (s.is_active ? 'chip-green' : 'chip-gray') + '">' + (s.is_active ? 'Active' : 'Inactive') + '</span></td>' +
+      '<td class="actions-cell">' +
+        '<button class="btn-icon-sm" style="color:' + (isDefault ? '#6D28D9' : 'var(--text-secondary)') + '" title="' + (isDefault ? 'Current default' : 'Set as default') + '" ' + (isDefault ? 'disabled' : '') + ' onclick="setDefault(\'' + s.id + '\')">★</button>' +
+        refreshAction +
+        '<button class="btn-icon-sm" title="Edit">✏️</button>' +
+        '<button class="btn-icon-sm" title="Delete">🗑️</button>' +
+      '</td>';
+
+    body.appendChild(tr);
+  });
+
+  renderReauthBanner();
+}
+
+function renderReauthBanner(){
+  var wrap = document.getElementById('reauth-banner');
+  var flagged = SESSIONS.filter(function(s){ return s.auth_type === 'oauth2' && s.requires_reauth; });
+  if (!flagged.length){ wrap.innerHTML = ''; return; }
+  wrap.innerHTML =
+    '<div class="alert alert-error">' +
+      '<span style="font-size:16px">⚠️</span>' +
+      '<div style="flex:1"><b>' + flagged.length + ' session' + (flagged.length > 1 ? 's' : '') + ' need' + (flagged.length > 1 ? '' : 's') + ' re-authentication</b>' +
+      '<div style="margin-top:2px">' + flagged.map(function(s){ return s.name; }).join(', ') +
+      ' — the OAuth refresh token could not be renewed. Tool calls routed through this session will fail until it is re-authenticated.</div></div>' +
+      '<button class="btn btn-sm btn-danger-outline" style="align-self:center;background:#fff" onclick="startReauth(\'' + flagged[0].id + '\')">🔑 Re-authenticate</button>' +
+    '</div>';
+}
+
+function setDefault(id){
+  var s = SESSIONS.find(function(x){ return x.id === id; });
+  if (!s || s.is_default) return;
+  SESSIONS.forEach(function(x){ x.is_default = (x.id === id); });
+  renderSessions();
+  toast('★ ' + s.name + ' set as default for slack-tools','success');
+}
+
+function refreshToken(id){
+  var s = SESSIONS.find(function(x){ return x.id === id; });
+  if (!s) return;
+  toast('OAuth token refreshed for ' + s.name + '.','success');
+  s.oauth_expires_at = nowPlusHours(1);
+  renderSessions();
+}
+
+function startReauth(id){
+  var s = SESSIONS.find(function(x){ return x.id === id; });
+  if (!s) return;
+  reauthTarget = id;
+  document.getElementById('oauth-title').textContent = 'Re-authenticate — ' + s.name;
+  document.getElementById('oauth-status').textContent = 'Redirecting to slack.com…';
+  document.getElementById('oauth-overlay').classList.add('open');
+  setTimeout(function(){
+    var el = document.getElementById('oauth-status');
+    if (el) el.textContent = 'Exchanging authorization code for tokens…';
+  }, 700);
+  setTimeout(function(){
+    if (reauthTarget !== id) return; // cancelled
+    completeReauth(id);
+  }, 1600);
+}
+
+function completeReauth(id){
+  var s = SESSIONS.find(function(x){ return x.id === id; });
+  document.getElementById('oauth-overlay').classList.remove('open');
+  if (!s) return;
+  /* in-place update: same row, same id, same default flag */
+  s.requires_reauth = false;
+  s.last_refresh_error = null;
+  s.oauth_expires_at = nowPlusHours(1);
+  s.oauth_refresh_expires_at = nowPlusHours(24*30);
+  renderSessions();
+  toast('Session re-authenticated — tokens updated in place.','success');
+  reauthTarget = null;
+}
+
+function cancelReauth(){
+  reauthTarget = null;
+  document.getElementById('oauth-overlay').classList.remove('open');
+  toast('Re-authentication cancelled — session still needs re-authentication.','info');
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   OPTIMIZED PLAN — error + retire states
+   Mirrors AgentOptimizedPlanTab.tsx render order and copy.
+   ══════════════════════════════════════════════════════════════════════ */
+
+var STATUS_CHIP = {
+  ready:          { cls:'chip-green',  label:'ready' },
+  failed:         { cls:'chip-red',    label:'failed' },
+  needs_feedback: { cls:'chip-orange', label:'needs_feedback' },
+  retired:        { cls:'chip-blue',   label:'retired' },
+  generating:     { cls:'chip-blue',   label:'generating' }
+};
+
+var retireSucceeded = false;
+
+function renderPlanSeg(){
+  var seg = document.getElementById('plan-seg');
+  seg.innerHTML = '';
+  PLAN_ORDER.forEach(function(key){
+    var b = document.createElement('button');
+    var p = PLANS[key];
+    b.textContent = key + ' · ' + p.status;
+    if (key === currentPlan) b.className = 'active';
+    b.onclick = function(){ currentPlan = key; retireSucceeded = false; renderPlanSeg(); renderPlan(); };
+    seg.appendChild(b);
+  });
+}
+
+function renderPlan(){
+  var plan = PLANS[currentPlan];
+  var body = document.getElementById('plan-body');
+  var chip = STATUS_CHIP[plan.status] || STATUS_CHIP.generating;
+  var canRetire = plan.status !== 'retired';
+
+  var h = '';
+
+  /* status row */
+  h += '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:12px">' +
+        '<span class="text-sm text-secondary">Status</span>' +
+        '<span class="chip ' + chip.cls + '" data-testid="optimized-plan-status">' + chip.label + '</span>' +
+        '<span class="chip chip-outline" style="border-color:#BFDBFE;color:var(--primary-dark)">' +
+          (plan.fully_scripted ? 'fully scripted' : 'tool mode') + '</span>' +
+        '<span class="spacer"></span>' +
+        '<button class="btn btn-sm" data-testid="retire-optimized-plan" ' + (canRetire ? '' : 'disabled') + ' onclick="retirePlan()">Retire plan</button>' +
+      '</div>';
+
+  /* retire success — shown after a successful retire */
+  if (retireSucceeded){
+    h += '<div class="alert alert-success" data-testid="retire-success">Optimized plan retired — the next run will offer optimization again.</div>';
+  }
+
+  /* nothing to retire — plan already retired */
+  if (plan.status === 'retired'){
+    h += '<div class="alert alert-info" data-testid="nothing-to-retire">Nothing to retire</div>';
+  }
+
+  /* failure reason — error severity when failed, warning otherwise */
+  if ((plan.status === 'failed' || plan.status === 'needs_feedback') && plan.error){
+    var sev = plan.status === 'failed' ? 'alert-error' : 'alert-warning';
+    h += '<div class="alert ' + sev + '" data-testid="plan-error"><span>⚠️</span><div><b>Optimization could not complete</b><div style="margin-top:2px">' + plan.error + '</div></div></div>';
+  }
+
+  /* needs_feedback prompt */
+  if (plan.status === 'needs_feedback'){
+    h += '<div class="alert alert-info" data-testid="needs-feedback-prompt">Verification could not produce a passing workflow script. Describe what to change below and submit feedback — it will guide the next regeneration.</div>';
+  }
+
+  /* flow */
+  if (plan.flow && plan.flow.length){
+    h += '<div class="flow">' + plan.flow.map(function(n){ return '<span class="flow-node">' + n + '</span>'; }).join('<span style="color:var(--text-secondary)">→</span>') + '</div>';
+  }
+
+  /* steps */
+  h += '<h4 style="font-size:13px;margin:14px 0 4px">Composition Steps</h4>';
+  if (!plan.steps || !plan.steps.length){
+    h += '<p class="text-sm text-secondary">No steps in this optimized plan.</p>';
+  } else {
+    h += '<div class="steps">';
+    plan.steps.forEach(function(s, i){
+      h += '<div class="step">' +
+             '<div class="step-num">' + (i+1) + '</div>' +
+             '<div style="flex:1"><div class="step-name">' + s.name + '</div><div class="step-desc">' + s.description + '</div></div>' +
+             '<span class="chip ' + (s.scriptable ? 'chip-blue' : 'chip-purple') + '">' + (s.scriptable ? 'scriptable' : 'model-backed') + '</span>' +
+             (s.scriptable ? '<button class="btn btn-xs" onclick="toast(\'Script viewer opened (not part of this flow)\',\'info\')">View script</button>' : '') +
+           '</div>';
+    });
+    h += '</div>';
+  }
+
+  h += '<hr class="divider">';
+
+  /* feedback */
+  h += '<h4 style="font-size:13px;margin-bottom:6px">Feedback</h4>';
+  if (plan.feedback && plan.feedback.length){
+    plan.feedback.forEach(function(c){
+      h += '<div class="feedback-item"><div style="font-weight:500">' + c.summary + '</div><div class="text-sm text-secondary">' + c.created_at + '</div></div>';
+    });
+  } else {
+    h += '<p class="text-sm text-secondary" style="margin-bottom:8px">No feedback yet.</p>';
+  }
+  h += '<textarea class="form-control" rows="2" id="feedback-input" style="margin-top:8px" placeholder="Describe what to change about this optimized plan…"></textarea>' +
+       '<div style="display:flex;gap:10px;align-items:center;margin-top:8px">' +
+         '<button class="btn btn-sm" onclick="submitFeedback()">✈ Submit feedback</button>' +
+         '<span id="feedback-saved" class="text-sm" style="color:var(--success);display:none">Feedback saved — it will be incorporated when the plan is regenerated.</span>' +
+       '</div>';
+
+  body.innerHTML = h;
+}
+
+function retirePlan(){
+  var plan = PLANS[currentPlan];
+  if (!plan || plan.status === 'retired') return;
+  /* Shipped behaviour: the plan is MARKED retired (kept for reference), the same
+     tab re-renders, and the next run offers optimization again. */
+  plan.status = 'retired';
+  retireSucceeded = true;
+  renderPlanSeg();
+  renderPlan();
+  toast('Optimized plan retired — the next run will offer optimization again.','success');
+}
+
+function submitFeedback(){
+  var input = document.getElementById('feedback-input');
+  if (!input || !input.value.trim()) return;
+  PLANS[currentPlan].feedback.unshift({ summary: input.value.trim(), created_at:'just now (LLM-summarized)' });
+  renderPlan();
+  var saved = document.getElementById('feedback-saved');
+  if (saved) saved.style.display = 'inline';
+  setTimeout(function(){ if (saved) saved.style.display = 'none'; }, 3500);
+}
+
+/* ── boot ── */
+resetDemo(true);
+</script>
+</body>
+</html>

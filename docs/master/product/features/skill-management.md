@@ -19,6 +19,10 @@ Skill Management allows administrators to define, organize, and govern Skills as
 - Supports permission assignment and auditability for all Skills
 - Skills can be bound directly to Agent Types (in addition to SOPs), giving agent designers the flexibility to reference skills at any granularity
 - Skill creation is also available inline from the Agent Management Panel, which reuses the same create/edit dialogs — with no change to standalone Skill Management behaviour
+- A Skill can only invoke the tools bound to it — there is no implicit tool access, so the binding is the skill's actual capability
+- The Skills list shows each skill's bound tools (grouped by owning server), and a skill with no bound tools carries an explicit "No tools bound" indicator instead of appearing ready to use
+- Adding tool bindings is additive: existing bindings are never silently removed when a skill is updated
+- Skills can be created and updated conversationally through the [Control Center Assistant](control-center-assistant.md), which discovers a server's available tools and binds the needed ones at creation
 
 ## Key Concepts
 - **Skill**: A reusable, permission-controlled action wrapping one or more tool calls. Each skill carries an `updated_at` timestamp that changes whenever the skill definition is modified.
@@ -26,7 +30,8 @@ Skill Management allows administrators to define, organize, and govern Skills as
 - **AI-Assisted Drafting**: Generating an initial workflow draft that authors can edit before publication
 - **Workflow Preview**: Reviewing the final formatted content that will be loaded at execution time
 - **Skill Assignment**: Granting access to Skills for users, agents, or roles
-- **MCP Tool Wrapping**: Encapsulating tool calls within Skills for governance
+- **MCP Tool Wrapping**: Encapsulating tool calls within Skills for governance. Binding is exclusive: a skill can only invoke the tools bound to it, and a skill with zero bindings is inert
+- **Tool Binding Visibility**: Bound tools are shown as entries grouped by owning server (display name, owning server, canonical name); binding a tool the user cannot browse (e.g. a permission-gated integration tool already referenced by the skill) keeps it visible as a read-only pinned entry so a save never silently drops it
 - **Permission Control**: Restricting Skill execution to authorized entities
 - **Skill Version Tracking**: The `updated_at` timestamp enables external agents to cache skills locally and only re-download those that have changed since their last sync. The `load_skills` system tool supports an optional `since` parameter for incremental sync of only updated skills.
 
@@ -42,6 +47,11 @@ Skill Management allows administrators to define, organize, and govern Skills as
 - Only authorized entities can execute each Skill
 - All Skill usage is logged and auditable
 - Skills are discoverable and manageable from the UI
+- Each skill displays its bound tools in the Skills list, or an explicit "No tools bound" indicator
+- A skill with no bound tools cannot invoke anything and is flagged rather than presented as ready to use
+- Updating a skill adds bindings without silently removing existing ones
+- A bound tool the user cannot browse stays visible and pre-selected as read-only, so saving never drops it
+- Skills can be created and updated conversationally through the Control Center Assistant, subject to the same permission enforcement
 
 ## Out of Scope
 - SOP composition and sequencing (covered by SOP Management)

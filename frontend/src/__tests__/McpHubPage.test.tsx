@@ -12,8 +12,10 @@ vi.mock('react-router-dom', async () => {
   return { ...actual, useNavigate: () => vi.fn() }
 })
 
-// Default mock servers — mutable so tests can override
-let mockServers = [
+// Default mock servers — mutable so tests can override (subset of McpServer
+// plus the FIX-20261101-090438 optional is_system_managed flag)
+type MockServer = Partial<import('../types').McpServer> & { slug: string }
+let mockServers: MockServer[] = [
   {
     id: '00000000-0000-0000-0000-000000000001',
     name: 'System',
@@ -447,5 +449,136 @@ describe('McpHubPage — sync button state (Issue 2 reproduction)', () => {
     const disabledSyncButtons = syncButtons.filter((btn) => btn.hasAttribute('disabled'))
     // Only System entry should be disabled
     expect(disabledSyncButtons.length).toBe(1)
+  })
+})
+
+/**
+ * FIX-20261101-014511 — Control Center (cc) entity gating.
+ *
+ * The per-tenant Control Center MCP entity is a protected integration:
+ * the backend only returns it in the list for callers granted
+ * `integration::control_center:read`, and mutations without `manage`
+ * yield structured 403s. The page must render the cc row (with a
+ * "protected" chip) when present, and surface mutation 403s via the
+ * standard PermissionDeniedAlert — never a silent failure or raw crash.
+ */
+describe('McpHubPage — Control Center entity gating', () => {
+  beforeEach(() => {
+    mockSyncState.isPending = false
+    mockSyncState.mutate = vi.fn()
+    mockServers.length = 0
+    mockServers.push(
+      {
+        id: 'cc-server-id',
+        name: 'Control Center',
+        slug: 'cc',
+        base_url: '',
+        status: 'active',
+        description: 'Control Center management capabilities',
+        session_count: 0,
+      },
+      {
+        id: 'srv-1',
+        name: 'Server One',
+        slug: 'server-one',
+        base_url: 'http://mcp.local/one',
+        status: 'active',
+        description: '',
+        session_count: 1,
+      }
+    )
+  })
+
+  it('renders the cc entity with the protected-integration chip when returned', async () => {
+    const { McpHubPage } = await import('../pages/mcp/McpHubPage')
+    render(<McpHubPage />, { wrapper })
+    expect(screen.getByText('cc')).toBeDefined()
+    expect(screen.getByText('mcp.controlCenter.chip')).toBeDefined()
+  })
+
+  it('renders no cc row when the (permission-filtered) list omits it', async () => {
+    mockServers.length = 0
+    mockServers.push({
+      id: 'srv-1',
+      name: 'Server One',
+      slug: 'server-one',
+      base_url: 'http://mcp.local/one',
+      status: 'active',
+      description: '',
+      session_count: 1,
+    })
+    const { McpHubPage } = await import('../pages/mcp/McpHubPage')
+    render(<McpHubPage />, { wrapper })
+    expect(screen.queryByText('mcp.controlCenter.chip')).toBeNull()
+    expect(screen.getByText('server-one')).toBeDefined()
+  })
+
+  it('cc entity shows System-managed chip with edit/delete/sync/sessions hidden (slug fallback)', async () => {
+    // Mock data has no is_system_managed flag — the slug fallback must lock the row.
+    const { McpHubPage } = await import('../pages/mcp/McpHubPage')
+    const { container } = render(<McpHubPage />, { wrapper })
+
+    expect(screen.getByText('mcp.controlCenter.systemManaged')).toBeDefined()
+
+    const row = screen.getByText('cc').closest('tr') as HTMLTableRowElement
+    // No sessions (Storage), edit (Edit), or delete (Delete) actions on the cc row
+    expect(row.querySelector('[data-testid="StorageIcon"]')).toBeNull()
+    expect(row.querySelector('[data-testid="EditIcon"]')).toBeNull()
+    expect(row.querySelector('[data-testid="DeleteIcon"]')).toBeNull()
+    // Sync is present but disabled
+    const syncBtn = row.querySelector('[data-testid="SyncIcon"]')?.closest('button')
+    expect(syncBtn).not.toBeNull()
+    expect(syncBtn?.hasAttribute('disabled')).toBe(true)
+    // Session count column shows the em dash
+    expect(row.textContent).toContain('—')
+    expect(container).toBeDefined()
+  })
+
+  it('cc entity honours the API is_system_managed flag', async () => {
+    mockServers.length = 0
+    mockServers.push({
+      id: 'cc-flagged',
+      name: 'Control Center',
+      slug: 'cc',
+      base_url: '',
+      status: 'active',
+      description: 'Control Center management capabilities',
+      session_count: 0,
+      is_system_managed: true,
+    })
+    const { McpHubPage } = await import('../pages/mcp/McpHubPage')
+    render(<McpHubPage />, { wrapper })
+    expect(screen.getByText('mcp.controlCenter.systemManaged')).toBeDefined()
+    const row = screen.getByText('cc').closest('tr') as HTMLTableRowElement
+    expect(row.querySelector('[data-testid="DeleteIcon"]')).toBeNull()
+    expect(row.querySelector('[data-testid="StorageIcon"]')).toBeNull()
+  })
+
+  it('surfaces a structured 403 from a server deletion via PermissionDeniedAlert', async () => {
+    window.confirm = vi.fn(() => true)
+    const apiClient = (await import('../api/apiClient')).default as unknown as { delete: ReturnType<typeof vi.fn> }
+    apiClient.delete.mockRejectedValueOnce({
+      response: {
+        status: 403,
+        data: {
+          detail: {
+            detail: 'manage required',
+            required_permission: {
+              resource_type: 'integration::control_center',
+              action: 'manage',
+              resource_id: null,
+            },
+          },
+        },
+      },
+    })
+    const { McpHubPage } = await import('../pages/mcp/McpHubPage')
+    render(<McpHubPage />, { wrapper })
+    // The cc row has NO delete action — the 403 path is exercised via the
+    // regular server row (PermissionDeniedAlert surfacing is row-agnostic).
+    const deleteButtons = screen.getAllByTestId('DeleteIcon')
+    expect(deleteButtons.length).toBe(1)
+    fireEvent.click(deleteButtons[0])
+    expect(await screen.findByText('Permission Denied:')).toBeDefined()
   })
 })

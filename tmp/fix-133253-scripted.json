@@ -1,0 +1,54 @@
+[
+  {
+    "match": "fraud-detection-agent-133253",
+    "response": "Live verification complete: agent fraud-detection-agent-133253 was created with model deepseek-v4-flash, identity, role and the skill granted to the role."
+  },
+  {
+    "match": "approval_value",
+    "response": "Approval received. Executing the confirmed create now.",
+    "tool_calls": [
+      {
+        "name": "invoke_management_tool",
+        "args": {
+          "tool_name": "create_agent_type",
+          "args": {
+            "name": "fraud-detection-agent-133253",
+            "data": {
+              "name": "fraud-detection-agent-133253",
+              "description": "Fraud Detection Agent (FIX-20261031-133253 live verification)",
+              "model_id": "deepseek-v4-flash",
+              "input_type": "conversation"
+            }
+          }
+        }
+      }
+    ]
+  },
+  {
+    "match": "enabled_models",
+    "response": "Discovery done. Presenting the confirmation preview and requesting approval.",
+    "tool_calls": [
+      {
+        "name": "human_intervene",
+        "args": {
+          "intervention_type": "approval",
+          "reason": "APPROVAL-133253: confirm before I create the Fraud Detection Agent",
+          "prompt": "Approve the following operation?\n\n| Field | Value |\n| --- | --- |\n| Operation | create |\n| Resource | agent type |\n| Name | Fraud Detection Agent |\n| Model | deepseek-v4-flash |\n| Identity | existing (reused) |\n| Role | existing (reused) |\n| Skill grants | fraud-analysis skill \u2192 role |"
+        }
+      }
+    ]
+  },
+  {
+    "match": "fraud detection agent",
+    "response": "Discovering existing pieces (model configs) first.",
+    "tool_calls": [
+      {
+        "name": "invoke_management_tool",
+        "args": {
+          "tool_name": "list_model_configs",
+          "args": {}
+        }
+      }
+    ]
+  }
+]

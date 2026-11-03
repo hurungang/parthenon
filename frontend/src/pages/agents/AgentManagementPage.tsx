@@ -304,7 +304,19 @@ export function AgentManagementPage() {
                   onClick={() => setDetailsDialogTypeId(at.id)}
                   sx={{ cursor: 'pointer' }}
                 >
-                  <TableCell>{at.name}</TableCell>
+                  <TableCell>
+                    <Box display="flex" alignItems="center" gap={1}>
+                      <Typography variant="body2">{at.name}</Typography>
+                      {at.is_system && (
+                        <Chip
+                          label={t('agents.types.systemBadge')}
+                          size="small"
+                          color="secondary"
+                          variant="outlined"
+                        />
+                      )}
+                    </Box>
+                  </TableCell>
                   <TableCell>
                     <Chip label={at.input_type} size="small" variant="outlined" />
                   </TableCell>
@@ -360,15 +372,29 @@ export function AgentManagementPage() {
                           <VisibilityIcon fontSize="small" />
                         </IconButton>
                       </Tooltip>
-                      <Tooltip title={t('app.edit')}>
-                        <IconButton size="small" aria-label={t('app.edit')} onClick={() => handleOpenEdit(at)}>
-                          <EditIcon fontSize="small" />
-                        </IconButton>
+                      <Tooltip title={at.is_system ? t('agents.types.systemProtected') : t('app.edit')}>
+                        <span>
+                          <IconButton
+                            size="small"
+                            aria-label={t('app.edit')}
+                            onClick={() => handleOpenEdit(at)}
+                            disabled={at.is_system}
+                          >
+                            <EditIcon fontSize="small" />
+                          </IconButton>
+                        </span>
                       </Tooltip>
-                      <Tooltip title={t('app.delete')}>
-                        <IconButton size="small" aria-label={t('app.delete')} onClick={() => handleDeleteClick(at)}>
-                          <DeleteIcon fontSize="small" color="error" />
-                        </IconButton>
+                      <Tooltip title={at.is_system ? t('agents.types.systemProtected') : t('app.delete')}>
+                        <span>
+                          <IconButton
+                            size="small"
+                            aria-label={t('app.delete')}
+                            onClick={() => handleDeleteClick(at)}
+                            disabled={at.is_system}
+                          >
+                            <DeleteIcon fontSize="small" color={at.is_system ? 'disabled' : 'error'} />
+                          </IconButton>
+                        </span>
                       </Tooltip>
                     </Box>
                   </TableCell>

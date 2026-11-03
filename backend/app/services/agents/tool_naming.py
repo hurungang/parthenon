@@ -25,8 +25,13 @@ TOOL_SEPARATOR = "____"
 
 #: Server slugs that are reserved and cannot be used for custom MCP servers.
 #: ``decision`` is reserved for user-defined decision tools surfaced as
-#: ``decision____<name>``.
-RESERVED_SERVER_NAMES: frozenset[str] = frozenset({"system", "decision"})
+#: ``decision____<name>``.  ``cc`` is reserved for the Control Center
+#: management entity — its tools surface as ``cc____<name>``
+#: (FIX-20261101-000319).
+RESERVED_SERVER_NAMES: frozenset[str] = frozenset({"system", "decision", "cc"})
+
+#: Server slug of the dedicated Control Center management entity.
+CC_SERVER_SLUG = "cc"
 
 #: Bare names of the built-in system tools — sourced from the registry.
 _LEGACY_SYSTEM_TOOL_NAMES: frozenset[str] = SystemToolRegistry.get_names()
@@ -90,10 +95,14 @@ def parse_tool_name(name: str) -> tuple[str, str]:
             )
         return server, tool
 
-    # Legacy bare-name fallback — treat as built-in system tool.
-    if SystemToolRegistry.is_system_tool(name):
-        return "system", name
-
+    # Legacy bare-name fallback — resolve via the registry's category-aware
+    # server slug (management tools → "cc", general tools → "system").
+    if name in SystemToolRegistry.get_names():
+        return SystemToolRegistry.parse_name(name)  # type: ignore[return-value]
+    if name.startswith("system/"):
+        return "system", name[len("system/"):]
+    if name.startswith("system_"):
+        return "system", name[len("system_"):]
     raise ValueError(
         f"Tool name '{name}' has no '{TOOL_SEPARATOR}' separator and is not a known "
         "legacy system tool name."
@@ -104,15 +113,32 @@ def is_system_tool(name: str) -> bool:
     """Return ``True`` if *name* refers to a built-in system tool.
 
     Delegates to :class:`SystemToolRegistry` which acts as the single
-    source of truth for all registered system tools.
+    source of truth for all registered system tools.  Both namespaces
+    qualify: general ``system____`` tools AND Control Center ``cc____``
+    management tools (both route over the internal system-tool path).
 
     Args:
         name: Tool name in any supported format.
 
     Returns:
-        ``True`` if the tool is a system tool; ``False`` otherwise.
+        ``True`` if the tool is a built-in tool; ``False`` otherwise.
     """
     return SystemToolRegistry.is_system_tool(name)
+
+
+def is_cc_tool(name: str) -> bool:
+    """Return ``True`` if *name* refers to a Control Center ``cc____`` tool.
+
+    Only management-category tools qualify (the 36 management execution
+    tools and the 4 management meta tools).
+
+    Args:
+        name: Tool name in any supported format.
+
+    Returns:
+        ``True`` if the tool belongs to the ``cc____`` namespace.
+    """
+    return SystemToolRegistry.is_cc_tool(name)
 
 
 def get_server_name(name: str) -> str:

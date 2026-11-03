@@ -28,6 +28,9 @@ Control Center is the governance center for policy-driven operation of Parthenon
 - Provides the **Agent Runtime Monitor** — a full-page interactive map of the running agent population showing all currently running agents and their delegated children, each with configured model-usage limits, current usage posture (within limit, approaching limit, breached), and execution guardrail status; the map auto-fits on load, arranges agents in a team-row layout by delegation depth, and stays current through live server push updates (with automatic fallback to polling)
 - Provides **node-level termination** from the map for authorized users, with **cascade termination** of delegated children when a parent is terminated
 - Provides **disabled-vendor** and **disabled-model** block surfaces in the operator UI, with the cascade source clearly visible
+- Provides the embedded **[Control Center Assistant](control-center-assistant.md)** — a launcher in the Control Center shell opens a conversational assistant that performs Agents-menu management on the signed-in user's behalf, within that user's own permission scope, with a preview-and-approve step before any change and no deletion capability
+- Presents the assistant's management capability in MCP Hub as a protected, **system-managed** Control Center integration, visible and usable only by holders of the Control Center integration permission, and not editable, deletable, syncable, or session-bindable by anyone
+- Allows per-workspace selection of the approved model that powers the assistant, with clear guidance (and disabled input) when no model is selected
 
 ## Key Concepts
 - **Per-Agent-Type Guardrail Profile**: A policy profile tied to one Agent Type for consistent execution governance
@@ -45,6 +48,9 @@ Control Center is the governance center for policy-driven operation of Parthenon
 - **Conversational Policy Behavior**: Continuous token usage visibility while preserving conversation continuity unless other guardrails require a stop
 - **Policy Outcome Transparency**: Clear representation of guardrail outcomes for triage and governance reporting
 - **Workflow Generation Model Policy**: Central selection of the approved model used for AI-assisted workflow drafting and preview
+- **Control Center Assistant**: A built-in, system-provided conversational assistant in the Control Center that performs Agents-menu management actions as the signed-in user — never above their permissions, never destructive, and never outside the Agents menu group. It always shows a field-by-field preview and requires approval before writing
+- **Control Center Integration Entity**: The assistant's management capability exposed as a protected, platform-provisioned integration in MCP Hub. Visibility is permission-gated; the entity itself is immutable and sessionless (access flows through role and skill grants)
+- **Assistant Model Selection**: A per-workspace choice from the approved model catalogue determining which model powers the assistant
 
 ## Acceptance Criteria
 - A distinct guardrail profile is visible for each Agent Type
@@ -76,6 +82,14 @@ Control Center is the governance center for policy-driven operation of Parthenon
 - If a user lacks required permission, termination controls are unavailable or rejected with a clear user-visible message
 - Guardrail, termination, and disable-state outcomes (including model-disabled and vendor-disabled blocks) are reflected in execution logs so operators can distinguish policy events from functional failures
 - Disabled vendors and disabled models block agent execution before any LLM call, and the block is surfaced in execution logs with a clear operator-visible reason
+- An assistant launcher is available in the Control Center to signed-in users and opens a conversational assistant that is clearly marked as system-provided
+- The assistant performs create, update, and read actions only within the Agents menu group; out-of-scope and deletion requests are declined with clear messages
+- Every create or update shows a field-by-field preview table and executes only after the user approves it; rejecting leaves everything unchanged
+- The assistant acts with the signed-in user's permissions and attribution; actions the user is not authorized to perform are declined and no change occurs
+- The assistant's session is resumable: closing it keeps the session, and reopening resumes the most recent active session with full history
+- The Control Center integration appears in MCP Hub only for users holding the Control Center integration permission, is labelled as system-managed, and offers no edit, delete, sync, or session controls
+- Attempts by anyone — including permissions administrators — to modify or delete the Control Center integration are refused; granting its tools to roles remains permission-governed
+- The assistant model is selected per workspace from the approved catalogue; when none is selected the assistant explains why and offers a configuration path instead of falling back silently
 
 ## Out of Scope
 - Technical implementation details, architecture internals, or service-level configuration mechanics
@@ -91,6 +105,7 @@ Control Center is the governance center for policy-driven operation of Parthenon
 - Requires a vendor and model catalogue that the new hierarchy can be built on top of, so that vendor enable/disable and model selection have a stable source of truth
 - Requires reliable runtime state and delegation relationship signals to render an accurate running-agent map on the Agent Runtime Monitor
 - Terminate operations must be routed through the Communication Hub to Agent Runtime to preserve service segregation and certificate-based authentication boundaries
+- The embedded assistant depends on the platform's conversational-agent experience, on the workspace having an approved model selected, and on the Control Center integration permission being granted to the roles that should see it
 
 ## Multi-Tenancy Note
 

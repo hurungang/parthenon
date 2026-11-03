@@ -150,11 +150,32 @@ export function SkillListPage() {
                       )}
                     </TableCell>
                     <TableCell>
-                      <Chip
-                        label={skill.tool_ids?.length ?? 0}
-                        size="small"
-                        variant="outlined"
-                      />
+                      <Box display="flex" flexWrap="wrap" gap={0.5} sx={{ maxWidth: 320 }}>
+                        {(skill.tool_bindings ?? []).length > 0 ? (
+                          <Typography
+                            variant="body2"
+                            sx={{ cursor: 'default' }}
+                            title={(skill.tool_bindings ?? [])
+                              .map((b) => b.original_name || b.name)
+                              .join(', ')}
+                          >
+                            {t('skills.toolCountValue', { count: (skill.tool_bindings ?? []).length })}
+                          </Typography>
+                        ) : (
+                          <Chip
+                            label={t('skills.noToolsBound')}
+                            size="small"
+                            variant="outlined"
+                            sx={{
+                              height: 20,
+                              fontSize: '0.7rem',
+                              color: 'text.disabled',
+                              borderColor: 'divider',
+                              fontStyle: 'italic',
+                            }}
+                          />
+                        )}
+                      </Box>
                     </TableCell>
                     <TableCell>
                       <Chip

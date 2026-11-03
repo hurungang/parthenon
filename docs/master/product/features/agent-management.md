@@ -25,6 +25,7 @@ Agent Management enables organizations to define, configure, and govern AI agent
 - Provides real-time preview of allowed actions for each role
 - Ensures all agent actions, assignments, and executions are logged and auditable
 - Renames "Agent Instances" to "Agent Executions" throughout the platform for clarity
+- Management of every Agents-menu module (roles, identities, agent types, skills, SOPs, model configurations, schedules, data types, and MCP Hub connections) is also available in natural language through the embedded [Control Center Assistant](./control-center-assistant.md), which acts with the signed-in user's permissions and asks for approval of a previewed change before writing; the manual forms and dialogs remain the primary, unchanged path
 - Agent Executions view supports filtering by agent type, enabling users to focus on relevant runs
 - Agent Types table includes columns for "Role" and "Identity", displaying the actual role and identity names for each agent type
 - Supports both traditional and passthrough session types for MCP servers; passthrough enables direct agent identity propagation without explicit session selection
@@ -94,6 +95,7 @@ The Agent Management Panel is a unified management module in the **Agents group*
 
 
 ## Acceptance Criteria
+- Every Agents-menu management action available in the manual UI is also reachable conversationally through the Control Center Assistant, with identical permission enforcement and no additional capability
 - The **Agents group** exists in the sidebar with the following modules, in this order:
 	1. Agent Roles
 	2. Agent Identities

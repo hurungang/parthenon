@@ -125,6 +125,7 @@ from app.db.models.tenant_invitation import TenantInvitation  # noqa: E402
 from app.db.models.tenant_license import LicenseTier, TenantLicense  # noqa: E402
 from app.db.models.tenant_membership import TenantUserMembership  # noqa: E402
 from app.db.models.tenant_quota_usage import QuotaType, TenantQuotaUsage  # noqa: E402
+from app.db.models.tenant_setting import TenantSetting  # noqa: E402
 from app.db.models.termination_request import TerminationRequest  # noqa: E402
 from app.db.models.tool_calls import RuntimeToolCall  # noqa: E402
 from app.db.models.token_health import TokenHealthCheck  # noqa: E402
@@ -309,6 +310,7 @@ _OWN_KWARGS = {
         "quota_type": QuotaType.monthly_executions,
         "period_start": date.today(),
     },
+    TenantSetting: lambda t, s: {"tenant_id": t, "key": f"setting-{s}"},
     ScheduledJob: lambda t, s: {
         "name": f"sched-{s}",
         "cron_expression": "0 0 * * *",

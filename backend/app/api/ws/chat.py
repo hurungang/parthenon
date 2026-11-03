@@ -1,5 +1,6 @@
 """WebSocket server — authenticates connections, runs conversational agent, persists turns."""
 import asyncio
+import contextlib
 import json
 import logging
 import uuid
@@ -22,6 +23,115 @@ logger = logging.getLogger(__name__)
 
 ws_router = APIRouter(tags=["WebSocket"])
 
+# ── Structured chat error codes ──────────────────────────────────────────────
+# Surfaced to the client as {"type": "chat_error", "code": ..., "message": ...}
+# payloads so the frontend can recognize actionable failure modes (e.g. the
+# assistant surface renders setup guidance) instead of a generic crash string.
+ERROR_CODE_ASSISTANT_MODEL_NOT_CONFIGURED = "assistant_model_not_configured"
+ERROR_CODE_MODEL_BINDING_ERROR = "model_binding_error"
+
+# FIX-20261031-091657: app-level WS keepalive cadence while a turn is in
+# flight — keeps idle proxies from closing the socket and lets the UI keep
+# the "thinking" indicator alive during long agentic turns.
+CONVERSATION_HEARTBEAT_INTERVAL_SECONDS = 15.0
+
+
+class ConversationTurnTimeoutError(Exception):
+    """Raised when the whole conversational turn exceeds the watchdog bound."""
+
+ASSISTANT_MODEL_NOT_CONFIGURED_MESSAGE = (
+    "No model is configured for this workspace yet. An administrator can "
+    "select one under System Config → Assistant model."
+)
+
+
+class ConversationTurnError(Exception):
+    """Typed, structured failure of one conversation turn.
+
+    Carries a stable machine-readable ``code`` the frontend can map to
+    dedicated guidance UI, plus a human-friendly ``message``.
+    """
+
+    def __init__(self, code: str, message: str) -> None:
+        super().__init__(message)
+        self.code = code
+        self.message = message
+
+
+def _conversation_turn_error_from_http_status(exc: httpx.HTTPStatusError) -> ConversationTurnError | None:
+    """Map an Agent Runtime 4xx rejection onto a structured turn error.
+
+    AR rejects a turn with 400 "Agent model is not configured" BEFORE calling
+    the model when the agent type has no ``model_id`` / ``model_config_id`` —
+    that becomes the dedicated ``assistant_model_not_configured`` code.
+    """
+    response = exc.response
+    if response.status_code != 400:
+        return None
+    try:
+        detail = str((response.json() or {}).get("detail") or "")
+    except Exception:
+        detail = ""
+    if "model" in detail.lower() and "not configured" in detail.lower():
+        return ConversationTurnError(
+            ERROR_CODE_ASSISTANT_MODEL_NOT_CONFIGURED,
+            ASSISTANT_MODEL_NOT_CONFIGURED_MESSAGE,
+        )
+    return None
+
+
+#: FIX-20261101-111439: user-comprehensible message for guardrail iteration
+#: stops. ``{limit}`` is filled from the AR-forwarded guardrail details when
+#: available. Message text lives backend-side (i18n-safe English baseline).
+ITERATION_LIMIT_MESSAGE_TEMPLATE = (
+    "This task needed more steps than allowed (limit {limit}). Try breaking it "
+    "into smaller requests or ask an administrator to raise the step limit."
+)
+ITERATION_LIMIT_MESSAGE_NO_LIMIT = (
+    "This task needed more steps than allowed. Try breaking it into smaller "
+    "requests or ask an administrator to raise the step limit."
+)
+
+#: Guardrail stop reasons AR may forward on the streaming error chunk
+#: (``GuardrailStop.reason`` from both the callback and the executor).
+_GUARDRAIL_STOP_CODES = {
+    "iteration_limit",
+    "iteration_limit_exceeded",
+    "token_budget",
+    "token_budget_exceeded_non_conversational",
+    "delegation_depth",
+    "delegation_depth_exceeded",
+    "delegated_steps_exceeded",
+    "cycle_detected",
+    "timeout",
+    "execution_timeout_exceeded",
+}
+
+_GENERIC_GUARDRAIL_MESSAGE_TEMPLATE = (
+    "The assistant stopped because a safety limit was reached ({reason}). "
+    "Please try again or contact your administrator."
+)
+
+
+def _conversation_turn_error_from_guardrail_stop(
+    reason: str,
+    details: dict[str, Any] | None = None,
+) -> ConversationTurnError:
+    """Map an AR-forwarded guardrail stop reason onto a structured turn error."""
+    safe_details = details if isinstance(details, dict) else {}
+    if reason in {"iteration_limit", "iteration_limit_exceeded"}:
+        limit = safe_details.get("max_iterations")
+        message = (
+            ITERATION_LIMIT_MESSAGE_TEMPLATE.format(limit=limit)
+            if isinstance(limit, int)
+            else ITERATION_LIMIT_MESSAGE_NO_LIMIT
+        )
+        return ConversationTurnError("iteration_limit", message)
+    return ConversationTurnError(
+        f"guardrail_{reason}",
+        _GENERIC_GUARDRAIL_MESSAGE_TEMPLATE.format(reason=reason),
+    )
+
 
 class ActiveSessionTracker:
     """Tracks active WebSocket connections for intervention routing.
@@ -39,9 +149,21 @@ class ActiveSessionTracker:
         cls._connections[str(session_id)] = websocket
 
     @classmethod
-    def unregister(cls, session_id: str) -> None:
-        cls._connections.pop(str(session_id), None)
-        cls._intervention_active.discard(str(session_id))
+    def unregister(cls, session_id: str, websocket: WebSocket | None = None) -> None:
+        """Remove a session's connection entry.
+
+        When ``websocket`` is given, the entry is only removed if it still
+        points at THAT socket — a reconnecting client registers a NEW socket
+        for the same session id while the old handler is still finishing, and
+        the old connection's cleanup must not evict the new registration
+        (FIX-20261031-071721 follow-up).
+        """
+        key = str(session_id)
+        if websocket is not None and cls._connections.get(key) is not websocket:
+            cls._intervention_active.discard(key)
+            return
+        cls._connections.pop(key, None)
+        cls._intervention_active.discard(key)
 
     @classmethod
     def is_connected(cls, session_id: str) -> bool:
@@ -77,6 +199,36 @@ class ActiveSessionTracker:
             )
 
 
+async def _send_to_live_socket(
+    session_id: str,
+    fallback_ws: WebSocket | None,
+    payload: dict[str, Any],
+) -> None:
+    """Send a JSON payload over the CURRENT live socket for ``session_id``.
+
+    Long agentic turns can outlive the original WebSocket connection: the
+    client reconnects with the same session id and a NEW socket is
+    registered in ``ActiveSessionTracker``. Sends must therefore resolve the
+    live socket from the tracker at send time instead of using the socket
+    captured at connection start (FIX-20261031-071721 follow-up); the
+    captured socket is only a fallback for flows without a tracker entry.
+    Send failures (dead socket) are logged and swallowed — a transport error
+    must never crash the turn pipeline. Persistence is unaffected.
+    """
+    ws = ActiveSessionTracker.get_ws(session_id) or fallback_ws
+    if ws is None:
+        return
+    try:
+        await ws.send_json(payload)
+    except Exception as exc:
+        logger.warning(
+            "WebSocket send failed for session %s (socket=%r): %s",
+            session_id,
+            getattr(ws, "name", type(ws).__name__),
+            exc,
+        )
+
+
 def _build_chat_status_event(
     status_value: str,
     agent_type: str | None = None,
@@ -94,6 +246,289 @@ def _build_chat_status_event(
         payload["receiver_session_id"] = receiver_session_id
     payload["timestamp"] = timestamp or datetime.now(timezone.utc).isoformat()
     return payload
+
+
+# FIX-20261031-091657 (Defect B): in-flight CH-side turn tasks per session so
+# the session-end termination path (CC → CH ``/internal/agent/terminate``) can
+# cancel a pending turn promptly instead of waiting out the full watchdog.
+_pending_turn_tasks: dict[str, "asyncio.Task[None]"] = {}
+
+
+def cancel_pending_conversation_turn(session_id: str) -> bool:
+    """Cancel a pending conversational turn task for ``session_id`` (best-effort)."""
+    task = _pending_turn_tasks.pop(str(session_id), None)
+    if task is None or task.done():
+        return False
+    task.cancel()
+    logger.info(
+        "Cancelled pending conversation turn for session %s (session ended)", session_id
+    )
+    return True
+
+
+async def _thinking_heartbeat_loop(
+    session_id: str,
+    fallback_ws: WebSocket | None,
+    stop: asyncio.Event,
+) -> None:
+    """Emit a lightweight keepalive status event while a turn is in flight."""
+    while not stop.is_set():
+        try:
+            await asyncio.wait_for(stop.wait(), timeout=CONVERSATION_HEARTBEAT_INTERVAL_SECONDS)
+        except asyncio.TimeoutError:
+            pass
+        if stop.is_set():
+            return
+        await _send_to_live_socket(
+            session_id,
+            fallback_ws,
+            {
+                "type": "chat_status",
+                **_build_chat_status_event("thinking_heartbeat"),
+            },
+        )
+
+
+async def run_conversation_turn(
+    *,
+    session_id: str,
+    conv_session_id: uuid.UUID,
+    user_message: str,
+    is_first_message: bool,
+    app: Any,
+    websocket: WebSocket | None,
+    message_count: int,
+) -> None:
+    """Execute one conversational turn under the whole-turn watchdog.
+
+    FIX-20261031-091657 (Defect A): the delegated AR call uses a disabled HTTP
+    timeout on the streaming path, so an Agent Runtime hang would previously
+    leave this turn awaiting forever. The whole turn is now bounded by
+    ``agent_question_timeout_seconds``; on watchdog fire (or end-session
+    cancellation) the pipeline emits the existing ``timeout_or_failed`` status
+    event, delivers a clear error message and persists the error turn exactly
+    once (the normal path never persists a duplicate error).
+    """
+    settings = get_settings()
+    configured_timeout = int(getattr(settings, "agent_question_timeout_seconds", 300))
+    timeout_seconds = float(max(1, configured_timeout))
+
+    data_client = getattr(app.state, "data_client", None)
+    error_persisted = False
+    reply_delivered = False
+
+    stop_heartbeat = asyncio.Event()
+    heartbeat_task = asyncio.create_task(
+        _thinking_heartbeat_loop(session_id, websocket, stop_heartbeat)
+    )
+
+    async def send_status_event(status_event: dict[str, str]) -> None:
+        event_timestamp = status_event.get("timestamp")
+        await _send_to_live_socket(
+            session_id,
+            websocket,
+            {
+                "type": "chat_status",
+                **status_event,
+                "timestamp": event_timestamp or datetime.now(timezone.utc).isoformat(),
+            },
+        )
+
+    async def deliver_reply(agent_reply: str) -> None:
+        nonlocal reply_delivered
+        reply_delivered = True
+        await _send_to_live_socket(
+            session_id,
+            websocket,
+            {
+                "sender_role": "agent",
+                "content": agent_reply,
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            },
+        )
+        logger.debug(
+            "Conversation agent response sent: message=%d session=%s length=%d",
+            message_count,
+            session_id,
+            len(agent_reply),
+            extra={"data": {"agent_response": agent_reply}},
+        )
+
+    try:
+        agent_reply, session_title, guardrail_usage, status_events = await asyncio.wait_for(
+            _process_message(
+                conv_session_id=conv_session_id,
+                user_message=user_message,
+                is_first_message=is_first_message,
+                app=app,
+                on_status_event=send_status_event,
+                on_reply=deliver_reply,
+            ),
+            timeout=timeout_seconds,
+        )
+
+        if not reply_delivered:
+            await deliver_reply(agent_reply)
+
+        if session_title:
+            await _send_to_live_socket(
+                session_id,
+                websocket,
+                {"type": "title_update", "title": session_title},
+            )
+
+        if guardrail_usage:
+            await _send_to_live_socket(
+                session_id,
+                websocket,
+                {"type": "guardrail_update", "guardrail_usage": guardrail_usage},
+            )
+    except asyncio.TimeoutError:
+        if reply_delivered:
+            # Reply already reached the user — only the persistence tail hung.
+            # Never send a duplicate error message / status event.
+            logger.warning(
+                "Conversation turn persistence exceeded the watchdog for session %s "
+                "after %.0fs (reply already delivered)",
+                session_id,
+                timeout_seconds,
+            )
+        else:
+            logger.warning(
+                "Conversation turn watchdog fired for session %s after %.0fs",
+                session_id,
+                timeout_seconds,
+            )
+            error_persisted = await _persist_and_surface_turn_error(
+                session_id=session_id,
+                conv_session_id=conv_session_id,
+                user_message=user_message,
+                is_first_message=is_first_message,
+                websocket=websocket,
+                data_client=data_client,
+                error_text=(
+                    "Your request timed out because the assistant took too long to "
+                    "respond. Please try again."
+                ),
+            )
+    except asyncio.CancelledError:
+        # End-session termination path (Defect B): surface the same bounded
+        # failure UX, then let the cancellation unwind. A delivered reply is
+        # never followed by a duplicate error message.
+        if not reply_delivered and not error_persisted:
+            with contextlib.suppress(Exception):
+                await _persist_and_surface_turn_error(
+                    session_id=session_id,
+                    conv_session_id=conv_session_id,
+                    user_message=user_message,
+                    is_first_message=is_first_message,
+                    websocket=websocket,
+                    data_client=data_client,
+                    error_text=(
+                        "This conversation session was ended while the assistant "
+                        "was still processing your request."
+                    ),
+                )
+        raise
+    except ConversationTurnError as turn_exc:
+        logger.warning(
+            "Conversation turn blocked for session %s: code=%s",
+            session_id,
+            turn_exc.code,
+        )
+        await _send_to_live_socket(
+            session_id,
+            websocket,
+            {
+                "type": "chat_error",
+                "code": turn_exc.code,
+                "message": turn_exc.message,
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            },
+        )
+        # FIX-20261101-111439: structured errors (e.g. guardrail iteration
+        # stops) must surface as a clear, persisted error turn instead of the
+        # generic "An error occurred" message. Follows the timeout_or_failed
+        # pattern: emit status + deliver + persist exactly once.
+        if not reply_delivered:
+            await _persist_and_surface_turn_error(
+                session_id=session_id,
+                conv_session_id=conv_session_id,
+                user_message=user_message,
+                is_first_message=is_first_message,
+                websocket=websocket,
+                data_client=data_client,
+                error_text=turn_exc.message,
+                status_value=turn_exc.code,
+            )
+    except Exception:
+        logger.exception("Background conversation turn failed for session %s", session_id)
+        await _send_to_live_socket(
+            session_id,
+            websocket,
+            {
+                "sender_role": "agent",
+                "content": "I encountered an error processing your request. Please try again.",
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            },
+        )
+    finally:
+        stop_heartbeat.set()
+        with contextlib.suppress(Exception):
+            await heartbeat_task
+
+
+async def _persist_and_surface_turn_error(
+    *,
+    session_id: str,
+    conv_session_id: uuid.UUID,
+    user_message: str,
+    is_first_message: bool,
+    websocket: WebSocket | None,
+    data_client: Any,
+    error_text: str,
+    status_value: str = "timeout_or_failed",
+) -> bool:
+    """Emit a terminal status + deliver and persist the error turn.
+
+    Returns True when the error turn was persisted (dedupe guard so a
+    watchdog fire and a cancellation never double-persist).
+    """
+    await _send_to_live_socket(
+        session_id,
+        websocket,
+        {
+            "type": "chat_status",
+            **_build_chat_status_event(status_value),
+        },
+    )
+    await _send_to_live_socket(
+        session_id,
+        websocket,
+        {
+            "sender_role": "agent",
+            "content": error_text,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        },
+    )
+    if data_client is None:
+        return False
+    try:
+        with _signed_tenant_forwarding():
+            await data_client.append_conversation_turn(
+                conv_session_id=conv_session_id,
+                agent_reply=error_text,
+                is_first_message=is_first_message,
+                first_user_message=user_message if is_first_message else None,
+                guardrail_usage=None,
+                status_events=[_build_chat_status_event(status_value)],
+            )
+        return True
+    except Exception:
+        logger.warning(
+            "Failed to persist watchdog error turn for session %s", session_id, exc_info=True
+        )
+        return False
 
 
 @contextmanager
@@ -130,6 +565,109 @@ def _signed_tenant_forwarding():
         yield
     finally:
         reset_forwarded_tenant_headers(token)
+
+
+async def _resolve_oidc_tenant_slug(db: Any, sub: str) -> str | None:
+    """Resolve an OIDC user's tenant slug from their active membership.
+
+    Mirrors the REST login-context resolution used by the tenant-membership
+    endpoints (``/auth/tenant-memberships``): the ``PlatformUser`` record is
+    looked up by the verified token's ``sub`` (identity-plane, unscoped),
+    then the user's ACTIVE membership in an ACTIVE tenant is selected
+    (default tenant first).  Returns None when no membership resolves —
+    callers must fail closed.
+    """
+    if not sub:
+        return None
+    from sqlalchemy import select
+
+    from app.db.models.platform_user import PlatformUser
+    from app.db.models.tenant import Tenant, TenantStatus
+    from app.db.models.tenant_membership import (
+        TenantUserMembership,
+        TenantUserMembershipStatus,
+    )
+    from app.db.tenant_scoping import execute_unscoped
+
+    user_result = await execute_unscoped(
+        db, select(PlatformUser).where(PlatformUser.sub == sub)
+    )
+    user = user_result.scalar_one_or_none()
+    if user is None:
+        return None
+
+    result = await db.execute(
+        select(Tenant.slug)
+        .join(TenantUserMembership, TenantUserMembership.tenant_id == Tenant.id)
+        .where(
+            TenantUserMembership.user_id == user.id,
+            TenantUserMembership.status == TenantUserMembershipStatus.active,
+            Tenant.status == TenantStatus.active,
+        )
+        .order_by(
+            TenantUserMembership.is_default.desc(),
+            Tenant.name.asc(),
+        )
+        .limit(1)
+    )
+    return result.scalar_one_or_none()
+
+
+async def _bind_connection_tenant_context(claims: dict[str, Any]) -> str | None:
+    """Resolve and bind the tenant context for a WebSocket connection.
+
+    WebSockets bypass the HTTP tenant-resolution middleware, so the context
+    must be bound here from the VERIFIED token claims:
+
+    - Platform-account JWTs carry a native ``tenant`` slug claim → resolved
+      exactly as before (unchanged behaviour).
+    - OIDC tokens (Keycloak/EntraID) return claims verbatim with NO
+      ``tenant`` claim on this direct-validation path → the tenant is
+      resolved server-side from the user's active membership, the SAME
+      mechanism REST uses for OIDC sessions (see
+      ``_resolve_oidc_tenant_slug``).
+    - Multi-tenancy off → no binding: root-tenant binding, headerless
+      traffic, single-tenant behaviour unchanged.
+    - Fail-closed: when multi-tenancy is on and no tenant can be resolved,
+      a reason string is returned and the caller MUST reject the
+      connection (no headerless pipeline).
+
+    Returns None on success (context bound, or single-tenant no-op), or a
+    close-reason string on failure.
+    """
+    from app.core.tenant_context import set_current_tenant_context
+    from app.db.session import AsyncSessionLocal
+    from app.services.tenancy.platform_settings_service import (
+        get_platform_settings_service,
+    )
+    from app.services.tenancy.tenant_resolution_service import (
+        TenantResolutionError,
+        get_tenant_resolution_service,
+    )
+
+    tenant_slug = claims.get("tenant")
+    oidc_fallback = not (isinstance(tenant_slug, str) and tenant_slug.strip())
+
+    async with AsyncSessionLocal() as db:
+        if oidc_fallback:
+            settings_service = get_platform_settings_service()
+            if not await settings_service.is_multi_tenancy_enabled(db):
+                return None  # single-tenant mode: unchanged, headerless
+            resolved = await _resolve_oidc_tenant_slug(
+                db, str(claims.get("sub", "") or "")
+            )
+            if not resolved:
+                return "No active tenant membership"
+            tenant_slug = resolved
+        try:
+            context = await get_tenant_resolution_service().resolve_slug(
+                db, tenant_slug.strip()
+            )
+        except TenantResolutionError:
+            return "Unknown tenant"
+
+    set_current_tenant_context(context)
+    return None
 
 
 class WebSocketServer:
@@ -198,31 +736,18 @@ async def websocket_chat(websocket: WebSocket, session_id: str) -> None:
     # Bind the tenant context for this connection: WebSockets bypass the
     # HTTP tenant-resolution middleware, so all in-connection queries and
     # model/tool resolution would otherwise run context-less (fail-closed
-    # under strict tenant scoping).  Both token kinds carry ``tenant``
-    # (slug): platform-account JWTs natively; OIDC tokens via middleware
-    # claim injection during the REST calls that created the session.
-    tenant_slug = claims.get("tenant")
-    if isinstance(tenant_slug, str) and tenant_slug.strip():
-        try:
-            from app.db.session import AsyncSessionLocal
-            from app.services.tenancy.tenant_resolution_service import (
-                TenantResolutionService,
-                TenantResolutionError,
-            )
-            from app.core.tenant_context import set_current_tenant_context
-
-            async with AsyncSessionLocal() as db:
-                context = await TenantResolutionService().resolve_slug(
-                    db, tenant_slug.strip()
-                )
-            set_current_tenant_context(context)
-        except TenantResolutionError:
-            await websocket.close(code=4003, reason="Unknown tenant")
-            logger.warning(
-                "WebSocket rejected: unknown tenant %r for session %s",
-                tenant_slug, session_id,
-            )
-            return
+    # under strict tenant scoping).  Platform-account JWTs carry ``tenant``
+    # natively; OIDC tokens are resolved server-side from the user's active
+    # membership (the same mechanism REST uses).  Fail-closed: an
+    # unresolvable tenant under multi-tenancy rejects the connection.
+    tenant_error = await _bind_connection_tenant_context(claims)
+    if tenant_error:
+        await websocket.close(code=4003, reason=tenant_error)
+        logger.warning(
+            "WebSocket rejected: %s for session %s (subject=%s)",
+            tenant_error, session_id, claims.get("sub", "unknown"),
+        )
+        return
 
     # Register this WebSocket connection for intervention routing
     ActiveSessionTracker.register(session_id, websocket)
@@ -275,7 +800,7 @@ async def websocket_chat(websocket: WebSocket, session_id: str) -> None:
 
             # ── Block chat messages when intervention is pending ───────────
             if ActiveSessionTracker.has_pending_intervention(session_id):
-                await websocket.send_json({
+                await _send_to_live_socket(session_id, websocket, {
                     "type": "chat_blocked",
                     "reason": "intervention_pending",
                     "message": "An intervention request is pending. Please respond to the intervention before sending new messages.",
@@ -302,89 +827,55 @@ async def websocket_chat(websocket: WebSocket, session_id: str) -> None:
                 extra={"data": {"user_prompt": user_message}},
             )
 
-            await websocket.send_json(
+            await _send_to_live_socket(
+                session_id,
+                websocket,
                 {
                     "type": "chat_status",
                     **_build_chat_status_event("thinking"),
                     "timestamp": datetime.now(timezone.utc).isoformat(),
-                }
+                },
             )
-
-            async def send_status_event(status_event: dict[str, str]) -> None:
-                event_timestamp = status_event.get("timestamp")
-                try:
-                    await websocket.send_json(
-                        {
-                            "type": "chat_status",
-                            **status_event,
-                            "timestamp": event_timestamp or datetime.now(timezone.utc).isoformat(),
-                        }
-                    )
-                except Exception as ws_exc:
-                    logger.warning(
-                        "Failed to send status event via WebSocket for session %s: %s",
-                        session_id,
-                        ws_exc,
-                    )
 
             # Run the conversation turn as a background task so the WebSocket
             # loop is not blocked — this allows intervention response messages
             # to be processed while the turn waits for delegated agents.
-            async def _run_turn_and_reply() -> None:
-                try:
-                    agent_reply, session_title, guardrail_usage, status_events = await _process_message(
+            def _run_turn_and_reply() -> "asyncio.Task[None]":
+                task = asyncio.create_task(
+                    run_conversation_turn(
+                        session_id=session_id,
                         conv_session_id=conv_session_id,
                         user_message=user_message,
                         is_first_message=(message_count == 1),
                         app=websocket.app,
-                        on_status_event=send_status_event,
+                        websocket=websocket,
+                        message_count=message_count,
                     )
+                )
+                _pending_turn_tasks[session_id] = task
 
-                    await websocket.send_json(
-                        {
-                            "sender_role": "agent",
-                            "content": agent_reply,
-                            "timestamp": datetime.now(timezone.utc).isoformat(),
-                        }
-                    )
-                    logger.debug(
-                        "Conversation agent response sent: message=%d session=%s length=%d",
-                        message_count,
-                        session_id,
-                        len(agent_reply),
-                        extra={"data": {"agent_response": agent_reply}},
-                    )
+                def _cleanup(done: "asyncio.Task[None]") -> None:
+                    if _pending_turn_tasks.get(session_id) is done:
+                        _pending_turn_tasks.pop(session_id, None)
 
-                    if session_title:
-                        await websocket.send_json(
-                            {"type": "title_update", "title": session_title}
-                        )
+                task.add_done_callback(_cleanup)
+                return task
 
-                    if guardrail_usage:
-                        await websocket.send_json(
-                            {"type": "guardrail_update", "guardrail_usage": guardrail_usage}
-                        )
-                except Exception:
-                    logger.exception("Background conversation turn failed for session %s", session_id)
-                    try:
-                        await websocket.send_json(
-                            {
-                                "sender_role": "agent",
-                                "content": "I encountered an error processing your request. Please try again.",
-                                "timestamp": datetime.now(timezone.utc).isoformat(),
-                            }
-                        )
-                    except Exception:
-                        pass
+            _run_turn_and_reply()
 
-            asyncio.create_task(_run_turn_and_reply())
-
-    except WebSocketDisconnect:
-        logger.info("WebSocket disconnected: session=%s", session_id)
+    except WebSocketDisconnect as exc:
+        # FIX-20261031-091657: log close code + reason so idle-proxy closes
+        # are diagnosable instead of a silent drop.
+        logger.info(
+            "WebSocket disconnected: session=%s code=%s reason=%r",
+            session_id,
+            exc.code,
+            exc.reason,
+        )
     except Exception as exc:
         logger.error("WebSocket error for session %s: %s", session_id, exc, exc_info=True)
     finally:
-        ActiveSessionTracker.unregister(session_id)
+        ActiveSessionTracker.unregister(session_id, websocket)
 
 
 async def _handle_intervention_response(
@@ -393,7 +884,7 @@ async def _handle_intervention_response(
     """Handle an intervene_response message from the WebSocket client."""
     request_id = payload.get("request_id")
     if not request_id:
-        await websocket.send_json({
+        await _send_to_live_socket(session_id, websocket, {
             "type": "intervene_status",
             "status": "error",
             "message": "Missing request_id in intervention response",
@@ -438,7 +929,7 @@ async def _handle_intervention_response(
                 request_id,
                 exc,
             )
-            await websocket.send_json({
+            await _send_to_live_socket(session_id, websocket, {
                 "type": "intervene_status",
                 "request_id": request_id,
                 "status": "error",
@@ -450,7 +941,7 @@ async def _handle_intervention_response(
     ActiveSessionTracker.set_intervention_active(session_id, False)
 
     # Notify client of success
-    await websocket.send_json({
+    await _send_to_live_socket(session_id, websocket, {
         "type": "intervene_status",
         "request_id": request_id,
         "status": "responded",
@@ -494,7 +985,7 @@ async def _handle_intervention_cancel(
     ActiveSessionTracker.set_intervention_active(session_id, False)
 
     # Notify client
-    await websocket.send_json({
+    await _send_to_live_socket(session_id, websocket, {
         "type": "intervene_status",
         "request_id": request_id,
         "status": "cancelled",
@@ -507,9 +998,14 @@ async def _process_message(
     is_first_message: bool,
     app: Any,
     on_status_event: Callable[[dict[str, str]], Awaitable[None]] | None = None,
+    on_reply: Callable[[str], Awaitable[None]] | None = None,
 ) -> tuple[str, str | None, dict[str, Any] | None, list[dict[str, str]]]:
     """
     Persist user turn, call LLM, persist agent turn, optionally auto-name the session.
+
+    ``on_reply`` (FIX-20261031-091657) is invoked with the agent reply the
+    moment the LLM delegation returns — BEFORE the persistence call — so a
+    slow/hung persistence path can never delay or swallow the live reply.
 
     Returns:
         (agent_reply, session_title, guardrail_usage, status_events) — session_title is set only on the first message.
@@ -548,6 +1044,9 @@ async def _process_message(
             )
     else:
         agent_reply = "No model is configured for this agent."
+
+    if on_reply is not None:
+        await on_reply(agent_reply)
 
     with _signed_tenant_forwarding():
         appended = await data_client.append_conversation_turn(
@@ -609,10 +1108,27 @@ async def _call_llm(
             on_status_event=on_status_event,
         )
 
+    except ConversationTurnError:
+        # Structured, actionable error (e.g. assistant_model_not_configured) —
+        # propagated so the WebSocket loop can surface the typed payload.
+        raise
     except ModelBindingError as exc:
         logger.warning("Model binding error for session %s: %s", conv_session_id, exc)
         return (
-            f"Unable to process your message: {exc}",
+            "Unable to process your message: the model for this workspace is not "
+            "available or not configured correctly. Please contact your administrator.",
+            None,
+            [_build_chat_status_event("timeout_or_failed")],
+        )
+    except httpx.HTTPStatusError as exc:
+        mapped = _conversation_turn_error_from_http_status(exc)
+        if mapped is not None:
+            raise mapped
+        logger.warning(
+            "Conversation turn rejected for session %s: %s", conv_session_id, exc
+        )
+        return (
+            "An error occurred while processing your message. Please try again.",
             None,
             [_build_chat_status_event("timeout_or_failed")],
         )
@@ -743,6 +1259,20 @@ async def _delegate_conversation_turn_to_agent_runtime(
                         break
 
                     if chunk_type == "error":
+                        # FIX-20261101-111439: AR now forwards guardrail stop
+                        # reasons (e.g. ``iteration_limit``) so Control Center
+                        # can raise a structured, user-comprehensible turn
+                        # error instead of a generic RuntimeError.
+                        error_type = chunk.get("error_type")
+                        if isinstance(error_type, str) and error_type in _GUARDRAIL_STOP_CODES:
+                            details = (
+                                chunk.get("error_details")
+                                if isinstance(chunk.get("error_details"), dict)
+                                else {}
+                            )
+                            raise _conversation_turn_error_from_guardrail_stop(
+                                error_type, details
+                            )
                         raise RuntimeError("Agent Runtime streaming error")
 
             return final_response, final_guardrail_usage, status_events

@@ -27,6 +27,56 @@ Agent Runtime binds LangChain `BaseTool` subclasses for all platform system tool
 | `get_recipient_group` | Resolve notification recipient groups | AR → CH → CC |
 | `human_intervene` | Suspend execution and request human input (HITL) | AR → CH → CC |
 
+Management (`cc____`) and decision (`decision____`) tool families route through the same path but are owned by the Control Center and Decision Tools modules respectively; Agent Runtime treats them as ordinary MCP tools.
+
+## Inherent Self-Context & Optimization Skills
+
+Every agent — role-based or role-less — receives two **built-in skills** at context-build time, with no administrator configuration and no binding rows:
+
+| Inherent skill | Purpose | Tools |
+|---|---|---|
+| **Self-context** | The agent can inspect its own plan, scripts, and execution history | Plan retrieval (base and optimized), script listing, execution log |
+| **Workflow optimization** | The agent can author and run its own optimized composition | Optimized-plan generation, script generation, script execution, script listing/retrieval |
+
+Injection is dynamic per turn: the inherent tool names are merged into the agent's allowed toolset and the two skills are appended to its skill summary with deterministic identifiers, so nothing is persisted per agent. All inherent tools are **general** category (`system____` namespace) — no management parity, no confirmation requirement, and no privilege escalation; script execution stays inside the Agent Runtime sandbox and the run's iteration budget still applies. Definitions are derived from the system tool registry at request time and fail closed on registry drift.
+
+## Conversational Turn Execution
+
+Conversational agent types run a **deep-agent turn** in Agent Runtime: the runtime receives the turn from Communication Hub, assembles the agent's context for that turn, streams status events back while the loop runs, and returns the reply with guardrail usage.
+
+- **Context per turn** — allowed tools and skills, guardrail policy, delegation limits, and model binding are resolved from Control Center for the calling tenant; a missing model binding is rejected *before* any model call so the surface can guide configuration instead of failing inside the model.
+- **Streaming status** — thinking, tool use, delegation, and waiting-for-human states are emitted as status events; the hub keep-alives them so long turns stay visibly alive.
+- **Layered time bounds** — every model call is bounded; a hang surfaces as a timeout outcome instead of a silent stall. While a human approval is pending, the wait is re-armed up to a longer intervention bound kept below the hub's turn watchdog.
+- **Cancellation** — in-flight conversation turns are registered per session and cancelled when the session ends or an execution is terminated.
+- **Never direct** — all tool, MCP, and delegation traffic leaves through Communication Hub; Agent Runtime holds no credentials and never touches the database.
+
+```mermaid
+flowchart LR
+    CH[Communication Hub]
+    TURN[Conversation Turn Executor]
+    CTX[Agent Context<br/>tools · skills · policy]
+    DA[Deep Agent Loop]
+    POL[Guardrail Monitor]
+    RS[In-Process Resume Registry]
+    HITL[Human Intervention Tool]
+    EVT[Status and reply stream]
+
+    CH -->|delegated turn| TURN
+    TURN --> CTX
+    CTX --> DA
+    DA --> POL
+    DA -->|human_intervene| HITL
+    HITL --> RS
+    RS -->|operator response resumes the turn| HITL
+    TURN --> EVT
+    EVT --> CH
+    POL -->|budget exceeded| EVT
+```
+
+### In-Process Intervention Resume
+
+On the conversational path, a human-intervention tool call **suspends inside the tool call** and awaits the operator: the pending request is registered in-process against the conversation session, forwarded through the hub to the chat surface, and resolved by the runtime's resume endpoint when the operator responds. The resume path checks pending conversational interventions *before* the job-relaunch fallback, so a conversation without an execution job resumes correctly. A timeout returns an explicit "not executed" result to the agent — never a silent success. Task (job) agents keep the existing interrupt/resume flow unchanged.
+
 ## Typed Output Handling
 
 When a non-conversational agent type has an assigned output data type (`output_data_type_id`), Agent Runtime performs a two-phase completion flow:
@@ -130,7 +180,8 @@ Agent Runtime receives executions only after the Communication Hub's preflight g
 ## Sandboxed Scripting & Model-Authored Composition
 
 Agent Runtime also executes **sandboxed, model-authored Python scripts**
-(RestrictedPython; allowlisted builtins/pre-bound modules; no I/O; MCP-only
+(RestrictedPython; globals seeded from the audited safe baseline plus
+pre-bound modules; no I/O; MCP-only
 egress via the injected session-bound `CommHubToolClient`; CPU / memory /
 wall-time caps with safe termination). The composition follows a
 **two-layer plan model**: the base implementation plan stays high-level,

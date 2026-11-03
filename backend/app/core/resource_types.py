@@ -28,6 +28,10 @@ RT_AGENT_SCRIPTS: Final[str] = "agent::scripts"
 # Integrations module
 RT_INTEGRATION_MCP_HUB: Final[str] = "integration::mcp_hub"
 RT_INTEGRATION_NOTIFICATIONS: Final[str] = "integration::notifications"
+# FIX-20261101-014511 — entity-view permission for the per-tenant Control
+# Center MCP entity (slug ``cc``): ``read`` = see the entity + its tools,
+# ``manage`` = define/configure around it (grants, sessions, rebinding).
+RT_INTEGRATION_CONTROL_CENTER: Final[str] = "integration::control_center"
 
 # API Keys — bound to agent identities for external MCP hub access
 RT_API_KEYS: Final[str] = "agent::api_keys"
@@ -111,6 +115,9 @@ ResourceTypeManifest: Final[dict[str, dict[str, list[str]]]] = {
     RT_INTEGRATION_NOTIFICATIONS: {
         "actions": ["read", "manage"],
     },
+    RT_INTEGRATION_CONTROL_CENTER: {
+        "actions": ["read", "manage"],
+    },
     RT_SYSTEM_OBSERVABILITY: {
         "actions": ["read"],
     },
@@ -166,6 +173,7 @@ MODULE_GROUPS: Final[dict[str, list[str]]] = {
     "integration": [
         RT_INTEGRATION_MCP_HUB,
         RT_INTEGRATION_NOTIFICATIONS,
+        RT_INTEGRATION_CONTROL_CENTER,
     ],
     "system": [
         RT_SYSTEM_OBSERVABILITY,

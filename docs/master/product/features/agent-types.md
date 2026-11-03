@@ -21,6 +21,15 @@ Agent Types define how organizations standardize agent behavior, governance, and
 - Supports binding multiple SOPs and skills to an Agent Type as an ordered list of entries, where each entry references either an SOP or a skill; bindings define the curated capability set used for system instruction generation and Agent Plan Mode
 - Non-conversational agent types can optionally be assigned an output data type from the [Agent Data Type Registry](./agent-data-types.md). When a data type is selected, the agent type's output is validated against that schema at execution time, stored with the schema reference, and rendered as a structured field-by-field view in execution logs. Conversational agent types do not support data type assignment
 - The agent type details dialog preview shows the unified agent topology view — the same presentation used in the agent management panel — for ALL agent types (both typed and conversational). There is no separate or divergent preview topology diagram; users see one identical composition graph in both locations, including zoom in/out. Text size is capped, so zooming and fullscreen reveal more topology content rather than magnifying text, and input/output slots display the same editor-dialog labels (None/Auto) instead of empty placeholders
+- Agent types provided by the platform (such as the [Control Center Assistant](control-center-assistant.md)) are marked as system-provided and are protected from user editing and deletion, mirroring system-provided skills and roles
+- An agent type is only considered complete and functional when it has a working model and either an identity or a role, in addition to its capability bindings; the Agent Types area and conversational creation both follow this expectation
+
+## Completeness Expectations
+
+- A saved agent type is expected to be **runnable**: a working model plus either an assigned identity or role, plus at least one bound SOP or skill
+- When an agent type is created conversationally through the [Control Center Assistant](control-center-assistant.md), the preview must show model, identity or role, bound skills/SOPs, and access grants before anything is saved, so an incomplete "shell" is never created
+- Access for a role-based agent type is granted at role level; a platform-provided agent type without a role (such as the assistant) relies on its direct capability bindings — access is always granted at the level the configuration consumes it
+- Referenced items must exist first (skills before roles that grant them, roles before identities are assigned) — the ordering is derived from the dependencies, not a fixed script
 
 ## SOP & Skill Binding
 - Agent Types store an ordered list of binding entries, each referencing either an SOP or a skill
@@ -68,6 +77,10 @@ Agent Types define how organizations standardize agent behavior, governance, and
 - **Zoom in and out is available in the details dialog preview topology and behaves the same as in the management panel**
 - **Input and output slots in the topology show the editor-dialog labels (None/Auto) rather than empty placeholders**
 - **No separate preview-specific topology diagram appears anywhere in the UI — the preview shows the unified view only**
+- **System-provided agent types are visibly marked and their edit/delete controls are unavailable**
+- **An agent type is only presented as complete when it has a working model and either an identity or a role plus its bindings; incomplete agent types are not created conversationally**
+- **Conversational creation of an agent type shows model, identity or role, bindings, and grants in the confirmation preview before saving**
+- **Capability grants are applied at the level the agent type consumes them: role grants for role-based agent types, direct bindings for platform-provided agent types without a role**
 
 ## Out of Scope
 - Technical implementation design or service internals

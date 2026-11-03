@@ -50,6 +50,23 @@ def _hash_api_key(raw_key: str) -> str:
     return hashlib.sha256(raw_key.encode("utf-8")).hexdigest()
 
 
+def _looks_like_jwt(token: str) -> bool:
+    """Return True when *token* is a JWT (three dot-separated segments).
+
+    API keys are opaque ``phn_sk_*`` strings and are never treated as JWTs;
+    conversely a JWT must never be treated as an API key.
+    """
+    if token.count(".") != 2:
+        return False
+    try:
+        from jose import jwt
+
+        header = jwt.get_unverified_header(token)
+        return "alg" in header
+    except Exception:
+        return False
+
+
 def _extract_api_key(request: Request) -> str | None:
     """Extract API key from request headers or query parameters.
 
@@ -160,10 +177,24 @@ class ApiKeyAuthMiddleware(BaseHTTPMiddleware):
         if not path.startswith(_MCP_PATH_PREFIX):
             return await call_next(request)
 
+        # Coexistence with the OAuth/OIDC Bearer-token middleware (which runs
+        # first / outermost): a request already authenticated as OAuth carries
+        # a user JWT, not an opaque API key — never re-treat that JWT as an API
+        # key (hashing it and rejecting with 401).  Fall through untouched.
+        if getattr(request.state, "auth_method", None) == "oauth":
+            return await call_next(request)
+
         # Try to extract API key
         raw_key = _extract_api_key(request)
         if raw_key is None:
             # No API key — let the request proceed (may be handled by other auth)
+            return await call_next(request)
+
+        # OAuth tokens are JWTs (three dot-separated segments); API keys are
+        # opaque ``phn_sk_*`` strings.  A JWT-looking Bearer token belongs to
+        # the OAuth middleware — skip it here even if it arrived without that
+        # middleware setting auth_method (defense-in-depth).
+        if _looks_like_jwt(raw_key):
             return await call_next(request)
 
         # Hash the key for secure transmission to CC

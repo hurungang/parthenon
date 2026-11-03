@@ -1,0 +1,37 @@
+[
+  {
+    "match": "This skill has no tools bound",
+    "response": "Live verification complete: skill confirm-preview-live-223511 was created but the tool result carried the zero-binding warning (no tools bound) - I must bind cc____list_skills to it via update_skill before it can invoke anything."
+  },
+  {
+    "match": "approval_value",
+    "response": "Approval received. Executing the confirmed create now.",
+    "tool_calls": [
+      {
+        "name": "cc__invoke_management_tool",
+        "args": {
+          "tool_name": "create_skill",
+          "args": {
+            "name": "confirm-preview-live-223511",
+            "data": {
+              "description": "Live verification skill (FIX-20261101-223511) - created WITHOUT tools on purpose to trigger the zero-binding warning"
+            }
+          }
+        }
+      }
+    ]
+  },
+  {
+    "match": "create-preview-live",
+    "response": "Presenting the canonical confirmation preview and requesting approval.",
+    "tool_calls": [
+      {
+        "name": "human_intervene",
+        "args": {
+          "intervention_type": "approval",
+          "reason": "**Create Skill: confirm-preview-live-223511**\n\n| Field | Value |\n|-------|-------|\n| Operation | create |\n| Resource Type | skill |\n| Name | confirm-preview-live-223511 |\n| Description | Live verification skill (FIX-20261101-223511) |\n| Tools | (none yet - will bind after creation) |"
+        }
+      }
+    ]
+  }
+]

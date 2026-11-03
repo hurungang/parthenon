@@ -40,6 +40,16 @@ class SkillUpdate(BaseModel):
         return v
 
 
+class SkillToolBindingRead(BaseModel):
+    """A bound tool on a skill (FIX-20261101-223511 visibility)."""
+
+    tool_id: uuid.UUID | None = None
+    name: str
+    original_name: str | None = None
+    server_slug: str | None = None
+    server_name: str | None = None
+
+
 class SkillRead(BaseModel):
     model_config = {"from_attributes": True}
 
@@ -49,6 +59,7 @@ class SkillRead(BaseModel):
     is_active: bool
     is_system: bool = False
     tool_ids: list[uuid.UUID] = []
+    tool_bindings: list[SkillToolBindingRead] = []
     instructions_with_tools: str | None = None
     created_at: datetime
     updated_at: datetime
@@ -56,11 +67,61 @@ class SkillRead(BaseModel):
     @model_validator(mode="before")
     @classmethod
     def populate_tool_ids(cls, data: Any) -> Any:
-        if hasattr(data, "tool_bindings"):
-            bindings = getattr(data, "tool_bindings", None) or []
-            sorted_bindings = sorted(bindings, key=lambda b: b.order)
-            data.tool_ids = [b.tool_id for b in sorted_bindings]
-        return data
+        if not hasattr(data, "tool_bindings") or isinstance(data, dict):
+            return data
+        bindings = getattr(data, "tool_bindings", None) or []
+        sorted_bindings = sorted(bindings, key=lambda b: b.order)
+        tool_ids = [b.tool_id for b in sorted_bindings]
+        # FIX-20261101-223511: expose tool name + owning server so the
+        # Skills UI can show WHAT a skill invokes, not just a count.
+        # Bindings to virtual tools (no mcp_tools row) degrade to the
+        # stringified tool id.
+        tool_bindings = [
+            {
+                # FIX-20261102-062047: the id lets editors pre-select and
+                # resolve bound tools that are not part of general browsing
+                # (e.g. cc tools shown read-only without the cc permission).
+                "tool_id": b.tool_id,
+                "name": (
+                    b.tool.name if getattr(b, "tool", None) is not None else str(b.tool_id)
+                ),
+                "original_name": (
+                    b.tool.original_name if getattr(b, "tool", None) is not None else None
+                ),
+                "server_slug": (
+                    b.tool.server.slug
+                    if getattr(b, "tool", None) is not None
+                    and getattr(b.tool, "server", None) is not None
+                    else None
+                ),
+                "server_name": (
+                    b.tool.server.name
+                    if getattr(b, "tool", None) is not None
+                    and getattr(b.tool, "server", None) is not None
+                    else None
+                ),
+            }
+            for b in sorted_bindings
+        ]
+        # Do NOT set attributes on the ORM instance — tool_bindings is an
+        # instrumented relationship collection and rejects plain dicts.
+        # Build a detached snapshot instead.
+        from types import SimpleNamespace
+
+        snapshot = SimpleNamespace(
+            id=getattr(data, "id", None),
+            name=getattr(data, "name", None),
+            description=getattr(data, "description", None),
+            is_active=getattr(data, "is_active", True),
+            is_system=getattr(data, "is_system", False),
+            instructions=getattr(data, "instructions", None),
+            instructions_with_tools=getattr(data, "instructions_with_tools", None),
+            created_at=getattr(data, "created_at", None),
+            updated_at=getattr(data, "updated_at", None),
+        )
+        snapshot.tool_ids = tool_ids
+        snapshot.tool_bindings = tool_bindings
+        return snapshot
 
 
 class SkillDetailRead(SkillRead):

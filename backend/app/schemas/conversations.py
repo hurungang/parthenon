@@ -60,3 +60,18 @@ class ConversationSessionRead(BaseModel):
 
 class ConversationSessionDetailRead(ConversationSessionRead):
     turns: list[ConversationTurnRead] = []
+
+
+class ConversationSessionPageRead(BaseModel):
+    """Paginated sessions listing — FIX-20261101-120618 Work Item 1.
+
+    ``default_window_days`` mirrors the backend's
+    ``conversation_sessions_default_window_days`` setting so the UI can
+    default its date-range inputs to the configured window.
+    """
+
+    items: list[ConversationSessionRead]
+    total: int
+    page: int
+    page_size: int
+    default_window_days: int

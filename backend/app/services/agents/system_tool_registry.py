@@ -20,8 +20,28 @@ from __future__ import annotations
 import uuid
 from typing import Any
 
+from app.core.resource_types import (
+    RT_AGENT,
+    RT_AGENT_DATA_TYPES,
+    RT_AGENT_SCHEDULES,
+    RT_AGENT_SKILLS,
+    RT_AGENT_SOPS,
+    RT_INTEGRATION_MCP_HUB,
+)
+
 #: Four-underscore separator used in canonical ``server____tool`` names.
 TOOL_SEPARATOR = "____"
+
+#: Server slug of the dedicated Control Center management entity.  Management
+#: tools surface canonically as ``cc____<bare>`` (FIX-20261101-000319);
+#: general tools remain ``system____<bare>``.
+CC_SERVER_SLUG = "cc"
+SYSTEM_SERVER_SLUG = "system"
+
+#: Tool categories.  ``management`` tools belong to the dedicated Control
+#: Center MCP entity (``cc____`` namespace); ``general`` tools stay in the
+#: generic System entity (``system____`` namespace).
+TOOL_CATEGORIES = frozenset({"general", "management"})
 
 
 class SystemTool:
@@ -50,6 +70,18 @@ class SystemTool:
         Short description for the seeded skill.
     skill_instructions:
         Agent-facing instructions for the seeded skill.
+    parity:
+        Optional ``(resource_type, action)`` tuple.  When set, the tool is a
+        *management tool*: an OAuth-authenticated user may only list/call it
+        when their permission scope satisfies this exact pair (the same pair
+        the equivalent REST endpoint enforces via ``require_permission``).
+        Management tools have no delete verb and never carry credentials.
+    category:
+        ``"general"`` (default) or ``"management"``.  Management-category
+        tools surface canonically as ``cc____<bare>`` under the dedicated
+        per-tenant Control Center MCP entity; general tools surface as
+        ``system____<bare>`` under the generic System entity
+        (FIX-20261101-000319).
     """
 
     def __init__(
@@ -63,6 +95,8 @@ class SystemTool:
         skill_name: str | None = None,
         skill_description: str | None = None,
         skill_instructions: str | None = None,
+        parity: tuple[str, str] | None = None,
+        category: str = "general",
     ) -> None:
         if not name or not isinstance(name, str):
             raise ValueError("SystemTool name must be a non-empty string")
@@ -70,6 +104,11 @@ class SystemTool:
             raise ValueError("SystemTool description must be a non-empty string")
         if not cc_endpoint_path:
             raise ValueError("SystemTool cc_endpoint_path must be a non-empty string")
+        if category not in TOOL_CATEGORIES:
+            raise ValueError(
+                f"SystemTool category must be one of {sorted(TOOL_CATEGORIES)}, "
+                f"got '{category}'"
+            )
 
         self.name = name
         self.description = description
@@ -79,6 +118,23 @@ class SystemTool:
         self.skill_name = skill_name
         self.skill_description = skill_description
         self.skill_instructions = skill_instructions
+        self.parity = parity
+        self.category = category
+
+    @property
+    def is_management_tool(self) -> bool:
+        """Return ``True`` when this tool carries a permission parity mapping."""
+        return self.parity is not None
+
+    @property
+    def is_cc_tool(self) -> bool:
+        """Return ``True`` when this tool belongs to the ``cc____`` namespace."""
+        return self.category == "management"
+
+    @property
+    def server_slug(self) -> str:
+        """Server slug of the entity this tool belongs to (``cc`` or ``system``)."""
+        return CC_SERVER_SLUG if self.category == "management" else SYSTEM_SERVER_SLUG
 
     @property
     def openai_schema(self) -> dict[str, Any]:
@@ -94,8 +150,8 @@ class SystemTool:
 
     @property
     def canonical_name(self) -> str:
-        """Full canonical name in ``system____<name>`` format."""
-        return f"system{TOOL_SEPARATOR}{self.name}"
+        """Full canonical name — category-aware ``cc____<name>`` / ``system____<name>``."""
+        return f"{self.server_slug}{TOOL_SEPARATOR}{self.name}"
 
 
 class SystemToolRegistry:
@@ -173,6 +229,10 @@ class SystemToolRegistry:
     def get_mcp_hub_entries(cls) -> list[dict[str, Any]]:
         """Return data dicts for building McpToolRead objects and DB seeding.
 
+        GENERAL tools only — management-category tools are NOT auto-seeded
+        into the generic System entity; they belong to the dedicated
+        Control Center entity (see :meth:`get_cc_mcp_hub_entries`).
+
         Each dict contains ``id``, ``name`` (canonical ``system____<bare>``),
         ``original_name``, ``description``, and ``input_schema``.
         Consumers use these to build framework-specific objects without
@@ -187,6 +247,28 @@ class SystemToolRegistry:
                 "input_schema": tool.parameters,
             }
             for tool in cls._tools.values()
+            if tool.category == "general"
+        ]
+
+    @classmethod
+    def get_cc_mcp_hub_entries(cls) -> list[dict[str, Any]]:
+        """Return data dicts for the Control Center MCP entity's tools.
+
+        Management-category tools only (the 36 management execution tools +
+        the 4 management meta tools), canonical ``cc____<bare>`` names.  Used
+        by the assistant seeder to provision the per-tenant "Control Center"
+        McpServer + McpTool rows (FIX-20261101-000319).
+        """
+        return [
+            {
+                "id": tool.mcp_hub_id,
+                "name": f"{CC_SERVER_SLUG}{TOOL_SEPARATOR}{tool.name}",
+                "original_name": tool.name,
+                "description": tool.description,
+                "input_schema": tool.parameters,
+            }
+            for tool in cls._tools.values()
+            if tool.category == "management"
         ]
 
     @classmethod
@@ -217,22 +299,79 @@ class SystemToolRegistry:
             if tool.skill_name is not None
         ]
 
+    @classmethod
+    def is_management_tool(cls, name: str) -> bool:
+        """Return ``True`` when *name* refers to a registered management tool.
+
+        Accepts the bare name, the canonical ``cc____<bare>`` form, or the
+        legacy ``system____<bare>`` form.
+        """
+        bare = name
+        for prefix in (
+            CC_SERVER_SLUG + TOOL_SEPARATOR,
+            SYSTEM_SERVER_SLUG + TOOL_SEPARATOR,
+        ):
+            if name.startswith(prefix):
+                bare = name[len(prefix):]
+                break
+        tool = cls._tools.get(bare)
+        return tool is not None and tool.is_management_tool
+
+    @classmethod
+    def is_cc_tool(cls, name: str) -> bool:
+        """Return ``True`` when *name* refers to a ``cc____``-namespaced tool.
+
+        Only management-category tools qualify; a ``cc____`` prefix over a
+        general tool (or unknown name) is ``False``.
+        """
+        prefix = CC_SERVER_SLUG + TOOL_SEPARATOR
+        if name.startswith(prefix):
+            tool = cls._tools.get(name[len(prefix):])
+            return tool is not None and tool.category == "management"
+        return False
+
+    @classmethod
+    def get_parity_map(cls) -> dict[str, tuple[str, str]]:
+        """Return ``{bare_name: (resource_type, action)}`` for management tools.
+
+        This is the single source of truth for the management-tool →
+        permission parity: every entry equals the matching REST endpoint's
+        ``require_permission`` arguments (verified against skills.py, sops.py,
+        agents.py, scheduling.py, data_types.py, mcp_hub.py).  No delete verb
+        exists.
+        """
+        return {
+            name: tool.parity
+            for name, tool in cls._tools.items()
+            if tool.parity is not None
+        }
+
+    @classmethod
+    def get_management_tool_names(cls) -> frozenset[str]:
+        """Return the bare names of every registered management tool."""
+        return frozenset(cls.get_parity_map().keys())
+
     # ── Name parsing & routing helpers ──────────────────────────────────
 
     @classmethod
     def is_system_tool(cls, name: str) -> bool:
-        """Return ``True`` if *name* refers to a registered system tool.
+        """Return ``True`` if *name* refers to a registered built-in tool.
 
-        Accepts all supported naming formats:
-        - Canonical ``system____save_result``
-        - Bare ``save_result``
+        Accepts all supported naming formats (both namespaces — used for
+        ROUTING decisions, not for canonical display):
+        - Canonical ``system____save_result`` / ``cc____create_skill``
+        - Bare ``save_result`` / ``create_skill``
         - Old display ``system/save_result``
         - Old sanitised ``system_save_result``
         """
         if name in cls._tools:
             return True
-        if name.startswith("system" + TOOL_SEPARATOR):
-            return name[len("system" + TOOL_SEPARATOR):] in cls._tools
+        for prefix in (
+            SYSTEM_SERVER_SLUG + TOOL_SEPARATOR,
+            CC_SERVER_SLUG + TOOL_SEPARATOR,
+        ):
+            if name.startswith(prefix):
+                return name[len(prefix):] in cls._tools
         if name.startswith("system/"):
             return name[len("system/"):] in cls._tools
         if name.startswith("system_"):
@@ -243,27 +382,34 @@ class SystemToolRegistry:
     def parse_name(cls, name: str) -> tuple[str, str] | None:
         """Parse a tool name into ``(server, bare_tool)``.
 
-        Returns ``("system", "<bare_name>")`` if the name refers to a
-        registered system tool in any supported format, or ``None`` otherwise.
+        Returns the CATEGORY-AWARE server slug (``"cc"`` for management
+        tools, ``"system"`` for general tools) if the name refers to a
+        registered built-in tool in any supported format, or ``None``
+        otherwise.
         """
         if TOOL_SEPARATOR in name:
             parts = name.split(TOOL_SEPARATOR)
-            if len(parts) == 2 and parts[0] == "system":
-                return ("system", parts[1])
+            if len(parts) == 2 and parts[0] in (SYSTEM_SERVER_SLUG, CC_SERVER_SLUG):
+                if parts[1] in cls._tools:
+                    # Category-aware: a system____ prefix over a management
+                    # tool canonicalizes to cc (legacy tolerance).
+                    tool = cls._tools[parts[1]]
+                    return (tool.server_slug, parts[1])
         if name in cls._tools:
-            return ("system", name)
+            return (cls._tools[name].server_slug, name)
         return None
 
     @classmethod
     def canonicalize_name(cls, name: str) -> str | None:
-        """Convert *name* to canonical ``system____<bare>`` format.
+        """Convert *name* to its canonical category-aware ``server____<bare>`` form.
 
-        Returns ``None`` for names that do not match any registered system tool.
+        Management tools → ``cc____<bare>``; general tools → ``system____<bare>``.
+        Returns ``None`` for names that do not match any registered tool.
         """
         parsed = cls.parse_name(name)
         if parsed is None:
             return None
-        return f"system{TOOL_SEPARATOR}{parsed[1]}"
+        return f"{parsed[0]}{TOOL_SEPARATOR}{parsed[1]}"
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -700,3 +846,464 @@ SystemToolRegistry.register(SystemTool(
     cc_endpoint_path="/api/v1/internal/system-tools/get-execution-log",
     mcp_hub_id=uuid.UUID("00000000-0000-0000-0000-000000000018"),
 ))
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Management tools — Control Center Assistant (Agents-menu management)
+# ═══════════════════════════════════════════════════════════════════════════
+#
+# These tools expose the Agents-menu management operations (create / update /
+# read) as OAuth-authenticated MCP tools on the Communication Hub MCP protocol
+# server.  Each tool carries its **parity** ``(resource_type, action)`` — the
+# exact pair the equivalent REST endpoint enforces via ``require_permission``
+# (verified against skills.py, sops.py, agents.py, scheduling.py,
+# data_types.py, mcp_hub.py).  No delete verb is registered.
+#
+# The single source of truth for the parity map is ``SystemToolRegistry
+# .get_parity_map()`` — the tool registry is the only place tool names, UUIDs,
+# CC endpoint paths, and parity permissions are declared.
+#
+# UUID allocation (continue the reserved system-tool block, decimal):
+#   00000000-0000-0000-0000-000000000019 .. 00000000-0000-0000-0000-000000000054
+
+#: resource spec → (singular, plural, resource_type, create_action, update_action)
+_MANAGEMENT_RESOURCES: tuple[tuple[str, str, str, str, str], ...] = (
+    ("skill", "skills", RT_AGENT_SKILLS, "create", "update"),
+    ("sop", "sops", RT_AGENT_SOPS, "manage", "manage"),
+    ("agent_type", "agent_types", RT_AGENT, "create", "update"),
+    ("agent_role", "agent_roles", RT_AGENT, "create", "update"),
+    ("agent_identity", "agent_identities", RT_AGENT, "create", "update"),
+    ("model_config", "model_configs", RT_AGENT, "create", "update"),
+    ("schedule", "schedules", RT_AGENT_SCHEDULES, "create", "update"),
+    ("data_type", "data_types", RT_AGENT_DATA_TYPES, "create", "update"),
+    ("mcp_server", "mcp_servers", RT_INTEGRATION_MCP_HUB, "create", "update"),
+)
+
+_management_uuid_counter = 19  # continue after get_execution_log (018)
+
+
+def _next_management_uuid() -> uuid.UUID:
+    global _management_uuid_counter
+    value = uuid.UUID(f"00000000-0000-0000-0000-{_management_uuid_counter:012d}")
+    _management_uuid_counter += 1
+    return value
+
+
+def _register_management_tools() -> None:
+    """Register the four management verbs per resource family (create/update/list/get)."""
+    for singular, plural, resource_type, create_action, update_action in _MANAGEMENT_RESOURCES:
+        display = singular.replace("_", " ")
+
+        SystemToolRegistry.register(SystemTool(
+            name=f"create_{singular}",
+            description=(
+                f"Create a new {display}. Performs the same action as the "
+                f"Control Center management UI. Requires {resource_type}:{create_action} permission."
+            ),
+            parameters={
+                "type": "object",
+                "properties": {
+                    "name": {"type": "string", "description": f"Name for the new {display} (must be unique within the workspace)"},
+                    "data": {"type": "object", "description": f"Field values for the new {display}", "additionalProperties": True},
+                },
+                "required": ["name"],
+            },
+            cc_endpoint_path=f"/api/v1/internal/management-tools/create_{singular}",
+            mcp_hub_id=_next_management_uuid(),
+            parity=(resource_type, create_action),
+            category="management",
+        ))
+
+        SystemToolRegistry.register(SystemTool(
+            name=f"update_{singular}",
+            description=(
+                f"Update an existing {display} by id. Performs the same action "
+                f"as the Control Center management UI. Requires {resource_type}:{update_action} permission."
+            ),
+            parameters={
+                "type": "object",
+                "properties": {
+                    "id": {"type": "string", "description": f"ID of the {display} to update"},
+                    "name": {"type": "string", "description": f"New name for the {display} (optional)"},
+                    "data": {"type": "object", "description": f"Field values to update", "additionalProperties": True},
+                },
+                "required": ["id"],
+            },
+            cc_endpoint_path=f"/api/v1/internal/management-tools/update_{singular}",
+            mcp_hub_id=_next_management_uuid(),
+            parity=(resource_type, update_action),
+            category="management",
+        ))
+
+        SystemToolRegistry.register(SystemTool(
+            name=f"list_{plural}",
+            description=(
+                f"List {plural.replace('_', ' ')} in the current workspace. "
+                f"Requires {resource_type}:read permission."
+            ),
+            parameters={
+                "type": "object",
+                "properties": {
+                    "limit": {"type": "integer", "description": "Maximum number of records to return (default 50)"},
+                    "offset": {"type": "integer", "description": "Pagination offset (default 0)"},
+                },
+                "required": [],
+            },
+            cc_endpoint_path=f"/api/v1/internal/management-tools/list_{plural}",
+            mcp_hub_id=_next_management_uuid(),
+            parity=(resource_type, "read"),
+            category="management",
+        ))
+
+        SystemToolRegistry.register(SystemTool(
+            name=f"get_{singular}",
+            description=(
+                f"Read a single {display} by id. Requires {resource_type}:read permission."
+            ),
+            parameters={
+                "type": "object",
+                "properties": {
+                    "id": {"type": "string", "description": f"ID of the {display} to read"},
+                    "name": {"type": "string", "description": f"Name of the {display} to read (alternative to id)"},
+                },
+                "required": [],
+            },
+            cc_endpoint_path=f"/api/v1/internal/management-tools/get_{singular}",
+            mcp_hub_id=_next_management_uuid(),
+            parity=(resource_type, "read"),
+            category="management",
+        ))
+
+
+_register_management_tools()
+
+
+# ── Agent-type binding schema enrichment (FIX-20261031-071721) ──────────────
+#
+# create_agent_type / update_agent_type accept optional ``skill_ids`` and
+# ``sop_ids`` (id or name, tenant-scoped) in their ``data`` object to
+# associate skills/SOPs with the agent type.  Semantics: ADDITIVE MERGE —
+# provided entries are added; existing bindings are never removed (no delete
+# verb in this toolset); re-binding an existing pair is an idempotent no-op.
+# Mutating the registered tools in place keeps their stable mcp_hub_ids and
+# parity pairs untouched.
+
+
+def _enrich_agent_type_binding_schemas() -> None:
+    binding_fields: dict[str, Any] = {
+        "skill_ids": {
+            "type": "array",
+            "items": {"type": "string"},
+            "description": "Skill ids or names to associate with the agent "
+            "type (tenant-scoped; unknown value → 404)",
+        },
+        "sop_ids": {
+            "type": "array",
+            "items": {"type": "string"},
+            "description": "SOP ids or names to associate with the agent "
+            "type (tenant-scoped; unknown value → 404)",
+        },
+    }
+    for tool_name, action_verb in (
+        ("create_agent_type", "created"),
+        ("update_agent_type", "updated"),
+    ):
+        tool = SystemToolRegistry.get(tool_name)
+        if tool is None:
+            continue
+        data_prop = tool.parameters.setdefault("properties", {}).setdefault(
+            "data", {"type": "object", "additionalProperties": True}
+        )
+        data_prop.setdefault("properties", {}).update(binding_fields)
+        tool.description = (
+            tool.description
+            + " The data object may include skill_ids and/or sop_ids (ids or "
+            "names) to ASSOCIATE skills/SOPs with the agent type. Bindings are "
+            "additive: provided entries are added to the existing set, existing "
+            "bindings are never removed, and re-binding an already-associated "
+            "skill/SOP is an idempotent no-op. An agent type should always have "
+            f"at least one skill/SOP associated (or an assigned role) by the time it is "
+            f"{action_verb}, otherwise it cannot act."
+        )
+
+
+_enrich_agent_type_binding_schemas()
+
+
+# ── Agent-role grant schema enrichment (FIX-20261031-131030) ────────────────
+#
+# create_agent_role / update_agent_role accept optional ``skill_ids`` and
+# ``sop_ids`` (id or name, tenant-scoped) in their ``data`` object to GRANT
+# skills/SOPs to the role.  Role-based agents resolve their runtime tool
+# access from the role's grants, so granting the skill to the agent's role is
+# what makes it accessible at runtime.  Same additive/idempotent semantics as
+# the agent-type bindings.
+
+
+def _enrich_agent_role_grant_schemas() -> None:
+    grant_fields: dict[str, Any] = {
+        "skill_ids": {
+            "type": "array",
+            "items": {"type": "string"},
+            "description": "Skill ids or names to GRANT to the role "
+            "(tenant-scoped; unknown value → 404)",
+        },
+        "sop_ids": {
+            "type": "array",
+            "items": {"type": "string"},
+            "description": "SOP ids or names to GRANT to the role "
+            "(tenant-scoped; unknown value → 404)",
+        },
+    }
+    for tool_name in ("create_agent_role", "update_agent_role"):
+        tool = SystemToolRegistry.get(tool_name)
+        if tool is None:
+            continue
+        data_prop = tool.parameters.setdefault("properties", {}).setdefault(
+            "data", {"type": "object", "additionalProperties": True}
+        )
+        data_prop.setdefault("properties", {}).update(grant_fields)
+        tool.description = (
+            tool.description
+            + " The data object may include skill_ids and/or sop_ids (ids or "
+            "names) to GRANT skills/SOPs to the role. Role-based agents get "
+            "their runtime tool access from the role's grants, so every "
+            "skill/SOP the agent needs MUST be granted to its role. Grants "
+            "are additive: provided entries are added to the existing set, "
+            "existing grants are never removed, and re-granting an "
+            "already-granted skill/SOP is an idempotent no-op."
+        )
+
+
+_enrich_agent_role_grant_schemas()
+
+
+# ── Skill ↔ tool binding schema enrichment (FIX-20261101-000319) ────────────
+#
+# create_skill / update_skill accept optional ``tool_ids`` and ``tool_names``
+# (canonical ``server____tool`` names — including ``cc____`` Control Center
+# tools — or McpTool UUIDs; tenant-scoped) to associate MCP tools with the
+# skill via ``SkillToolBinding`` rows.  Same additive/idempotent semantics as
+# the agent-type/role bindings.
+
+
+def _enrich_skill_tool_binding_schemas() -> None:
+    binding_fields: dict[str, Any] = {
+        "tool_ids": {
+            "type": "array",
+            "items": {"type": "string"},
+            "description": "MCP tool UUIDs to bind to the skill "
+            "(tenant-scoped; unknown value → 404)",
+        },
+        "tool_names": {
+            "type": "array",
+            "items": {"type": "string"},
+            "description": "Canonical server____tool names to bind to the "
+            "skill (e.g. 'supabase____run_sql', 'cc____create_skill'); "
+            "tenant-scoped; unknown name → 404. Discover a server's tools "
+            "with get_mcp_server first.",
+        },
+    }
+    for tool_name, action_verb in (
+        ("create_skill", "created"),
+        ("update_skill", "updated"),
+    ):
+        tool = SystemToolRegistry.get(tool_name)
+        if tool is None:
+            continue
+        data_prop = tool.parameters.setdefault("properties", {}).setdefault(
+            "data", {"type": "object", "additionalProperties": True}
+        )
+        data_prop.setdefault("properties", {}).update(binding_fields)
+        tool.description = (
+            tool.description
+            + " The data object may include tool_ids and/or tool_names "
+            "(canonical server____tool names or UUIDs) to BIND MCP tools to "
+            "the skill — a skill can only invoke tools BOUND to it. Bindings "
+            "are additive: provided tools are added to the existing set, "
+            "existing bindings are never removed, and re-binding an "
+            "already-bound tool is an idempotent no-op. Discover an MCP "
+            "server's synced tools with get_mcp_server (its 'tools' list) "
+            "before binding. cc____ tools are Control Center management "
+            "capabilities, distinct from general system____ tools. Skills "
+            "without at least one bound tool cannot do anything. An unknown "
+            "tool fails the whole call with 404 (no partial write)."
+        )
+
+
+_enrich_skill_tool_binding_schemas()
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Assistant meta tools — progressive tool disclosure (O(1) context)
+# ═══════════════════════════════════════════════════════════════════════════
+#
+# Instead of loading all ~36 management tool schemas into every assistant
+# turn (~large payload), the conversational assistant context carries ONLY
+# these constant meta tools:
+#
+#   invoke_management_tool      — dispatches to ANY registered management
+#                                 tool through the existing management-tools
+#                                 dispatch (permission parity re-enforced per
+#                                 invocation against the signed-in user).
+#   get_management_tool_schema  — full OpenAI schema for one tool, on demand.
+#   list_management_tools       — cheap catalog (name + description +
+#                                 permission requirement).
+#   search_assistant_knowledge  — keyword search over the platform knowledge
+#                                 corpus (app.services.agents.assistant_knowledge).
+#
+# The management execution tools stay registered and bound (they are what
+# the wrapper dispatches to internally and what the parity map / resolve
+# endpoint / external MCP clients use).  Meta tools carry NO parity — they
+# never appear in the permission parity map.
+#
+# UUID allocation (continue the reserved system-tool block, decimal):
+#   00000000-0000-0000-0000-000000000055  → invoke_management_tool
+#   00000000-0000-0000-0000-000000000056  → get_management_tool_schema
+#   00000000-0000-0000-0000-000000000057  → list_management_tools
+#   00000000-0000-0000-0000-000000000058  → search_assistant_knowledge
+
+_META_MANAGEMENT_TOOL_NAMES: tuple[str, ...] = (
+    "invoke_management_tool",
+    "get_management_tool_schema",
+    "list_management_tools",
+    "search_assistant_knowledge",
+    # FIX-20261031-133253: the assistant MUST be able to pause for human
+    # approval before any create/update — human_intervene is the 5th
+    # always-loaded meta definition. It carries no parity (not a management
+    # action) and routes to the existing CC /internal/system-tools/
+    # human-intervene endpoint via the AR→CH system-tool path; the AR
+    # wrapper already maps it to the LangGraph interrupt() HITL flow.
+    "human_intervene",
+)
+
+_META_UUIDS: dict[str, str] = {
+    "invoke_management_tool": "00000000-0000-0000-0000-000000000055",
+    "get_management_tool_schema": "00000000-0000-0000-0000-000000000056",
+    "list_management_tools": "00000000-0000-0000-0000-000000000057",
+    "search_assistant_knowledge": "00000000-0000-0000-0000-000000000058",
+}
+
+SystemToolRegistry.register(SystemTool(
+    name="invoke_management_tool",
+    description=(
+        "Invoke any registered Control Center management tool by name — e.g. "
+        "create_skill, update_agent_type, list_model_configs. Pass the target "
+        "tool_name and its args object (each tool's exact argument schema is "
+        "available via get_management_tool_schema). Every invocation is "
+        "authorized against the signed-in user's own permissions; deletion is "
+        "not supported."
+    ),
+    parameters={
+        "type": "object",
+        "properties": {
+            "tool_name": {
+                "type": "string",
+                "description": "Bare name of the management tool to invoke "
+                "(see list_management_tools)",
+            },
+            "args": {
+                "type": "object",
+                "description": "Argument object for the target tool (see "
+                "get_management_tool_schema for its exact schema)",
+                "additionalProperties": True,
+            },
+        },
+        "required": ["tool_name", "args"],
+    },
+    cc_endpoint_path="/api/v1/internal/management-tools/invoke_management_tool",
+    mcp_hub_id=uuid.UUID(_META_UUIDS["invoke_management_tool"]),
+    category="management",
+    skill_name="invoke-management-tool",
+    skill_description=(
+        "Progressive-disclosure wrapper: executes any Control Center "
+        "management tool by name with per-call permission parity."
+    ),
+    skill_instructions=(
+        "Use this skill to run any Agents-menu management operation without "
+        "loading every tool schema: pass the target management tool name and "
+        "its arguments. Discover available tools with list_management_tools "
+        "and inspect exact argument schemas with get_management_tool_schema "
+        "before invoking an unfamiliar tool."
+    ),
+))
+
+SystemToolRegistry.register(SystemTool(
+    name="get_management_tool_schema",
+    description=(
+        "Return the full OpenAI function-calling schema (exact parameters) "
+        "for one registered management tool, e.g. 'create_skill'. Call this "
+        "before invoking an unfamiliar tool via invoke_management_tool."
+    ),
+    parameters={
+        "type": "object",
+        "properties": {
+            "tool_name": {
+                "type": "string",
+                "description": "Bare name of the management tool (e.g. 'update_sop')",
+            },
+        },
+        "required": ["tool_name"],
+    },
+    cc_endpoint_path="/api/v1/internal/management-tools/get_management_tool_schema",
+    mcp_hub_id=uuid.UUID(_META_UUIDS["get_management_tool_schema"]),
+    category="management",
+))
+
+SystemToolRegistry.register(SystemTool(
+    name="list_management_tools",
+    description=(
+        "List every available Control Center management tool with a one-line "
+        "description and the permission it requires "
+        "(resource_type:action). Cheap catalog — use it to discover which "
+        "management actions exist before invoking one."
+    ),
+    parameters={"type": "object", "properties": {}},
+    cc_endpoint_path="/api/v1/internal/management-tools/list_management_tools",
+    mcp_hub_id=uuid.UUID(_META_UUIDS["list_management_tools"]),
+    category="management",
+))
+
+SystemToolRegistry.register(SystemTool(
+    name="search_assistant_knowledge",
+    description=(
+        "Search the Parthenon platform knowledge base for domain rules "
+        "(agent-type composition, roles/identities, model availability, "
+        "input/output types, MCP hub, naming rules, boundaries). Use this "
+        "before performing management actions whose platform rules you are "
+        "unsure about."
+    ),
+    parameters={
+        "type": "object",
+        "properties": {
+            "query": {
+                "type": "string",
+                "description": "Natural-language query, e.g. 'how do I attach "
+                "MCP tools to an agent type'",
+            },
+            "top_k": {
+                "type": "integer",
+                "description": "Maximum number of rule entries to return (default 3)",
+            },
+        },
+        "required": ["query"],
+    },
+    cc_endpoint_path="/api/v1/internal/management-tools/search_assistant_knowledge",
+    mcp_hub_id=uuid.UUID(_META_UUIDS["search_assistant_knowledge"]),
+    category="management",
+))
+
+# ── Meta-tool registry accessor ─────────────────────────────────────────────
+
+
+def _get_meta_tool_names(cls: type[SystemToolRegistry]) -> frozenset[str]:
+    """Return the bare names of the assistant meta (progressive-disclosure) tools.
+
+    These are the CONSTANT, small set of tool definitions the conversational
+    assistant carries in context instead of all management execution schemas.
+    They carry no parity mapping and never appear in ``get_parity_map()``.
+    """
+    return frozenset(_META_MANAGEMENT_TOOL_NAMES)
+
+
+SystemToolRegistry.get_meta_tool_names = classmethod(_get_meta_tool_names)  # type: ignore[attr-defined]

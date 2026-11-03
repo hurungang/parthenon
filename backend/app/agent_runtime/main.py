@@ -12,6 +12,7 @@ Entry point: uvicorn app.agent_runtime.main:app
 from __future__ import annotations
 
 import logging
+import os
 import sys
 from pathlib import Path
 
@@ -119,23 +120,29 @@ async def startup_event() -> None:
 async def _load_certificate() -> None:
     """Load or bootstrap the agent-instance certificate from Control Center.
 
-    Phase 2 (task 2.2) wires this to the /internal/bootstrap endpoint.
-    At Phase 1, the manager loads an existing cert from AGENT_CERT_PATH if present,
-    and logs a warning when running without a certificate (dev/test mode).
+    Fails fast at startup (FIX-20261031-131030): a missing or unloadable
+    certificate aborts startup with a clear, actionable message — mirroring
+    ``_validate_control_center_reachable`` — instead of silently running
+    without mTLS and failing lazily at first use.
     """
+    from app.core.cert_paths import CertValidationError, resolve_cert_path
+    from app.agent_runtime.certificate_manager import CertificateManager, CertificateLoadError
+
+    manager = CertificateManager()
     try:
-        from app.agent_runtime.certificate_manager import CertificateManager, CertificateLoadError
-        manager = CertificateManager()
         await manager.load_certificate()
-        # Store globally so routes and the data client can access it
-        app.state.certificate_manager = manager
-        logger.info("Agent Runtime certificate loaded successfully")
-    except Exception as exc:
-        logger.exception(
-            "Agent Runtime certificate not loaded — running without mTLS "
-            "(acceptable in dev/test; Phase 2 wires full bootstrap)"
-        )
-        app.state.certificate_manager = None
+    except (CertificateLoadError, CertValidationError, Exception) as exc:  # noqa: BLE001
+        cert_path = resolve_cert_path(os.environ.get("AGENT_CERT_PATH"))
+        raise RuntimeError(
+            "Agent Runtime startup FAILED: agent certificate could not be "
+            f"loaded or bootstrapped (resolved cert path: {cert_path}). "
+            "Ensure AGENT_CERT_PATH, AGENT_KEY_PATH, CA_CERT_PATH, "
+            "CONTROL_CENTER_URL and SERVICE_BOOTSTRAP_KEY are set, Control "
+            f"Center is reachable, and the certificate files exist. Error: {exc}"
+        ) from exc
+    # Store globally so routes and the data client can access it
+    app.state.certificate_manager = manager
+    logger.info("Agent Runtime certificate loaded successfully")
 
 
 async def _start_certificate_renewal() -> None:

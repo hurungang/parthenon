@@ -32,12 +32,15 @@ logger = logging.getLogger(__name__)
 SopRouter = APIRouter(prefix="/sops", tags=["SOPs"])
 
 
-def _require_workflow_model_id() -> str:
-    model_id = get_workflow_generation_model_id()
+async def _require_workflow_model_id(db: DbSession) -> str:
+    model_id = await get_workflow_generation_model_id(db)
     if not model_id:
         raise HTTPException(
             status_code=422,
-            detail="Workflow generation model is not configured. Configure it in system settings.",
+            detail=(
+                "Workflow generation model is not configured for this workspace. "
+                "Configure it in settings."
+            ),
         )
     return model_id
 
@@ -117,7 +120,7 @@ async def generate_sop_workflow(
     if not body.steps:
         raise HTTPException(status_code=422, detail="Add at least one SOP step to generate workflow")
 
-    model_id = _require_workflow_model_id()
+    model_id = await _require_workflow_model_id(db)
     try:
         await resolve_model_config_for_generation(model_id, db)
 
@@ -181,7 +184,7 @@ async def preview_sop_workflow(
     db: DbSession,
     _: dict = Depends(require_permission(RT_AGENT_SOPS, "read")),
 ) -> SopWorkflowPreviewResponse:
-    model_id = _require_workflow_model_id()
+    model_id = await _require_workflow_model_id(db)
     try:
         await resolve_model_config_for_generation(model_id, db)
     except Exception as exc:

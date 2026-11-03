@@ -34,10 +34,11 @@ flowchart TB
 
 ## Reserved Namespaces
 
-The `system` and `decision` server names are reserved namespaces (`RESERVED_SERVER_NAMES`) and are tenant-neutral in the wire format but resolved within the caller's tenant:
+The `system`, `decision`, and `cc` server names are reserved namespaces (`RESERVED_SERVER_NAMES`) and are tenant-neutral in the wire format but resolved within the caller's tenant:
 
 - **`system____*`** — platform system tools (`save_data`, `get_data`, `get_output`, `query_result`, `send_notification`, `get_recipient_group`, …), routed to CC internal endpoints.
 - **`decision____*`** — decision tools. These are **virtual bindings with no `mcp_tools` rows**: they are registered via skill bindings against the tenant's configured decision provider. In AR, the tool-routing layer classifies `decision____` names before MCP proxying and dispatches them to the decision-tool service, which resolves data types and execution strictly within the calling tenant (exact `tenant_id` match; the old `IS NULL OR own` shared-slot pattern is removed). Decision-provider vendor differences are abstracted behind the Control Center multi-provider client factory, so provider backends are selected per resolved tenant, not hard-wired. Decision tools appear in `tools/list` and the skill-editor tool picker alongside system tools as `decision____<name>`; skills themselves are unchanged by this pathway. See [Decision Tools Architecture](../decision-tools/architecture.md).
+- **`cc____*`** — Control Center management and meta tools (`create_*` / `update_*` / `list_*` / `get_*`), hosted on a dedicated **per-tenant Control Center entity** rather than the System entity, so management capability is granted independently of general system tools. The entity is system-managed (seeder-only writer, immutable, sessionless) and its visibility is gated by `integration::control_center`; invocation is gated by tool grants plus per-tool permission parity. See [Control Center Architecture](../control-center/architecture.md).
 
 ## A2A Delegation Naming
 

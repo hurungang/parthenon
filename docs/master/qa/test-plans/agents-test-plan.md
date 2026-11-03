@@ -132,6 +132,33 @@ Covers the agent system tools for intermediate data persistence (`save_data`), n
 
 ---
 
+### 7. Optimized Plan Tab — Failure Visibility & Retire States
+
+**What is tested:**
+- A plan in `needs_feedback` renders its status distinctly, shows the persisted failure reason, and prompts the operator to steer the next attempt via feedback
+- The failure reason is read from the plan's `error` field (already served by the API) and rendered with i18n-wrapped text
+- The failure reason is persisted server-side for a failed plan, so it survives a tab reload
+- A non-ready (`failed` / `needs_feedback`) plan never promotes scripts into serving artifacts
+- Retire with nothing active (plan already `retired`) shows a clear "nothing to retire" state and disables the retire action — no request is issued
+- Retire invalidates the whole agent-type query scope so the launch/Run Agent action re-gates immediately (cache-refresh regression, no page reload)
+
+**Acceptance criteria:**
+- `needs_feedback` shows both the status and the human-readable failure reason; the steer prompt is present
+- Empty / very long / unicode reasons render safely (no crash, no layout break)
+- Retire on an already-retired plan issues no API call and the retire control is disabled
+- After a successful retire, dependent queries refresh without a manual reload
+
+**Test files:**
+- [backend/tests/test_optimized_plan.py](../../../../backend/tests/test_optimized_plan.py) — non-ready plan promotes no scripts; `error` persisted on a failed plan (`mark_failed`); self-reflection read surfaces (`get_scripts`, `get_execution_log`, `get_optimized_implementation_plan`); retire endpoint marks rows retired without deleting and stops serving
+- [frontend/src/__tests__/AgentOptimizedPlanTab.test.tsx](../../../../frontend/src/__tests__/AgentOptimizedPlanTab.test.tsx) — `needs_feedback` status + failure reason + steer prompt; "nothing to retire" state with retire disabled and no request; retire query-scope invalidation
+
+**Notes:**
+- Mandatory self-reflection ordering (`get_scripts` → `get_execution_log` → `get_optimized_implementation_plan` before authoring, skip-when-healthy) is enforced in the optimization mission prompt; the three read surfaces each have backend coverage, but the literal ordering is not asserted by a test.
+- The "nothing to retire" empty state is component-level only — the Optimized Plan tab lives inside a nested agent-type dialog flow, so there is no dedicated E2E spec.
+- Semantic tool-error detection and the fallback/repair/re-optimization reactions were deferred by product decision; no test claims them.
+
+---
+
 ## Edge Cases & Risks
 
 - **Unbounded query risk**: Missing `get_data` filter guard may trigger full-table scans — validated by guardrail tests
@@ -156,3 +183,4 @@ All three tools (`save_data`, `get_data`, `get_output`) use the **Agent Runtime 
 | Change | Description | Added |
 |--------|-------------|-------|
 | agent-save-data-get-tools | System tools for intermediate data persistence, named data retrieval, and output history query; legacy save_result removal; Agent Outputs Query UI | 2026-07-03 |
+| sandboxed-scripting-follow-ups | Optimized Plan tab failure visibility (`error` on `needs_feedback`), "nothing to retire" empty state, retire cache-refresh regression, mandatory self-reflection ordering (prompt-enforced) | 2026-11-03 |

@@ -15,7 +15,7 @@ from app.api.v1.mcp_hub import (
 from app.core.resource_types import RT_AGENT_SKILLS
 from app.core.tenant_context import get_tenant_context
 from app.db.session import DbSession
-from app.db.models.mcp_hub import McpTool
+from app.db.models.mcp_hub import McpTool, McpServer
 from app.db.models.skills import Skill, SkillToolBinding
 from app.schemas.skills import SkillCreate, SkillDetailRead, SkillRead, SkillUpdate
 from app.db.models.agents import AgentRoleSkill
@@ -53,7 +53,10 @@ def _get_system_tool_record(tool_id: uuid.UUID) -> _ToolRecord | None:
     Data is derived from SystemToolRegistry — no hardcoded tool data here.
     """
     from app.services.agents.system_tool_registry import SystemToolRegistry
-    for entry in SystemToolRegistry.get_mcp_hub_entries():
+    for entry in (
+        SystemToolRegistry.get_mcp_hub_entries()
+        + SystemToolRegistry.get_cc_mcp_hub_entries()
+    ):
         if entry["id"] == tool_id:
             return _ToolRecord(
                 name=entry["name"],
@@ -184,16 +187,23 @@ async def _build_skill_detail_read(
 
 
 _SKILL_LOAD_OPTIONS = [
-    selectinload(Skill.tool_bindings).selectinload(SkillToolBinding.tool)
+    # FIX-20261101-223511: eager-load the tool AND its owning server so
+    # SkillRead.tool_bindings can expose tool name + server slug/name.
+    selectinload(Skill.tool_bindings)
+    .selectinload(SkillToolBinding.tool)
+    .selectinload(McpTool.server)
 ]
 
 
-def _require_workflow_model_id() -> str:
-    model_id = get_workflow_generation_model_id()
+async def _require_workflow_model_id(db: DbSession) -> str:
+    model_id = await get_workflow_generation_model_id(db)
     if not model_id:
         raise HTTPException(
             status_code=422,
-            detail="Workflow generation model is not configured. Configure it in system settings.",
+            detail=(
+                "Workflow generation model is not configured for this workspace. "
+                "Configure it in settings."
+            ),
         )
     return model_id
 
@@ -350,7 +360,7 @@ async def generate_skill_workflow(
     if not body.selected_tools:
         raise HTTPException(status_code=422, detail="Select at least one tool to generate workflow")
 
-    model_id = _require_workflow_model_id()
+    model_id = await _require_workflow_model_id(db)
     try:
         # Ensure the selected model points to a valid configured provider.
         await resolve_model_config_for_generation(model_id, db)
@@ -389,7 +399,7 @@ async def preview_skill_workflow(
     db: DbSession,
     _: dict = Depends(require_permission(RT_AGENT_SKILLS, "read")),
 ) -> SkillWorkflowPreviewResponse:
-    model_id = _require_workflow_model_id()
+    model_id = await _require_workflow_model_id(db)
 
     # Validate model selection is resolvable and not stale.
     try:

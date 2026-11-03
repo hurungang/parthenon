@@ -206,3 +206,69 @@ Test files added (verified present):
 - `backend/tests/integration/test_mcp_hub_tenant_slug_isolation.py` — same slug `supabase` registered in two tenants (both succeed), duplicate within one tenant rejected, per-tenant slug DB constraint positive/negative inserts, tenant-stamped tool sync, same-tenant skill binding resolution, scoped-session invocation resolution, ToolPermission grant containment
 
 E2E: N/A — backend-only change.
+
+---
+
+## control-center-chatbot Update (2026-11)
+
+Adds a third system-managed MCP entity and tightens tool-listing completeness. Existing server,
+session, sync and tool-repository scenarios remain valid.
+
+**Behaviour deltas:**
+- A per-tenant **Control Center** server row (slug `cc`, deterministic id) holds the management
+  toolset and meta tools (41 entries; zero general system tools). `system` and `decision` remain
+  separate entities.
+- `cc` is **system-managed**: update / delete / sync / OAuth-authorize return a structured 403
+  (`code=system_managed_integration`) even with `integration::control_center:manage` or wildcard
+  grants; the seeder refreshes drifted fields idempotently without creating rows.
+- `cc` is **sessionless**: session create/update/delete return 403 "not supported"; session
+  listing stays 200; non-`cc` session creation is unaffected.
+- `cc` visibility is gated by `integration::control_center` (read/manage): omitted from lists and
+  tool listings without read, detail 404-without-leak, tool grants require manage; the management
+  toolset applies the same trigger-user check to `list_mcp_servers` / `get_mcp_server`.
+- The MCP Hub UI renders the `cc` row with the system-managed chip, hides edit/delete/sessions and
+  disables sync; ordinary rows keep their actions.
+- Tool listing is complete and permission-correct: default window not truncated (declared default
+  ≥ 200), lossless deterministic pagination ordered by `(server_slug, name, id)`, `decision____*`
+  virtual tools included, and a skill-referenced `cc` tool resolvable read-only (unreferenced → 404).
+
+**Test files added (verified present):**
+- `backend/tests/unit/test_cc_integration_permission.py` — read/manage gating, system-managed immutability, sessionless refusals, `is_system_managed` flag, seeder field refresh.
+- `backend/tests/unit/test_fix_20261102_062047_mcp_tool_listing.py` — default window, pagination losslessness/ordering, `cc` filtering, referenced-`cc` resolution, decision tools, server paging.
+- `frontend/src/__tests__/McpHubPage.test.tsx` — system-managed chip, hidden actions, sync disabled, non-`cc` rows unaffected.
+- `frontend/src/__tests__/useMcpServers.pagination.test.tsx` — complete paging past the 200 cap.
+
+See `control-center-assistant-test-plan.md` for the assistant-wide coverage map.
+
+---
+
+## sandboxed-scripting-follow-ups Update (2026-11-03)
+
+Adds unrecoverable OAuth-refresh detection and an in-place re-auth UX on MCP sessions. Existing
+server, session, sync, passthrough and default-session scenarios remain valid; no contract change
+for session CRUD.
+
+**Behaviour deltas:**
+- `McpSession` gains `requires_reauth` (bool) and `last_refresh_error` (text), exposed on session
+  reads (`McpSessionRead`).
+- Refresh failures are classified: a provider-level **unrecoverable** failure (e.g. `invalid_grant`
+  / "No such refresh token found") sets `requires_reauth` + `last_refresh_error` instead of silently
+  deactivating the session; a **transient** failure does not set the flag and retries as before; a
+  **successful** refresh clears both fields.
+- Completing re-auth updates the **same** session in place (no duplicate session row), clearing flag
+  and reason; only the affected session is flagged — other sessions on the server and other servers
+  keep working.
+- Session management UI shows a "Needs re-authentication" token status, exposes the stored reason as
+  the tooltip, and offers the re-auth action; the ordinary refresh action is suppressed while flagged.
+
+**Test files added / updated (verified present):**
+- `backend/tests/services/test_oauth_refresh_classification.py` — unrecoverable sets the flag + reason; transient leaves both unset; success clears both.
+- `backend/tests/services/test_mcp_oauth_reauth_tenant.py` — in-place same-session re-auth (no new row), re-auth state carries the session id, cross-tenant re-auth creates a separate session, superseding old OAuth sessions migrates bindings, refreshed credentials are used by the next tool call.
+- `frontend/src/__tests__/McpSessionManager.test.tsx` — an expired refresh token renders the error-coloured re-auth action and suppresses the success refresh action.
+- `e2e/tests/mcp-hub.spec.ts` (`MCP Session re-auth state`) — a session flagged `requires_reauth` shows the "Needs re-authentication" status with no page errors.
+
+**Coverage gaps (accepted):** "other sessions unaffected" is guaranteed by per-session row mutation
+but has no dedicated assertion; the status-tooltip string and the re-auth button's enabled/disabled
+state are exercised at component/E2E level only for the flagged-vs-expired rendering, not for the
+reason text itself.
+

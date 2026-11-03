@@ -13,9 +13,9 @@ import {
 } from "../constants/resourceTypes"
 
 describe("ResourceTypeManifestMirror", () => {
-  it("has exactly 27 namespaced resource types", () => {
+  it("has exactly 28 namespaced resource types", () => {
     const keys = Object.keys(RESOURCE_TYPE_MANIFEST)
-    expect(keys).toHaveLength(27)
+    expect(keys).toHaveLength(28)
   })
 
   it("all identifiers use :: delimiter with exactly two layers", () => {
@@ -30,8 +30,8 @@ describe("ResourceTypeManifestMirror", () => {
     expect(MODULE_GROUPS.agents.submodules).toHaveLength(15)
   })
 
-  it("has 2 integration submodules", () => {
-    expect(MODULE_GROUPS.integrations.submodules).toHaveLength(2)
+  it("has 3 integration submodules", () => {
+    expect(MODULE_GROUPS.integrations.submodules).toHaveLength(3)
   })
 
   it("has 5 system submodules", () => {
@@ -71,7 +71,7 @@ describe("ResourceTypeManifestMirror", () => {
         seen.add(submodule)
       }
     }
-    expect(seen.size).toBe(27)
+    expect(seen.size).toBe(28)
   })
 
   it("all agent submodules start with 'agent::'", () => {
@@ -104,8 +104,8 @@ describe("ResourceTypeManifestMirror", () => {
     }
   })
 
-  it("RESOURCE_TYPE_OPTIONS contains all 27 types", () => {
-    expect(RESOURCE_TYPE_OPTIONS).toHaveLength(27)
+  it("RESOURCE_TYPE_OPTIONS contains all 28 types", () => {
+    expect(RESOURCE_TYPE_OPTIONS).toHaveLength(28)
   })
 
   it("no legacy flat values in the manifest", () => {
@@ -162,6 +162,7 @@ describe("ResourceTypeManifestMirror", () => {
     expect(keys).toContain("agent::outputs")
     expect(keys).toContain("integration::mcp_hub")
     expect(keys).toContain("integration::notifications")
+    expect(keys).toContain("integration::control_center")
     expect(keys).toContain("system::observability")
     expect(keys).toContain("system::permissions")
     expect(keys).toContain("system::system_config")

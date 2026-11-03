@@ -90,6 +90,13 @@ def create_app() -> FastAPI:
     from app.communication_hub.middleware.api_key_auth import ApiKeyAuthMiddleware
     app.add_middleware(ApiKeyAuthMiddleware)
 
+    # OAuth/OIDC Bearer-token auth on MCP paths (parallel to API keys):
+    # validates the user's OIDC token and resolves identity/permissions/tenant
+    # into the MCP session.  Added after ApiKeyAuthMiddleware so it runs first
+    # (outermost) and only consumes JWT tokens; opaque API keys fall through.
+    from app.communication_hub.middleware.oauth_bearer_auth import OAuthBearerAuthMiddleware
+    app.add_middleware(OAuthBearerAuthMiddleware)
+
     # Control plane middleware: validate Control Center service cert on /internal/* paths
     # (task 4.3 — while still accepting JWT-authenticated WebSocket connections)
     from app.communication_hub.middleware.control_plane import ControlPlaneMiddleware
@@ -162,27 +169,33 @@ async def startup_event() -> None:
 async def _load_certificate() -> None:
     """Load or bootstrap the Communication Hub service certificate from Control Center.
 
-    Phase 2 (task 2.3) wires this to the /internal/bootstrap endpoint.
-    Logs a warning and continues without mTLS when running in dev/test without
-    the required environment variables.
+    Fails fast at startup (FIX-20261031-131030): a missing or unloadable
+    certificate aborts startup with a clear, actionable message — never a
+    lazy ``FileNotFoundError`` at first LLM-call time while health probes
+    stay green.
     """
-    try:
-        from app.communication_hub.certificate_manager import (
-            CommHubCertificateManager,
-            CertificateLoadError,
-        )
+    from app.core.cert_paths import CertValidationError, resolve_cert_path
+    from app.communication_hub.certificate_manager import (
+        CommHubCertificateManager,
+        CertificateLoadError,
+    )
 
-        manager = CommHubCertificateManager()
+    manager = CommHubCertificateManager()
+    try:
         await manager.load_certificate()
-        app.state.certificate_manager = manager
-        logger.info("Communication Hub certificate loaded successfully")
-    except Exception as exc:
-        logger.warning(
-            "Communication Hub certificate not loaded — running without mTLS "
-            "(acceptable in dev/test; ensure COMM_HUB_CERT_PATH and SERVICE_BOOTSTRAP_KEY are set). Error: %s",
-            exc
+    except (CertificateLoadError, CertValidationError, Exception) as exc:  # noqa: BLE001
+        cert_path = resolve_cert_path(
+            os.environ.get("COMM_HUB_CERT_PATH")
         )
-        app.state.certificate_manager = None
+        raise RuntimeError(
+            "Communication Hub startup FAILED: service certificate could not "
+            f"be loaded or bootstrapped (resolved cert path: {cert_path}). "
+            "Ensure COMM_HUB_CERT_PATH, COMM_HUB_KEY_PATH, CA_CERT_PATH, "
+            "CONTROL_CENTER_URL and SERVICE_BOOTSTRAP_KEY are set, Control "
+            f"Center is reachable, and the certificate files exist. Error: {exc}"
+        ) from exc
+    app.state.certificate_manager = manager
+    logger.info("Communication Hub certificate loaded successfully")
 
 
 async def _start_certificate_renewal() -> None:

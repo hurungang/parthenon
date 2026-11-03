@@ -2,11 +2,13 @@ import { describe, it, expect, vi, afterEach } from 'vitest'
 import { render, screen, waitFor, fireEvent } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import {
+  NO_PENDING,
   PanelTopologyCanvas,
   TOPOLOGY_MAX_FONT_SCALE,
   buildPanelTopology,
   capabilityColor,
 } from '../components/agents/panel/PanelTopologyCanvas'
+import type { PanelTopologyPending } from '../components/agents/panel/PanelTopologyCanvas'
 import { emptyDraft } from '../hooks/useAgentDraftComposition'
 import type { AgentDraftComposition, TopologyNode, TopologyZone } from '../types'
 
@@ -137,6 +139,7 @@ const LABELS = {
     tools: { title: 'agents.plan.zoneToolsTitle', subtitle: 'agents.plan.zoneToolsSubtitle' },
   },
   noTools: 'agents.plan.noTools',
+  loading: 'agents.panel.topologyLoading',
 }
 
 const FULL_DRAFT: AgentDraftComposition = {
@@ -538,6 +541,148 @@ describe('buildPanelTopology', () => {
   })
 })
 
+// ── Pending (in-flight) resolution — FIX-20261102-100704 Work Item 2 ──────────
+
+/** Name maps with EVERY reference unresolved (as on a cold, slow network). */
+const EMPTY_NAMES = {
+  roleNames: {},
+  identityNames: {},
+  skillNames: {},
+  sopNames: {},
+  dataTypeNames: {},
+  modelLabels: {},
+  inputDataTypeName: null,
+  toolNames: {},
+  toolServerSlugs: {},
+  toolServerColors: {},
+  skillToolIds: {},
+  identityTokenHealth: {},
+  sopComposedSkillIds: {},
+}
+
+const ALL_PENDING: PanelTopologyPending = {
+  identity: true,
+  role: true,
+  model: true,
+  dataTypes: true,
+  skills: true,
+  sops: true,
+  sopDetails: true,
+  tools: true,
+}
+
+describe('buildPanelTopology — pending (in-flight) entities', () => {
+  it('renders loading placeholders instead of raw ids while references are in flight', () => {
+    const { nodes, edges } = buildPanelTopology('research-agent', FULL_DRAFT, EMPTY_NAMES, LABELS, ALL_PENDING)
+
+    // Every bound-but-unresolved entity shows the loading label + pending flag.
+    for (const id of [
+      'identity',
+      'role',
+      'model',
+      'input_data_type',
+      'output_data_type',
+      'sop_sop-1',
+      'skill_skill-1',
+    ]) {
+      expect(findNode(nodes, id)).toMatchObject({ label: LABELS.loading, pending: true })
+    }
+
+    // Raw ids are NEVER leaked mid-load.
+    for (const rawId of ['identity-1', 'role-1', 'dt-1', 'sop-1', 'skill-1', 'gpt-4o']) {
+      expect(nodes.some((n) => n.label === rawId)).toBe(false)
+    }
+
+    // The SOP composition is unknown while details load → a pending child
+    // placeholder renders beneath the SOP (the composition chain appears once
+    // the detail arrives).
+    expect(findNode(nodes, 'sop_pending_sop-1')).toMatchObject({
+      pending: true,
+      childOf: 'sop_sop-1',
+      zone: 'capabilities',
+      group: 'sops',
+      label: LABELS.loading,
+    })
+
+    // The tools zone shows a pending placeholder — NOT the "no tools" state,
+    // and no tool nodes / skill→tool route connectors yet.
+    expect(findNode(nodes, 'tool_pending')).toMatchObject({ pending: true, zone: 'tools', label: LABELS.loading })
+    expect(nodes.some((n) => n.id === 'tool_empty')).toBe(false)
+    expect(nodes.some((n) => n.type === 'tool' && n.id.startsWith('tool_') && n.id !== 'tool_pending')).toBe(false)
+    expect(edges.some((e) => e.style === 'dashed')).toBe(false)
+  })
+
+  it('does not mark genuinely-missing references pending — resolved fallbacks are kept', () => {
+    // Lists resolved and the referenced rows are absent → the historical raw-id
+    // fallback stays (a genuinely missing/unavailable entity, not a pending one).
+    const { nodes } = buildPanelTopology('research-agent', FULL_DRAFT, EMPTY_NAMES, LABELS, NO_PENDING)
+
+    expect(findNode(nodes, 'role')).toMatchObject({ label: 'role-1' })
+    expect(findNode(nodes, 'identity')).toMatchObject({ label: 'identity-1' })
+    expect(nodes.every((n) => n.pending !== true)).toBe(true)
+    expect(nodes.some((n) => n.id === 'sop_pending_sop-1')).toBe(false)
+    // Nothing resolves → the legitimate "no tools" placeholder again.
+    expect(findNode(nodes, 'tool_empty')).toMatchObject({ label: 'agents.plan.noTools', usage: 'empty' })
+  })
+
+  it('resolves already-cached names even while other loads are still in flight', () => {
+    const { nodes } = buildPanelTopology('research-agent', FULL_DRAFT, NAMES, LABELS, ALL_PENDING)
+
+    // Known names never show a spinner (no flicker for cached entities).
+    expect(findNode(nodes, 'role')).toMatchObject({ label: 'Researcher' })
+    expect(findNode(nodes, 'role')?.pending).toBeUndefined()
+    expect(findNode(nodes, 'identity')?.label).toBe('svc-agent')
+    expect(findNode(nodes, 'skill_skill-1')?.label).toBe('web-search')
+    // The SOP composition is not covered by the name maps → still pending.
+    expect(findNode(nodes, 'sop_pending_sop-1')?.pending).toBe(true)
+  })
+
+  it('keeps the tools zone pending while SOP composition details are in flight', () => {
+    // SOP-only agent: its tools appear only via the SOP's composed skills, so
+    // "no tools" would be a lie until the detail request completes.
+    const sopOnly: AgentDraftComposition = { ...FULL_DRAFT, skillBindings: [] }
+    const pendingTools = buildPanelTopology('research-agent', sopOnly, NAMES, LABELS, {
+      ...NO_PENDING,
+      sopDetails: true,
+    })
+    expect(findNode(pendingTools.nodes, 'tool_pending')).toMatchObject({
+      pending: true,
+      label: LABELS.loading,
+    })
+    expect(pendingTools.nodes.some((n) => n.id === 'tool_empty')).toBe(false)
+
+    // Detail resolved with no composed skills → the genuine "no tools" state.
+    const resolved = buildPanelTopology('research-agent', sopOnly, NAMES, LABELS)
+    expect(findNode(resolved.nodes, 'tool_empty')).toMatchObject({ usage: 'empty' })
+    expect(resolved.nodes.some((n) => n.id === 'tool_pending')).toBe(false)
+  })
+
+  it('never marks the deliberately-set None/Auto/locked slots or unfilled placeholders pending', () => {
+    const noneAuto: AgentDraftComposition = {
+      ...FULL_DRAFT,
+      inputType: 'none',
+      inputSchema: null,
+      outputType: 'auto',
+      outputDataTypeId: null,
+    }
+    const { nodes } = buildPanelTopology('research-agent', noneAuto, EMPTY_NAMES, LABELS, ALL_PENDING)
+    expect(findNode(nodes, 'input_data_type')).toMatchObject({ label: 'agents.panel.noInputType' })
+    expect(findNode(nodes, 'input_data_type')?.pending).toBeUndefined()
+    expect(findNode(nodes, 'output_data_type')).toMatchObject({ label: 'agents.types.outputAuto' })
+    expect(findNode(nodes, 'output_data_type')?.pending).toBeUndefined()
+
+    // An empty draft has no bound references at all → dashed placeholders, not spinners.
+    const empty = buildPanelTopology('new-agent', emptyDraft(), EMPTY_NAMES, LABELS, ALL_PENDING)
+    expect(findNode(empty.nodes, 'role')).toMatchObject({ usage: 'empty' })
+    expect(findNode(empty.nodes, 'role')?.pending).toBeUndefined()
+    expect(findNode(empty.nodes, 'identity')?.pending).toBeUndefined()
+    expect(empty.nodes.some((n) => n.id === 'sop_pending_sop-1')).toBe(false)
+    // No bound capability → no pending tools placeholder either.
+    expect(empty.nodes.some((n) => n.id === 'tool_pending')).toBe(false)
+    expect(findNode(empty.nodes, 'tool_empty')).toBeDefined()
+  })
+})
+
 describe('PanelTopologyCanvas', () => {
   function renderCanvas(draft: AgentDraftComposition, isDirty = false) {
     const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
@@ -881,5 +1026,131 @@ describe('PanelTopologyCanvas', () => {
     renderCanvas(FULL_DRAFT)
 
     expect(mockForwardedNodeClick.fn).toBeUndefined()
+  })
+
+  // ── Pending (in-flight) entities — FIX-20261102-100704 Work Item 2 ──────────
+
+  const nodeById = (id: string) => mockTopologyNodes.find((n) => (n as TopologyNode).id === id) as
+    | TopologyNode
+    | undefined
+
+  /** apiClient mock whose requests stay in flight until `resolve` is called. */
+  function stallRequests() {
+    const resolvers = new Map<string, (value: { data: unknown }) => void>()
+    mockApiGet.mockReset()
+    mockApiGet.mockImplementation(
+      (url: string) =>
+        new Promise((resolve) => {
+          resolvers.set(url, resolve as (value: { data: unknown }) => void)
+        }),
+    )
+    const resolve = (url: string, data: unknown) => {
+      const fn = resolvers.get(url)
+      expect(fn, `no in-flight request for ${url}`).toBeDefined()
+      fn?.({ data })
+    }
+    return { resolve }
+  }
+
+  it('shows pending placeholders (never raw ids) while reference lists are in flight, then real nodes', async () => {
+    const { resolve } = stallRequests()
+
+    renderCanvas(FULL_DRAFT)
+
+    // In flight: every bound-but-unresolved entity carries the loading label.
+    await waitFor(() => {
+      expect(nodeById('role')).toMatchObject({
+        pending: true,
+        label: 'agents.panel.topologyLoading',
+      })
+    })
+    for (const id of ['identity', 'model', 'input_data_type', 'output_data_type', 'skill_skill-1', 'sop_sop-1']) {
+      expect(nodeById(id)).toMatchObject({ pending: true, label: 'agents.panel.topologyLoading' })
+    }
+    // Raw ids are never exposed while loading.
+    for (const rawId of ['identity-1', 'role-1', 'dt-1', 'sop-1', 'skill-1', 'gpt-4o']) {
+      expect(mockTopologyNodes.some((n) => (n as TopologyNode).label === rawId)).toBe(false)
+    }
+    // SOP composition + tools show dedicated pending placeholders (not the
+    // "no tools" state) until their requests complete.
+    expect(nodeById('sop_pending_sop-1')).toMatchObject({ pending: true, childOf: 'sop_sop-1' })
+    expect(nodeById('tool_pending')).toMatchObject({ pending: true })
+    expect(nodeById('tool_empty')).toBeUndefined()
+
+    // Resolution completes → real labels, no pending flags, tools resolve.
+    resolve('/agents/roles', [{ id: 'role-1', name: 'Researcher' }])
+    resolve('/agents/identities', [{ id: 'identity-1', name: 'svc-agent' }])
+    resolve('/skills', [{ id: 'skill-1', name: 'web-search', tool_ids: ['tool-1'] }])
+    resolve('/sops', [{ id: 'sop-1', name: 'research-sop' }])
+    resolve('/sops/sop-1', { id: 'sop-1', name: 'research-sop', steps: [] })
+    resolve('/data-types', {
+      items: [{ id: 'dt-1', name: 'final-report', fields: [] }],
+      total: 1,
+      page: 1,
+      page_size: 100,
+    })
+    resolve('/agents/model-configs', [
+      { id: 'mc-1', display_name: 'OpenAI Prod', enabled_models: ['gpt-4o'], provider_type: 'openai' },
+    ])
+    resolve('/mcp/tools', [{ id: 'tool-1', name: 'mcp____search', server_id: 'srv-1' }])
+    resolve('/mcp/servers', [{ id: 'srv-1', slug: 'mcp-github' }])
+    resolve('/dashboard/token-health', {
+      identities: { items: [] },
+      mcp_sessions: { items: [] },
+      permission_flags: {},
+    })
+
+    await waitFor(() => {
+      expect(nodeById('role')).toMatchObject({ label: 'Researcher' })
+    })
+    expect(nodeById('role')?.pending).toBeUndefined()
+    expect(nodeById('identity')?.label).toBe('svc-agent')
+    expect(nodeById('model')?.label).toBe('gpt-4o (OpenAI Prod)')
+    expect(nodeById('output_data_type')?.label).toBe('final-report')
+    expect(nodeById('skill_skill-1')?.label).toBe('web-search')
+    expect(nodeById('sop_sop-1')?.label).toBe('research-sop')
+    expect(nodeById('tool_tool-1')?.label).toBe('mcp____search')
+    expect(nodeById('tool_pending')).toBeUndefined()
+    expect(nodeById('sop_pending_sop-1')).toBeUndefined()
+    expect(mockTopologyNodes.every((n) => (n as TopologyNode).pending !== true)).toBe(true)
+  })
+
+  it('keeps None/Auto/dashed placeholder semantics while reference lists are in flight', async () => {
+    stallRequests()
+
+    renderCanvas({
+      ...FULL_DRAFT,
+      inputType: 'none',
+      inputSchema: null,
+      outputType: 'auto',
+      outputDataTypeId: null,
+    })
+
+    await waitFor(() => {
+      expect(nodeById('role')).toMatchObject({ pending: true })
+    })
+    // Deliberately-set contract states are NOT loading states.
+    expect(nodeById('input_data_type')).toMatchObject({ label: 'agents.panel.noInputType' })
+    expect(nodeById('input_data_type')?.pending).toBeUndefined()
+    expect(nodeById('output_data_type')).toMatchObject({ label: 'agents.types.outputAuto' })
+    expect(nodeById('output_data_type')?.pending).toBeUndefined()
+  })
+
+  it('keeps dashed empty placeholders (not spinners) for an unbound draft', async () => {
+    stallRequests()
+
+    renderCanvas(emptyDraft())
+
+    await waitFor(() => {
+      expect(mockTopologyNodes.length).toBeGreaterThan(0)
+    })
+    expect(nodeById('role')).toMatchObject({ usage: 'empty' })
+    expect(nodeById('role')?.pending).toBeUndefined()
+    expect(nodeById('identity')?.pending).toBeUndefined()
+    expect(nodeById('model')?.usage).toBe('empty')
+    expect(nodeById('sop_empty')).toMatchObject({ usage: 'empty' })
+    expect(nodeById('sop_empty')?.pending).toBeUndefined()
+    expect(nodeById('tool_pending')).toBeUndefined()
+    expect(nodeById('tool_empty')).toBeDefined()
   })
 })

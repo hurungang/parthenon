@@ -47,10 +47,13 @@ class InterveneRequest(Base):
     tenant_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("tenants.id", ondelete="SET NULL"), nullable=True
     )
-    agent_session_id: Mapped[uuid.UUID] = mapped_column(
+    # FIX-20261031-133253: NULL for conversation-scoped requests — the
+    # assistant (a conversational agent type) has no agent_jobs row; the
+    # conversation_session_id below is the resume key in that case.
+    agent_session_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("agent_jobs.id", ondelete="CASCADE"),
-        nullable=False,
+        nullable=True,
     )
     agent_type_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),

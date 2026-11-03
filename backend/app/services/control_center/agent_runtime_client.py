@@ -72,9 +72,12 @@ class AgentRuntimeClient:
             communication_hub_url
             or os.environ.get("COMMUNICATION_HUB_URL", "http://localhost:8002")
         ).rstrip("/")
-        self._cert_path = cert_path or os.environ.get("CC_CERT_PATH")
-        self._key_path = key_path or os.environ.get("CC_KEY_PATH")
-        self._ca_cert_path = ca_cert_path or os.environ.get("CA_CERT_PATH")
+        # CWD-independent resolution (FIX-20261031-131030).
+        from app.core.cert_paths import resolve_cert_path
+
+        self._cert_path = resolve_cert_path(cert_path or os.environ.get("CC_CERT_PATH"))
+        self._key_path = resolve_cert_path(key_path or os.environ.get("CC_KEY_PATH"))
+        self._ca_cert_path = resolve_cert_path(ca_cert_path or os.environ.get("CA_CERT_PATH"))
 
     def _make_client(self) -> httpx.AsyncClient:
         """Return a client configured for the target URL scheme.

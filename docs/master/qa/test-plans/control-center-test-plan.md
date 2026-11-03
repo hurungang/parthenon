@@ -132,3 +132,29 @@
 ### E2E Tests
 - `e2e/tests/agent-security-segregation.spec.ts` — **Real Backend Integration**: certificate authentication endpoint wiring, metadata security assertion (no identity tokens in response), tool authorization with certificate validation, revocation flow
 - `e2e/tests/agent-identity-token-refresh.spec.ts` — **Real Backend Integration**: token refresh endpoint wiring and auth requirement verification
+
+---
+
+## control-center-chatbot Update (2026-11)
+
+Control Center hosts a new user-facing subsystem: the conversational **Control Center Assistant**
+and the management MCP toolset it drives. Its full coverage map lives in
+[control-center-assistant-test-plan.md](control-center-assistant-test-plan.md); the Control
+Center-specific deltas are:
+
+- A seeded system conversational `AgentType` (`is_system=true`) is provisioned idempotently for
+  every tenant by `AssistantSeeder`, together with the `cc` MCP entity, the management skill and
+  its tool bindings; stale instruction text, digests and iteration budget are refreshed on restart.
+- Management writes are executed by Control Center handlers (`/internal/management-tools/{tool}`)
+  after the permission engine authorizes the parity pair; Control Center remains the sole DB owner
+  and never executes agent code.
+- Assistant model selection is per-tenant and persisted on the tenant's assistant agent type;
+  workflow-generation selection is per-tenant via `tenant_settings`.
+- Assistant guardrails use a 24-iteration budget, and `GuardrailStop` surfaces as a structured
+  `iteration_limit` conversation error that is persisted exactly once.
+- Internal dispatch for management/MCP calls fails closed without the signed
+  `X-Internal-Tenant-*` header set.
+
+**Test file references:** see [control-center-assistant-test-plan.md](control-center-assistant-test-plan.md)
+(coverage areas 1–15) and, for cross-cutting pieces, `mcp-hub-test-plan.md`,
+`conversation-sessions-test-plan.md`, `skills-sop-test-plan.md`, and `identity-test-plan.md`.

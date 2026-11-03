@@ -174,3 +174,17 @@ Foundation gains tenancy primitives since the multi-tenant support change (full 
 | `TenantContext` + accessors | class (new) | Immutable per-request tenant context, `TENANT_UNSET` sentinel, `get/set/require_tenant_context`, `is_tenancy_enabled` | `backend/app/core/tenant_context.py` |
 | `tenant_address_base_domain` / `tenant_context_signing_key` | settings (new) | Tenancy resolution base domain and HMAC signing key on `Settings` | `backend/app/core/config.py` |
 | `set_tenant_span_attributes` | function (new usage) | OTEL span tenant attribution called by CC/AR/CH middlewares; `telemetry.py` itself unchanged | `backend/app/core/telemetry.py` |
+
+## Certificate Path Resolution & Fail-Fast Startup Validation (control-center-chatbot change)
+
+Certificate paths were previously interpreted relative to the process working directory, so a service started from a different directory could not find its certificate and silently continued without mTLS — health probes stayed green while the failure only surfaced later, lazily, at the first outbound call. Both problems are fixed centrally.
+
+| Symbol | Type | Description | File |
+|--------|------|-------------|------|
+| `BACKEND_ROOT` | constant (new) | `Path(__file__).resolve().parents[2]` — the anchor for relative certificate paths, independent of CWD | `backend/app/core/cert_paths.py` |
+| `resolve_cert_path` | function (new) | Resolves a configured certificate path: relative values (`.env` `CC_CERT_PATH`/`CC_KEY_PATH`, `COMM_HUB_CERT_PATH`, `AGENT_CERT_PATH`, `CA_CERT_PATH`, `certs/control-center/…` defaults) anchor to `BACKEND_ROOT`; absolute paths and explicitly absolute env config pass through untouched | `backend/app/core/cert_paths.py` |
+| `ensure_cert_files_exist` | function (new) | Raises `CertValidationError` with an actionable message (resolved path + required env vars) when a resolved certificate file is missing | `backend/app/core/cert_paths.py` |
+| `CertValidationError` | exception (new) | Typed certificate-path validation failure, distinct from load/parse failures | `backend/app/core/cert_paths.py` |
+| `_load_certificate` (CH/AR startup) | startup hooks (modified) | Fail-fast: a missing or unloadable service/agent certificate raises `RuntimeError` ("… startup FAILED", resolved cert path, required env vars, root error) instead of the previous warn-and-continue with `certificate_manager = None` | `backend/app/communication_hub/main.py`, `backend/app/agent_runtime/main.py` |
+| `resolve_cert_path` (consumers) | call sites (modified) | CH/AR certificate managers, `cc_service_cert_renewal` (`DEFAULT_CERT_DIR`) and the CC outbound `CommunicationHubClient`/`AgentRuntimeClient` all resolve through the shared helper | `backend/app/core/cc_service_cert_renewal.py`, `backend/app/services/control_center/comm_hub_client.py`, `backend/app/services/control_center/agent_runtime_client.py` |
+| `test_fix_20261031_131030_cert_paths` | test | CWD-independence (relative vs absolute), missing-file errors, startup fail-fast | `backend/tests/unit/test_fix_20261031_131030_cert_paths.py` |

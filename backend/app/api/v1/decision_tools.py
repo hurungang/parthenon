@@ -215,13 +215,13 @@ async def generate_decision_tool_draft(
     the draft is validated through the decision-tool question schemas.
     Permission-gated like tool creation.
     """
-    model_id = get_workflow_generation_model_id()
+    model_id = await get_workflow_generation_model_id(db)
     if not model_id:
         raise HTTPException(
             status_code=422,
             detail=(
-                "Workflow generation model is not configured. Configure it "
-                "in system settings."
+                "Workflow generation model is not configured for this workspace. "
+                "Configure it in settings."
             ),
         )
 

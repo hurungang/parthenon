@@ -16,6 +16,7 @@ from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.util import get_remote_address
 
+from app.core.cc_service_cert_renewal import renew_cc_service_certificate_if_needed
 from app.core.config import get_settings
 from app.core.telemetry import setup_telemetry
 from app.middleware.auth import JWTAuthMiddleware
@@ -226,6 +227,9 @@ def create_app() -> FastAPI:
             allow_credentials=True,
             allow_methods=["*"],
             allow_headers=["*"],
+            # FIX-20261102-062047: expose the list contract's true total so
+            # the browser can page complete result sets (no silent truncation).
+            expose_headers=["X-Total-Count"],
         )
     else:
         app.add_middleware(
@@ -234,6 +238,7 @@ def create_app() -> FastAPI:
             allow_credentials=True,
             allow_methods=["*"],
             allow_headers=["*"],
+            expose_headers=["X-Total-Count"],
         )
 
     # JWT Auth Middleware (applied after CORS)
@@ -427,6 +432,8 @@ async def startup_event() -> None:
     await _cleanup_super_admin_db_records()
     await _initialize_oidc_provider_registry()
     await _run_skill_seeder()
+    await _run_assistant_seeder()
+    await _adopt_legacy_workflow_generation_model()
     await _seed_command_prompts()
     await _initialize_certificate_authority()
     await _start_scheduling_engine()
@@ -502,6 +509,48 @@ async def _run_skill_seeder() -> None:
         logger.info("SkillSeeder complete: %s", summary)
     except Exception:
         logger.exception("SkillSeeder failed; application will continue without default skills.")
+
+
+async def _run_assistant_seeder() -> None:
+    """Idempotently seed the Control Center Assistant (system AgentType + tools)."""
+    try:
+        from app.db.session import AsyncSessionLocal
+        from app.services.agents.assistant_seeder import AssistantSeeder
+        async with AsyncSessionLocal() as db:
+            summary = await AssistantSeeder().run(db)
+            await db.commit()
+        logger.info("AssistantSeeder complete: %s", summary)
+    except Exception:
+        logger.exception("AssistantSeeder failed; the assistant may be unavailable.")
+
+
+async def _adopt_legacy_workflow_generation_model() -> None:
+    """Adopt the legacy global workflow-generation model into the root tenant.
+
+    One-time, best-effort migration of the ``workflow_generation_model_id``
+    value previously persisted in ``config/app.yaml`` into the root tenant's
+    ``tenant_settings`` row (per-tenant store).  Idempotent: never overwrites
+    an existing root-tenant selection.  The yaml value is left in place.
+    """
+    try:
+        from app.db.session import AsyncSessionLocal
+        from app.services.agents.workflow_generation_settings import (
+            adopt_legacy_app_yaml_value,
+        )
+
+        async with AsyncSessionLocal() as db:
+            adopted = await adopt_legacy_app_yaml_value(db)
+            await db.commit()
+        if adopted:
+            logger.info(
+                "Adopted legacy workflow-generation model '%s' into the root tenant.",
+                adopted,
+            )
+    except Exception:
+        logger.exception(
+            "Legacy workflow-generation model adoption failed; configure the "
+            "model per workspace in settings."
+        )
 
 
 async def _seed_command_prompts() -> None:
@@ -668,10 +717,10 @@ async def _ensure_cc_service_certificate() -> None:
     re-issue them from the CA (self-renewal — see
     ``app.core.cc_service_cert_renewal``). Failures never crash startup.
     """
-    from app.core.cc_service_cert_renewal import start_daily_renewal_task
+    from app.core import cc_service_cert_renewal
 
     try:
-        renewed = await renew_cc_service_certificate_if_needed()
+        renewed = await cc_service_cert_renewal.renew_cc_service_certificate_if_needed()
         if not renewed:
             logger.info("Control Center service certificate is present and valid")
     except Exception:
@@ -680,7 +729,7 @@ async def _ensure_cc_service_certificate() -> None:
             "internal calls to Communication Hub will fail. "
             "Ensure the Certificate Authority is initialized."
         )
-    start_daily_renewal_task()
+    cc_service_cert_renewal.start_daily_renewal_task()
 
 
 async def _start_scheduling_engine() -> None:

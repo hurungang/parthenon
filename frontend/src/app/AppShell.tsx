@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Outlet, useNavigate, useLocation } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { isAxiosError } from 'axios'
@@ -10,6 +10,7 @@ import {
   CssBaseline,
   Divider,
   Drawer,
+  Fab,
   IconButton,
   List,
   ListItem,
@@ -20,6 +21,7 @@ import {
   Typography,
   Avatar,
   Tooltip,
+  CircularProgress,
 } from '@mui/material'
 import MenuIcon from '@mui/icons-material/Menu'
 import DashboardIcon from '@mui/icons-material/Dashboard'
@@ -48,10 +50,13 @@ import BusinessIcon from '@mui/icons-material/Business'
 import GroupIcon from '@mui/icons-material/Group'
 import { useAuthStore } from '../stores/authStore'
 import { usePlatformAccess } from '../hooks/usePlatformAccess'
+import { useAgentTypes } from '../hooks/useAgentTypes'
+import { consumeForceNewSessionFlag } from '../utils/assistantSessionState'
 import { PermissionErrorSnackbar } from '../components/permissions/PermissionErrorSnackbar'
 import { TenantSessionGate } from '../components/auth/TenantSessionGate'
+import { ConversationDialog } from '../components/agents/ConversationDialog'
 import apiClient from '../api/apiClient'
-import type { InterveneMetrics } from '../types'
+import type { ConversationSession, InterveneMetrics } from '../types'
 
 const DRAWER_WIDTH = 256
 
@@ -271,6 +276,53 @@ export function AppShell() {
   const [expandedGroups, setExpandedGroups] =
     useState<Record<string, boolean>>(DEFAULT_EXPANDED_GROUPS)
   const [interveneMetrics, setInterveneMetrics] = useState<InterveneMetrics | null>(null)
+  // Control Center Assistant: resolve the seeded system agent type (is_system)
+  // once via the existing agent-types query; the assistant surfaces as a
+  // floating action button opening the reused ConversationDialog.
+  const { data: agentTypes } = useAgentTypes()
+  const [assistantOpen, setAssistantOpen] = useState(false)
+  const assistantType = (Array.isArray(agentTypes) ? agentTypes : []).find((at) => at.is_system) ?? null
+  // Session persistence: while `assistantResolving` is true we are fetching the
+  // user's most recent ACTIVE conversation session for the assistant agent type
+  // so the dialog can resume it instead of always starting a new session.
+  // `assistantSessionId === null` after resolution means "no active session →
+  // start a fresh one". Closing the dialog only disconnects the WebSocket —
+  // the session stays active on the backend and is resolved again on reopen.
+  const [assistantSessionId, setAssistantSessionId] = useState<string | null>(null)
+  const [assistantResolving, setAssistantResolving] = useState(false)
+
+  const openAssistant = useCallback(async () => {
+    if (!assistantType) return
+    setAssistantOpen(true)
+    setAssistantResolving(true)
+    setAssistantSessionId(null)
+    // FIX-20261031-091657 (Defect B): after an explicit END the user expects a
+    // NEW session on next open for this agent type — skip resume-latest-active.
+    if (consumeForceNewSessionFlag(assistantType.id)) {
+      setAssistantResolving(false)
+      return
+    }
+    try {
+      const { data } = await apiClient.get<ConversationSession[]>(
+        `/conversations?agent_type_id=${assistantType.id}`,
+      )
+      const activeSessions = (Array.isArray(data) ? data : []).filter(
+        (session) => session.status === 'active',
+      )
+      const latest = activeSessions
+        .slice()
+        .sort(
+          (a, b) =>
+            Date.parse(b.updated_at || b.created_at) - Date.parse(a.updated_at || a.created_at),
+        )[0]
+      setAssistantSessionId(latest?.id ?? null)
+    } catch {
+      // Best-effort resume: fall back to a new session on any failure.
+      setAssistantSessionId(null)
+    } finally {
+      setAssistantResolving(false)
+    }
+  }, [assistantType])
   // Phase 11 (task 11.5): the Tenant Admin group renders for ALL tenants
   // (root included) whenever the session is tenant-bound; the Platform
   // console group renders ONLY on a granted backend permission probe
@@ -507,6 +559,33 @@ export function AppShell() {
       {/* Multi-tenancy: org picker for multi-organization sessions (inert
           when the tenancy switch is off or the user has a single org). */}
       <TenantSessionGate />
+
+      {/* Control Center Assistant — floating launch entry point. Resolves the
+          seeded system agent type and opens the conversational surface. */}
+      {assistantType && (
+        <Fab
+          color="primary"
+          aria-label={t('assistant.launch')}
+          data-testid="assistant-fab"
+          onClick={() => void openAssistant()}
+          sx={{ position: 'fixed', right: 24, bottom: 24, zIndex: (theme) => theme.zIndex.fab }}
+        >
+          {assistantResolving ? <CircularProgress size={24} color="inherit" /> : <SmartToyIcon />}
+        </Fab>
+      )}
+      {/* Render the dialog only after the latest active session has been
+          resolved so a resume never flashes an empty conversation. */}
+      {assistantType && assistantOpen && !assistantResolving && (
+        <ConversationDialog
+          open={true}
+          sessionId={assistantSessionId}
+          agentTypeId={assistantType.id}
+          agentTypeName={assistantType.name}
+          testIdPrefix="assistant-conversation"
+          assistantModelConfigCheck
+          onClose={() => setAssistantOpen(false)}
+        />
+      )}
     </Box>
   )
 }

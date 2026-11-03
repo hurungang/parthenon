@@ -62,6 +62,42 @@ _LOAD_SKILLS_INPUT_SCHEMA = {
     },
 }
 
+#: Fixed denial reasons surfaced in-band by the management assistant.
+_DELETE_DENIED_MESSAGE = (
+    "Deletion is not supported through the management assistant. "
+    "This action cannot be performed."
+)
+
+_MANAGEMENT_VERBS = {"create", "update", "list", "get"}
+
+
+def _management_scope_denial(canonical: str) -> dict[str, Any] | None:
+    """Return a structured denial for delete verbs / out-of-scope resources.
+
+    No delete tool is registered; this is a defense-in-depth backstop that
+    declines such requests before any write with a fixed reason the assistant
+    can relay.  Returns ``None`` when the name is not management-shaped.
+    FIX-20261101-000319: management tools are canonically ``cc____``; the
+    legacy ``system____`` prefix is still honored.
+    """
+    prefixes = ("cc" + TOOL_SEPARATOR, "system" + TOOL_SEPARATOR)
+    bare = None
+    for prefix in prefixes:
+        if canonical.startswith(prefix):
+            bare = canonical[len(prefix):]
+            break
+    if bare is None:
+        return None
+    if bare.startswith("delete_"):
+        return {"error": "deletion_not_supported", "message": _DELETE_DENIED_MESSAGE}
+    verb = bare.split("_", 1)[0]
+    if verb in _MANAGEMENT_VERBS and SystemToolRegistry.get(bare) is None:
+        return {
+            "error": "out_of_scope",
+            "message": f"'{bare}' is outside the management scope.",
+        }
+    return None
+
 
 def _canonicalize(name: str) -> str:
     """Normalize a tool name to canonical ``server____tool`` form."""
@@ -88,6 +124,12 @@ class ToolRegistryBridge:
         (``decision:``-prefixed, auto-generated descriptions), permitted
         system tools, and permitted proxied MCP tools.
         """
+        # OAuth sessions (the Control Center Assistant / external MCP clients)
+        # list ONLY the management tools the user's own permission scope allows
+        # — deny-by-default, wildcards honored (task 4.1).
+        if getattr(session, "auth_method", None) == "oauth":
+            return self._build_oauth_catalog(session)
+
         permitted: set[str] = set(session.permissions or [])
 
         # Map canonical tool name → (description, input_schema) from resolved skills.
@@ -168,6 +210,29 @@ class ToolRegistryBridge:
 
         return tools
 
+    def _build_oauth_catalog(self, session: Any) -> list[dict[str, Any]]:
+        """Build the OAuth permission-filtered catalog (management tools only).
+
+        The user's permitted tool set (resolved by Control Center at session
+        creation) is the single source of truth; out-of-scope tools are
+        omitted entirely.
+        """
+        permitted: set[str] = set(session.permissions or [])
+        tools: list[dict[str, Any]] = []
+        for canonical in sorted(permitted):
+            bare = get_bare_tool_name(canonical)
+            registered = SystemToolRegistry.get(bare)
+            if registered is None or not registered.is_management_tool:
+                continue
+            tools.append(
+                {
+                    "name": canonical,
+                    "description": registered.description,
+                    "inputSchema": registered.parameters,
+                }
+            )
+        return tools
+
     # ── Dispatch ───────────────────────────────────────────────────────────
 
     async def dispatch(
@@ -198,10 +263,31 @@ class ToolRegistryBridge:
 
         canonical = _canonicalize(tool_name)
         permitted: set[str] = set(session.permissions or [])
+
+        # OAuth sessions: structured, non-mutating denials (task 4.2 / 4.3).
+        if getattr(session, "auth_method", None) == "oauth":
+            denial = _management_scope_denial(canonical)
+            if denial is not None:
+                return _text_result(json.dumps(denial))
+            if canonical not in permitted:
+                return _text_result(
+                    json.dumps(
+                        {
+                            "error": "permission_denied",
+                            "message": f"You do not have permission to call '{tool_name}'.",
+                        }
+                    )
+                )
+
         if canonical not in permitted:
             raise PermissionError(f"Tool '{tool_name}' is not permitted for this API key")
 
         if is_system_tool(canonical):
+            bare = get_bare_tool_name(canonical)
+            if SystemToolRegistry.is_management_tool(bare):
+                return await self._call_management_tool(
+                    request, session, canonical, arguments
+                )
             return await self._call_system_tool(request, session, canonical, arguments)
         return await self._call_mcp_tool(request, session, canonical, arguments)
 
@@ -309,6 +395,39 @@ class ToolRegistryBridge:
         }
         # get_cc_endpoint_map returns FULL URLs — strip the base back off,
         # _post_cc re-attaches it.
+        result = await self._post_cc(
+            request, cc_base, endpoint[len(cc_base.rstrip("/")):], payload
+        )
+        return _text_result(json.dumps(result.get("result", {}), default=str))
+
+    async def _call_management_tool(
+        self, request: Any, session: Any, canonical: str, arguments: dict[str, Any]
+    ) -> dict[str, Any]:
+        """Route a management tool to its Control Center endpoint (OAuth user).
+
+        The user's ``sub`` (resolved at OAuth session creation) is forwarded so
+        Control Center re-authorizes the call against the user's own permission
+        scope — the identity token itself never leaves the Communication Hub.
+        """
+        cc_base = get_control_center_url()
+        if not cc_base:
+            raise RuntimeError("Control Center URL not configured")
+
+        bare = get_bare_tool_name(canonical)
+        endpoint_map = SystemToolRegistry.get_cc_endpoint_map(cc_base)
+        endpoint = endpoint_map.get(bare)
+        if not endpoint:
+            raise RuntimeError(f"Unknown management tool: {bare}")
+
+        payload: dict[str, Any] = {
+            "session_id": session.session_id,
+            "user_sub": getattr(session, "user_sub", None),
+            "tool_args": arguments,
+        }
+        conv_session_id = getattr(session, "conversation_session_id", None)
+        if conv_session_id:
+            payload["conversation_session_id"] = conv_session_id
+
         result = await self._post_cc(
             request, cc_base, endpoint[len(cc_base.rstrip("/")):], payload
         )

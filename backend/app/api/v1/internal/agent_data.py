@@ -578,7 +578,7 @@ async def get_agent_context(
             for tool_name in allowed_tools:
                 try:
                     server, bare = parse_tool_name(tool_name)
-                    if server in ("system", "agent"):
+                    if server in ("system", "cc", "agent"):
                         continue
                 except ValueError:
                     pass
@@ -679,6 +679,127 @@ async def get_agent_context(
                     decision_tools_resolved.append(tool)
                     allowed_tools.add(build_tool_name("decision", tool.name))
 
+    else:
+        # ── Role-less agent types (e.g. the conversational Control Center ────
+        # Assistant): there is no role graph, so permissions come from the
+        # agent type's DIRECT skill bindings (AgentTypeSkillBinding →
+        # SkillToolBinding → McpTool), strictly within the calling tenant.
+        # Without this branch the delegation context for conversational
+        # agents carried NO tools and the model hallucinated management
+        # results (FIX-20261031-035145).
+        direct_skill_rows = await db.execute(
+            select(AgentTypeSkillBinding.skill_id, Skill.name)
+            .join(Skill, AgentTypeSkillBinding.skill_id == Skill.id)
+            .where(AgentTypeSkillBinding.agent_type_id == agent_type_id)
+        )
+        for s_id, s_name in direct_skill_rows.fetchall():
+            skill_ids.add(s_id)
+            skills_summary.append(SkillSummary(id=s_id, name=s_name))
+        bound_skill_ids_list = sorted(skill_ids)
+
+        if skill_ids:
+            tool_rows = await db.execute(
+                select(McpTool.name)
+                .join(SkillToolBinding, SkillToolBinding.tool_id == McpTool.id)
+                .where(
+                    SkillToolBinding.skill_id.in_(skill_ids),
+                    McpTool.is_active.is_(True),
+                )
+            )
+            for (tool_name,) in tool_rows.fetchall():
+                resolved_tool_names_raw.add(tool_name)
+                allowed_tools.add(_canonicalize_tool_identifier(tool_name))
+
+        # ── Progressive tool disclosure (O(1) context) ───────────────────
+        # The conversational assistant context carries ONLY the constant
+        # meta tools (invoke_management_tool + companions), never the ~36
+        # management execution schemas — massive token cost per turn.  The
+        # execution tools stay registered/bound (the wrapper dispatches to
+        # them via the CC management-tools dispatch, which re-enforces
+        # permission parity per invocation).
+        management_names = SystemToolRegistry.get_management_tool_names()
+
+        def _bare_of(canonical_or_raw: str) -> str:
+            try:
+                _server, _bare = parse_tool_name(canonical_or_raw)
+                return _bare
+            except ValueError:
+                return canonical_or_raw
+
+        resolved_tool_names_raw = {
+            name for name in resolved_tool_names_raw if _bare_of(name) not in management_names
+        }
+        allowed_tools = {
+            name for name in allowed_tools if _bare_of(name) not in management_names
+        }
+        for meta_name in sorted(SystemToolRegistry.get_meta_tool_names()):
+            # Category-aware canonical names: the 4 management meta tools
+            # surface as cc____<name> (FIX-20261101-000319);
+            # human_intervene stays system____<name>.
+            meta_tool = SystemToolRegistry.get(meta_name)
+            if meta_tool is not None:
+                allowed_tools.add(meta_tool.canonical_name)
+            else:
+                allowed_tools.add(build_tool_name("system", meta_name))
+
+        # ── Decision tools (virtual bindings — no mcp_tools row) ─────────────
+        if skill_ids:
+            from app.db.models.decision_tools import DecisionTool  # noqa: F401
+            from app.db.tenant_scoping import scope_for_session
+            from app.services.system_one.decision_tool_service import (
+                is_decision_tool_ready,
+                resolve_virtual_tool_id,
+            )
+
+            binding_id_rows = await db.execute(
+                select(SkillToolBinding.tool_id).where(
+                    SkillToolBinding.skill_id.in_(skill_ids)
+                )
+            )
+            binding_tool_ids = [row[0] for row in binding_id_rows.fetchall()]
+            if binding_tool_ids:
+                matched_rows = await db.execute(
+                    select(McpTool.id).where(McpTool.id.in_(binding_tool_ids))
+                )
+                matched_ids = {row[0] for row in matched_rows.fetchall()}
+                unmatched_ids = [
+                    tid for tid in binding_tool_ids if tid not in matched_ids
+                ]
+                _tenant_id = scope_for_session(db)
+                for virtual_id in unmatched_ids:
+                    tool = await resolve_virtual_tool_id(db, virtual_id, _tenant_id)
+                    if tool is None:
+                        continue
+                    if not is_decision_tool_ready(tool):
+                        logger.warning(
+                            "decision tool '%s' is enabled but not ready: "
+                            "missing input/output data type — registered "
+                            "as an unavailable stub in the toolset",
+                            tool.name,
+                        )
+                        decision_unready_names.add(tool.name)
+                    decision_tools_resolved.append(tool)
+                    allowed_tools.add(build_tool_name("decision", tool.name))
+
+    # ── Built-in inherent skills (FIX-20261101-120618) ───────────────────
+    # EVERY agent — role'd or role-less — knows its own context and can
+    # optimise its own work.  Injection is DYNAMIC (context-build time):
+    # definitions derive from SystemToolRegistry, no AgentTypeSkillBinding
+    # rows are created, and no confirmation/HITL applies (these are system
+    # tools, not management wrapper calls).
+    from app.services.agents.builtin_skills import (
+        get_inherent_canonical_tool_names,
+        get_inherent_skill_summaries,
+    )
+
+    allowed_tools.update(get_inherent_canonical_tool_names())
+    existing_summary_names = {s.name for s in skills_summary}
+    for inherent_id, inherent_name in get_inherent_skill_summaries():
+        if inherent_name not in existing_summary_names:
+            skills_summary.append(
+                SkillSummary(id=inherent_id, name=inherent_name)
+            )
+
     # ── Tool definitions (OpenAI format) ─────────────────────────────────────
     tool_definitions: list[dict[str, Any]] = []
     tool_name_map: dict[str, str] = {}
@@ -745,11 +866,27 @@ async def get_agent_context(
             server, bare_tool = parse_tool_name(tool_name)
         except ValueError:
             continue
-        if server != "system":
+        if server not in ("system", "cc"):
             continue
         if bare_tool in SystemToolRegistry.get_names():
             schema = SystemToolRegistry.get_schema(bare_tool)
             if schema is not None:
+                # FIX-20261101-000319: emit the CATEGORY-AWARE canonical name
+                # (sanitised for OpenAI: ____ → __) and populate the
+                # tool_name_map so the runtime restores canonical names on
+                # dispatch — cc____ meta tools are first-class, not bare.
+                registered = SystemToolRegistry.get(bare_tool)
+                canonical_tool_name = registered.canonical_name
+                sanitized = canonical_tool_name.replace("____", "__")
+                schema = {
+                    "type": "function",
+                    "function": {
+                        "name": sanitized,
+                        "description": schema["function"]["description"],
+                        "parameters": schema["function"]["parameters"],
+                    },
+                }
+                tool_name_map[sanitized] = canonical_tool_name
                 tool_definitions.append(schema)
 
     if allowed_agent_types:

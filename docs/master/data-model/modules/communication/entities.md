@@ -49,7 +49,7 @@ erDiagram
     }
     InterveneRequest {
         uuid id
-        uuid agent_session_id
+        uuid agent_session_id "nullable; NULL for conversation-scoped requests (no backing agent job)"
         uuid agent_type_id
         uuid conversation_session_id
         enum intervention_type
@@ -117,7 +117,7 @@ erDiagram
     ConversationTurn ||--o{ ToolCallRecord : "invokes"
     ConversationTurn }o--o| InterveneRequest : "references"
     InterveneRequest }o--|| ConversationSession : "surfaced in"
-    InterveneRequest }o--|| AgentJob : "originates from"
+    InterveneRequest }o--o| AgentJob : "originates from (null for conversation-scoped)"
     InterveneRequest ||--o| InterveneResponse : "resolved by"
     InterveneResponse }o--|| Identity : "responded by"
     AgentA2ASessionLink ||--o| ConversationSession : "links delegated context"
@@ -144,12 +144,14 @@ erDiagram
 
 **RuntimeToolCall notes:** `session_id` is a polymorphic **logical reference with no enforced FK** — it holds an `AgentJob` id when `session_kind=agent` and a `ConversationSession` id when `session_kind=conversation` (conversation turns execute without a backing agent job). `mcp_slug` maps to `McpServer.slug` at render time for MCP-routed calls (no FK). A2A delegation rows (`route_type=a2a`) are recorded permanently in `runtime_tool_calls` but rendered as delegation edges, not in-node tool calls.
 
+**Conversation-scoped interventions:** `InterveneRequest.agent_session_id` is optional because conversational agent types (e.g. the Control Center Assistant) execute turns without an `AgentJob`. Such requests carry `agent_session_id = NULL` and use `conversation_session_id` as the resume key; job-scoped requests still set both where a conversation exists.
+
 | Entity | Description |
 |--------|-------------|
 | **ConversationSession** | Primary user-facing session entity for conversational agent interactions; tracks session title (auto-generated), user ownership, agent type, and lifecycle status (active / closed / archived / error). Promoted from an internal execution record to a persistent, bounded conversation with full turn history. |
 | **ConversationTurn** | A single message within a session; carries a role label (user, agent, tool, or system) and a `turn_type` distinguishing regular `message` turns from `intervene_request` and `intervene_response` intervention events. Ordered chronologically. |
 | **ToolCallRecord** | A record of a specific tool invocation made during a conversation turn — what was called, with what arguments, what was returned, and any error encountered. |
-| **InterveneRequest** | An agent-initiated request for human intervention surfaced in a conversation session. Links to the originating `AgentJob` and parent `ConversationSession`. Tracks intervention type (approval, choice, text), lifecycle status, and delegation depth. |
+| **InterveneRequest** | An agent-initiated request for human intervention surfaced in a conversation session. Links to the originating `AgentJob` when there is one — `agent_session_id` is **optional**, so conversation-scoped requests (e.g. from the Control Center Assistant) carry NULL and resume from `conversation_session_id` — and to the parent `ConversationSession`. Tracks intervention type (approval, choice, text), lifecycle status, and delegation depth. |
 | **InterveneResponse** | The operator's response to an `InterveneRequest`. Carries the type-specific response value (approval boolean, selected choice, or free-form text) and the responding operator identity. |
 | **AgentJob** | A single provisioned agent execution tracked from submission through completion; carries trigger provenance via `triggered_by_user_id` (direct, delegated, or schedule-inherited) and delegation via `parent_job_id`/`root_job_id`. |
 | **RuntimeToolCall** | Append-only runtime log of every tool execution performed by Agent Runtime — system tools, MCP tools, and A2A delegations — keyed to an agent job or conversation session (polymorphic `session_id`, no FK). Powers the per-node tool-call routes and history in the runtime topology. |

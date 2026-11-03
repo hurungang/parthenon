@@ -35,7 +35,7 @@ class InterveneRequestStore:
     async def create_request(
         self,
         db: AsyncSession,
-        agent_session_id: uuid.UUID,
+        agent_session_id: uuid.UUID | None,
         agent_type_id: uuid.UUID,
         intervention_type: InterventionType,
         reason: str,
@@ -45,18 +45,26 @@ class InterveneRequestStore:
     ) -> InterveneRequest:
         """Create a new intervene request for an agent session.
 
+        ``agent_session_id`` may be None for conversation-scoped requests
+        (FIX-20261031-133253): the conversational assistant has no agent_jobs
+        row; ``conversation_session_id`` is then the resume key.
+
         Raises ValueError if a pending request already exists for the session.
         """
         with tracer.start_as_current_span(
             "intervene.create_request",
             attributes={
-                "intervene.agent_session_id": str(agent_session_id),
+                "intervene.agent_session_id": str(agent_session_id) if agent_session_id else None,
                 "intervene.intervention_type": intervention_type.value,
                 "intervene.conversation_session_id": str(conversation_session_id) if conversation_session_id else None,
                 "intervene.delegation_depth": delegation_depth,
             },
         ) as span:
-            existing = await self._find_pending_for_session(db, agent_session_id)
+            existing = (
+                await self._find_pending_for_session(db, agent_session_id)
+                if agent_session_id is not None
+                else None
+            )
             if existing is not None:
                 span.set_attribute("intervene.conflict", True)
                 raise ValueError(
@@ -199,8 +207,13 @@ class InterveneRequestStore:
             request.status = InterveneRequestStatus.responded
             request.responded_at = datetime.now(UTC)
 
-            # Resume the agent session
-            job = await db.get(AgentJob, request.agent_session_id)
+            # Resume the agent session (may be absent for conversation-scoped
+            # requests — FIX-20261031-133253)
+            job = (
+                await db.get(AgentJob, request.agent_session_id)
+                if request.agent_session_id is not None
+                else None
+            )
             if job is not None and job.status == AgentJobStatus.waiting_for_human:
                 job.status = AgentJobStatus.running
                 span.set_attribute("intervene.session_resumed", True)

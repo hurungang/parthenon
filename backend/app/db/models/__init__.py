@@ -141,6 +141,7 @@ from app.db.models.platform_setting import (  # noqa: F401
     PlatformSetting,
     PlatformSettingCategory,
 )
+from app.db.models.tenant_setting import TenantSetting  # noqa: F401
 from app.db.models.tenant_license import (  # noqa: F401
     LicenseTier,
     TenantLicense,

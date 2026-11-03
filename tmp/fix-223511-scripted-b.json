@@ -1,0 +1,7 @@
+[
+  { "match": "This skill has no tools bound",
+    "response": "Live verification complete: skill confirm-preview-live-223511 was created but the tool result carried the zero-binding warning (no tools bound)." },
+  { "match": "create-preview-live",
+    "response": "Creating the skill now.",
+    "tool_calls": [ { "name": "cc__invoke_management_tool", "args": { "tool_name": "create_skill", "args": { "name": "confirm-preview-live-b-223511", "data": { "description": "no-tools probe" } } } } ] }
+]

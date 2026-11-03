@@ -81,18 +81,29 @@ erDiagram
         datetime created_at
         datetime updated_at
     }
+    TenantSetting {
+        uuid id
+        uuid tenant_id "owning tenant; one row per key"
+        string key "unique per tenant (e.g. workflow_generation_model_id)"
+        json value
+        datetime created_at
+        datetime updated_at
+    }
 
     Tenant ||--o{ TenantUserMembership : "grants membership in"
     PlatformUser ||--o{ TenantUserMembership : "joins tenants via"
     Tenant ||--o{ TenantInvitation : "receives invitations for"
     TenantUserMembership ||--o{ TenantInvitation : "sends invitations"
     Tenant ||--o{ TenantAuditEvent : "records audit events for"
+    Tenant ||--o{ TenantSetting : "owns configuration for"
     PlatformSetting ||..o{ Tenant : "governs tenancy mode for"
 ```
 
 **Permission containment invariant**: role and policy grants apply **only within their owning tenant**; wildcard grants (`agent::*`, `system::*`, `*::*`) are shorthand *within* one tenant's role space and never cross tenant boundaries. `platform::` grants exist **only in the root tenant's role space**, held by root-tenant members with platform roles. No customer-tenant role carries `platform::` grants; no root-tenant role addresses another tenant's business data. Root memberships (`is_root`) cannot be changed, demoted, or removed by anyone — rejected attempts are recorded as `root_protection_rejected` audit events.
 
-**Sources**: `backend/app/db/models/tenant.py`, `backend/app/db/models/tenant_membership.py`, `backend/app/db/models/tenant_invitation.py`, `backend/app/db/models/tenant_audit_event.py`, `backend/app/db/models/platform_setting.py`, `backend/app/db/models/platform_user.py`
+**Per-tenant settings:** `TenantSetting` is the tenant-scoped key/value configuration store — exactly one row per **(tenant, key)**, so different tenants may hold different values for the same key. It is the counterpart of the tenant-agnostic `PlatformSetting` (which is globally unique by key and holds platform switches such as `multi_tenancy_enabled`). Its first consumer is the **per-tenant workflow-generation model selection** (`workflow_generation_model_id`), which replaced the former global `config/app.yaml` value and applies uniformly to agent, SOP, skill, and decision-tool workflow generation.
+
+**Sources**: `backend/app/db/models/tenant.py`, `backend/app/db/models/tenant_membership.py`, `backend/app/db/models/tenant_invitation.py`, `backend/app/db/models/tenant_audit_event.py`, `backend/app/db/models/platform_setting.py`, `backend/app/db/models/tenant_setting.py`, `backend/app/db/models/platform_user.py`
 
 ---
 
@@ -379,6 +390,8 @@ erDiagram
         datetime last_token_refresh_at "nullable; last CC OAuth refresh of this session"
         enum last_token_refresh_outcome "success | failure (nullable)"
         enum token_health_state "healthy | expiring | expired | unknown (computed, nullable)"
+        boolean requires_reauth "set only on an unrecoverable token-refresh failure"
+        string last_refresh_error "nullable; failure reason recorded when flagged"
         boolean is_active
         boolean is_default
         datetime created_at
@@ -413,6 +426,7 @@ erDiagram
 - `McpTool.tenant_id` is a denormalized, mandatory tenant stamp (defense in depth for hot-path lookups); it must always equal its server's tenant and is kept consistent by tool sync.
 - Tool **permission grants** resolve within the granting tenant: a grant in tenant A never authorizes a tool in tenant B (roles and tools share the same tenant scope).
 - At most one `McpSession` per `McpServer` may be marked `is_default = true`; a sole session is automatically treated as default. Sessions inherit tenant scope through their server.
+- **OAuth re-auth flag:** `requires_reauth` (with `last_refresh_error` carrying the reason) is set only when a token refresh fails **unrecoverably** (e.g. the identity provider reports the refresh token no longer exists); it is cleared when the user completes in-place re-auth on the **same** session. Transient failures (network, temporary provider errors) never set it.
 
 **Source**: `backend/app/db/models/mcp_hub.py`, `backend/app/db/models/token_health.py`
 
@@ -590,6 +604,7 @@ erDiagram
         json output_schema
         uuid output_data_type_id "optional; linked when output_type=typed"
         boolean is_active
+        boolean is_system "system-provided agent type (e.g. Control Center Assistant); protected from user edit/delete"
         datetime created_at
         datetime updated_at
     }
@@ -711,6 +726,8 @@ erDiagram
 
 **Tenant containment:** `AgentRole`, `AgentIdentity`, `AgentType`, `ModelConfig`, `AgentData`, `AgentOutput`, and `AgentDataType` carry a **mandatory** tenant reference; names and slugs are unique per tenant only (NULL-tenant global variants retired). Bindings resolve within the tenant: agent type → skill/SOP bindings and role grants on tools/skills/SOPs are same-tenant only; SOP delegation steps and A2A delegation **by name** resolve the target agent type by **(tenant, name)** — a name collision across tenants never routes to the wrong tenant's agent. Agent data saves and typed output queries (`get_data`, `get_output`, `query_result`) match the calling tenant only.
 
+**System-provided agent types:** `AgentType.is_system = true` marks an agent type as platform-supplied rather than tenant-authored — the UI surfaces it specially and users cannot modify or delete it. The first such agent type is the **Control Center Assistant** (seeded per tenant as `control-center-assistant`, conversational input, bound to the `control-center-management` skill), which performs Agents-menu management operations on the user's behalf. Each tenant receives its own seeded copy, so the flag is protected *within* a tenant and never shares data across tenants. This mirrors the existing `Skill.is_system`, `Role.is_system`, and `DecisionTool.is_system` conventions.
+
 ### Agent Execution Data Flow
 
 Saved data (AgentData) is intermediate and optional — the `save_data` tool may be called zero or more times per session. Output (AgentOutput) is the final, singular result per session, produced once at execution completion.
@@ -723,6 +740,7 @@ erDiagram
         string slug
         enum output_type
         boolean is_active
+        boolean is_system "system-provided; protected from user edit/delete"
     }
 
     AgentSession {
@@ -826,7 +844,7 @@ erDiagram
         json plan_steps "authored composition: script segments + LLM bridges + output decision"
         bool fully_scripted "execution-semantics mark"
         enum status "generating|ready|failed|needs_feedback|retired"
-        text error
+        text error "populated whenever status is needs_feedback"
         json feedback_comments "accumulated user feedback memory"
     }
     CommandPrompt {
@@ -841,7 +859,7 @@ erDiagram
         bool sandbox_check_passed "sandbox-compliance evidence"
     }
     ScriptExecutionRecord {
-        enum outcome
+        enum outcome "success|validation_failure|fell_back|partial_failure"
         int tokens_saved_estimate "historical rows"
         int tokens_saved_actual "measured, not estimated"
         bool sandbox_termination
@@ -877,7 +895,13 @@ reference) so the next run re-triggers the optimized-plan check.
 `CommandPrompt` is a stored mission, not a permission-grantable skill.
 `llm_mock_recordings` is test-infrastructure data keyed by request content
 (no relationship to ScriptVersion) and never contains API keys or identity
-tokens.
+tokens. `OptimizedImplementationPlan.error` is reliably populated whenever the
+plan ends in `needs_feedback` (the persisted failure reason is what the
+Optimized Plan tab renders) — no schema change, a behavioural guarantee.
+`ScriptExecutionRecord.outcome` may be `partial_failure`, recorded when a tool
+call returns a semantic error report; detecting semantic errors is **not yet
+automated**, so this value is currently written by explicit caller decision
+rather than derived.
 
 **Source**: `backend/app/db/models/script_registry.py` — ScriptDefinition, ScriptVersion, VerificationRun, FallbackEvent, RepairAttempt
 **Source**: `backend/app/db/models/optimized_plan.py` — OptimizedImplementationPlan
@@ -1177,7 +1201,7 @@ erDiagram
     }
     InterveneRequest {
         uuid id
-        uuid agent_session_id
+        uuid agent_session_id "nullable; NULL for conversation-scoped requests (no backing agent job)"
         uuid agent_type_id
         uuid conversation_session_id
         enum intervention_type
@@ -1228,7 +1252,7 @@ erDiagram
     ConversationTurn ||--o{ ToolCallRecord : "invokes"
     ConversationTurn }o--o| InterveneRequest : "references"
     InterveneRequest }o--|| ConversationSession : "surfaced in"
-    InterveneRequest }o--|| AgentJob : "originates from"
+    InterveneRequest }o--o| AgentJob : "originates from (null for conversation-scoped)"
     InterveneRequest ||--o| InterveneResponse : "resolved by"
     InterveneResponse }o--|| Identity : "responded by"
     ConversationSession }o--o| AgentJob : "backed by"
@@ -1240,6 +1264,8 @@ erDiagram
 ```
 
 **Source**: `backend/app/db/models/conversations.py`, `backend/app/db/models/intervene.py`, `backend/app/db/models/agents.py`, `backend/app/db/models/tool_calls.py`
+
+**Conversation-scoped interventions:** `InterveneRequest.agent_session_id` is **optional**. A request raised from a conversational turn (e.g. by the Control Center Assistant) has no backing `AgentJob`, so it carries `agent_session_id = NULL` and resumes from `conversation_session_id` — the conversation session is the resume key in that case. Job-scoped interventions still set `agent_session_id` and are surfaced in a conversation only when one exists.
 
 **Runtime topology projection:** Per execution node, the topology API exposes `trigger_source` (`user | schedule | delegated | unknown`), `trigger_source_label`, and `trigger_user_label` — all **derived at read time**, never persisted columns. `trigger_source=user` resolves `AgentJob.triggered_by_user_id` to its `Identity.display_name`; `trigger_source=delegated` inherits the parent job's trigger source via `AgentJob.parent_job_id`; `trigger_source=schedule` uses the schedule **name** as `trigger_source_label` and — when the creator is known — the `ScheduledJob.scheduled_by_user_id` creator's display name as `trigger_user_label`. Each node's `tool_calls` list is the runtime tool-call history (from `RuntimeToolCall`, non-A2A rows) resolved to MCP server slugs; A2A delegation rows (`route_type=a2a`) are recorded permanently in `runtime_tool_calls` but rendered as delegation edges rather than in-node tool calls.
 
@@ -1418,7 +1444,7 @@ erDiagram
     }
     InterveneRequest {
         uuid id
-        uuid agent_session_id
+        uuid agent_session_id "nullable; NULL for conversation-scoped requests"
         uuid agent_type_id
         uuid conversation_session_id
         enum intervention_type "approval | choice | text"
@@ -1440,7 +1466,7 @@ erDiagram
         datetime responded_at
     }
 
-    AgentSession ||--o{ InterveneRequest : "initiates"
+    AgentSession |o--o{ InterveneRequest : "initiates (0..1 — null for conversation-scoped requests)"
     InterveneRequest }o--|| ConversationSession : "surfaced in"
     InterveneRequest ||--o| InterveneResponse : "resolved by"
     InterveneResponse }o--|| Identity : "responded by"
@@ -1470,4 +1496,5 @@ erDiagram
     PlatformUser ||--o{ TenantUserMembership : "joins tenants via"
     Tenant ||--o{ TenantLicense : "is entitled by"
     Tenant ||--o{ TenantQuotaUsage : "accumulates quota usage for"
+    Tenant ||--o{ TenantSetting : "owns configuration for"
 ```

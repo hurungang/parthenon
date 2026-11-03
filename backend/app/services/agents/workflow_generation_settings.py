@@ -1,46 +1,96 @@
-"""Persistence helpers for workflow generation model selection."""
+"""Per-tenant workflow generation model selection (DB-backed).
+
+The selection lives in the ``tenant_settings`` table under the key
+``workflow_generation_model_id`` and is resolved for the SESSION tenant
+(the root tenant when multi-tenancy is off). Each tenant configures its
+own model — there is no global fallback.
+"""
 
 from __future__ import annotations
 
-import os
+import uuid
 from pathlib import Path
 
-import yaml
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.config import _resolve_app_yaml_path, get_settings
+from app.services.tenancy.tenant_settings_service import get_value, set_value
 
-
-def get_workflow_generation_model_id() -> str | None:
-    """Return the configured workflow generation model ID, or None if missing."""
-    model_id = (get_settings().workflow_generation_model_id or "").strip()
-    return model_id or None
+#: Tenant-setting key holding the workflow generation model id.
+WORKFLOW_GENERATION_MODEL_KEY = "workflow_generation_model_id"
 
 
-def set_workflow_generation_model_id(model_id: str | None) -> None:
-    """Persist workflow generation model ID into config/app.yaml.
+async def _session_tenant_id(db: AsyncSession) -> uuid.UUID | None:
+    """The current tenant id (root tenant when multi-tenancy is off)."""
+    from app.core.tenant_context import get_current_tenant_context
+    from app.services.tenancy.root_tenant import get_root_tenant_id
 
-    The value is saved alongside other application defaults so all services
-    resolve the same model selection.
+    context = get_current_tenant_context()
+    if context is not None:
+        return context.tenant_id
+    # No request context (startup, background jobs) — the root tenant
+    # is the default tenant context when the tenancy switch is OFF.
+    return await get_root_tenant_id(db)
+
+
+async def get_workflow_generation_model_id(db: AsyncSession) -> str | None:
+    """Return the session tenant's workflow generation model ID, or None."""
+    tenant_id = await _session_tenant_id(db)
+    if tenant_id is None:
+        return None
+    value = await get_value(db, tenant_id, WORKFLOW_GENERATION_MODEL_KEY)
+    if isinstance(value, str):
+        stripped = value.strip()
+        return stripped or None
+    return None
+
+
+async def set_workflow_generation_model_id(
+    db: AsyncSession, model_id: str | None
+) -> None:
+    """Persist the session tenant's workflow generation model selection."""
+    tenant_id = await _session_tenant_id(db)
+    if tenant_id is None:
+        raise RuntimeError("No tenant context available to store the workflow generation model")
+    cleaned = (model_id or "").strip() or None
+    await set_value(db, tenant_id, WORKFLOW_GENERATION_MODEL_KEY, cleaned)
+
+
+async def adopt_legacy_app_yaml_value(
+    db: AsyncSession,
+    *,
+    yaml_path_resolver=None,
+) -> str | None:
+    """Adopt the legacy ``config/app.yaml`` selection into the root tenant.
+
+    One-time, best-effort migration for existing deployments: reads the
+    legacy global ``workflow_generation_model_id`` from app.yaml and writes
+    it to the ROOT tenant's ``tenant_settings`` row.  Idempotent — never
+    overwrites an existing root-tenant selection.  The yaml value is left
+    in place.  Returns the adopted model id, or None when nothing was
+    adopted (no legacy value, or a selection already exists).  Caller
+    commits.
     """
-    target_path = _resolve_app_yaml_path()
-    tmp_path = target_path.with_suffix(".yaml.tmp")
+    import yaml
 
-    existing: dict[str, object] = {}
-    if target_path.exists():
-        with open(target_path, "r", encoding="utf-8") as fh:
+    from app.core.config import _app_yaml_path
+    from app.services.tenancy.root_tenant import ensure_root_tenant
+
+    resolve = yaml_path_resolver or _app_yaml_path
+    legacy_value: str | None = None
+    yaml_path = Path(resolve())
+    if yaml_path.exists():
+        with open(yaml_path, "r", encoding="utf-8") as fh:
             loaded = yaml.safe_load(fh)
         if isinstance(loaded, dict):
-            existing = dict(loaded)
+            raw = loaded.get("workflow_generation_model_id")
+            if isinstance(raw, str) and raw.strip():
+                legacy_value = raw.strip()
+    if not legacy_value:
+        return None
 
-    if model_id and model_id.strip():
-        existing["workflow_generation_model_id"] = model_id.strip()
-    else:
-        existing.pop("workflow_generation_model_id", None)
-
-    target_path.parent.mkdir(parents=True, exist_ok=True)
-    with open(tmp_path, "w", encoding="utf-8") as fh:
-        yaml.safe_dump(existing, fh, default_flow_style=False, allow_unicode=False, sort_keys=True)
-    os.replace(tmp_path, target_path)
-
-    # The settings object is cached; refresh it after mutating app.yaml.
-    get_settings.cache_clear()
+    root = await ensure_root_tenant(db)
+    existing = await get_value(db, root.id, WORKFLOW_GENERATION_MODEL_KEY)
+    if isinstance(existing, str) and existing.strip():
+        return None
+    await set_value(db, root.id, WORKFLOW_GENERATION_MODEL_KEY, legacy_value)
+    return legacy_value

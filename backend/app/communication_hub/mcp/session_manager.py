@@ -45,6 +45,14 @@ class McpSession:
     # decision-tool catalog and dispatch within the caller's tenant.
     tenant_id: str | None = None
 
+    # ── OAuth/OIDC context (parallel to the API-key path) ────────────────
+    # Which auth plane authenticated this session: "api_key" | "oauth".
+    auth_method: str | None = None
+    # Resolved identity of the OAuth-authenticated user.  Held server-side
+    # only — never serialized into client-visible responses.
+    platform_user_id: str | None = None
+    user_sub: str | None = None
+
     created_at: float = field(default_factory=time.time)
     last_activity: float = field(default_factory=time.time)
 
@@ -59,7 +67,8 @@ class McpSession:
     def to_public_context(self) -> dict[str, Any]:
         """Return a safe, client-facing subset of session context.
 
-        Deliberately excludes the identity token and any credential material.
+        Deliberately excludes the identity token, the user's ``sub`` /
+        ``platform_user_id`` and any credential material.
         """
         return {
             "session_id": self.session_id,
@@ -67,6 +76,7 @@ class McpSession:
             "protocol_version": self.protocol_version,
             "agent_role_id": self.agent_role_id,
             "api_key_name": self.api_key_name,
+            "auth_method": self.auth_method,
         }
 
 
@@ -120,3 +130,37 @@ class McpSessionManager:
         if (time.time() - self._last_cleanup) >= CLEANUP_INTERVAL_SECONDS:
             return self.cleanup_expired()
         return 0
+
+
+def is_request_authenticated(request: Any) -> bool:
+    """Return ``True`` when the request carries an accepted auth plane.
+
+    Both the API-key and OAuth/OIDC middleware set ``request.state.auth_method``
+    before the transport builds a session; any other value fails closed.
+    """
+    return getattr(request.state, "auth_method", None) in ("api_key", "oauth")
+
+
+def build_session_from_request(request: Any, manager: "McpSessionManager") -> McpSession:
+    """Seed an MCP session from the resolved auth context on ``request.state``.
+
+    Reads both the API-key context (``api_key_*``) and the OAuth context
+    (``user_sub`` / ``platform_user_id`` / ``permissions``) so both transports
+    share one construction path.  Identity material stays server-side only.
+    """
+    return manager.create_session(
+        auth_method=getattr(request.state, "auth_method", None),
+        identity_token=getattr(request.state, "identity_token", None),
+        agent_identity_id=getattr(request.state, "api_key_agent_identity_id", None),
+        agent_role_id=getattr(request.state, "api_key_agent_role_id", None),
+        permissions=list(
+            getattr(request.state, "permissions", None)
+            or getattr(request.state, "api_key_permissions", [])
+            or []
+        ),
+        skills=list(getattr(request.state, "api_key_skills", []) or []),
+        api_key_name=getattr(request.state, "api_key_name", None),
+        tenant_id=getattr(request.state, "tenant_id", None),
+        platform_user_id=getattr(request.state, "platform_user_id", None),
+        user_sub=getattr(request.state, "user_sub", None),
+    )

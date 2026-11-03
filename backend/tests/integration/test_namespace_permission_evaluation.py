@@ -53,10 +53,11 @@ class TestNamespacePermissionEvaluationRealDB:
         assert set(MODULE_GROUPS.keys()) == {
             "agent", "integration", "system", "platform", "tenant",
         }
-        # Correct counts
-        assert len(MODULE_GROUPS["agent"]) == 14
-        assert len(MODULE_GROUPS["integration"]) == 2
-        assert len(MODULE_GROUPS["system"]) == 3
+        # Correct counts (agent gained agent::scripts; integration gained
+        # integration::control_center — FIX-20261101-014511)
+        assert len(MODULE_GROUPS["agent"]) == 15
+        assert len(MODULE_GROUPS["integration"]) == 3
+        assert len(MODULE_GROUPS["system"]) == 5
         assert len(MODULE_GROUPS["platform"]) == 3
         assert len(MODULE_GROUPS["tenant"]) == 2
         # All entries in manifest
@@ -64,9 +65,9 @@ class TestNamespacePermissionEvaluationRealDB:
             for rt in module:
                 assert rt in ResourceTypeManifest
 
-    async def test_manifest_has_25_entries(self):
-        """Manifest should contain exactly 25 resource types (24 namespaced + bare 'agent')."""
-        assert len(ResourceTypeManifest) == 25
+    async def test_manifest_has_29_entries(self):
+        """Manifest should contain exactly 29 resource types (28 namespaced + bare 'agent')."""
+        assert len(ResourceTypeManifest) == 29
 
     async def test_all_entries_use_double_colon_delimiter(self):
         """Every namespaced manifest entry must use the :: delimiter; bare 'agent' is the exception."""

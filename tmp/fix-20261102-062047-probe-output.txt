@@ -1,0 +1,54 @@
+{
+  "probeBaseline": {
+    "oldDefaultLimit": 50,
+    "note": "recorded pre-fix: default window returned exactly 50 tools, only system+cc"
+  },
+  "admin": {
+    "defaultStatus": 200,
+    "defaultCount": 90,
+    "defaultCounts": {
+      "cc": 41,
+      "map-demo": 3,
+      "supabase": 29,
+      "system": 17
+    },
+    "totalHeader": "90",
+    "explicitCount": 90,
+    "explicitCounts": {
+      "cc": 41,
+      "map-demo": 3,
+      "supabase": 29,
+      "system": 17
+    },
+    "orderingDeterministic": true,
+    "pagingNoLossNoDup": true,
+    "supabasePresent": true,
+    "decisionServerPresent": false
+  },
+  "noCcPrincipal": {
+    "servers": [
+      "system",
+      "decision",
+      "map-demo",
+      "supabase"
+    ],
+    "ccServerHidden": true,
+    "toolCount": 49,
+    "ccToolsHidden": true,
+    "referencedCcToolId": "5371efa1-582f-5dfa-8d94-4ea2eff199dc",
+    "referencedCcToolResolveStatus": 200,
+    "referencedCcToolResolvedName": "cc____create_agent_identity"
+  },
+  "serverPaging": {
+    "pagesWalked": [
+      "system",
+      "decision",
+      "map-demo",
+      "supabase"
+    ],
+    "noDuplicates": true,
+    "pageSizeRespected": true,
+    "ccHidden": true
+  }
+}
+LIVE-PROBE-PASSED

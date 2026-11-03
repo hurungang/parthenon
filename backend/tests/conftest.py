@@ -48,6 +48,7 @@ _SERVICE_DEPENDENT_FILES = {
 # Files whose tests require a live PostgreSQL database (localhost:5432)
 _DB_DEPENDENT_FILES = {
     "tests/db/test_namespace_migration.py",
+    "tests/db/test_agent_type_is_system_migration.py",
 }
 
 # Individual tests (within otherwise-runnable files) that require PostgreSQL

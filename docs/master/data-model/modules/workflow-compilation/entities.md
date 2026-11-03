@@ -68,7 +68,7 @@ erDiagram
         uuid tenant_id
         uuid script_version_id "version served, optional"
         uuid session_id "FK to AgentJob — the run's identity/permission context"
-        enum outcome "success|validation_failure|fell_back"
+        enum outcome "success|validation_failure|fell_back|partial_failure"
         int duration_ms
         json tools_invoked "MCP tool calls made, 0..many"
         json model_backed_steps_used "semantic-bridge/decision steps, 0..many"
@@ -111,4 +111,5 @@ erDiagram
 - Script version content and resource caps are immutable per version; lifecycle progresses `draft → verified → compiled → retired`.
 - A repair-produced candidate version carries `repaired_from` lineage (separate from generic parent lineage) so defect-driven repair chains are auditable, and must pass verification before promotion to compiled.
 - Aggregate `health_status` on the Script Definition degrades with repeated fallback events.
+- `ScriptExecutionRecord.outcome` also accepts `partial_failure`, recorded when a tool call returns a semantic error report. Semantic-error detection is **not yet automated** — the value is written on explicit caller determination rather than derived.
 - Only Control Center persists registry and execution data; Agent Runtime consumes them exclusively via Control Center REST APIs.

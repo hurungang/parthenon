@@ -19,6 +19,7 @@ never API keys or identity tokens (they are never accepted in payloads).
 """
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import json
 import logging
@@ -43,6 +44,21 @@ MODE_SCRIPTED = "scripted"
 MODE_RECORD = "record"
 MODE_REPLAY = "replay"
 _VALID_MODES = {MODE_OFF, MODE_SCRIPTED, MODE_RECORD, MODE_REPLAY}
+
+# FIX-20261031-091657 — test-only delay/hang hooks so real-turn verification
+# can simulate a slow or hanging provider through the live stack:
+#   LLM_MOCK_DELAY_SECONDS  — sleep before every completion (default: none)
+#   LLM_MOCK_HANG=1         — block forever (never returns)
+def _mock_delay_seconds() -> float:
+    raw = os.environ.get("LLM_MOCK_DELAY_SECONDS") or ""
+    try:
+        return max(0.0, float(raw)) if raw else 0.0
+    except ValueError:
+        return 0.0
+
+
+def _mock_hang_enabled() -> bool:
+    return (os.environ.get("LLM_MOCK_HANG") or "").strip().lower() in ("1", "true", "yes")
 
 
 class LLMMockConfigurationError(Exception):
@@ -363,6 +379,11 @@ class MockChatModel(BaseChatModel):
         run_manager: Optional[AsyncCallbackManagerForLLMRun] = None,
         **kwargs: Any,
     ) -> ChatResult:
+        if _mock_hang_enabled():
+            await asyncio.Event().wait()  # never set — blocks until cancelled
+        delay = _mock_delay_seconds()
+        if delay > 0:
+            await asyncio.sleep(delay)
         return self._generate(messages, stop=stop, **kwargs)
 
     # ── Helpers ───────────────────────────────────────────────────────────

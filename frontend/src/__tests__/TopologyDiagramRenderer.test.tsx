@@ -1368,3 +1368,71 @@ describe('withCommunicationHub', () => {
     expect(twice.edges).toBe(once.edges)
   })
 })
+
+// ── Pending (in-flight) entities — FIX-20261102-100704 Work Item 2 ─────────────
+
+describe('TopologyDiagramRenderer — pending (loading) entities', () => {
+  const PENDING_ROLE: TopologyNode = {
+    id: 'role:r1',
+    type: 'role',
+    label: 'agents.panel.topologyLoading',
+    pending: true,
+  }
+
+  it('renders an accessible spinner in place of the entity icon while pending', async () => {
+    const { default: TopologyDiagramRenderer } = await import(
+      '../components/agents/TopologyDiagramRenderer'
+    )
+    const { container } = render(<TopologyDiagramRenderer nodes={[PENDING_ROLE]} edges={[]} />)
+
+    const spinner = screen.getByTestId('topology-node-pending-role:r1')
+    // Accessible: progressbar role + localized label/title.
+    expect(spinner.getAttribute('role')).toBe('progressbar')
+    expect(spinner.getAttribute('aria-label')).toBe('agents.panel.topologyLoading')
+    expect(spinner.querySelector('title')?.textContent).toBe('agents.panel.topologyLoading')
+    // Animated (SMIL rotation) inside the SVG — no HTML overlay.
+    expect(spinner.querySelector('animateTransform')).not.toBeNull()
+    // The pending label renders (aria/title + the node's own label text).
+    expect(screen.getAllByText('agents.panel.topologyLoading').length).toBeGreaterThan(0)
+    expect(container.querySelector('[data-node-icon="role"]')).toBeNull()
+  })
+
+  it('keeps the spinner geometry in viewBox units (scales with the diagram)', async () => {
+    const { default: TopologyDiagramRenderer } = await import(
+      '../components/agents/TopologyDiagramRenderer'
+    )
+    const { container } = render(
+      <TopologyDiagramRenderer nodes={[PENDING_ROLE]} edges={[]} viewZoom={2} viewFontZoom={1.6} />,
+    )
+    const spinner = screen.getByTestId('topology-node-pending-role:r1')
+    const radius = Number(spinner.querySelector('circle')?.getAttribute('r'))
+    // A small world-space radius (not a screen-pixel size) so the spinner
+    // scales sanely with the viewBox under zoom/responsive scaling.
+    expect(radius).toBeGreaterThan(0)
+    expect(radius).toBeLessThanOrEqual(6)
+    expect(container.querySelector('svg')).not.toBeNull()
+  })
+
+  it('does not render a spinner for a resolved node (normal icon + label)', async () => {
+    const { default: TopologyDiagramRenderer } = await import(
+      '../components/agents/TopologyDiagramRenderer'
+    )
+    const { container } = render(<TopologyDiagramRenderer nodes={[ROLE_NODE]} edges={[]} />)
+
+    expect(screen.queryByTestId(`topology-node-pending-${ROLE_NODE.id}`)).toBeNull()
+    expect(container.querySelector('[data-node-icon="role"]')).not.toBeNull()
+    expect(screen.getByText('My Role')).toBeDefined()
+  })
+
+  it('does not navigate when a pending node is clicked', async () => {
+    const { default: TopologyDiagramRenderer } = await import(
+      '../components/agents/TopologyDiagramRenderer'
+    )
+    const onNodeClick = vi.fn()
+    render(<TopologyDiagramRenderer nodes={[PENDING_ROLE]} edges={[]} onNodeClick={onNodeClick} />)
+
+    fireEvent.click(screen.getByTestId('topology-node-pending-role:r1'))
+
+    expect(onNodeClick).not.toHaveBeenCalled()
+  })
+})

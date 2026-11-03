@@ -22,12 +22,7 @@ def _app_yaml_path() -> str:
     return os.environ.get(
         "APP_YAML_PATH", str(_REPO_ROOT / "config" / "app.yaml")
     )
-
-
-def _resolve_app_yaml_path() -> Path:
-    """Return resolved Path for app.yaml (used for writing settings back)."""
-    return Path(_app_yaml_path())
-
+ 
 
 # ---------------------------------------------------------------------------
 # Telemetry — exporter type enum and per-exporter option models
@@ -270,7 +265,6 @@ class Settings(BaseSettings):
     identity_realm: str = Field(default="")
     identity_setup_complete: bool = Field(default=False)
     agent_realm_name: str = Field(default="ai_agents")
-    workflow_generation_model_id: str = Field(default="")
 
     # Credential Vault — must be exactly 32 bytes for AES-256
     credential_vault_key: str = Field(default="change-me-32-byte-key-for-aes256!")
@@ -328,6 +322,22 @@ class Settings(BaseSettings):
     # Agent defaults
     default_max_agent_instances: int = 5
     agent_question_timeout_seconds: int = 300
+    # FIX-20261031-091657: hard bound for one conversational LLM completion in
+    # the Agent Runtime executor — a hanging provider (e.g. unreachable
+    # api_base_url) previously left the turn awaiting forever. Applied both as
+    # an asyncio bound around the conversational agent invocation and as the
+    # LangChain client request timeout.
+    conversation_llm_timeout_seconds: int = 120
+    # FIX-20261031-133253: how long a conversational turn may stay paused on
+    # a human_intervene confirmation before the turn gives up (must stay
+    # comfortably below the CH turn watchdog bound,
+    # agent_question_timeout_seconds, so the watchdog never fires first).
+    conversation_intervention_timeout_seconds: int = 240
+    # FIX-20261101-120618: default lower time bound (in days, from now) applied to
+    # the sessions list query (GET /conversations/sessions) when no explicit
+    # date range is given — keeps the default view bounded. Explicit
+    # date_from/date_to params override; all_time=true disables the window.
+    conversation_sessions_default_window_days: int = 7
 
     # Scheduling
     scheduler_enabled: bool = True

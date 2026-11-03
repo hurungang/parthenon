@@ -25,6 +25,8 @@ Update this table whenever new components are added or new log events are instru
 | **API Key Auth (Communication Hub)** | Authentication validation (`api_key.auth.success`, `api_key.auth.failed`); skill loading (`api_key.load_skills`); tool call proxying (`api_key.tool_call`) |
 | **API Key Management (Control Center)** | Key lifecycle events (`api_key.created`, `api_key.revoked`, `api_key.deleted`); internal validation lookups (`api_key.validation`) |
 | **MCP Protocol Server (Communication Hub)** | MCP handshake and tool activity (`mcp.initialize`, `mcp.tools_list`, `mcp.tools_call`); expired-key rejections (`api_key.auth.failed` with reason `expired`) |
+| **MCP OAuth Bearer Auth (Communication Hub)** | OAuth/OIDC user-token validation on `/mcp*`: authenticated user, bound tenant, invalid/expired token, missing `sub`, and Control Center `/resolve` failures (`OAuth middleware:*` lines) |
+| **Control Center Assistant (Control Center)** | Management-tool session resolution and dispatch (`Management resolve:*`), permission denials and in-band scopes/deletes (returned to the caller, logged as request outcomes), assistant seeding (`AssistantSeeder:*`) |
 | **All components** | Service startup and shutdown with configuration summary; health check results; unhandled exceptions with full stack trace |
 | **Startup Validation** | `startup.validation.*` events — dependency reachability checks at service boot (PostgreSQL, Keycloak, Redis, Control Center); pass/fail with latency and error detail |
 | **Configuration Source** | `config.*.resolved` events — infrastructure connection source resolution (database, redis, OIDC, telemetry); emitted at INFO on every startup |
@@ -544,6 +546,155 @@ The `ApiKeyUsageLog` database table provides an immutable, append-only audit tra
 | Skill resolution failures | Communication Hub / Control Center | `backend/logs/communication-hub.log` for `api_key.load_skills` errors; `backend/logs/control-center.log` for permission resolution errors |
 | Identity token refresh failures | Control Center | `backend/logs/control-center.log` — search for `identity.token_refresh_failed` |
 | Distributed trace correlation | All services | Use `trace_id` from any log line to jump to the full trace in Jaeger |
+
+---
+
+## Control Center Assistant Events
+
+The Control Center Assistant is a **delegated actor**: it acts as the signed-in OAuth user, never elevated, never deleting. Management tools are `cc____<bare>` tools on the Communication Hub MCP protocol server; both the in-app chatbot and external MCP clients use the same OAuth identity plane and the same permission resolution.
+
+**Log files** (from `docs/config.yaml`): `backend/logs/control-center.log`, `backend/logs/communication-hub.log`, `backend/logs/agent-runtime.log`, `backend/logs/otel.log`. Files rotate at ~10 MB with `.1`/`.2` retained.
+
+> **Instrumentation note**: the assistant emits **plain structured log lines today** — there are no dedicated `management_tool.*` OTel counters or JSON event names yet. The *Proposed event* column is the stable taxonomy to adopt when counters/events are instrumented; use the *Observed message* column for live greps.
+
+### Management Tool Execution and Permission Decisions
+
+**Log source**: `backend/logs/control-center.log`
+
+| Observed message | Proposed event | Level | Key fields | When logged |
+|------------------|----------------|-------|-----------|-------------|
+| `Management resolve: sub=… user=… tenant=… permitted=…` | `management_tool.session_resolved` | INFO | `sub`, `platform_user_id`, `tenant_id`, `permitted_count` | OAuth MCP session creation; `permitted=0` means the user holds no management grants in the resolved tenant |
+| `authorize_identity DENIED: user_id=… module=… action=… reason=…` | `management_tool.permission_denied` | WARN | `user_id`, `resource_type` (`module`), `action`, `reason` | Parity authorization failed for the user's own scope on `/{tool_name}` or the `invoke_management_tool` wrapper; the HTTP response carries `PermissionDeniedDetail` |
+| `authorize_identity ALLOWED: user_id=… module=… action=…` / `ALLOWED via membership: …` | `management_tool.call_allowed` | DEBUG | `user_id`, `module`, `action` | Successful per-call re-authorization (debug level; enable temporarily when tracing a denial) |
+| `authorize_identity: user_id=… has no active membership in resolved tenant=… — no_access_to_workspace` | `management_tool.tenant_membership_denied` | WARN | `user_id`, `tenant_id` | Identity is valid but holds no membership in the resolved tenant; returns the structured `no_access_to_workspace` 403 |
+| Tool result body `{"error":"out_of_scope"}` returned by the Communication Hub (no CC write attempted) | `management_tool.scope_rejected` | WARN | `tool_name`, `requested_scope` | Request outside the Agents-menu / MCP Hub management surface |
+| Tool result body `{"error":"deletion_not_supported"}` | `management_tool.delete_rejected` | WARN | `tool_name` | Any delete-shaped `cc____delete_*` attempt; deliberately non-mutating |
+| Tool result body `{"error":"permission_denied"}` returned by the Communication Hub | `management_tool.permission_denied` (CH-side) | WARN | `tool_name` | Canonical name is not in the OAuth session's permitted set; denied before the CC call |
+| HTTP 404 `Unknown or out-of-scope management tool` / `Unknown management verb` | `management_tool.unknown_tool` | WARN | `tool_name`, `verb` | Unregistered tool or delete-verb backstop at the CC dispatch layer |
+| `authorize_identity: PlatformUser not found for sub=… — user must re-authenticate` | `management_tool.identity_resolution_failed` | WARN | `sub` | OAuth identity could not resolve to a `PlatformUser`; fail-closed, no write performed |
+| `Created intervene request …` / `Submitted response …` from the intervene service | see Intervention lifecycle below | INFO | `request_id`, `session_id`, `operator` | Confirmation/HITL lifecycle |
+
+**Dispatch path**: Communication Hub `tools/call` → `POST /api/v1/internal/management-tools/{tool_name}` (or the meta wrapper `invoke_management_tool`) → re-authorization against the user's own `(resource_type, action)` → handler. The per-call denial is returned in-band (assistant relays it) — there is no elevated fallback path.
+
+### MCP OAuth Identity Plane (Communication Hub)
+
+**Log source**: `backend/logs/communication-hub.log`
+
+| Observed message | Proposed event | Level | Key fields | When logged |
+|------------------|----------------|-------|-----------|-------------|
+| `OAuth middleware: authenticated user <sub> on <path>` | `mcp.oauth.authenticated` | INFO | `sub`, `path` | OIDC (or platform-account) Bearer token validated on `/mcp*` |
+| `OAuth middleware: bound tenant <tenant_id> for user <sub>` | `mcp.oauth.tenant_bound` | INFO | `tenant_id`, `sub` | Multi-tenant mode: CC-signed header set bound for downstream calls |
+| `OAuth middleware: invalid user token on <path>` | `mcp.oauth.rejected` (reason `invalid_token`) | WARN | `path` | Signature/expiry/issuer failure → HTTP 401, `auth_type=oauth` |
+| `OAuth middleware: token missing sub claim on <path>` | `mcp.oauth.rejected` (reason `missing_subject`) | WARN | `path` | Valid signature but unusable identity → HTTP 401 |
+| `OAuth middleware: CC resolve returned HTTP <n> for sub <sub>` | `mcp.oauth.rejected` (reason `identity_unresolvable` / `tenant_unresolvable`) | WARN | `sub`, `status_code` | CC `/resolve` denied (unknown user or unresolvable tenant) → HTTP 401 |
+| `OAuth middleware: failed to resolve user via CC: <exc>` | `mcp.oauth.resolve_error` | ERROR | `sub`, `error` | Transport/CC failure during resolve; also fail-closed 401 |
+| `OAuth middleware: unexpected OIDC error` / `platform token validation failed` | `mcp.oauth.validation_error` | WARN | `path` | Validation exceptions (JWKS fetch, clock skew, malformed token) |
+
+Non-JWT (opaque `phn_sk_*`) tokens fall through untouched to the API-key middleware — see [API Key Log Events](#api-key-log-events).
+
+### Control Center (cc) Entity Guards
+
+**Log source**: `backend/logs/control-center.log` (MCP Hub REST surface)
+
+| Response code | Proposed event | Level | Key fields | When returned |
+|---------------|----------------|-------|-----------|---------------|
+| `403` with `code = system_managed_integration` (detail: "system-managed and cannot be modified") | `cc.entity.system_managed_rejected` | WARN | `actor`, `operation` (`update`/`delete`/`sync`/`oauth`) | Any attempt to mutate/lifecycle the `cc` entity — locked for everyone; the seeder is the only writer |
+| `403` with `code = system_managed_integration` (detail: "Sessions are not supported") | `cc.entity.sessions_unsupported` | WARN | `actor`, `operation` | Session operations against `cc`; access flows through role/skill grants only |
+| `403` with `required_permission.resource_type = integration::control_center` | `cc.entity.permission_gated` | WARN | `actor`, `action` (`read`/`manage`) | Tool-grant operations on `cc` tools without the entity grant |
+| `404 MCP server not found` (while the `cc` row exists) | `cc.entity.hidden` | DEBUG | `actor` | Read-visibility gate: the entity is hidden from callers lacking `integration::control_center:read` |
+| `403 System agent types cannot be modified` / `cannot be deleted` | `assistant.agent_type.protected` | WARN | `agent_type_id`, `actor` | Direct REST mutation of the seeded `is_system=true` assistant agent type |
+
+### Conversation Turn Lifecycle
+
+**Log sources**: `backend/logs/communication-hub.log` (socket, watchdog, heartbeat) and `backend/logs/agent-runtime.log` (agent loop, LLM timeout, guardrail stops)
+
+| Observed message | Proposed event | Level | Key fields | When logged |
+|------------------|----------------|-------|-----------|-------------|
+| `WebSocket connected: session=… subject=…` | `chat.ws.connected` | INFO | `session_id`, `subject` | Authenticated conversation socket (also the point where the user JWT is cached for dual-identity tool calls) |
+| `WebSocket rejected: invalid token for session …` | `chat.ws.rejected` (reason `invalid_token`) | WARN | `session_id` | Close `1008` — no valid OIDC or platform token |
+| `WebSocket rejected: <reason> for session … (subject=…)` | `chat.ws.rejected` (reason `tenant_context`) | WARN | `session_id`, `subject`, `reason` | Close `4003` — tenant context could not be bound (fail-closed) |
+| `WebSocket disconnected: session=… code=… reason=…` | `chat.ws.disconnected` | INFO | `session_id`, `code`, `reason` | Every socket close, including idle-proxy closes — correlate `code` with the disconnect alert |
+| `Conversation turn watchdog fired for session … after …s` | `chat.turn.watchdog` (kind `timeout`) | WARN | `session_id`, `timeout_seconds` | Whole-turn bound (`agent_question_timeout_seconds`) fired before any reply |
+| `Conversation turn persistence exceeded the watchdog for session …` | `chat.turn.watchdog` (kind `persistence_timeout`) | WARN | `session_id`, `timeout_seconds` | Reply already reached the user; only the CC persistence tail hung (no duplicate error emitted) |
+| `Cancelled pending conversation turn for session … (session ended)` | `chat.turn.cancelled` | INFO | `session_id` | End-session termination canceled the in-flight CH turn |
+| `Conversation turn blocked for session …: code=…` | `chat.turn.blocked` | WARN | `session_id`, `code` (`assistant_model_not_configured`, `iteration_limit`, `guardrail_<reason>`) | Structured turn error surfaced to the UI with typed guidance |
+| `Background conversation turn failed for session …` | `chat.turn.failed` | ERROR | `session_id`, `error` (stack) | Unexpected exception in the turn pipeline |
+| `WebSocket send failed for session … (socket=…)` | `chat.ws.send_failed` | WARN | `session_id`, `socket_state` | Dead socket during reply delivery; persistence is unaffected and the live-socket lookup retries on the next send |
+| `Conversation turn … paused on human_intervene — waiting up to …s for operator response` | `chat.turn.waiting_for_human` | INFO | `conv_session_id`, `timeout_seconds` | Assistant called `human_intervene` (confirmation before a write) |
+| `Conversation turn … still paused on human_intervene (…s) — extending wait` | `chat.turn.intervention_wait_extended` | INFO | `conv_session_id`, `elapsed_seconds` | LLM timeout re-armed while an intervention is legitimately pending |
+| `Conversation turn timed out after …s (session=…, bound=…)` | `chat.turn.llm_timeout` | WARN | `conv_session_id`, `bound` | AR `conversation_llm_timeout_seconds` expired → `timeout_or_failed` |
+| `Conversation guardrail stop (LangGraph[ , post-resume]): session=… reason=…` | `chat.turn.guardrail_stop` | WARN | `conv_session_id`, `reason` | Guardrail stop forwarded to CH; `iteration_limit` becomes the user-facing step-limit message |
+
+The `thinking_heartbeat` status event is emitted every 15 s while a turn is in flight (keeps idle proxies open and the UI spinner alive); it is a WS status payload, not a log line — absence of heartbeats alongside a live socket is itself the signal.
+
+### Intervention Lifecycle (Confirmation / HITL)
+
+**Log sources**: `backend/logs/agent-runtime.log` (graph pause/resume) and `backend/logs/control-center.log` (request state); OTEL spans `intervene.create_request`, `intervene.submit_response`, `intervene.cancel_request`
+
+| Observed message | Proposed event | Level | Key fields | When logged |
+|------------------|----------------|-------|-----------|-------------|
+| `Created intervene request … for session … (type=…)` | `intervention.created` | INFO | `request_id`, `agent_session_id`, `intervention_type` | Assistant requested approval/choice/text before a mutating action |
+| `Received intervention response for request … from session …` | `intervention.response_received` | INFO | `request_id`, `session_id` | WS `intervene_response` arrived |
+| `Intervention response … persisted via CC` | `intervention.approved` / `intervention.denied` | INFO | `request_id` | Response persisted; approve/deny is carried in the response payload (`approval_value`) |
+| `Resumed agent session … after human response to request …` | `intervention.session_resumed` | INFO | `request_id`, `session_id` | Non-conversational session resumed from `waiting_for_human` |
+| `Conversation turn … resuming deep-agent loop after operator response (approval=…)` | `intervention.resumed` | INFO | `conv_session_id`, `approval_value` | Same conversational graph resumed via `Command(resume=…)` |
+| `The confirmation request timed out without a response` (user-facing) + `timeout_or_failed` status | `intervention.timeout` | WARN | `conv_session_id`, `timeout_seconds` | No response within `conversation_intervention_timeout_seconds`; **the operation was not executed** |
+| `Failed to persist intervention response …: …` | `intervention.persist_failed` | ERROR | `request_id`, `error` | CC submit failed; UI shows an intervention error and stays blocked |
+| `Cancelled intervene request …` | `intervention.cancelled` | INFO | `request_id` | Operator or session-end canceled the pending request |
+
+While an intervention is pending, further chat messages are rejected with a `chat_blocked` payload (`reason=intervention_pending`) rather than queued — a user reporting "the assistant stopped accepting messages" is usually an unanswered confirmation.
+
+### Assistant Seed Events
+
+**Log source**: `backend/logs/control-center.log` (startup)
+
+| Observed message | Proposed event | Level | Key fields | When logged |
+|------------------|----------------|-------|-----------|-------------|
+| `AssistantSeeder complete: {summary}` | `assistant.seed.success` | INFO | `tenants`, `per_tenant` (created/updated) | Idempotent per-tenant seed finished |
+| `AssistantSeeder failed; the assistant may be unavailable.` | `assistant.seed.failed` | ERROR | `error` (stack) | Seeder raised; assistant agent type/tools may be missing |
+| `AssistantSeeder: provisioning failed for tenant … — rolling back this tenant only and continuing.` | `assistant.seed.tenant_failed` | ERROR | `tenant_id` | Per-tenant failure (other tenants unaffected) |
+| `AssistantSeeder: management tool '…' could not be provisioned for tenant … — binding skipped.` | `assistant.seed.binding_skipped` | ERROR | `tool_name`, `tenant_id` | Registry/tool row mismatch; that management tool is unreachable through the skill |
+| `AssistantSeeder: created management skill '…'` / `updated management skill '…'` | `assistant.seed.skill` | INFO | `skill_name`, `tenant_id` | Management skill upsert |
+| `AssistantSeeder: provisioned management tool '…' for tenant …` | `assistant.seed.tool` | INFO | `tool_name` (`cc____…`), `tenant_id` | New `cc____` tool row created |
+| `AssistantSeeder: provisioned/refreshed per-tenant Control Center (cc) server for tenant …` | `assistant.seed.cc_server` | INFO | `tenant_id` | Protected `cc` MCP entity upserted/drift-corrected |
+| `AssistantSeeder: retired N legacy system____ management rows for tenant …` | `assistant.seed.legacy_retired` | INFO | `tenant_id`, `rows` | One-time `system____` → `cc____` namespace migration |
+| `AssistantSeeder: created/updated assistant agent type '…'` | `assistant.seed.agent_type` | INFO | `agent_type`, `tenant_id` | Seeded `is_system=true` assistant agent type |
+| `SkillSeeder complete: {summary}` / `SkillSeeder failed; …` | `skill.seed.*` | INFO / ERROR | `summary` | Companion seeder; a failure degrades default skills, not the assistant |
+
+A seeded assistant with **no model bound** is valid: the first turn returns the structured `assistant_model_not_configured` error until an administrator picks a model per workspace (System Config → Assistant model).
+
+### Knowledge and Meta-Tool Dispatch
+
+**Log sources**: `backend/logs/communication-hub.log` (`MCP tool call: tool=…`), `backend/logs/control-center.log` (meta endpoints)
+
+| Observed message | Proposed event | Level | Key fields | When logged |
+|------------------|----------------|-------|-----------|-------------|
+| `MCP tool call: tool=… session=… key=…` | `mcp.tools_call` | INFO | `tool_name` (canonical `cc____…`), `session_id`, `api_key_name` | Every `tools/call` reaching the protocol server (OAuth sessions show the session, not a key) |
+| Meta dispatch of `invoke_management_tool` / `list_management_tools` / `get_management_tool_schema` / `search_assistant_knowledge` | `assistant.meta.dispatch` | INFO (proposed) | `meta_tool`, `target_tool`, `count` | Progressive tool disclosure: the assistant context carries only the constant meta tools, never the ~36 management schemas |
+| `MCP method <m> failed` | `mcp.method.failed` | ERROR | `method`, `error` | Unhandled exception inside a JSON-RPC method (also covers catalog build failures) |
+
+`list_management_tools` returns the cheap catalog (name + one-line description + `requires_permission`); `get_management_tool_schema` returns one full schema on demand. A `404 Unknown management tool` from either is a registry/parity mismatch, not a permission problem.
+
+### Catalog Listing Anomalies
+
+**Log source**: `backend/logs/communication-hub.log` (`tools/list`) and `backend/logs/control-center.log` (MCP Hub REST listing)
+
+| Signal | Proposed event | Level | Key fields | Meaning |
+|--------|----------------|-------|-----------|---------|
+| OAuth `tools/list` returns an empty array while `/resolve` reported `permitted>0` | `assistant.catalog.empty` | WARN | `sub`, `permitted_count` | Bridge filtering dropped every permitted name (registration vs canonical-name drift) |
+| REST list returns exactly `limit` rows (default 50, hard cap 100) | `assistant.catalog.page_truncated` | INFO | `resource`, `limit`, `offset` | Normal pagination — the assistant must page with `offset`; a "missing record" report is usually this |
+| `cc` server visible to an identity without `integration::control_center:read` | `assistant.catalog.cc_entity_leak` | WARN | `actor` | Visibility-gate regression on the protected entity |
+| `404 Unknown or out-of-scope management tool` at dispatch | `assistant.catalog.unknown_tool` | WARN | `tool_name` | Model called a tool that was never in its catalog (stale schema/instruction drift) |
+
+### Audit Attribution and Sensitive Data
+
+Audit attribution is **database-backed, not log-derived**: every management action is attributed to the OAuth-authenticated user and recorded in `ToolCallRecord` (`tool_name`, `tool_input`, `tool_output`, `error`) plus `RuntimeToolCall`. Query the conversation/tool-call store for compliance review; logs are the operational signal only.
+
+Sensitive-data exclusion (reinforces the existing logging conventions):
+
+- Never log identity tokens, refresh tokens, JWT bodies, DB credentials, API keys, or decrypted MCP/provider credentials.
+- Read handlers omit credential material and write handlers never echo it back into tool results; no new assistant log field may carry credential material.
+- Log operational identifiers only: `tool_name`, `resource_type`, `action`, `sub`/`tenant_id`, `session_id`, `request_id`, `code`/`reason`.
 
 ---
 

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useQueryClient } from '@tanstack/react-query'
+import { useNavigate } from 'react-router-dom'
 import {
   Alert,
   Avatar,
@@ -13,10 +14,13 @@ import {
   DialogContent,
   DialogTitle,
   Fab,
+  FormControlLabel,
   IconButton,
+  Pagination,
   Paper,
   Popover,
   Stack,
+  Switch,
   TextField,
   Typography,
 } from '@mui/material'
@@ -29,8 +33,11 @@ import FullscreenIcon from '@mui/icons-material/Fullscreen'
 import FullscreenExitIcon from '@mui/icons-material/FullscreenExit'
 import VisibilityIcon from '@mui/icons-material/Visibility'
 import VisibilityOffIcon from '@mui/icons-material/VisibilityOff'
+import ListAltIcon from '@mui/icons-material/ListAlt'
+import AddIcon from '@mui/icons-material/Add'
 import apiClient from '../../api/apiClient'
 import { useSessionExecutionLogStream } from '../../hooks/useSessionExecutionLogStream'
+import { useAssistantModelConfig } from '../../hooks/useAssistantModelConfig'
 import PermissionDeniedAlert from '../permissions/PermissionDeniedAlert'
 import { ContentRenderer } from '../ContentRenderer'
 import { MaximizableContent } from '../MaximizableContent'
@@ -44,9 +51,219 @@ import {
   type DelegationCycle,
   type ConversationalGuardrailUsage,
 } from '../../hooks/useChatSession'
-import { useEndConversationSession } from '../../hooks/useConversationSessions'
+import { useEndConversationSession, useConversationSessionsPage } from '../../hooks/useConversationSessions'
+import { markAssistantSessionEnded } from '../../utils/assistantSessionState'
 import { buildDelegationHistoryFromTurns, buildHistoryMessagesFromTurns } from '../../utils/delegationHistory'
 import type { AgentJob, AgentJobStatus, ConversationSessionDetail, ExecutionLogEntry } from '../../types'
+
+/**
+ * FIX-20261101-120618 Work Item 1: in-chat "View All Sessions" list upgraded
+ * to the sessions-tab experience — active/ended toggle (default active-only),
+ * date-range inputs (default = configured window, mirrored by
+ * DEFAULT_SESSIONS_WINDOW_DAYS), paginated time-desc rows. Resuming calls
+ * back into ConversationDialog's switch handler (POST /conversations/{id}/resume)
+ * — the previous session is never ended or archived from here (FIX-111439).
+ * Ended sessions are viewable but never resumable.
+ */
+
+/** Mirrors backend Settings.conversation_sessions_default_window_days (7). */
+const DEFAULT_SESSIONS_WINDOW_DAYS = 7
+const SESSIONS_PAGE_SIZE = 10
+
+function toDateInput(d: Date): string {
+  return d.toISOString().slice(0, 10)
+}
+
+function SessionSwitcherList({
+  agentTypeId,
+  currentSessionId,
+  onResume,
+}: {
+  agentTypeId: string
+  currentSessionId: string | null
+  onResume: (sessionId: string) => void
+}) {
+  const { t } = useTranslation()
+  const [showEnded, setShowEnded] = useState(false)
+  const [page, setPage] = useState(1)
+  const [fromInput, setFromInput] = useState(() =>
+    toDateInput(new Date(Date.now() - DEFAULT_SESSIONS_WINDOW_DAYS * 24 * 3600 * 1000)),
+  )
+  const [toInput, setToInput] = useState(() => toDateInput(new Date()))
+
+  const { data, isLoading, error } = useConversationSessionsPage({
+    agentTypeId,
+    status: showEnded ? 'all' : 'active',
+    dateFrom: fromInput ? `${fromInput}T00:00:00.000Z` : undefined,
+    dateTo: toInput ? `${toInput}T23:59:59.999Z` : undefined,
+    page,
+    pageSize: SESSIONS_PAGE_SIZE,
+  })
+
+  const sessions = data?.items ?? []
+  const totalPages = data ? Math.max(1, Math.ceil(data.total / data.page_size)) : 1
+
+  if (isLoading) {
+    return (
+      <Box display="flex" justifyContent="center" py={3}>
+        <CircularProgress size={24} />
+      </Box>
+    )
+  }
+  if (error) {
+    return <PermissionDeniedAlert error={error} fallbackMessage={t('app.error')} />
+  }
+  return (
+    <Box>
+      {/* Filters: ended toggle + date range (from/to) */}
+      <Box display="flex" alignItems="center" gap={2} flexWrap="wrap" mb={1.5}>
+        <FormControlLabel
+          control={
+            <Switch
+              size="small"
+              checked={showEnded}
+              inputProps={{ 'aria-label': t('conversations.sessions.showEnded') }}
+              onChange={() => {
+                setShowEnded((v) => !v)
+                setPage(1)
+              }}
+            />
+          }
+          label={<Typography variant="body2">{t('conversations.sessions.showEnded')}</Typography>}
+        />
+        <Box component="span" sx={{ display: 'inline-flex', alignItems: 'center', gap: 1 }}>
+          <Typography variant="body2" component="label" htmlFor="sessions-date-from">
+            {t('conversations.sessions.dateFrom')}
+          </Typography>
+          <TextField
+            id="sessions-date-from"
+            type="date"
+            size="small"
+            variant="outlined"
+            value={fromInput}
+            inputProps={{ 'aria-label': t('conversations.sessions.dateFrom') }}
+            onChange={(e) => {
+              setFromInput(e.target.value)
+              setPage(1)
+            }}
+            sx={{ width: 165 }}
+          />
+          <Typography variant="body2" component="label" htmlFor="sessions-date-to">
+            {t('conversations.sessions.dateTo')}
+          </Typography>
+          <TextField
+            id="sessions-date-to"
+            type="date"
+            size="small"
+            variant="outlined"
+            value={toInput}
+            inputProps={{ 'aria-label': t('conversations.sessions.dateTo') }}
+            onChange={(e) => {
+              setToInput(e.target.value)
+              setPage(1)
+            }}
+            sx={{ width: 165 }}
+          />
+        </Box>
+      </Box>
+
+      {sessions.length === 0 ? (
+        <Typography color="text.secondary" align="center" py={3}>
+          {t('conversations.sessions.empty')}
+        </Typography>
+      ) : (
+        <Stack spacing={0.75}>
+          {sessions.map((session) => {
+            const isEnded = session.status !== 'active'
+            return (
+              <Box
+                key={session.id}
+                sx={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 1,
+                  border: (theme) => `1px solid ${theme.palette.divider}`,
+                  borderRadius: 1.5,
+                  px: 1.25,
+                  py: 0.85,
+                  bgcolor: session.id === currentSessionId ? 'action.selected' : 'background.paper',
+                }}
+              >
+                <Box sx={{ minWidth: 0, flex: 1 }}>
+                  <Typography variant="body2" fontWeight={session.id === currentSessionId ? 700 : 400} noWrap>
+                    {session.title ?? (
+                      <Typography component="em" color="text.secondary">
+                        {t('conversations.sessions.untitled')}
+                      </Typography>
+                    )}
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    {t(`conversations.sessions.status.${session.status}`)} ·{' '}
+                    {new Date(session.updated_at).toLocaleString()}
+                  </Typography>
+                </Box>
+                {isEnded && (
+                  <Chip
+                    data-testid={`conversation-dialog-session-${session.id}-terminated`}
+                    label={t('conversations.sessions.endedTag')}
+                    size="small"
+                    color="default"
+                  />
+                )}
+                {!isEnded && session.id !== currentSessionId && (
+                  <Button
+                    size="small"
+                    variant="outlined"
+                    data-testid={`conversation-dialog-switch-session-${session.id}`}
+                    onClick={() => onResume(session.id)}
+                  >
+                    {t('conversations.sessions.resume')}
+                  </Button>
+                )}
+                {session.id === currentSessionId && (
+                  <Chip label={t('conversations.sessions.currentSession')} size="small" color="primary" />
+                )}
+              </Box>
+            )
+          })}
+        </Stack>
+      )}
+
+      {totalPages > 1 && (
+        <Box display="flex" justifyContent="center" mt={2}>
+          <Pagination
+            count={totalPages}
+            page={page}
+            size="small"
+            onChange={(_, p) => setPage(p)}
+          />
+        </Box>
+      )}
+    </Box>
+  )
+}
+
+/**
+ * "Configure model" action inside the assistant model-unconfigured guidance
+ * Alert. Isolated in its own component so only this button (not the whole
+ * dialog) requires a Router context — ConversationDialog is also rendered
+ * in non-router test harnesses.
+ */
+function ConfigureAssistantModelButton({ testId }: { testId: string }) {
+  const { t } = useTranslation()
+  const navigate = useNavigate()
+  return (
+    <Button
+      color="inherit"
+      size="small"
+      variant="outlined"
+      data-testid={testId}
+      onClick={() => navigate('/system-config')}
+    >
+      {t('assistant.modelNotConfiguredCta')}
+    </Button>
+  )
+}
 
 interface ConversationDialogProps {
   open: boolean
@@ -56,6 +273,9 @@ interface ConversationDialogProps {
   onClose: () => void
   initialFullscreen?: boolean
   testIdPrefix?: string
+  /** Assistant-only: proactively check the tenant's assistant model selection
+   * and show setup guidance (with a Configure-model action) when unconfigured. */
+  assistantModelConfigCheck?: boolean
 }
 
 function toNullableNumber(value: unknown): number | null {
@@ -67,6 +287,36 @@ function pickRecordValue(payload: Record<string, unknown>, snakeKey: string, cam
     return payload[snakeKey]
   }
   return payload[camelKey]
+}
+
+/**
+ * FIX-20261031-071721 (defect 1): merge persisted history turns into the
+ * rendered message list without duplicating what is already visible (e.g. the
+ * optimistic user message, or a reply that did arrive before a reconnect).
+ * Occurrences are counted per (role, content) pair; only the difference is
+ * appended, preserving history order.
+ */
+function mergeUnseenMessages(
+  rendered: ChatMessage[],
+  live: ChatMessage[],
+  incoming: ChatMessage[],
+): ChatMessage[] {
+  const counts = new Map<string, number>()
+  for (const msg of [...rendered, ...live]) {
+    const key = `${msg.role}|${msg.content}`
+    counts.set(key, (counts.get(key) ?? 0) + 1)
+  }
+  const unseen: ChatMessage[] = []
+  for (const msg of incoming) {
+    const key = `${msg.role}|${msg.content}`
+    const count = counts.get(key) ?? 0
+    if (count > 0) {
+      counts.set(key, count - 1)
+    } else {
+      unseen.push(msg)
+    }
+  }
+  return unseen.length > 0 ? [...rendered, ...unseen] : rendered
 }
 
 function parsePersistedGuardrailUsage(value: unknown): ConversationalGuardrailUsage | null {
@@ -210,6 +460,7 @@ export function ConversationDialog({
   onClose,
   initialFullscreen = false,
   testIdPrefix = 'conversation-dialog',
+  assistantModelConfigCheck = false,
 }: ConversationDialogProps) {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
@@ -228,6 +479,8 @@ export function ConversationDialog({
   const [guardrailHintAnchorEl, setGuardrailHintAnchorEl] = useState<HTMLElement | null>(null)
   const [resumedGuardrailUsage, setResumedGuardrailUsage] =
     useState<ConversationalGuardrailUsage | null>(null)
+  // FIX-20261101-111439 (defect 2): action-bar "View All Sessions" switcher.
+  const [sessionsDialogOpen, setSessionsDialogOpen] = useState(false)
 
   const endSession = useEndConversationSession(agentTypeId)
   const testId = (suffix: string) => `${testIdPrefix}-${suffix}`
@@ -340,13 +593,36 @@ export function ConversationDialog({
     delegationExecutionSessionId,
     hydrateDelegationFromHistory,
     sendMessage,
+    chatError,
     interventionRequest,
     interventionQueueLength: _interventionQueueLength,
     sendInterventionResponse,
     cancelIntervention,
+    clearMessages,
+    recoveryEpoch,
   } =
     useChatSession(wsSessionId, convSessionId)
   const effectiveGuardrailUsage = liveGuardrailUsage ?? resumedGuardrailUsage
+  // Latest live WS messages for the mid-turn recovery merge (effect-safe read).
+  const wsMessagesRef = useRef<ChatMessage[]>(wsMessages)
+  wsMessagesRef.current = wsMessages
+
+  // Assistant-specific proactive model-config check: when the tenant has not
+  // selected a model for the Control Center Assistant (or the backend reports
+  // `assistant_model_not_configured` mid-session), show setup guidance and
+  // disable chatting instead of letting turns fail. Regular agent types are
+  // unaffected (the check is off by default).
+  const { data: assistantModelConfig } = useAssistantModelConfig(
+    open && assistantModelConfigCheck,
+  )
+  // Unconfigured when the loaded tenant config has no selection, or when the
+  // backend surfaces the structured error mid-session (generic mapping).
+  const ASSISTANT_MODEL_NOT_CONFIGURED_CODE = 'assistant_model_not_configured'
+  const assistantModelUnconfigured =
+    (assistantModelConfigCheck &&
+      assistantModelConfig != null &&
+      assistantModelConfig.selected_model_id == null) ||
+    chatError?.code === ASSISTANT_MODEL_NOT_CONFIGURED_CODE
 
   const {
     dialogError: interventionDialogError,
@@ -358,6 +634,19 @@ export function ConversationDialog({
     sendInterventionResponse,
     cancelIntervention,
   )
+
+  // FIX-20261101-111439 (defect 2): a conversational turn is in flight —
+  // session-switching and end actions are blocked while this is true.
+  const turnStreaming =
+    isResuming ||
+    !!pendingQuestion ||
+    !!interventionRequest ||
+    (chatStatus?.kind === 'thinking' ||
+      chatStatus?.kind === 'delegating' ||
+      chatStatus?.kind === 'waiting' ||
+      chatStatus?.kind === 'using_tool' ||
+      chatStatus?.kind === 'waiting_for_human' ||
+      chatStatus?.kind === 'delegation_resumed')
 
   const formatTokenCountK = (value: number | null): string => {
     if (value == null) return t('agents.sessions.logViewer.summary.notAvailable')
@@ -452,11 +741,46 @@ export function ConversationDialog({
 
   // Resume session when dialog opens with a sessionId
   // For new chats, session is created only when user sends first message
+  // FIX-20261031-071721: guard with a ref so concurrent effect invocations
+  // (e.g. React StrictMode's double-mount in dev) never fire two resume POSTs
+  // for the same session — the second response could race and re-render stale
+  // history over freshly arrived live messages.
+  const resumeRequestedForRef = useRef<string | null>(null)
   useEffect(() => {
-    if (open && sessionId && !convSessionId) {
+    if (open && sessionId && !convSessionId && resumeRequestedForRef.current !== sessionId) {
+      resumeRequestedForRef.current = sessionId
       void handleResumeSession(sessionId)
     }
   }, [open, sessionId])
+
+  // FIX-20261031-071721 (defect 1): mid-turn WS loss recovery. When the chat
+  // socket reconnects while a turn was in flight, the reply generated during
+  // the outage was never transmitted — refetch the persisted history and
+  // merge any turns not already rendered so the response appears live
+  // instead of only after exit/reopen.
+  const lastRecoveryEpochRef = useRef(0)
+  useEffect(() => {
+    if (!convSessionId || !recoveryEpoch || recoveryEpoch === lastRecoveryEpochRef.current) {
+      return
+    }
+    lastRecoveryEpochRef.current = recoveryEpoch
+    void (async () => {
+      try {
+        const { data } = await apiClient.post<ConversationSessionDetail>(
+          `/conversations/${convSessionId}/resume`,
+        )
+        const history: ChatMessage[] = buildHistoryMessagesFromTurns(
+          data.turns,
+          (agentType) => t('conversations.sessions.statusDelegatingToAgent', { agentType }),
+        )
+        setResumedMessages((prev) =>
+          mergeUnseenMessages(prev, wsMessagesRef.current, history),
+        )
+      } catch {
+        // Best-effort recovery only.
+      }
+    })()
+  }, [convSessionId, recoveryEpoch, t])
 
   // Refresh the sessions list when title arrives
   useEffect(() => {
@@ -488,6 +812,8 @@ export function ConversationDialog({
       setPendingInitialMessage(null)
       setGuardrailHintAnchorEl(null)
       setResumedGuardrailUsage(null)
+      resumeRequestedForRef.current = null
+      lastRecoveryEpochRef.current = 0
     }
   }, [open, convSessionId, messages, sessionId])
 
@@ -550,11 +876,46 @@ export function ConversationDialog({
     setEndError(null)
     try {
       await endSession.mutateAsync(convSessionId)
+      // FIX-20261031-091657 (Defect B): after an explicit END, the next open
+      // for this agent type must start a NEW session, not resume an old one.
+      markAssistantSessionEnded(agentTypeId)
       setEndConfirmOpen(false)
       onClose() // Close dialog after ending session
     } catch (err) {
       setEndError(err)
     }
+  }
+
+  // FIX-20261101-111439 (defect 2): reset the in-chat state without ending or
+  // archiving the current session. Used by "New Session" (fresh session) and
+  // "View All Sessions" (switch to another session). The torn-down WebSocket
+  // is closed as intentional by useChatSession's effect cleanup (no
+  // reconnect), and the previous session stays `active` on the server.
+  const resetForSessionSwitch = () => {
+    setResumedMessages([])
+    setResumedGuardrailUsage(null)
+    setPendingInitialMessage(null)
+    setInputText('')
+    setError(null)
+    clearMessages()
+    hydrateDelegationFromHistory({ cycles: [] })
+  }
+
+  // "New Session": start a FRESH session immediately. The current session is
+  // intentionally left active (it remains visible in View All Sessions); the
+  // end/archive API is never called and no force-new flag is set.
+  const handleStartNewSession = async () => {
+    if (turnStreaming) return
+    resetForSessionSwitch()
+    await handleStartSession()
+  }
+
+  // "View All Sessions": switch to an existing session and resume it.
+  const handleSwitchToSession = (targetSessionId: string) => {
+    if (turnStreaming) return
+    setSessionsDialogOpen(false)
+    resetForSessionSwitch()
+    void handleResumeSession(targetSessionId)
   }
 
   const handleSend = async () => {
@@ -652,6 +1013,25 @@ export function ConversationDialog({
             </Box>
           )}
 
+          {assistantModelUnconfigured && (
+            <Box p={2} pb={0}>
+              <Alert
+                severity="warning"
+                data-testid={testId('assistant-model-not-configured')}
+                action={
+                  <ConfigureAssistantModelButton testId={testId('configure-assistant-model')} />
+                }
+              >
+                <Typography variant="body2" fontWeight={600}>
+                  {t('assistant.modelNotConfiguredTitle')}
+                </Typography>
+                <Typography variant="body2">
+                  {t('assistant.modelNotConfiguredBody')}
+                </Typography>
+              </Alert>
+            </Box>
+          )}
+
           {isResuming ? (
             <Box display="flex" justifyContent="center" alignItems="center" flex={1}>
               <Typography>{t('app.loading')}</Typography>
@@ -701,7 +1081,7 @@ export function ConversationDialog({
                                 >
                                   {msg.role !== 'user' ? (
                                     <MaximizableContent title="Agent Response">
-                                      <ContentRenderer mode="chat" content={msg.content} />
+                                      <ContentRenderer mode="auto" content={msg.content} />
                                     </MaximizableContent>
                                   ) : (
                                     <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap' }}>
@@ -929,21 +1309,24 @@ export function ConversationDialog({
                     onChange={(e) => setInputText(e.target.value)}
                     onKeyDown={handleKeyDown}
                     placeholder={
-                      interventionRequest
-                        ? t('conversations.sessions.intervention.inputBlocked')
-                        : t('conversations.sessions.chatPlaceholder')
+                      assistantModelUnconfigured
+                        ? t('assistant.modelNotConfiguredInputDisabled')
+                        : interventionRequest
+                          ? t('conversations.sessions.intervention.inputBlocked')
+                          : t('conversations.sessions.chatPlaceholder')
                     }
                     disabled={
-                      convSessionId
+                      assistantModelUnconfigured ||
+                      (convSessionId
                         ? !!interventionRequest || !connected || !!pendingQuestion || !!pendingInitialMessage
-                        : false
+                        : false)
                     }
                     size="small"
                   />
                   <Button
                     variant="contained"
                     onClick={() => void handleSend()}
-                    disabled={!inputText.trim() || (convSessionId ? !!interventionRequest || !connected || !!pendingQuestion || !!pendingInitialMessage : false)}
+                    disabled={assistantModelUnconfigured || !inputText.trim() || (convSessionId ? !!interventionRequest || !connected || !!pendingQuestion || !!pendingInitialMessage : false)}
                     startIcon={<SendIcon />}
                   >
                     {t('conversations.sessions.send')}
@@ -1010,21 +1393,66 @@ export function ConversationDialog({
           )}
         </DialogContent>
 
-        <DialogActions>
-          <Button onClick={onClose}>{t('conversations.sessions.exit')}</Button>
+        <DialogActions sx={{ gap: 1 }}>
+          <Button
+            size="small"
+            startIcon={<ListAltIcon />}
+            data-testid={testId('view-all-sessions')}
+            onClick={() => setSessionsDialogOpen(true)}
+          >
+            {t('conversations.sessions.viewAllSessions')}
+          </Button>
+          <Button
+            size="small"
+            startIcon={<AddIcon />}
+            data-testid={testId('new-session')}
+            onClick={() => void handleStartNewSession()}
+            disabled={turnStreaming || isResuming}
+          >
+            {t('conversations.sessions.newSession')}
+          </Button>
+          <Box sx={{ flex: 1 }} />
           {convSessionId && (
             <Button
+              size="small"
               variant="outlined"
               color="error"
               startIcon={<StopCircleIcon />}
               onClick={() => setEndConfirmOpen(true)}
-              disabled={endSession.isPending}
+              disabled={endSession.isPending || turnStreaming}
             >
               {t('conversations.sessions.end')}
             </Button>
           )}
+          <Button size="small" onClick={onClose}>
+            {t('conversations.sessions.exit')}
+          </Button>
         </DialogActions>
       </Dialog>
+
+      {/* FIX-20261101-111439 (defect 2): View All Sessions switcher — lists the
+          agent type's sessions and resumes the chosen one in this dialog. */}
+      {sessionsDialogOpen && (
+        <Dialog
+          open
+          onClose={() => setSessionsDialogOpen(false)}
+          maxWidth="sm"
+          fullWidth
+          data-testid={testId('sessions-switcher')}
+        >
+          <DialogTitle>{t('conversations.sessions.viewAllSessionsTitle')}</DialogTitle>
+          <DialogContent dividers>
+            <SessionSwitcherList
+              agentTypeId={agentTypeId}
+              currentSessionId={convSessionId}
+              onResume={handleSwitchToSession}
+            />
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={() => setSessionsDialogOpen(false)}>{t('app.cancel')}</Button>
+          </DialogActions>
+        </Dialog>
+      )}
 
       {/* End Session confirmation dialog */}
       <Dialog

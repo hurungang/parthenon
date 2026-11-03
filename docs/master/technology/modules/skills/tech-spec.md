@@ -26,8 +26,8 @@ The skills module defines the execution primitives that agents use to interact w
 
 | Component | Description |
 |-----------|-------------|
-| `SkillListPage` | Skill list with tool count badges and assigned role chips; hosts `SkillEditor` as an in-page slide-in panel |
-| `SkillEditor` | In-page skill editor: Basic Info fields (name, description, instructions), MCP Tools multi-select grouped by server, and Assign to Roles sidebar |
+| `SkillListPage` | Skill list; one tool column showing the binding COUNT ("N tools", tooltip lists the names) with an explicit "No tools bound" chip at zero; hosts `SkillEditor` as an in-page slide-in panel |
+| `SkillEditor` | In-page skill editor and the SINGLE tool-binding surface: Basic Info fields (name, description, instructions), one grouped tool list (display + edit) keyed by owning server, a "Referenced (read-only)" group for permission-gated dependencies, and the Assign to Roles sidebar |
 | `SopListPage` | SOP list with step count; hosts `SopEditor` as an in-page slide-in panel |
 | `SopEditor` | In-page SOP editor: Basic Info + `instructions` field, ordered step cards with drag-and-drop reorder, step type selector, and SOP Details sidebar |
 
@@ -83,7 +83,10 @@ The skills module defines the execution primitives that agents use to interact w
 | `preview_sop_workflow` | endpoint function | Returns single-file SOP workflow preview with selected model metadata | `backend/app/api/v1/sops.py` |
 | `SkillCreate` | Pydantic schema | Skill creation payload; includes `instructions` field | `backend/app/schemas/skills.py` |
 | `SkillUpdate` | Pydantic schema | Skill partial update payload; includes `instructions` field | `backend/app/schemas/skills.py` |
-| `SkillRead` | Pydantic schema | Skill response schema; includes `tool_ids: list[uuid.UUID]` derived from `tool_bindings` | `backend/app/schemas/skills.py` |
+| `SkillRead` | Pydantic schema | Skill response schema; includes `tool_ids: list[uuid.UUID]` derived from `tool_bindings`, plus `tool_bindings: list[SkillToolBindingRead]` (name, original_name, server_slug, server_name, tool_id) so a binding is describable without browsing the catalogue | `backend/app/schemas/skills.py` |
+| `SkillToolBindingRead` | Pydantic schema | One binding projection: `tool_id`, `name` (canonical), `original_name`, `server_slug`, `server_name`; permission-gated tools are still described here so the editor can pin them read-only | `backend/app/schemas/skills.py` |
+| `SkillRead.populate_tool_ids` | validator | Builds a DETACHED snapshot (SimpleNamespace) for the derived fields — never assigns dicts onto the ORM's instrumented `tool_bindings` collection | `backend/app/schemas/skills.py` |
+| `_SKILL_LOAD_OPTIONS` | constant | Eager-load set for skill reads: `selectinload(Skill.tool_bindings)` plus the tool's owning server, so list/detail responses avoid N+1 | `backend/app/api/v1/skills.py` |
 | `SkillDetailRead` | Pydantic schema | Skill detail response schema with workflow text and tool-context fields | `backend/app/schemas/skills.py` |
 | `SkillWorkflowGenerateRequest` | Pydantic schema | Skill workflow generation request contract | `backend/app/schemas/skills.py` |
 | `SkillWorkflowPreviewResponse` | Pydantic schema | Skill workflow preview response including model identifier and formatted output | `backend/app/schemas/skills.py` |
@@ -108,8 +111,9 @@ The skills module defines the execution primitives that agents use to interact w
 | `Skill` (TS) | TypeScript interface | Frontend skill type; extended with `tool_ids: string[]` | `frontend/src/types/index.ts` |
 | `useSkillRoles` | hook | React Query hook fetching role IDs for a skill (`GET /skills/{skillId}/roles`) | `frontend/src/hooks/useSkills.ts` |
 | `useSopRoles` | hook | React Query hook fetching role IDs for a SOP (`GET /sops/{sopId}/roles`) | `frontend/src/hooks/useSops.ts` |
-| `SkillListPage` | component | Skill list with tool count badges and role chips; hosts `SkillEditor` in-page panel | `frontend/src/pages/skills/SkillListPage.tsx` |
-| `SkillEditor` | component | In-page skill editor: name, description, instructions, MCP Tools multi-select grouped by server, role assignment sidebar | `frontend/src/components/agents/SkillEditor.tsx` (shared; relocated from the page folder) |
+| `SkillListPage` | component | Skill list; tool-count column with hover tooltip of bound names and a "No tools bound" chip at zero; hosts `SkillEditor` in-page panel | `frontend/src/pages/skills/SkillListPage.tsx` |
+| `SkillEditor` | component | In-page skill editor; `selectedToolIds` is the single binding source of truth (detail payload applied once, never overwrites a user edit), one grouped list doubles as display and editor, "Referenced (read-only)" group pins permission-gated dependencies and always includes them on save; role assignment sidebar retained | `frontend/src/components/agents/SkillEditor.tsx` (shared; relocated from the page folder) |
+| `buildSkillToolEntries` / `groupToolEntries` | functions | Resolve binding ids from the browsable catalogue (degrading to the `tool_bindings` payload) and group them by owning server slug, sorted | `frontend/src/components/agents/SkillEditor.tsx` (shared; relocated from the page folder) |
 | `extractGeneratedToolSection` | function | Extracts generated tool context section from a persisted instructions payload | `frontend/src/components/agents/SkillEditor.tsx` (shared; relocated from the page folder) |
 | `buildGeneratedToolSectionFromSelection` | function | Builds generated tool context section from current selected tools in editor state | `frontend/src/components/agents/SkillEditor.tsx` (shared; relocated from the page folder) |
 | `SkillEditor.handleGenerateWorkflow` | function | Calls Skill workflow generation API using unsaved form state | `frontend/src/components/agents/SkillEditor.tsx` (shared; relocated from the page folder) |

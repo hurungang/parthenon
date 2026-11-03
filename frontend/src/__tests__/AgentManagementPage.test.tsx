@@ -22,6 +22,7 @@ type MockAgentType = {
   output_data_type_id: string | null
   output_data_type_name: string | null
   is_active: boolean
+  is_system?: boolean
   created_at: string
   updated_at: string
   sop_bindings?: Array<unknown>
@@ -642,5 +643,66 @@ describe('AgentManagementPage — Default SOP field available for all input type
 
     // agents.types.bindings.title is the i18n key rendered by useTranslation mock as-is
     expect(screen.getByText('agents.types.bindings.title')).toBeDefined()
+  })
+})
+
+// ── is_system surfacing (Control Center Assistant) ───────────────────────────
+
+describe('AgentManagementPage — is_system agent types', () => {
+  beforeEach(() => {
+    mockAgentTypes = [
+      {
+        id: 'at-system',
+        name: 'control-center-assistant',
+        description: null,
+        identity_id: null,
+        role_id: null,
+        llm_provider: 'openai',
+        llm_model: 'gpt-4o',
+        model_id: null,
+        system_instruction: null,
+        input_type: 'conversation',
+        input_schema: null,
+        output_type: 'auto',
+        output_schema: null,
+        output_data_type_id: null,
+        output_data_type_name: null,
+        sop_bindings: [],
+        skill_bindings: [],
+        is_active: true,
+        is_system: true,
+        created_at: '2026-01-01T00:00:00Z',
+        updated_at: '2026-01-01T00:00:00Z',
+      },
+    ]
+    vi.clearAllMocks()
+  })
+
+  it('marks the system agent type with the System badge', async () => {
+    const { AgentManagementPage } = await import('../pages/agents/AgentManagementPage')
+    render(<AgentManagementPage />, { wrapper })
+    // The badge renders the agents.types.systemBadge i18n key (mocked t).
+    expect(screen.getByText('agents.types.systemBadge')).toBeDefined()
+  })
+
+  it('disables the edit control for system agent types', async () => {
+    const { AgentManagementPage } = await import('../pages/agents/AgentManagementPage')
+    render(<AgentManagementPage />, { wrapper })
+    const editBtn = screen.getByRole('button', { name: 'app.edit' })
+    expect((editBtn as HTMLButtonElement).disabled).toBe(true)
+  })
+
+  it('disables the delete control for system agent types', async () => {
+    const { AgentManagementPage } = await import('../pages/agents/AgentManagementPage')
+    render(<AgentManagementPage />, { wrapper })
+    const deleteBtn = screen.getByRole('button', { name: 'app.delete' })
+    expect((deleteBtn as HTMLButtonElement).disabled).toBe(true)
+  })
+
+  it('does not mark a non-system agent type with the System badge', async () => {
+    mockAgentTypes = [{ ...mockAgentTypes[0], is_system: false, id: 'at-normal', name: 'Normal Agent' }]
+    const { AgentManagementPage } = await import('../pages/agents/AgentManagementPage')
+    render(<AgentManagementPage />, { wrapper })
+    expect(screen.queryByText('agents.types.systemBadge')).toBeNull()
   })
 })

@@ -86,6 +86,24 @@ async def terminate_session(
             status_code=404,
             detail=f"No in-flight task for session {session_id}",
         )
+    # FIX-20261031-091657 (Defect B): conversational turns register their
+    # in-flight task under the CONVERSATION session id; check that registry
+    # first so ending a conversation session cancels a hung/slow turn too.
+    conversation_tasks: dict[uuid.UUID, asyncio.Task] = getattr(
+        request.app.state, "conversation_tasks", None
+    ) or {}
+    conversation_task = conversation_tasks.get(session_id)
+    if conversation_task is not None and not conversation_task.done():
+        conversation_task.cancel()
+        logger.info(
+            "terminate_session: cancelled in-flight CONVERSATION turn task for session %s",
+            session_id,
+        )
+        return TerminateResponse(
+            session_id=session_id,
+            cancelled=True,
+            reason="Conversation turn terminated (session ended)",
+        )
     task = session_tasks.get(session_id)
     if task is None:
         logger.info(

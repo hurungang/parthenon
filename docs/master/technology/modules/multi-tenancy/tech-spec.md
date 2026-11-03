@@ -302,3 +302,18 @@ Tenant isolation is strict and fail-closed on the data plane:
 | websocket chat auth + tenant binding | endpoint behaviour | WS chat authenticates both token kinds, binds the tenant, and signs the CC loopback context | `backend/app/api/ws/chat.py` (`_signed_tenant_forwarding`, `websocket_chat`) |
 | Adoption migration | migration | NULL-tenant → root adoption + NOT NULL `tenant_id` + per-tenant MCP slug scoping; idempotent | `backend/alembic/versions/b8c9d0e1f2a3_per_tenant_entity_adoption_and_mcp_slug_scoping.py` |
 | Per-tenant IdP scope uniqueness | migration | Unique tenant scope on `identity_provider_configs` | `backend/alembic/versions/c9d0e1f2a3b4_unique_tenant_scope_on_identity_provider_configs.py` |
+
+## Per-Tenant Settings Store (control-center-chatbot change)
+
+Before this change the only settings store was `PlatformSetting` — tenant-**agnostic** and globally unique per key. Tenant-scoped preferences (workflow-generation model, and the pattern for future per-workspace configuration) need a per-tenant row, so a dedicated store was added next to the platform one. The distinction is structural: platform settings describe the deployment; tenant settings describe one workspace and must never leak across tenants.
+
+| Symbol | Type | Description | File |
+|--------|------|-------------|------|
+| `TenantSetting` | model (new) | Tenant-scoped key/value store (`tenant_settings`): unique `(tenant_id, key)`, FK → `tenants` with CASCADE delete, JSON value; tenant scope is enforced by the standard `apply_tenant_scope` gateway (no bespoke scoping) | `backend/app/db/models/tenant_setting.py` |
+| `get_value` / `set_value` | functions (new) | Typed async read/upsert helpers requiring an explicit `tenant_id` (callers resolve the session tenant; root tenant when multi-tenancy is off) | `backend/app/services/tenancy/tenant_settings_service.py` |
+| `WORKFLOW_GENERATION_MODEL_KEY` | constant | `workflow_generation_model_id` — the per-tenant workflow-generation model selection | `backend/app/services/agents/workflow_generation_settings.py` |
+| `get_workflow_generation_model_id` / `set_workflow_generation_model_id` | functions (rewritten) | Resolve/persist the selection for the SESSION tenant (root tenant when tenancy is off), replacing the single global `config/app.yaml` value; the REST contract is unchanged | `backend/app/services/agents/workflow_generation_settings.py` |
+| `adopt_legacy_app_yaml_value` | function (new) | One-time idempotent CC-startup adoption: copies the legacy yaml global into the ROOT tenant's row only when that row is empty (never overwrites; the yaml value is left in place) | `backend/app/services/agents/workflow_generation_settings.py`, `backend/app/main.py` |
+| Migration `6fba31147599` | migration (new) | Creates `tenant_settings` with the per-tenant unique index and tenant FK CASCADE (revises `1a0ed55b8cf1`) | `backend/alembic/versions/6fba31147599_add_tenant_settings_table.py` |
+| `SystemConfigPage` model selectors | component (modified) | Workflow-generation and assistant model selections are workspace-scoped; both read/write through their existing REST contracts, so the UI is tenancy-aware without new endpoints | `frontend/src/pages/system/SystemConfigPage.tsx` |
+| `test_tenant_settings_workflow_generation` | test | Per-tenant isolation of the workflow-generation setting, upsert semantics, legacy yaml adoption idempotency | `backend/tests/test_tenant_settings_workflow_generation.py` |

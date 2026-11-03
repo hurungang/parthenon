@@ -57,7 +57,30 @@ async def resume_session(
     the database.
 
     Authentication is enforced by ControlCenterCertificateMiddleware.
+
+    FIX-20261031-133253: if the session is a CONVERSATIONAL turn paused on a
+    ``human_intervene`` interrupt (registry hit), the operator response is
+    delivered in-process and the deep-agent loop resumes with
+    ``Command(resume=...)`` — no job execution is launched.
     """
+    from app.agent_runtime import conversation_resume
+
+    conv_session_id = body.session_id
+    if conversation_resume.is_pending(conv_session_id):
+        delivered = conversation_resume.resolve(
+            conv_session_id, body.response_value or {}
+        )
+        if delivered:
+            logger.info(
+                "resume_session: conversational intervention resolved for "
+                "session %s (response_value=%s)",
+                conv_session_id, body.response_value,
+            )
+            return ResumeResponse(
+                session_id=body.session_id,
+                status="resumed",
+            )
+
     data_client = getattr(request.app.state, "data_client", None)
     if data_client is None:
         logger.error(

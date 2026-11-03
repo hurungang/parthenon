@@ -9,9 +9,10 @@ the execution model.
 - **No I/O of any kind** — filesystem, network, subprocess, and database
   access all fail closed; the only egress is the injected session-bound
   tool client (MCP-only).
-- **Allowlist-only** — restricted compile, allowlisted builtins and
-  pre-bound safe modules; no `import` statement, no dynamic-evaluation
-  constructs.
+- **Baseline-only** — restricted compile; runtime globals seeded wholesale
+  from RestrictedPython's audited safe baseline (plus pre-bound safe
+  modules) with only documented guards layered on top; no `import`
+  statement, no dynamic-evaluation constructs.
 - **Resource caps** — per-version CPU, memory, and wall-time limits with
   safe termination; a breach kills the execution safely, records the
   event, and falls back to the LLM path (a run never fails solely because

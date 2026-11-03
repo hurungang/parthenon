@@ -65,6 +65,40 @@ def get_user_jwt(session_id: str) -> str | None:
     return _user_jwt_by_session.get(session_id)
 
 
+async def _extract_user_sub(user_jwt: str | None) -> str | None:
+    """Validate a user JWT and return its ``sub`` claim (or None).
+
+    Management tools run on the *user's* identity (the OAuth identity plane),
+    so the in-app assistant must forward the authenticated user's ``sub`` to
+    Control Center for per-call authorization.  Tries OIDC first, then the
+    platform-account fallback (mirrors the WebSocket auth path).
+    """
+    if not user_jwt:
+        return None
+    from app.core.oidc_client import OIDCError, get_oidc_client
+
+    try:
+        claims = await get_oidc_client().validate_token(user_jwt)
+        sub = claims.get("sub")
+        if sub:
+            return str(sub)
+    except OIDCError:
+        pass
+    except Exception:
+        logger.warning("Management tool: unexpected OIDC error resolving user sub", exc_info=True)
+    try:
+        from app.services.tenancy.platform_account_auth_service import (
+            validate_platform_account_token,
+        )
+
+        claims = validate_platform_account_token(user_jwt)
+        if claims:
+            return claims.get("sub")
+    except Exception:
+        logger.warning("Management tool: platform token validation failed", exc_info=True)
+    return None
+
+
 def _allow_insecure_internal_fallback() -> bool:
     """Return True only for explicit development-mode insecure fallback opt-in."""
     environment = os.environ.get("ENVIRONMENT", "").strip().lower()
@@ -639,6 +673,27 @@ async def _route_to_system_tool(body: ToolCallRequest, request: Request) -> Tool
     }
     if body.conv_session_id:
         payload["conversation_session_id"] = body.conv_session_id
+
+    # Management tools (Control Center Assistant) run on the user's OAuth
+    # identity: forward the authenticated user's ``sub`` so Control Center can
+    # re-authorize against the user's own permission scope (no elevation).
+    from app.services.agents.system_tool_registry import SystemToolRegistry
+
+    if SystemToolRegistry.is_management_tool(bare_name) or (
+        bare_name in SystemToolRegistry.get_meta_tool_names()
+    ):
+        user_sub = await _extract_user_sub(
+            body.user_jwt or get_user_jwt(body.conv_session_id) or get_user_jwt(body.session_id)
+        )
+        if not user_sub:
+            return ToolCallResponse(
+                result={},
+                error=(
+                    "Management operations require an authenticated user context. "
+                    "Please re-open the assistant conversation."
+                ),
+            )
+        payload["user_sub"] = user_sub
 
     try:
         cc_client_kwargs, headers = _build_control_center_auth(request, cc_base)

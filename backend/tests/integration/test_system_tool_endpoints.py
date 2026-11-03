@@ -208,8 +208,17 @@ def test_ch_allowlist_contains_all_system_tool_cc_endpoint_paths() -> None:
     stale_allowlisted: list[str] = []
 
     # 1. Check every registered system tool's CC endpoint is allowlisted
+    #    Management tools route through a SINGLE parameterized route
+    #    (``/api/v1/internal/management-tools/{tool_name}``) rather than one
+    #    allowlist entry per verb; they share one template entry instead.
+    management_template = ("POST", "/api/v1/internal/management-tools/{tool_name}")
+    assert management_template in _CH_ALLOWLIST
+    management_prefix = "/api/v1/internal/management-tools/"
     for name, tool in sorted(SystemToolRegistry._tools.items()):
         path = tool.cc_endpoint_path
+        if path.startswith(management_prefix):
+            # Covered by the parameterized template above (verified explicitly).
+            continue
         if (method, path) not in _CH_ALLOWLIST:
             missing.append(f"{method} {path}  (tool={name})")
 

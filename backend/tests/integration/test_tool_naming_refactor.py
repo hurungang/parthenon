@@ -110,14 +110,23 @@ class TestNoAutoInjection:
         # Call the context endpoint directly
         context = await get_agent_context(agent_type_id=agent_type.id, db=db_session)
 
-        # No system tools should be auto-injected
+        # FIX-20261101-120618: the built-in inherent skills (self-context +
+        # workflow-optimization) are now injected into EVERY agent context;
+        # no OTHER system tool may be auto-injected.
+        from app.services.agents.builtin_skills import get_inherent_tool_names
+
         auto_injected = [
             t for t in context.allowed_tools
-            if is_system_tool(t)
+            if is_system_tool(t) and t.split("____")[-1] not in get_inherent_tool_names()
         ]
         assert auto_injected == [], (
             f"System tools were auto-injected into allowed_tools: {auto_injected}"
         )
+        inherent_injected = {
+            t for t in context.allowed_tools
+            if t.split("____")[-1] in get_inherent_tool_names()
+        }
+        assert len(inherent_injected) == len(get_inherent_tool_names())
 
     @pytest.mark.asyncio
     async def test_system_tools_appear_when_explicitly_bound(
@@ -171,9 +180,15 @@ class TestNoAutoInjection:
         assert "system____save_data" in context.allowed_tools, (
             "system____save_data must appear in allowed_tools when explicitly bound"
         )
-        # send_notification and get_recipient_group were NOT bound — should be absent
+        # send_notification and get_recipient_group were NOT bound — should be
+        # absent (the FIX-20261101-120618 inherent skill tools aside).
+        from app.services.agents.builtin_skills import get_inherent_tool_names
+
         assert "system____send_notification" not in context.allowed_tools
         assert "system____get_recipient_group" not in context.allowed_tools
+        # The inherent optimization/self-context set is present for every agent.
+        for bare in get_inherent_tool_names():
+            assert f"system____{bare}" in context.allowed_tools
 
 
 class TestSendNotificationSystemTool:

@@ -23,6 +23,7 @@ The security model also covers API key authentication for external agents. API k
 - Deny-by-default boundary enforcement blocks all non-allowlisted Control Center paths
 - Centralized identity and authorization governance keeps sensitive identity handling outside runtime surfaces
 - External MCP protocol sessions inherit role-based permissions, keep identity tokens inside the protected boundary, and authenticate via the existing API keys
+- Management actions requested conversationally or by an external agent presenting a user's own credentials are authorized against that user's scope on every action, attributed to that user, and can never exceed it; no destructive operation is reachable
 - Security gaps are tracked with risk-ranked remediation ownership and target outcomes
 
 ## Business Value
@@ -46,6 +47,7 @@ The security model also covers API key authentication for external agents. API k
 - Security gap tracking with risk-ranked remediation ownership and target outcomes
 - **API Key Security Model**: API keys are stored as cryptographic hashes in Control Center's database — the clear-text key is never persisted or retrievable after creation. Authentication involves hashing the presented key and comparing against the stored hash. Identity tokens resolved during API key authentication are injected into proxied MCP requests by the Communication Hub and never exposed to the external agent, maintaining strict token isolation. All Communication Hub to Control Center calls for key validation are conducted over mTLS-secured service channels.
 - **MCP Protocol Session Security**: External MCP clients authenticate with an existing API key and inherit the bound role's permission set — exactly as internal agents do. Identity tokens resolved for the session are held by the Communication Hub and injected per proxied tool call, never exposed to the client. Unauthorized tool calls are rejected using the same permission resolution path.
+- **Delegated Management Actions (No Elevation)**: The [Control Center Assistant](control-center-assistant.md) — and any external agent connecting with a user's own credentials — performs management actions strictly on behalf of that signed-in user. Permission is resolved from the caller's own scope at every action, actions are attributed to that user, no elevated service credential path exists for management operations, and destructive operations are simply not available. Read and write results exclude sensitive material (identity tokens, database credentials, decrypted connection credentials)
 
 ## Out of Scope
 - Technical implementation details, code, or architecture diagrams

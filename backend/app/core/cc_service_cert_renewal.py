@@ -39,9 +39,12 @@ logger = logging.getLogger(__name__)
 RENEWAL_DAYS_ENV = "CC_SERVICE_CERT_RENEWAL_DAYS"
 DEFAULT_RENEWAL_THRESHOLD_DAYS = 30
 
-#: Default on-disk certificate directory (relative to the backend workdir,
-#: matching the existing ``_ensure_cc_service_certificate`` layout).
-DEFAULT_CERT_DIR = Path("certs/control-center")
+#: Default on-disk certificate directory.  Anchored to the backend root at
+#: import time (FIX-20261031-131030) so a restart from any working directory
+#: resolves to the same ``backend/certs/control-center`` location.
+from app.core.cert_paths import resolve_cert_path
+
+DEFAULT_CERT_DIR = resolve_cert_path("certs/control-center")
 CERT_FILENAME = "service-cert.pem"
 KEY_FILENAME = "service-key.pem"
 
@@ -118,7 +121,9 @@ async def renew_cc_service_certificate_if_needed(
     Returns:
         True when a new certificate was issued and written, False otherwise.
     """
-    cert_dir = Path(cert_dir or DEFAULT_CERT_DIR)
+    # Resolve relative cert_dir arguments against the backend root as well
+    # (CWD-independent, FIX-20261031-131030).
+    cert_dir = resolve_cert_path(cert_dir) if cert_dir is not None else DEFAULT_CERT_DIR
     cert_path = cert_dir / CERT_FILENAME
     key_path = cert_dir / KEY_FILENAME
     threshold = threshold_days if threshold_days is not None else get_renewal_threshold_days()

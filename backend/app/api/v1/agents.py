@@ -89,6 +89,8 @@ from app.schemas.agents import (
     WorkflowGenerationModelConfigRead,
     WorkflowGenerationModelConfigUpdate,
     WorkflowGenerationModelOption,
+    AssistantModelConfigRead,
+    AssistantModelConfigUpdate,
 )
 from app.services.agents.agent_type_service import AgentTypeService
 from app.services.agents.binding_validation import validate_bindings
@@ -113,6 +115,7 @@ from app.services.agents.role_service import (
     AgentRoleService,
 )
 from app.services.agents.session_service import AgentSessionService
+from app.services.agents.system_tool_registry import SystemToolRegistry
 from app.services.agents.tool_naming import build_tool_name, is_system_tool
 from app.services.agents.workflow_generation_settings import (
     get_workflow_generation_model_id,
@@ -279,7 +282,14 @@ async def get_role_mcp_tools(
     except Exception as exc:
         logger.warning("Permission manager failed for role %s: %s", role_id, exc)
         raise HTTPException(status_code=404, detail=str(exc))
-    canonical_tools = [build_tool_name("system", tool) if is_system_tool(tool) and "____" not in tool else tool for tool in tools]
+    canonical_tools = [
+        (
+            SystemToolRegistry.canonicalize_name(tool) or tool
+            if is_system_tool(tool) and "____" not in tool
+            else tool
+        )
+        for tool in tools
+    ]
     return sorted(canonical_tools)
 
 
@@ -1535,11 +1545,23 @@ async def update_agent_type(
     if not agent_type:
         raise HTTPException(status_code=404, detail="Agent type not found")
 
+    # System-provided agent types (e.g. the Control Center Assistant) are
+    # protected from user-driven mutation — never editable via the REST API.
+    if getattr(agent_type, "is_system", False):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="System agent types cannot be modified",
+        )
+
     # Save raw Pydantic model objects before model_dump converts them to dicts
     raw_sop_bindings = body.sop_bindings
     raw_skill_bindings = body.skill_bindings
 
     update_data = body.model_dump(exclude_unset=True)
+    # ``is_system`` is surfaced for schema parity only — it can never be
+    # toggled through the REST update path (system protection is enforced
+    # above; user types can never become system types).
+    update_data.pop("is_system", None)
 
     # Determine effective role_id after applying the update
     effective_role_id = update_data.get("role_id", agent_type.role_id)
@@ -1861,6 +1883,11 @@ async def delete_agent_type(
     agent_type = await db.get(AgentType, type_id)
     if not agent_type:
         raise HTTPException(status_code=404, detail="Agent type not found")
+    if getattr(agent_type, "is_system", False):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="System agent types cannot be deleted",
+        )
     await db.delete(agent_type)
     await db.flush()
 
@@ -2066,7 +2093,7 @@ async def get_workflow_generation_model(
             )
 
     return WorkflowGenerationModelConfigRead(
-        selected_model_id=get_workflow_generation_model_id(),
+        selected_model_id=await get_workflow_generation_model_id(db),
         options=options,
     )
 
@@ -2087,8 +2114,121 @@ async def set_workflow_generation_model(
             detail="Selected workflow generation model is not enabled in any model configuration",
         )
 
-    set_workflow_generation_model_id(body.model_id)
+    await set_workflow_generation_model_id(db, body.model_id)
     return await get_workflow_generation_model(db=db, _={})
+
+
+# ── Per-tenant Assistant Model Configuration ──────────────────────────────────
+#
+# The assistant ``AgentType`` is seeded with ``is_system=True`` and therefore
+# protected from generic UI edit; these dedicated endpoints are the sanctioned
+# configuration path for its model binding.  Selection is tenant-scoped: the
+# options come from the *current tenant's* Model Configurations and the
+# selection is persisted onto the *tenant's own* assistant ``AgentType.model_id``
+# (resolved by ``ModelBindingLayer.resolve_model_config`` at conversation time).
+
+
+@ModelConfigRouter.get("/assistant-model", response_model=AssistantModelConfigRead)
+async def get_assistant_model_config(
+    db: DbSession,
+    _: dict = Depends(require_permission(RT_AGENT, "read")),
+) -> AssistantModelConfigRead:
+    from sqlalchemy import select
+
+    from app.db.models.agents import AgentType
+    from app.services.agents.assistant_seeder import ASSISTANT_AGENT_TYPE_NAME
+
+    # Both queries run on the session-scoped tenant context — they can only
+    # ever see the current tenant's model configs and assistant row.
+    configs = await _model_config_service.list_model_configs(db)
+    options: list[WorkflowGenerationModelOption] = []
+    for config in configs:
+        for model_id in config.enabled_models or []:
+            options.append(
+                WorkflowGenerationModelOption(
+                    model_id=model_id,
+                    config_id=config.id,
+                    config_display_name=config.display_name,
+                    provider_type=config.provider_type,
+                )
+            )
+
+    assistant = (
+        await db.execute(
+            select(AgentType).where(AgentType.name == ASSISTANT_AGENT_TYPE_NAME)
+        )
+    ).scalar_one_or_none()
+
+    return AssistantModelConfigRead(
+        selected_model_id=assistant.model_id if assistant is not None else None,
+        options=options,
+    )
+
+
+@ModelConfigRouter.put("/assistant-model", response_model=AssistantModelConfigRead)
+async def set_assistant_model_config(
+    body: AssistantModelConfigUpdate,
+    request: Request,
+    db: DbSession,
+    _: dict = Depends(require_permission(RT_AGENT, "update")),
+) -> AssistantModelConfigRead:
+    from sqlalchemy import select
+
+    from app.core.tenant_context import get_tenant_context
+    from app.db.models.agents import (
+        AgentInputType,
+        AgentOutputType,
+        AgentType,
+    )
+    from app.services.agents.assistant_seeder import (
+        ASSISTANT_AGENT_TYPE_NAME,
+        ASSISTANT_SYSTEM_INSTRUCTION,
+    )
+
+    configs = await _model_config_service.list_model_configs(db)
+    allowed_model_ids: set[str] = {
+        model_id for config in configs for model_id in (config.enabled_models or [])
+    }
+    if body.model_id is not None and body.model_id not in allowed_model_ids:
+        raise HTTPException(
+            status_code=422,
+            detail="Selected assistant model is not enabled in any model configuration",
+        )
+
+    # Resolve within the session tenant context (same as create-model-config).
+    tenant_context = get_tenant_context(request)
+    tenant_id: uuid.UUID | None = (
+        tenant_context.tenant_id if tenant_context.is_set else None
+    )
+
+    assistant = (
+        await db.execute(
+            select(AgentType).where(AgentType.name == ASSISTANT_AGENT_TYPE_NAME)
+        )
+    ).scalar_one_or_none()
+    if assistant is None:
+        # Tenant has no assistant row yet — create it with the seeder's
+        # defaults (conversational, system-provided).  No model bound yet.
+        assistant = AgentType(
+            tenant_id=tenant_id,
+            name=ASSISTANT_AGENT_TYPE_NAME,
+            description=(
+                "System-provided conversational assistant for Control Center "
+                "Agents-menu management."
+            ),
+            system_instruction=ASSISTANT_SYSTEM_INSTRUCTION,
+            input_type=AgentInputType.conversation,
+            output_type=AgentOutputType.auto,
+            is_active=True,
+            is_system=True,
+        )
+        db.add(assistant)
+        await db.flush()
+
+    assistant.model_id = body.model_id
+    await db.flush()
+
+    return await get_assistant_model_config(db=db, _={})
 
 
 @ModelConfigRouter.get("/{config_id}", response_model=ModelConfigRead)

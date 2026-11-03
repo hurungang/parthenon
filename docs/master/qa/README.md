@@ -14,6 +14,7 @@ This directory contains all master QA documentation for the Parthenon Enterprise
 - [Refine OIDC Integration](test-plans/refine-oidc-integration-test-plan.md)
 - [Production-Ready Configuration](test-plans/production-ready-configuration-test-plan.md)
 - [Control Center](test-plans/control-center-test-plan.md)
+- [Control Center Assistant](test-plans/control-center-assistant-test-plan.md)
 - [Communication Hub](test-plans/communication-hub-test-plan.md)
 - [Frontend](test-plans/frontend-test-plan.md)
 - [Web UI Shell — Sidebar Navigation](test-plans/web-ui-shell-test-plan.md)

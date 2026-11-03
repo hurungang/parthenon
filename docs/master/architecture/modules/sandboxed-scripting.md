@@ -15,25 +15,55 @@ hardened, fail-closed sandbox built on
 - **Compile-time restriction** — `compile_restricted_exec`; disallowed
   constructs fail closed with a typed `SandboxCompileError` before anything
   runs.
-- **Allowlisted runtime** — `safe_builtins` plus safe computation helpers;
-  the modules `json`, `math`, and `statistics` are pre-bound; there is **no
-  `import` statement**, no `open`/`eval`/`exec`/`compile`/`__import__`.
-  Filesystem, network, database, and subprocess access all fail closed
-  (`SandboxViolationError`).
-- **MCP-only egress** — the script's ONLY external binding is the injected
-  `tools` facade (`SandboxToolFacade`), a thin sync wrapper over the
-  session-bound `CommHubToolClient`: same mTLS path, dual identities,
-  per-call token injection by Communication Hub, `provenance=script`
-  tagging. Scripts never hold credentials.
-- **Resource caps (N1)** — per-version caps (`cpu_limit_seconds`,
-  `memory_limit_mb`, `wall_time_limit_seconds`) with platform defaults when
-  null. Wall-time is enforced with a daemon worker thread + join timeout
-  (safe abandonment: the request/event loop stays healthy); memory via
-  `resource.RLIMIT_AS` around execution where the platform supports it; the
-  CPU budget is enforced through the wall-time cap (in-process sandboxing
-  cannot signal-kill one thread without risking the service process).
-  Breaches raise `ResourceLimitExceededError` with
-  `sandbox_termination=True` and a one-line human-readable detail.
+- **Baseline-seeded runtime (audited wholesale)** — runtime globals are
+  seeded wholesale from RestrictedPython's own audited `safe_builtins`
+  baseline (plus its required guard hooks), not assembled
+  construct-by-construct. This is
+  what makes ordinary Python work inside the sandbox: tuple unpacking
+  (`_unpack_sequence_`) and augmented assignment (`_inplacevar_`) come from
+  the baseline itself, so valid business logic no longer fails on standard
+  language constructs. The modules `json`, `math`, and `statistics` are
+  pre-bound; there is **no `import` statement**, no
+  `open`/`eval`/`exec`/`compile`/`__import__`. Filesystem, network, database,
+  and subprocess access all fail closed (`SandboxViolationError`).
+- **Documented custom guards layered on the baseline** — nothing is patched
+  into the baseline ad hoc; each guard below is part of the capability
+  contract and is covered by a test:
+  - **MCP-only tools facade (egress)** — the script's ONLY external binding
+    is the injected `tools` facade (`SandboxToolFacade`), a thin sync
+    wrapper over the session-bound `CommHubToolClient`: same mTLS path, dual
+    identities, per-call token injection by Communication Hub,
+    `provenance=script` tagging. Scripts never hold credentials.
+  - **Context binding** — `context` is bound read-only from the workflow
+    inputs and is the only way data enters the script; it carries no
+    credentials or identity tokens.
+  - **Resource caps (N1)** — per-version caps (`cpu_limit_seconds`,
+    `memory_limit_mb`, `wall_time_limit_seconds`) with platform defaults
+    when null. Wall-time is enforced with a daemon worker thread + join
+    timeout (safe abandonment: the request/event loop stays healthy); memory
+    via `resource.RLIMIT_AS` around execution where the platform supports
+    it; the CPU budget is enforced through the wall-time cap (in-process
+    sandboxing cannot signal-kill one thread without risking the service
+    process). Breaches raise `ResourceLimitExceededError` with
+    `sandbox_termination=True` and a one-line human-readable detail.
+
+```mermaid
+flowchart TD
+    A["Script python_source"] --> B["RestrictedPython<br/>compile_restricted"]
+    B --> C["Audited safe baseline<br/>safe_builtins + guard hooks<br/>seeded WHOLESALE"]
+    C --> G["Documented custom guards"]
+    G --> G1["MCP-only tools facade"]
+    G --> G2["context binding"]
+    G --> G3["Resource caps"]
+    G1 --> E["Executes in Agent Runtime"]
+    G2 --> E
+    G3 --> E
+    E --> F["Fail-closed typed errors<br/>+ unconditional LLM fallback"]
+```
+
+One audited baseline replaces incremental guard-hook patching. Any future
+guard must be added to the capability contract and given a test — the
+baseline itself is never edited piecemeal.
 
 Script contract: the source defines `run(context, tools)` and returns a
 JSON-able dict.
@@ -55,6 +85,28 @@ mark — verifying each script against the real integration (the verification
 IS the real run). On success it persists an **`OptimizedImplementationPlan`**
 (a separate entity from the base `AgentPlan`); "Retire plan" marks the row
 `retired` so the next run re-triggers the optimized-plan check.
+
+**Mandatory self-reflection before authoring.** Reading the agent's own state
+is a required pre-authoring step, in a fixed order: **scripts → execution
+logs → prior optimized plan** (then the base plan, the source of truth for
+what the workflow must do). Logs include past failures and are read for their
+errors. The run may **skip re-authoring entirely** when the state is healthy
+and unchanged — recent executions succeeded, a fresh `ready` optimized plan
+exists, and scripts still match the base plan's intent — and must state that
+it skipped. This prevents both stale-state authoring and redoing good work.
+
+**Failure visibility and retire state (Optimized Plan tab).** When
+optimize-and-verify ends in `needs_feedback`, the run must persist a concise
+failure reason on the plan's `error` field (populating it is mandatory in the
+authoring mission; the field already existed). The Optimized Plan tab renders
+that stored reason as a warning/error alert, so an operator can see what to
+fix or how to steer feedback instead of guessing. Retire always refreshes the
+launch-dialog state, and when no active plan exists it renders an explicit
+**"nothing to retire"** state rather than being a silent no-op.
+
+The shipped Optimized Plan / Scripts UI is captured as an interactive
+prototype in [docs/master/ux/prototype/](../../ux/prototype/index.html) — that
+prototype, not an aspirational mock, is the reference for this module's UX.
 
 The Script Compiler
 (`backend/app/agent_runtime/scripts/compiler.py`) is a **validator /
@@ -84,6 +136,41 @@ failed optimized plan falls back to the base plan's LLM path.
 - `tokens_saved_actual` is **measured** against the reference LLM run's real
   token usage when known; `tokens_saved_estimate` remains only on
   historical rows.
+
+### Outcome semantics — `partial_failure` (recorded, not auto-detected)
+
+The script-execution outcome enum carries four values: `success`,
+`validation_failure`, `fell_back`, and `partial_failure`.
+
+`partial_failure` exists so that a semantic tool failure is *representable*
+on the execution record: a tool can return an upstream error report inside a
+**successful** transport envelope, and such a run must not be recorded as
+`success`. **What shipped is the outcome value itself.** Automatic
+semantic-error detection (inspecting successful envelopes for error reports)
+and the fallback / repair / re-optimization reactions were **explicitly
+deferred by product decision** — no code path writes `partial_failure` today.
+
+The accepted mitigation is defensive script authoring: model-authored scripts
+inspect the payload they receive and raise or branch on an error report
+rather than assuming a happy shape. A raised script error is a script
+failure, which already triggers the unconditional LLM fallback — so the
+reaction path is preserved without the detector.
+
+```mermaid
+flowchart TD
+    S["Script calls tools.call"] --> R["Tool returns payload"]
+    R -->|"transport error"| TE["Typed error"]
+    R -->|"error report inside<br/>successful envelope"| DF["Script handles<br/>payload shape defensively"]
+    DF --> TE
+    R -->|"healthy result"| OK["outcome = success"]
+    TE --> FB["outcome = fell_back<br/>→ unconditional LLM fallback"]
+    DF -.->|"would record"| PF["outcome = partial_failure<br/>enum shipped · detection DEFERRED"]
+```
+
+`outcome = partial_failure` is drawn as a **dashed** branch on purpose: the
+value is part of the contract, but nothing populates it yet. When detection
+is implemented, the fallback / repair / re-optimization reactions attach
+there.
 
 ## LLM Mock Layer
 

@@ -16,6 +16,7 @@ The MCP Hub enables Parthenon to connect with external tool servers, synchronize
 - **Supports "passthrough" session type:** Admins can designate an MCP server as passthrough, enabling direct agent identity propagation (no explicit session selection required)
 - Supports designating a default session per server for predictable tool routing
 - Automatically treats a server's sole session as the default, requiring no manual action
+- Detects when a session's stored credential can no longer be refreshed because the provider reports the refresh token as gone, marks that session as needing re-authentication, and keeps the failure reason with the session
 - Maps sessions or passthrough configuration to agent identities or roles for secure tool access
 - Exposes proxied MCP server tools to external MCP clients over the standard MCP protocol (initialize / tools/list / tools/call), in addition to internal Agent Runtime tool calls — both governed by the same role-based permission resolution
 - Exposes user-defined [decision tools](decision-tools.md) as MCP tools under the same permission model; decision tools carry a reserved "decision" naming prefix (mirroring the "system" prefix) and "decision" is reserved as an MCP slug namespace word so no registered server slug can conflict with it
@@ -29,6 +30,7 @@ The MCP Hub enables Parthenon to connect with external tool servers, synchronize
 - **Default Session**: The session used for sync and tool calls when no specific session is specified. Each MCP server has exactly one default session — explicitly set by the admin, or automatically assigned when only one session exists.
 - **Passthrough Session**: A session type where agent identity is automatically forwarded to the MCP server, eliminating manual session selection
 - **Credential Binding**: Associating credentials with sessions for secure access (not required for passthrough)
+- **Needs Re-Authentication**: A session state for credentials that cannot be recovered automatically — the provider no longer recognises the refresh token. The session stays visible and actionable rather than silently failing; the stored failure reason explains what happened, and re-authenticating restores the same session.
 - **Session-to-Role Mapping**: Assigning sessions or passthrough configuration to specific agent roles or identities; performed inline within the Edit Agent Role dialog via dynamic dropdowns that appear based on selected SOPs/Skills — no separate popup dialog
 - **Agent Identity Validation**: All MCP apps must support agent identities as first-class OIDC principals. The MCP Demo App serves as a reference implementation and validation artifact, now validating both dual-identity propagation (agent and user identities forwarded independently by the Communication Hub) and per-identity `mcp_role` claim-based tool access control.
 
@@ -48,12 +50,26 @@ The MCP Hub enables Parthenon to connect with external tool servers, synchronize
 - Tool usage is tracked per session or passthrough configuration and accessible for audit
 - When passthrough is enabled, agent identity is automatically forwarded to the MCP server
 - UI clearly distinguishes passthrough session type from traditional session selection
+- A session whose credential cannot be recovered automatically shows a "Needs re-authentication" status with the recorded failure reason, instead of appearing healthy or silently failing
+- Administrators can re-authenticate from the affected session; completing it restores the same session in place and clears the status and reason
+- Only the affected session is flagged — other sessions on the same server, and other servers, continue unaffected
+- Ordinary transient refresh failures (temporary provider unavailability, retryable errors) do not flag a session; automatic refresh continues as before
 - No regression in existing session-based workflows
 - MCP Demo App is available as a reference for validating dual-identity propagation (both agent and user identities), passthrough session type, per-identity `mcp_role` claim-based tool access control, and tool registration flows
 
 ## Token Health States
 
 Each named MCP session exposes a visible credential health state — **valid**, **expiring within 7 days**, or **expired** — derived from its credential/identity binding. Session listings serve as the remediation target for dashboard token-expiry warnings: an administrator clicking a warning lands on the session page to re-authenticate, and warnings clear automatically once re-authentication completes. (See [Token Expiry Alerting](token-expiry-alerting.md).)
+
+## Session Re-Authentication State
+
+Beyond the time-based health states, a session can be in a state that automatic refresh cannot fix — the identity provider reports that the stored refresh token no longer exists (for example, because it was revoked or expired at the provider).
+
+- Such a session is marked **"Needs re-authentication"**, and the failure reason is stored and shown with the session, so an administrator does not have to read logs to understand what happened.
+- The session manager offers the re-authentication action on the affected session; completing it updates the same session in place and clears the state and reason — no duplicate session is created and no routing configuration has to be redone.
+- Only the affected session is flagged. Other sessions on the same server and other servers are unaffected, and their automatic refresh continues normally.
+- Transient refresh failures are unaffected: they are still retried automatically and never flag a session.
+- A flagged session is surfaced as an actionable credential state rather than an unexplained agent error; its credential must be restored (via re-authentication) before dependent tool calls can succeed again.
 
 ## Out of Scope
 - Changes to underlying authentication protocols or OIDC/OAuth2 flows
@@ -64,6 +80,7 @@ Each named MCP session exposes a visible credential health state — **valid**, 
 - Requires MCP servers to support agent identity propagation via JWT (e.g., mcp-demo-app)
 - Relies on existing OIDC/OAuth2 infrastructure and agent identity management
 - UI/UX changes must maintain clarity for both passthrough and traditional session types
+- Some credential failures are not automatically recoverable: a refresh token the provider has discarded requires a human to re-authenticate, so this state is always surfaced rather than hidden
 
 ## Multi-Tenancy Note
 

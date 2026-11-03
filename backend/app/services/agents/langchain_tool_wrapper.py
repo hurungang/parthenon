@@ -400,7 +400,11 @@ def build_langchain_tools_for_ar_path(
             continue
 
         # ── human_intervene: must use LangGraph interrupt() to suspend execution
-        if original_name == "human_intervene":
+        # FIX-20261101-000319: definitions now carry canonical names — match
+        # the BARE name so ``system__human_intervene`` still hits the HITL path.
+        if original_name == "human_intervene" or original_name.endswith(
+            "____human_intervene"
+        ) or original_name.endswith("__human_intervene"):
             tool = LangChainHumanInterveneTool(
                 comm_hub_client=comm_hub_client,
                 session_id=session_id,

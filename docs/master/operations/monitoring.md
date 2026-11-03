@@ -150,6 +150,23 @@ Update this table whenever new components are added or new metrics are instrumen
 | **OIDC Config Service** | `oidc.config.test_failure_total` (labels: `provider_type`, `test_type`, `reason`) | Failed OIDC tests with failure reason (connectivity, auth, claims mapping). |
 | **OIDC Config Service** | `oidc.config.change_total` (labels: `action`, `provider_type`) | Provider config mutations; `action` is `create`, `update`, or `delete`. Used for audit trail. |
 | **OIDC Config Service** | `oidc.config.secret_encryption_errors_total` | Client secret encryption failures at rest. Any non-zero rate indicates crypto subsystem issue. |
+| **Control Center Assistant** | `internal_management_tool_calls_total` (labels: `tool_name`, `outcome` = `success`/`permission_denied`/`scope_rejected`/`delete_rejected`/`error`) — *proposed* | Delegated-action volume per `cc____` management tool; the primary usage/outcome signal for the assistant and external OAuth MCP clients |
+| **Control Center Assistant** | `internal_management_tool_permission_denials_total` (labels: `tool_name`, `resource_type`, `reason`) — *proposed* | Assistant attempts the user's own scope cannot authorize; sustained non-zero rate signals mis-scoped roles/grants or parity drift vs the REST `require_permission` |
+| **Control Center Assistant** | `internal_management_tool_delete_rejections_total` (labels: `tool_name`) — *proposed* | In-band delete attempts declined (`deletion_not_supported`); deletion is never supported, so a spike is misuse or an instruction regression |
+| **Control Center Assistant** | `internal_management_tool_scope_rejections_total` (labels: `tool_name`, `requested_scope`) — *proposed* | Requests outside the Agents-menu / MCP Hub management scope (`out_of_scope`) |
+| **Control Center Assistant** | `internal_management_tool_duration_seconds` (p99, labels: `tool_name`) — *proposed* | End-to-end handler time (authorize + persist) on `POST /internal/management-tools/*`; rising p99 indicates CC/DB pressure |
+| **Control Center Assistant** | `internal_management_tool_identity_resolution_failures_total` — *proposed* | Fail-closed cases where the OAuth `sub` could not resolve to a `PlatformUser` (CC `/resolve` 403); any non-zero rate needs triage |
+| **Control Center Assistant** | `mcp_oauth_auth_rejections_total` (labels: `reason` = `missing_token`/`invalid_token`/`expired_token`/`missing_subject`/`identity_unresolvable`/`tenant_unresolvable`) — *proposed* | OAuth/OIDC Bearer-token rejections at the Communication Hub `/mcp*` OAuth middleware; currently observable only as WARN log lines |
+| **Control Center Assistant** | `assistant_seed_result_total` (labels: `outcome` = `success`/`partial`/`failed`, `tenant_id`) — *proposed* (log-derived today) | Idempotent `AssistantSeeder` outcome at CC startup; `failed` means that tenant's assistant is unavailable |
+| **Control Center Assistant** | `assistant_turn_watchdog_fires_total` (labels: `kind` = `timeout`/`persistence_timeout`/`cancelled`) — *proposed* | Whole-turn watchdog fires in the Communication Hub chat socket; distinguishes a hung AR turn from a hung persistence tail |
+| **Control Center Assistant** | `assistant_turn_llm_timeout_total` (labels: `agent_type`) — *proposed* | Agent Runtime `conversation_llm_timeout_seconds` (and post-resume) turn timeouts |
+| **Control Center Assistant** | `guardrail_iteration_limit_hit_total` (labels: `agent_type`, `parent_session`) | Existing guardrail counter — filter to the seeded assistant agent type to detect conversational step-limit stops surfaced as an `iteration_limit` turn error |
+| **Control Center Assistant** | `assistant_intervention_total` (labels: `outcome` = `created`/`approved`/`denied`/`timeout`/`cancelled`) — *proposed* | Confirmation/HITL lifecycle for assistant writes; `timeout` means the turn aborted WITHOUT executing the operation |
+| **Control Center Assistant** | `assistant_intervention_pending` (gauge) — *proposed* | Pending `InterveneRequest` rows that block new chat messages for the session |
+| **Control Center Assistant** | `chat_ws_disconnect_total` (labels: `code`) / `chat_ws_active_connections` (gauge) — *proposed* | WebSocket disconnect causes (idle-proxy closes vs auth/tenant rejections) and live connection count for reply-delivery health |
+| **Control Center Assistant** | `assistant_catalog_anomalies_total` (labels: `kind` = `page_truncated`/`empty_catalog`/`cc_entity_leak`/`unknown_tool_requested`) — *proposed* | Sanity signal for the permission-filtered tool catalog: unexpected empty `tools/list`, page-cap truncation mistaken for missing tools, leak of the protected `cc` entity, or calls to unregistered tools |
+
+> **Instrumentation status**: the Control Center Assistant emits **structured logs only** — no dedicated assistant OTel counters exist yet (the guardrail counter is the one pre-existing series reused above). Rows marked *proposed* must be derived from the log events in [logging.md](logging.md) (Control Center Assistant subsection) until counters are instrumented. Alert names below are stable and safe to pre-create against log-derived series.
 
 ---
 
@@ -218,6 +235,22 @@ Guardrail policy behavior and stop-classification view. Add as a dedicated panel
 - **Non-Conversational Token Budget Stops** — `guardrail_token_budget_hit_total` split by provider/model.
 - **Token Fallback Activation** — `guardrail_token_fallback_applied_total` by `provider` and `fallback_mode`.
 - **Terminal State Classification Integrity** — `session_terminal_state_total` split by `state` and `stop_category`.
+
+### Control Center Assistant
+Conversational management surface plus the OAuth MCP plane it shares. Panels:
+
+- **Delegated Action Volume** — `internal_management_tool_calls_total` stacked by `outcome`; separate `cc____` management calls from meta-tool dispatch (`invoke_management_tool`, `list_management_tools`, `get_management_tool_schema`, `search_assistant_knowledge`).
+- **Permission Denial Rate by Resource Type** — `internal_management_tool_permission_denials_total` grouped by `resource_type`; annotate the expected zero-line for a healthy, correctly granted workspace.
+- **Delete / Out-of-Scope Rejections** — `internal_management_tool_delete_rejections_total` and `internal_management_tool_scope_rejections_total` as two lines; both should sit at zero outside attempted misuse.
+- **Management Tool Latency p99** — `internal_management_tool_duration_seconds` p99 by `tool_name`.
+- **Identity Resolution Failures** — `internal_management_tool_identity_resolution_failures_total` rate; any non-zero value is a hard failure of fail-closed enforcement.
+- **MCP OAuth Auth Rejection Rate** — `mcp_oauth_auth_rejections_total` split by `reason`.
+- **Assistant Availability / Seed Health** — `assistant_seed_result_total` by `outcome`, per tenant; plus a stat panel for the last startup result.
+- **Turn Watchdog and LLM Timeouts** — `assistant_turn_watchdog_fires_total` by `kind` overlaid with `assistant_turn_llm_timeout_total`.
+- **Iteration-Limit Stops (conversational)** — `guardrail_iteration_limit_hit_total` filtered to the seeded assistant agent type.
+- **Interventions** — `assistant_intervention_total` by `outcome` with `assistant_intervention_pending` as a gauge; annotate the configured `conversation_intervention_timeout_seconds`.
+- **WebSocket Health** — `chat_ws_active_connections` gauge and `chat_ws_disconnect_total` by `code`.
+- **Catalog Anomalies** — `assistant_catalog_anomalies_total` by `kind`, with a table panel listing the offending tool names.
 
 ### Service Segregation Boundary Enforcement
 Dedicated dashboard panel group for internal caller boundary controls. Panels:
@@ -294,6 +327,23 @@ Route Warning alerts to the operations on-call channel. Route Critical alerts to
 | `ConversationalTokenHardStopDetected` | conversational terminal sessions classified with token-budget stop reason for 2 min | Critical | Treat as policy regression; validate execution-mode branch and continuation behavior |
 | `TokenFallbackOveruse` | `guardrail_token_fallback_applied_total` above baseline for 15 min | Warning | Review provider capability mapping and fallback policy usage |
 | `StopReasonMissing` | terminal sessions without stop reason classification for 2 min | Critical | Validate stop metadata forwarding and persistence fields end-to-end |
+
+### Control Center Assistant Alerts
+
+Signals marked *proposed* have no OTel counter yet — create the alert against the log-derived series described in [logging.md](logging.md) until the counter ships.
+
+| Alert Name | Condition | Severity | Action |
+|------------|-----------|----------|--------|
+| `AssistantPermissionDenialSpike` | `rate(internal_management_tool_permission_denials_total) > baseline` for 5 min | Warning | Review the authenticated user's role/`agent::*` grants; distinguish user-scope denials from parity-map regression (see [runbooks/control-center-assistant.md](runbooks/control-center-assistant.md) §2) |
+| `AssistantIdentityResolutionFailure` | `rate(internal_management_tool_identity_resolution_failures_total) > 0` for 2 min | Critical | Fail-closed enforcement is rejecting valid actions; check OAuth `sub` → `PlatformUser` mapping immediately |
+| `McpOAuthAuthRejectionSpike` | `rate(mcp_oauth_auth_rejections_total) > baseline` for 5 min | Warning | Investigate token issuer/JWKS/clock-skew/identity-provisioning and tenant resolution; runbook §1 |
+| `AssistantDeleteRejectionSurge` | `rate(internal_management_tool_delete_rejections_total) > baseline` for 5 min | Warning | Investigate misuse or an assistant instruction regression — deletion is never supported |
+| `AssistantSeedFailed` | `assistant_seed_result_total{outcome="failed"}` present at startup, or `AssistantSeeder failed` ERROR in `control-center.log` | Critical | Assistant agent type/tools missing for at least one tenant; runbook §3 |
+| `AssistantTurnWatchdogFires` *(proposed)* | `rate(assistant_turn_watchdog_fires_total) > 0` for 5 min | Warning | Separate `timeout` (hung AR turn) from `persistence_timeout` (reply delivered, CC write hung); runbook §4 |
+| `AssistantIterationLimitSurge` | `rate(guardrail_iteration_limit_hit_total{agent_type="<seeded assistant>"}) > baseline` for 10 min | Warning | Assistants are looping on tool discovery; check the tool-catalog size and the model's tool-selection behavior; runbook §4 |
+| `AssistantInterventionTimeoutSpike` *(proposed)* | `rate(assistant_intervention_total{outcome="timeout"}) > baseline` for 10 min | Warning | Operators are not answering confirmations within `conversation_intervention_timeout_seconds`; writes are aborting (no mutation) |
+| `AssistantWsDisconnectSpike` *(proposed)* | `rate(chat_ws_disconnect_total) > baseline` for 5 min | Warning | Distinguish idle-proxy closes (normal) from `4003`/`1008` auth-and-tenant rejections; runbook §5 |
+| `AssistantCatalogAnomaly` *(proposed)* | `increase(assistant_catalog_anomalies_total[10m]) > 0` | Warning | Empty catalog, page-cap truncation, or `cc` entity visibility anomaly; runbook §7 |
 
 ### Model-Usage Guardrail Alerts
 

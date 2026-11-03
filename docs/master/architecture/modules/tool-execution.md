@@ -118,6 +118,39 @@ sequenceDiagram
     MCP-->>SR: Result (audit: script provenance)
 ```
 
+### Tool-Result Outcome: `partial_failure`
+
+A tool call has two failure planes, and the chain treats them differently:
+
+- **Transport failure** — tool not found, HTTP error, timeout. The chain
+  raises a typed error, the sandbox surfaces it as a script failure, and the
+  unconditional LLM fallback reacts (recorded as `fell_back`).
+- **Semantic failure** — the MCP server answers HTTP 200 but the payload is
+  an error report (upstream service failed, business rule rejected).
+  Transport reports success; only the payload is wrong.
+
+Script execution records carry the outcome enum `success` /
+`validation_failure` / `fell_back` / `partial_failure`, and
+`partial_failure` is the designated home for the semantic case.
+**Status: recorded-but-not-auto-detected** — the enum value shipped, but no
+component inspects successful envelopes for error reports yet, and the
+fallback / repair / re-optimization reactions keyed on that value were
+deferred by product decision. The accepted mitigation is defensive script
+authoring: a script inspects the payload it receives and raises on an error
+report, which routes the run through the existing fallback path.
+
+```mermaid
+flowchart LR
+    C["Tool call<br/>(script or LLM)"] --> CH["Skill Engine → MCP Hub"]
+    CH --> EXT["External MCP Server"]
+    EXT -->|"HTTP error / timeout"| TE["Typed error<br/>→ unconditional LLM fallback<br/>outcome = fell_back"]
+    EXT -->|"HTTP 200 + error report"| SEM["Semantic failure"]
+    SEM --> DEF["Script raises on payload shape<br/>(defensive authoring)"]
+    DEF --> TE
+    SEM -.->|"would record"| PF["outcome = partial_failure<br/>shipped · detection deferred"]
+    EXT -->|"HTTP 200 + good payload"| OK["outcome = success"]
+```
+
 ## Multi-Turn Tool Use
 
 The sequence above shows a single tool-call round-trip. In practice, the LLM may request multiple tool calls in succession — each one traverses the same Skill Engine → MCP Hub → MCP Server chain before the final response is returned to the user.

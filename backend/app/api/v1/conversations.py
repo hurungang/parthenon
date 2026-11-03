@@ -1,6 +1,7 @@
 """Conversations API router — session management and conversation history."""
 import uuid
 import logging
+from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy import select
@@ -14,6 +15,7 @@ from app.db.session import DbSession
 from app.schemas.conversations import (
     ConversationSessionCreate,
     ConversationSessionDetailRead,
+    ConversationSessionPageRead,
     ConversationSessionRead,
 )
 from app.schemas.intervene import (
@@ -99,7 +101,12 @@ async def end_conversation_session(
     db: DbSession,
     _: dict = Depends(require_permission(RT_AGENT_TRAILS, "read")),
 ) -> ConversationSession:
-    """Transition a conversation session to closed status."""
+    """Transition a conversation session to closed status.
+
+    FIX-20261031-091657 (Defect B): also best-effort terminates any in-flight
+    agent execution bound to this session (hung/slow turn) via the existing
+    CC → CH → AR termination machinery; never fails the end call.
+    """
     user_id = _get_requesting_user_id(request)
     try:
         session = await _manager.end(
@@ -111,6 +118,12 @@ async def end_conversation_session(
         raise HTTPException(status_code=404, detail=str(exc))
     except PermissionError as exc:
         raise HTTPException(status_code=403, detail=str(exc))
+
+    from app.services.conversations.termination import (
+        terminate_in_flight_conversation_execution,
+    )
+
+    await terminate_in_flight_conversation_execution(session_id)
     return session
 
 
@@ -286,6 +299,57 @@ async def respond_to_conversation_intervention(
             )
 
     return response_data
+
+
+@ConversationRouter.get(
+    "/sessions", response_model=ConversationSessionPageRead
+)
+async def list_conversation_sessions_paged(
+    request: Request,
+    db: DbSession,
+    _: dict = Depends(require_permission(RT_AGENT_TRAILS, "read")),
+    agent_type_id: uuid.UUID | None = None,
+    triggered_by_user_id: uuid.UUID | None = None,
+    status: str = "all",
+    date_from: datetime | None = None,
+    date_to: datetime | None = None,
+    all_time: bool = False,
+    page: int = 1,
+    page_size: int = 10,
+) -> ConversationSessionPageRead:
+    """FIX-20261101-120618 Work Item 1: paginated, filterable sessions listing.
+
+    Ordered by updated_at DESC. When no explicit date range is given, a
+    default lower bound of ``now − conversation_sessions_default_window_days``
+    applies; ``all_time=true`` disables the window. ``status`` semantics:
+    ``active`` → only active; ``ended`` → closed/archived/error; ``all`` →
+    everything. Tenant-scoped via the request's tenant context.
+    """
+    from app.core.config import get_settings
+
+    if status not in ("active", "ended", "all"):
+        raise HTTPException(status_code=422, detail="status must be one of: active, ended, all")
+    if page < 1 or page_size < 1:
+        raise HTTPException(status_code=422, detail="page and page_size must be >= 1")
+
+    items, total = await _store.list_sessions_page(
+        db=db,
+        agent_type_id=agent_type_id,
+        triggered_by_user_id=triggered_by_user_id,
+        status=status,
+        date_from=date_from,
+        date_to=date_to,
+        all_time=all_time,
+        page=page,
+        page_size=page_size,
+    )
+    return ConversationSessionPageRead(
+        items=items,
+        total=total,
+        page=page,
+        page_size=page_size,
+        default_window_days=get_settings().conversation_sessions_default_window_days,
+    )
 
 
 @ConversationRouter.get("/{session_id}", response_model=ConversationSessionDetailRead)

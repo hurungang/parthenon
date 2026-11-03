@@ -114,6 +114,7 @@ vi.mock('../hooks/useAgentTypes', () => ({
 }))
 
 vi.mock('../hooks/useConversationSessions', () => ({
+  useConversationSessionsPage: vi.fn(() => ({ data: undefined, isLoading: false, error: null })),
   useEndConversationSession: () => ({
     mutateAsync: vi.fn(),
     isPending: false,

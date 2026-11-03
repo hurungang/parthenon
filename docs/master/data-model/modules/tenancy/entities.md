@@ -70,14 +70,27 @@ erDiagram
         datetime created_at
         datetime updated_at
     }
+    TenantSetting {
+        uuid id
+        uuid tenant_id "owning tenant; one row per key"
+        string key "unique per tenant (e.g. workflow_generation_model_id)"
+        json value
+        datetime created_at
+        datetime updated_at
+    }
 
     Tenant ||--o{ TenantUserMembership : "grants membership in"
     PlatformUser ||--o{ TenantUserMembership : "joins tenants via"
     Tenant ||--o{ TenantInvitation : "receives invitations for"
     TenantUserMembership ||--o{ TenantInvitation : "sends invitations"
     Tenant ||--o{ TenantAuditEvent : "records audit events for"
+    Tenant ||--o{ TenantSetting : "owns configuration for"
     PlatformSetting ||..o{ Tenant : "governs tenancy mode for"
 ```
+
+**Sources**: `backend/app/db/models/tenant.py`, `backend/app/db/models/tenant_membership.py`, `backend/app/db/models/tenant_invitation.py`, `backend/app/db/models/tenant_audit_event.py`, `backend/app/db/models/platform_setting.py`, `backend/app/db/models/tenant_setting.py`, `backend/app/db/models/platform_user.py`
+
+**Two configuration stores:** `PlatformSetting` is **tenant-agnostic** (globally unique by key, e.g. `multi_tenancy_enabled`); `TenantSetting` is **tenant-scoped** (one row per tenant + key, so different tenants may hold different values for the same key). Tenant settings are always read and written within the session tenant only, and are removed with their tenant.
 
 | Entity | Description | Source |
 |---|---|---|
@@ -86,6 +99,7 @@ erDiagram
 | `TenantInvitation` | Pending user onboarding into a tenant; carries target tenant role, single-use flag, and expiry | `backend/app/db/models/tenant_invitation.py` |
 | `TenantAuditEvent` | Tenant-attributed audit trail for lifecycle, registration, root-protection, licensing, and quota events; platform-level events attribute to the root tenant | `backend/app/db/models/tenant_audit_event.py` |
 | `PlatformSetting` | Tenant-agnostic platform configuration store; home of the `multi_tenancy_enabled` switch (default `false`) | `backend/app/db/models/platform_setting.py` |
+| `TenantSetting` | Tenant-scoped key/value configuration store; exactly one row per **(tenant, key)**, so each tenant holds its own value. Currently holds the per-tenant workflow-generation model selection (`workflow_generation_model_id`), which replaced the former global `config/app.yaml` value | `backend/app/db/models/tenant_setting.py` |
 | `PlatformUser` | Tenant-agnostic real-world person; tenant presence via memberships; platform-issued email + password credential for self-serve accounts | `backend/app/db/models/platform_user.py` |
 
 **Self-serve registration:** one all-or-nothing action creates `PlatformUser` + `Tenant` + the creator's root `TenantUserMembership` (`is_root = true`), then lands the root user in guided onboarding; a user who already owns a tenant is blocked (one owned tenant per user).

@@ -28,6 +28,7 @@ vi.mock('../hooks/useAgentTypes', () => ({
 }))
 
 vi.mock('../hooks/useConversationSessions', () => ({
+  useConversationSessionsPage: vi.fn(() => ({ data: undefined, isLoading: false, error: null })),
   useConversationSessions: vi.fn(() => ({ data: undefined })),
   useEndConversationSession: () => ({
     mutateAsync: vi.fn().mockResolvedValue({ id: 'conv-1', status: 'closed' }),

@@ -47,7 +47,18 @@ _DATA_PLANE_ROUTER_MODULES = [
     "app.api.v1.internal.agent_data",
     "app.api.v1.internal.mcp_proxy",
     "app.api.v1.internal.authorization",
+    "app.api.v1.internal.management_tools",
 ]
+
+#: Control-plane internal routes that ESTABLISH tenant context from a
+#: validated OAuth identity (the management ``/resolve`` endpoint).  CH calls
+#: these with only the OIDC-validated ``sub`` + ``tenant`` slug — no signed
+#: headers (CH is forward-only) — so ``require_internal_tenant_context`` must
+#: NOT be attached.  They remain gated by ``require_service_certificate``
+#: (mTLS), asserted separately in ``TestResolveEstablishesContextFromOAuth``.
+_CONTEXT_ESTABLISHING_ROUTES: dict[str, set[str]] = {
+    "app.api.v1.internal.management_tools": {"/internal/management-tools/resolve"},
+}
 
 
 def _tenant_ctx(tenant_id, slug: str) -> TenantContext:
@@ -120,9 +131,15 @@ class TestFailClosedHeaders:
 
     async def test_stale_timestamp_is_401(self, client, mt_on, db):
         tenant_a, _ = await create_two_tenants(db)
+        from app.core.config import get_settings
+
+        max_age = get_settings().tenant_signature_max_age_seconds
         headers = build_tenant_signature_headers(
             _tenant_ctx(tenant_a.id, tenant_a.slug),
-            timestamp=time.time() - 3600,  # far outside the replay window
+            # Far outside the CONFIGURED replay window (a signed set is minted
+            # once per session and forwarded for a whole agent run, so the
+            # window is large — hours, not seconds).
+            timestamp=time.time() - 2 * max_age,
         )
         response = await client.get("/probe", headers=headers)
         assert response.status_code == 401
@@ -190,14 +207,19 @@ class TestDependencyAttachedToAllDataPlaneRouters:
         from app.api.deps import require_internal_tenant_context
 
         module = importlib.import_module(module_name)
+        from fastapi.routing import APIRouter
+
         routers = [
             obj
             for obj in vars(module).values()
-            if hasattr(obj, "routes") and hasattr(obj, "dependencies")
+            if isinstance(obj, APIRouter)
         ]
         assert routers, f"no APIRouter found in {module_name}"
+        exempt = _CONTEXT_ESTABLISHING_ROUTES.get(module_name, set())
         for router in routers:
             for route in router.routes:
+                if getattr(route, "path", None) in exempt:
+                    continue
                 attached = any(
                     getattr(dep, "dependency", None) is require_internal_tenant_context
                     for dep in getattr(route, "dependencies", [])
@@ -209,3 +231,46 @@ class TestDependencyAttachedToAllDataPlaneRouters:
                     f"{module_name} route {getattr(route, 'path', route)} is not "
                     f"protected by require_internal_tenant_context (fail-open!)"
                 )
+
+
+class TestResolveEstablishesContextFromOAuth:
+    async def test_resolve_is_mtls_gated_and_not_tenant_context_gated(self):
+        """The ``/resolve`` endpoint establishes tenant context from the OAuth
+        identity; it must be mTLS-gated (``require_service_certificate``) but
+        must NOT consume ``require_internal_tenant_context`` (CH calls it
+        headerless, presenting only the OIDC-validated ``sub`` + ``tenant``).
+        """
+        import importlib
+
+        from app.api.deps import require_internal_tenant_context, require_service_certificate
+
+        module = importlib.import_module("app.api.v1.internal.management_tools")
+
+        resolve_router = getattr(module, "resolve_router", None)
+        assert resolve_router is not None, "resolve_router missing"
+        resolve_deps = {
+            getattr(dep, "dependency", None) for dep in resolve_router.dependencies
+        }
+        assert require_service_certificate in resolve_deps, (
+            "/resolve must remain mTLS-gated (require_service_certificate)"
+        )
+        assert require_internal_tenant_context not in resolve_deps, (
+            "/resolve must NOT consume require_internal_tenant_context "
+            "(CH calls it without signed headers)"
+        )
+        resolve_routes = [
+            r
+            for r in resolve_router.routes
+            if getattr(r, "path", None) == "/internal/management-tools/resolve"
+        ]
+        assert resolve_routes, "no /resolve route on resolve_router"
+
+        # The execution router keeps the tenant-context guard.
+        main_router = getattr(module, "router", None)
+        assert main_router is not None
+        main_deps = {
+            getattr(dep, "dependency", None) for dep in main_router.dependencies
+        }
+        assert require_internal_tenant_context in main_deps, (
+            "the /{tool_name} execution router must keep require_internal_tenant_context"
+        )

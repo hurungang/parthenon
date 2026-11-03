@@ -239,11 +239,59 @@ class LangChainHumanInterveneTool(BaseTool):
                     )
 
         # CommHub registration succeeded — pause the agent.
-        # GraphInterrupt is caught by _run_task_loop_ar, which extracts
-        # conversation state from the checkpointer and saves it to CC DB.
-        interrupt({"request_id": request_id, "intervention_type": intervention_type, "reason": reason})
+        # FIX-20261031-133253: for CONVERSATIONAL turns (the assistant), the
+        # tool waits on the in-process conversational resume registry — the
+        # AR /internal/resume call resolves it and the SAME tool call
+        # returns the operator's response. LangGraph interrupt()/Command
+        # resume replayed the tool task (re-registering duplicate requests),
+        # so the conversational path avoids interrupt() entirely. Task
+        # agents keep the existing interrupt() flow unchanged.
+        if self.conv_session_id:
+            from app.core.config import get_settings as _gs
+            from app.agent_runtime import conversation_resume as _cr
 
-        # Reached only if resumed via Command(resume=...) — not used in current impl.
+            _timeout = float(
+                max(30, int(getattr(_gs(), "conversation_intervention_timeout_seconds", 240)))
+            )
+            _response_value = await _cr.wait_for_resume(
+                self.conv_session_id, timeout_seconds=_timeout
+            )
+            if _response_value is None:
+                return json.dumps(
+                    {
+                        "status": "timeout",
+                        "request_id": request_id,
+                        "error": (
+                            "The confirmation request timed out without an "
+                            "operator response — the operation was NOT executed."
+                        ),
+                    }
+                )
+            return json.dumps(
+                {
+                    "status": (
+                        "approved" if _response_value.get("approval_value") else "resolved"
+                    ),
+                    "request_id": request_id,
+                    **_response_value,
+                }
+            )
+
+        resume_value = interrupt(
+            {"request_id": request_id, "intervention_type": intervention_type, "reason": reason}
+        )
+
+        # Reached only after Command(resume=...): surface the operator's
+        # response as the tool result so the model can act on the approval
+        # (FIX-20261031-133253 confirmation-before-write contract).
+        if isinstance(resume_value, dict):
+            return json.dumps(
+                {
+                    "status": "approved" if resume_value.get("approval_value") else "resolved",
+                    "request_id": request_id,
+                    **resume_value,
+                }
+            )
         return json.dumps({"status": "pending", "request_id": request_id})
 
 

@@ -6,7 +6,7 @@ from typing import Any
 from pydantic import BaseModel, Field, StringConstraints, model_validator
 from typing import Annotated
 
-from app.db.models.mcp_hub import McpServerStatus, McpSessionAuthType
+from app.db.models.mcp_hub import SYSTEM_MANAGED_SERVER_SLUGS, McpServerStatus, McpSessionAuthType
 
 
 class McpServerCreate(BaseModel):
@@ -36,8 +36,17 @@ class McpServerRead(BaseModel):
     status: McpServerStatus
     last_synced_at: datetime | None
     session_count: int = 0
+    # FIX-20261101-090438: derived from the slug convention (see
+    # SYSTEM_MANAGED_SERVER_SLUGS) — True for system/decision/cc.
+    is_system_managed: bool = False
     created_at: datetime
     updated_at: datetime
+
+    @model_validator(mode="after")
+    def _derive_system_managed(self) -> "McpServerRead":
+        if self.slug in SYSTEM_MANAGED_SERVER_SLUGS:
+            self.is_system_managed = True
+        return self
 
 
 class McpSessionCreate(BaseModel):

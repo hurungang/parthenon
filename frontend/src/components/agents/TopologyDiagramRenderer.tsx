@@ -575,6 +575,62 @@ function computeZonedLayout(
   }
 }
 
+// ── Pending-entity spinner ────────────────────────────────────────────────────
+
+interface PendingSpinnerProps {
+  /** Centre x in viewBox units (the icon gutter). */
+  x: number
+  /** Centre y in viewBox units. */
+  y: number
+  /** Diameter in viewBox units (mirrors the entity icon it replaces). */
+  size: number
+  color: string
+  /** Localized loading text (aria-label + <title>). */
+  label: string
+  testId: string
+}
+
+/**
+ * Spinner for an entity whose referenced data is still loading (pending
+ * request). Drawn in VIEWBOX units in the node's icon gutter — exactly the
+ * geometry of the entity icon it replaces — so it scales with the diagram
+ * (responsive width, fullscreen `fillHeight`, viewBox zoom + font cap) and the
+ * node never resizes/jumps when the real data arrives. Animated with SMIL
+ * inside the SVG (no HTML overlay), accessible via `role="progressbar"` with
+ * a localized `aria-label`/`<title>`.
+ */
+function PendingSpinner({ x, y, size, color, label, testId }: PendingSpinnerProps): React.ReactElement {
+  const radius = size / 2
+  const circumference = 2 * Math.PI * radius
+  return (
+    <g data-testid={testId} role="progressbar" aria-label={label}>
+      <title>{label}</title>
+      {/* Track */}
+      <circle cx={x} cy={y} r={radius} fill="none" stroke={color} strokeOpacity={0.25} strokeWidth={1.4} />
+      {/* Rotating arc (SMIL) */}
+      <circle
+        cx={x}
+        cy={y}
+        r={radius}
+        fill="none"
+        stroke={color}
+        strokeWidth={1.4}
+        strokeLinecap="round"
+        strokeDasharray={`${circumference * 0.28} ${circumference}`}
+      >
+        <animateTransform
+          attributeName="transform"
+          type="rotate"
+          from={`0 ${x} ${y}`}
+          to={`360 ${x} ${y}`}
+          dur="0.9s"
+          repeatCount="indefinite"
+        />
+      </circle>
+    </g>
+  )
+}
+
 // ── Component ─────────────────────────────────────────────────────────────────
 
 const TopologyDiagramRenderer: React.FC<Props> = ({ nodes, edges, onNodeClick, zones, hubBar, fillHeight, viewZoom, viewFontZoom }) => {
@@ -582,6 +638,8 @@ const TopologyDiagramRenderer: React.FC<Props> = ({ nodes, edges, onNodeClick, z
   const [clickedNodeId, setClickedNodeId] = useState<string | null>(null)
   const isZoned = Array.isArray(zones) && zones.length > 0
   const hubBarAfterZone = hubBar?.afterZone
+  /** Localized loading text for pending (in-flight) entities. */
+  const loadingLabel = t('agents.panel.topologyLoading', { defaultValue: 'Loading…' })
 
   // ── Fullscreen view transform state (fillHeight + viewZoom only) ──
   // The svg element ref (client box → screen-to-viewBox conversion for pan).
@@ -817,6 +875,8 @@ const TopologyDiagramRenderer: React.FC<Props> = ({ nodes, edges, onNodeClick, z
     const isLocked = node.usage === 'locked'
     const isBoundary = l.boundary === true
     const isClicked = clickedNodeId === node.id
+    /** Referenced entity still loading — spinner instead of the type icon. */
+    const isPending = node.pending === true
 
     // Width-aware label fitting (viewBox units — robust under responsive and
     // fillHeight scaling): the label is LEFT-ALIGNED after the icon gutter
@@ -862,14 +922,18 @@ const TopologyDiagramRenderer: React.FC<Props> = ({ nodes, edges, onNodeClick, z
         >
           <g
             data-topology-node={node.id}
+            data-pending={isPending ? 'true' : undefined}
             transform={`translate(${x + 10}, ${y + 10})`}
             onClick={() => {
+              // A pending node has no resolved entity behind it yet — never
+              // navigate/open a detail view for a not-yet-loaded reference.
+              if (isPending) return
               if (isTruncated) {
                 setClickedNodeId(isClicked ? null : node.id)
               }
               onNodeClick?.(node)
             }}
-            style={{ cursor: onNodeClick ? 'pointer' : isTruncated ? 'pointer' : 'default' }}
+            style={{ cursor: isPending ? 'default' : onNodeClick ? 'pointer' : isTruncated ? 'pointer' : 'default' }}
           >
             {/* Native browser tooltip with the FULL label (hover) — on the
                 node group and on every truncated text element. */}
@@ -965,15 +1029,28 @@ const TopologyDiagramRenderer: React.FC<Props> = ({ nodes, edges, onNodeClick, z
                 {/* Entity-type icon — dense 10px geometry inside the node
                     box; the left-aligned label starts 4 units right of the
                     icon and is vertically centred on it. Placeholders and
-                    locked slots render the same icon. */}
-                <TopologyNodeIcon
-                  type={node.type}
-                  size={NODE_ICON_SIZE}
-                  color={fillColor}
-                  x={NODE_ICON_X}
-                  y={capH + (h - capH) / 2 - NODE_ICON_SIZE / 2}
-                  testId={node.type}
-                />
+                    locked slots render the same icon. A PENDING (in-flight)
+                    entity swaps the icon for an accessible spinner in the
+                    same viewBox slot — geometry unchanged, no layout jump. */}
+                {isPending ? (
+                  <PendingSpinner
+                    x={NODE_ICON_X + NODE_ICON_SIZE / 2}
+                    y={capH + (h - capH) / 2}
+                    size={NODE_ICON_SIZE}
+                    color={fillColor}
+                    label={loadingLabel}
+                    testId={`topology-node-pending-${node.id}`}
+                  />
+                ) : (
+                  <TopologyNodeIcon
+                    type={node.type}
+                    size={NODE_ICON_SIZE}
+                    color={fillColor}
+                    x={NODE_ICON_X}
+                    y={capH + (h - capH) / 2 - NODE_ICON_SIZE / 2}
+                    testId={node.type}
+                  />
+                )}
                 {/* Node type badge (width-fitted, uppercase) */}
                 <text
                   x={NODE_LABEL_X}

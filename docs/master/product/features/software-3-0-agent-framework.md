@@ -81,6 +81,13 @@ Parthenon is positioned as a **Software 3.0 agent framework**: when an agent pro
 - Script content and verification artifacts never contain sensitive data (identity tokens, credentials, integration secrets).
 - All three backend services remain fully segregated; script artifacts are managed by Control Center and executed in Agent Runtime.
 
+### Inherent Self-Context & Optimization (Every Agent, No Configuration)
+
+Every agent — conversational, non-conversational, role-based or not — carries two built-in capabilities: **self-context** (inspect its own plan, optimized plan, generated scripts, and execution history) and **workflow-optimization** (generate and verify optimized implementations, author and run scripts). These are part of every agent's context by default, require no per-agent setup, and create no configurable rows — while remaining subject to the same guardrails, sandboxing, and permission rules as any other capability.
+
+- No user action is required to enable them; they are present for every agent from its first run.
+- They never widen an agent's tool permissions — they operate on the agent's own plans, scripts, and execution records.
+
 ## 6. Out of Scope
 
 - Replacing the model-driven agent loop — it remains always available as the unconditional fallback and the default for un-compiled workflows.

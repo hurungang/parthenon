@@ -52,6 +52,8 @@ export interface McpServer {
   status: McpServerStatus
   last_synced_at: string | null
   session_count: number
+  /** FIX-20261101-090438: system-managed entities (system/decision/cc) — UI hides lifecycle actions. */
+  is_system_managed?: boolean
   created_at: string
   updated_at: string
 }
@@ -109,6 +111,15 @@ export interface SyncResult {
 
 export type SopStepType = 'skill_invocation' | 'agent_delegation'
 
+export interface SkillToolBindingInfo {
+  /** FIX-20261102-062047: lets the editor map bindings to picker selections. */
+  tool_id?: string | null
+  name: string
+  original_name?: string | null
+  server_slug?: string | null
+  server_name?: string | null
+}
+
 export interface Skill {
   id: string
   name: string
@@ -118,6 +129,7 @@ export interface Skill {
   is_active: boolean
   is_system: boolean
   tool_ids: string[]
+  tool_bindings?: SkillToolBindingInfo[]
   created_at: string
   updated_at: string
 }
@@ -486,6 +498,15 @@ export interface TopologyNode {
    * the same zone + group to take effect.
    */
   childOf?: string
+  /**
+   * Loading state (zoned topology): `true` while the referenced entity is
+   * still being resolved (its request is in flight). The renderer swaps the
+   * entity icon for an accessible spinner and draws the supplied loading
+   * label instead of any id — the node geometry stays identical so the graph
+   * does not jump when the data arrives. Distinct from `usage: 'empty'`
+   * (a genuinely unfilled slot) and from a resolved-but-missing reference.
+   */
+  pending?: boolean
 }
 
 export interface TopologyEdge {
@@ -588,6 +609,7 @@ export interface AgentType {
   guardrail_conversational_token_visibility_mode?: 'enabled' | 'disabled'
   guardrail_conversational_continuation_policy?: 'allow'
   is_active: boolean
+  is_system?: boolean
   created_at: string
   updated_at: string
   plan?: AgentPlan | null
@@ -642,6 +664,17 @@ export interface WorkflowGenerationModelOption {
 export interface WorkflowGenerationModelConfig {
   selected_model_id: string | null
   options: WorkflowGenerationModelOption[]
+}
+
+export type AssistantModelOption = WorkflowGenerationModelOption
+
+export interface AssistantModelConfig {
+  selected_model_id: string | null
+  options: AssistantModelOption[]
+}
+
+export interface AssistantModelConfigUpdate {
+  model_id: string | null
 }
 
 export interface ExecutionLogRead {

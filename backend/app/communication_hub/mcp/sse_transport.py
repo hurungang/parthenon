@@ -21,13 +21,13 @@ from fastapi import Request
 from fastapi.responses import JSONResponse, Response, StreamingResponse
 
 from app.communication_hub.mcp.protocol_server import McpProtocolServer
-from app.communication_hub.mcp.session_manager import McpSessionManager
+from app.communication_hub.mcp.session_manager import (
+    McpSessionManager,
+    build_session_from_request,
+    is_request_authenticated,
+)
 
 logger = logging.getLogger(__name__)
-
-
-def _is_api_key_authenticated(request: Request) -> bool:
-    return getattr(request.state, "auth_method", None) == "api_key"
 
 
 async def handle_sse_open(
@@ -35,21 +35,13 @@ async def handle_sse_open(
     manager: McpSessionManager,
 ) -> Response:
     """Open an SSE stream for the client and announce the message endpoint."""
-    if not _is_api_key_authenticated(request):
+    if not is_request_authenticated(request):
         return JSONResponse(
             status_code=401,
-            content={"detail": "API key authentication required"},
+            content={"detail": "Authentication required"},
         )
 
-    session = manager.create_session(
-        identity_token=getattr(request.state, "identity_token", None),
-        agent_identity_id=getattr(request.state, "api_key_agent_identity_id", None),
-        agent_role_id=getattr(request.state, "api_key_agent_role_id", None),
-        permissions=list(getattr(request.state, "api_key_permissions", []) or []),
-        skills=list(getattr(request.state, "api_key_skills", []) or []),
-        api_key_name=getattr(request.state, "api_key_name", None),
-        tenant_id=getattr(request.state, "tenant_id", None),
-    )
+    session = build_session_from_request(request, manager)
     session_id = session.session_id
 
     async def event_stream() -> AsyncIterator[str]:
@@ -78,10 +70,10 @@ async def handle_sse_message(
     server: McpProtocolServer,
 ) -> Response:
     """Handle a JSON-RPC message posted to the SSE message endpoint."""
-    if not _is_api_key_authenticated(request):
+    if not is_request_authenticated(request):
         return JSONResponse(
             status_code=401,
-            content={"jsonrpc": "2.0", "id": None, "error": {"code": -32001, "message": "API key authentication required"}},
+            content={"jsonrpc": "2.0", "id": None, "error": {"code": -32001, "message": "Authentication required"}},
         )
 
     try:
@@ -97,15 +89,7 @@ async def handle_sse_message(
 
     if session is None:
         # Fall back to creating a session from the auth context.
-        session = manager.create_session(
-            identity_token=getattr(request.state, "identity_token", None),
-            agent_identity_id=getattr(request.state, "api_key_agent_identity_id", None),
-            agent_role_id=getattr(request.state, "api_key_agent_role_id", None),
-            permissions=list(getattr(request.state, "api_key_permissions", []) or []),
-            skills=list(getattr(request.state, "api_key_skills", []) or []),
-            api_key_name=getattr(request.state, "api_key_name", None),
-        tenant_id=getattr(request.state, "tenant_id", None),
-        )
+        session = build_session_from_request(request, manager)
 
     response_msg = await server.handle(request, body, session)
     if response_msg is None:

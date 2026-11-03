@@ -401,4 +401,51 @@ describe('InlineInterventionDialog', () => {
     const progressBar = container.querySelector('[role="progressbar"]')
     expect(progressBar).not.toBeNull()
   })
+
+  // ── FIX-20261031-133253: markdown table preview rendering ───────────────
+
+  it('renders a markdown table reason as a real table (ContentRenderer)', () => {
+    const markdownTable = [
+      'Approve the following operation:',
+      '',
+      '| Field | Value |',
+      '| --- | --- |',
+      '| Operation | create |',
+      '| Resource | agent type |',
+      '| Name | fraud-agent |',
+      '| Model | deepseek-v4-flash |',
+    ].join('\n')
+    const { container } = render(
+      <InlineInterventionDialog
+        request={{ ...baseRequest, reason: markdownTable }}
+        onApprove={onApprove}
+        onDeny={onDeny}
+        onSelectChoice={onSelectChoice}
+        onSubmitText={onSubmitText}
+        onDismiss={onDismiss}
+      />,
+    )
+    const table = container.querySelector('table')
+    expect(table).not.toBeNull()
+    // Header + 4 body rows
+    expect(table?.querySelectorAll('tr').length).toBe(5)
+    expect(container.textContent).toContain('deepseek-v4-flash')
+  })
+
+  it('still emits approve via intervene_response flow for a table preview', async () => {
+    const markdownTable = '| Field | Value |\n| --- | --- |\n| Operation | create |'
+    render(
+      <InlineInterventionDialog
+        request={{ ...baseRequest, reason: markdownTable }}
+        onApprove={onApprove}
+        onDeny={onDeny}
+        onSelectChoice={onSelectChoice}
+        onSubmitText={onSubmitText}
+        onDismiss={onDismiss}
+      />,
+    )
+    const approveButton = screen.getByRole('button', { name: 'Approve' })
+    fireEvent.click(approveButton)
+    await waitFor(() => expect(onApprove).toHaveBeenCalledTimes(1))
+  })
 })

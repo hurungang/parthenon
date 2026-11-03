@@ -17,6 +17,12 @@ import uuid
 
 import pytest
 import pytest_asyncio
+
+
+def _async_return(value):
+    async def _fn(*args, **kwargs):
+        return value
+    return _fn
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
@@ -94,7 +100,7 @@ def _generation_model_configured(monkeypatch):
     """Force the workflow generation model to be 'configured'."""
     import app.api.v1.decision_tools as dt_api
 
-    monkeypatch.setattr(dt_api, "get_workflow_generation_model_id", lambda: "cfg-gpt")
+    monkeypatch.setattr(dt_api, "get_workflow_generation_model_id", _async_return("cfg-gpt"))
 
 
 GOOD_DRAFT = json.dumps(
@@ -220,7 +226,7 @@ class TestGenerateEndpoint:
     async def test_generate_missing_workflow_model_422(self, gen_client, monkeypatch):
         import app.api.v1.decision_tools as dt_api
 
-        monkeypatch.setattr(dt_api, "get_workflow_generation_model_id", lambda: None)
+        monkeypatch.setattr(dt_api, "get_workflow_generation_model_id", _async_return(None))
         resp = await gen_client.post(
             GENERATE_URL, json={"description": "something"}
         )

@@ -117,9 +117,34 @@ async def execute_conversation_turn(
                     exc,
                     exc_info=True,
                 )
+                # FIX-20261101-111439: guardrail stops carry a machine-readable
+                # reason + details so Control Center can surface a clear,
+                # user-comprehensible error turn instead of the generic
+                # "An error occurred" fallback.
+                from app.services.agents.guardrail_callback import GuardrailStop as CallbackGuardrailStop
+                from app.services.agents.guardrails import GuardrailStop as ExecutorGuardrailStop
+
+                if isinstance(exc, (CallbackGuardrailStop, ExecutorGuardrailStop)):
+                    await queue.put(
+                        {
+                            "type": "error",
+                            "error_type": exc.reason,
+                            "error_details": exc.details or {},
+                        }
+                    )
+                    return
                 await queue.put({"type": "error"})
 
         task = asyncio.create_task(run_turn())
+
+        # FIX-20261031-091657 (Defect B): register the in-flight conversation
+        # turn so ``/terminate/{conv_session_id}`` can cancel a hung/slow turn
+        # when the conversation session is ended. Removed when the stream ends.
+        conversation_tasks: dict = getattr(request.app.state, "conversation_tasks", None)
+        if conversation_tasks is None:
+            conversation_tasks = {}
+            request.app.state.conversation_tasks = conversation_tasks
+        conversation_tasks[body.conv_session_id] = task
 
         async def stream_events():
             try:
@@ -129,6 +154,7 @@ async def execute_conversation_turn(
                     if item.get("type") in {"final", "error"}:
                         break
             finally:
+                conversation_tasks.pop(body.conv_session_id, None)
                 if not task.done():
                     task.cancel()
                 with contextlib.suppress(asyncio.CancelledError):

@@ -12,6 +12,10 @@
 > **token-expiry-alerting (2026-10-27): merged 4 demo scenarios** from the change's `demo-cases.md`. All 4 grep patterns verified against `e2e/tests/token-expiry-*.spec.ts` test titles (dashboard remediation, execution preflight, topology badges); no stale patterns removed.
 >
 > **system-one-decision-skills (2026-10-27): merged 4 demo scenarios** from the change's `demo-cases.md` (patterns 211–214 in the index). All 4 grep patterns verified against `e2e/tests/system-one-decision-tools.spec.ts` test titles; no stale patterns removed.
+>
+> **control-center-chatbot (2026-11-02): merged 5 change scenarios + 5 curated frontend scenarios** (10 new grep patterns; rows 226–235). The 5 change patterns were verified against `e2e/tests/control-center-chatbot.spec.ts`, `control-center-chatbot.real-backend.spec.ts` and `control-center-chatbot-mcp.spec.ts`. The 5 additional patterns are Vitest suites covering shipped assistant UX that has no Playwright spec yet (entry click-through, View All Sessions ended toggle, New-Session semantics, expandable approval preview, model-unconfigured guidance). Re-verified **all 201 existing patterns** against the declared `source.tests` layers (188 E2E, 7 frontend, 5 mcp-demo-app): **1 stale pattern removed** — `Setup Wizard — full user journey > bundled Keycloak happy path completes and shows success`, whose spec (`e2e/tests/setup-wizard.spec.ts`) no longer exists in the repo (the wizard was replaced by the `setup/` CLI flow; only a stale `e2e/playwright_out.txt` run log still mentions it). The two Scenario Index rows that pointed at that deleted spec (former #15 and #179) were dropped as well.
+>
+> **sandboxed-scripting-follow-ups (2026-11-03): merged 2 demo scenarios** from the change's `demo-cases.md` (rows 236–237). One new grep pattern was added — the MCP session re-auth status, verified against `e2e/tests/mcp-hub.spec.ts` (suite `MCP Session re-auth state`). The second scenario's pattern (`Agent Type Scripts tab — agent-owned script governance > operator retires a version from the Scripts tab`) already exists here from `software-3.0-agent-framework`, so it was reused rather than duplicated. Re-verified **all 210 existing patterns** against the declared `source.tests` layers (193 E2E, 12 frontend, 5 mcp-demo-app): **all matched — no stale patterns removed**. Caveat: the change's "nothing to retire" empty state is component-level only (`frontend/src/__tests__/AgentOptimizedPlanTab.test.tsx`) — there is no E2E spec for it — and the deferred semantic-error / `partial_failure` behaviour is deliberately not demoed because no test backs it.
 
 ## Grep Patterns
 <!-- Matches Playwright test titles and Vitest describe > it names (same format) -->
@@ -28,7 +32,6 @@
 - RolePolicyDialog E2E > batch save with wildcard module value is accepted
 - Login Page States > shows both when both enabled
 - OIDC Callback Flow > callback with valid code exchanges token and lands on /dashboard
-- Setup Wizard — full user journey > bundled Keycloak happy path completes and shows success
 - System Config Page > system config page renders without crash
 - Authentication > unauthenticated request to protected route redirects to login
 - Agent Management > displays list of agent types from API
@@ -217,8 +220,19 @@
 - Agent Type Scripts tab — agent-owned script governance > operator retires a version from the Scripts tab
 - Agent Type Scripts tab — agent-owned script governance > plan review shows a script link on the script-backed step and opens the Scripts tab (E4a)
 - Agent Type Scripts tab — agent-owned script governance > permission-gated promote surfaces via the dialog error pattern without crashing
+- Control Center Assistant (mocked) > clicking the assistant FAB opens the conversational surface
+- Control Center Assistant (mocked) > Agent Types list marks system agent types and disables edit/delete
+- Real Backend Integration - Control Center Assistant > OAuth token establishes a session and lists management tools
+- Real Backend Integration - Control Center Assistant > unauthenticated MCP request is rejected (401)
+- External MCP client parity - Control Center Assistant > tools/list filters and tools/call authorizes with parity
+- Control Center Assistant entry point (AppShell) > opens ConversationDialog with the resolved system agent type id on click
+- ConversationDialog — View All Sessions upgrades (FIX-120618 WI1) > toggling show-ended refetches with ended sessions included
+- ConversationDialog — action bar > New Session starts a FRESH session without ending/archiving the current one
+- InlineInterventionDialog expand (FIX-20261101-223511) > expanded dialog shows the full-width preview table
+- ConversationDialog assistant model guidance > shows the guidance banner, Configure-model action, and disables input when unconfigured
+- MCP Session re-auth state > shows a "Needs re-authentication" status for a session flagged requires_reauth
 
-## Scenario Index table
+## Scenario Index
 | # | Feature | What it Shows | Change | Spec File |
 |---|---------|---------------|--------|-----------|
 | 1 | Authentication | Unauthenticated user is redirected away from protected pages | enterprise-ai-harness | auth.spec.ts |
@@ -240,7 +254,6 @@
 | 12 | Scheduling | Scheduled job names appear in the schedule manager list | enterprise-ai-harness | scheduling.spec.ts |
 | 13 | Skills — Create | Create Skill button opens the skill editor dialog | enterprise-ai-harness | skills-sops.spec.ts |
 | 14 | SOPs — Steps | Clicking a SOP reveals its ordered step list | enterprise-ai-harness | skills-sops.spec.ts |
-| 15 | Setup Wizard | Wizard shows input fields for initial platform configuration | enterprise-ai-harness | setup-wizard.spec.ts |
 | 21 | Global Font | Inter font loaded and applied throughout the app | apply-material-theme | theme-application.spec.ts |
 | 22 | Card Polish | 12px border radius on cards demonstrates refined Material styling | apply-material-theme | component-theming.spec.ts |
 | 23 | Page Theme | Dashboard shows complete theme with indigo nav and slate background | apply-material-theme | page-consistency.spec.ts |
@@ -405,7 +418,6 @@
 | 176 | FreeSolo Wildcard Input | Batch save API accepts free-text wildcard patterns (`agent::*`, `integration::*`, `*::*`) as valid module values — enables freeSolo autocomplete entry in resource type selectors | namespace-resource-types | role-policy-dialog.spec.ts |
 | 177 | Login Page State | Login page adapts to show both OIDC login button and super admin credential form when both are configured | refine-oidc-integration | oidc-login-flows.spec.ts |
 | 178 | OIDC Authorization Code Flow | User returns from identity provider with an auth code, token is exchanged, and dashboard loads | refine-oidc-integration | auth-required/oidc-callback.spec.ts |
-| 179 | Setup Wizard — Keycloak | Operator completes first-run setup via bundled Keycloak flow, fills config form, and sees success confirmation | refine-oidc-integration | setup-wizard.spec.ts |
 | 180 | System Config Identity Management | Super admin navigates to system config page, identity provider tabs render with user/agent provider sections | refine-oidc-integration | oidc-login-flows.spec.ts |
 | 181 | Consolidated `setup dev` bootstrap | Single command replaces 7+ ad-hoc scripts — provisions Keycloak realms/clients, seeds database roles/permissions/skills, bootstraps certificate authority, and seeds test agent identities in one idempotent invocation | production-ready-configuration | (manual) |
 | 182 | Zero-Trust Control Center | Control Center validates the OIDC realm exists via discovery endpoint only — never calls Keycloak admin API | production-ready-configuration | (manual) |
@@ -456,3 +468,15 @@
 | 223 | Token expiry — execution preflight | Expired token (including a subagent) BLOCKS execution with a named identity | token-expiry-alerting | e2e/tests/token-expiry-execution-preflight.spec.ts |
 | 224 | Token expiry — execution preflight | Expiring token (≤7 days) WARNS but execution PROCEEDS | token-expiry-alerting | e2e/tests/token-expiry-execution-preflight.spec.ts |
 | 225 | Token expiry — topology badges | Expired identity renders an error badge on its container | token-expiry-alerting | e2e/tests/token-expiry-topology-badges.spec.ts |
+| 226 | Assistant entry point | The seeded system assistant agent type resolves to a launcher; clicking it opens the reused conversational surface (change's demo case 1) | control-center-chatbot | e2e/tests/control-center-chatbot.spec.ts |
+| 227 | `is_system` protection | System agent types show the System badge with Edit/Delete disabled, so the seeded assistant cannot be modified or removed from the UI (demo case 2) | control-center-chatbot | e2e/tests/control-center-chatbot.spec.ts |
+| 228 | OAuth-gated management catalog | A real user OAuth JWT establishes a `/mcp` session and receives the permission-filtered management catalog — no mocks, live CC resolve (demo case 3) | control-center-chatbot | e2e/tests/control-center-chatbot.real-backend.spec.ts |
+| 229 | External MCP client parity | An external MCP client with the user's OAuth credentials gets the same filtered `tools/list` (no delete tools) and user-attributed `tools/call` (demo case 4) | control-center-chatbot | e2e/tests/control-center-chatbot-mcp.spec.ts |
+| 230 | Fail-closed MCP auth | Unauthenticated `/mcp` requests return 401 with no catalog or session; complemented in-flow by in-band `deletion_not_supported` / `out_of_scope` declines (demo case 5) | control-center-chatbot | e2e/tests/control-center-chatbot.real-backend.spec.ts |
+| 231 | Assistant launch click-through | Clicking the resolved assistant launcher opens `ConversationDialog` bound to the system agent type id (Vitest counterpart to case 226) | control-center-chatbot | frontend/src/__tests__/ControlCenterAssistantEntry.test.tsx |
+| 232 | View All Sessions — ended toggle | Sessions list defaults to active-only over the last 7 days; toggling "show ended" refetches with closed/archived sessions and marks them non-resumable | control-center-chatbot | frontend/src/__tests__/ConversationDialog.sessionsView.test.tsx |
+| 233 | New Session semantics | "New Session" starts a fresh conversation without ending or archiving the current one (Exit keeps resume semantics; End sets force-new) | control-center-chatbot | frontend/src/__tests__/ConversationDialog.actionBar.test.tsx |
+| 234 | Expandable approval preview | The confirmation card expands into a full-width field/value preview table, and approve/deny from the expanded view run the same write path | control-center-chatbot | frontend/src/__tests__/InlineInterventionDialog.expand.test.tsx |
+| 235 | Model-unconfigured guidance | With no assistant model selected the chat shows a Configure-model banner and disables input; a configured model removes the banner | control-center-chatbot | frontend/src/__tests__/AssistantModelConfigGuidance.test.tsx |
+| 236 | MCP session re-auth state | A session whose OAuth refresh failed unrecoverably shows a "Needs re-authentication" status with the stored reason instead of silently deactivating | sandboxed-scripting-follow-ups | e2e/tests/mcp-hub.spec.ts |
+| 237 | Script retire (Optimized Plan lifecycle) | Operator retires a script version from the Scripts tab — the retire flow that now has a clear "nothing to retire" empty state | sandboxed-scripting-follow-ups | e2e/tests/agent-type-scripts-tab.spec.ts |

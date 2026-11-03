@@ -4,10 +4,36 @@ import type { McpServer, McpSession, McpTool, Skill, SyncResult, ToolPermission 
 
 const MCP_SERVERS_KEY = ['mcp', 'servers']
 
+/**
+ * FIX-20261102-062047: the backend caps list pages at 200 and exposes the
+ * true total via ``X-Total-Count``.  "Get everything" callers (tool pickers,
+ * role dialogs) page until a short page so no server/tool is silently lost
+ * when a tenant grows past one page.
+ */
+const MCP_TOOLS_PAGE_SIZE = 200
+const MCP_SERVERS_PAGE_SIZE = 100
+const MCP_LIST_MAX_PAGES = 50
+
+async function fetchAllPages<T>(url: string, pageSize: number): Promise<T[]> {
+  const collected: T[] = []
+  let offset = 0
+  for (let page = 0; page < MCP_LIST_MAX_PAGES; page += 1) {
+    const { data } = await apiClient.get<T[]>(url, {
+      params: { limit: pageSize, offset },
+    })
+    collected.push(...data)
+    if (data.length < pageSize) break
+    offset += data.length
+  }
+  return collected
+}
+
 export function useMcpServers(limit?: number, offset?: number) {
+  const paged = limit !== undefined || offset !== undefined
   return useQuery<McpServer[]>({
-    queryKey: [...MCP_SERVERS_KEY, limit ?? 0, offset ?? 0],
+    queryKey: [...MCP_SERVERS_KEY, paged ? (limit ?? 0) : 'all', offset ?? 0],
     queryFn: async () => {
+      if (!paged) return fetchAllPages<McpServer>('/mcp/servers', MCP_SERVERS_PAGE_SIZE)
       const params: Record<string, number> = {}
       if (limit !== undefined) params.limit = limit
       if (offset !== undefined) params.offset = offset
@@ -76,9 +102,11 @@ export function useToolPermissions(toolId: string) {
 }
 
 export function useAllTools(limit?: number, offset?: number) {
+  const paged = limit !== undefined || offset !== undefined
   return useQuery<McpTool[]>({
-    queryKey: ['mcp', 'tools', { limit, offset }],
+    queryKey: ['mcp', 'tools', paged ? { limit, offset } : 'all'],
     queryFn: async () => {
+      if (!paged) return fetchAllPages<McpTool>('/mcp/tools', MCP_TOOLS_PAGE_SIZE)
       const params: Record<string, number> = {}
       if (limit !== undefined) params.limit = limit
       if (offset !== undefined) params.offset = offset

@@ -44,6 +44,37 @@ flowchart LR
     CSTAT --> CHAT
 ```
 
+## Conversational WebSocket Flow
+
+Browser chat — the Control Center assistant and every conversational agent — uses one WebSocket channel per conversation session.
+
+- **Tenant binding at connect** — the socket carries the user's token (OIDC or platform account) as a query parameter, and tenant resolution is bound once from the verified token claim (OIDC users resolve their tenant from an active membership) instead of the HTTP tenant middleware. When multi-tenancy is on and no tenant resolves, the connection fails closed. Outbound internal calls in the turn carry headers minted from that verified context — the WebSocket path is the one place outside Control Center that mints per-call signatures — so the hub delegates to Agent Runtime with a valid tenant binding.
+- **Turn delegation** — the hub forwards the turn to Agent Runtime over the internal call path and relays its stream back: status events (thinking, tool use, delegation, waiting for human), the reply, and guardrail usage.
+- **Live-session reply routing** — a registry maps conversation session → current socket, and sends resolve the *live* socket at send time, so a client that reconnects mid-turn (new socket, same session) still receives status, intervention prompts, and the final reply. Placement is newest-wins: an older connection's cleanup never evicts a newer registration.
+- **Heartbeat** — while a turn is in flight the hub emits periodic thinking keep-alives, so intermediaries do not idle-close the socket and the "thinking" state stays truthful for arbitrarily long turns.
+- **Turn supervision** — the whole turn is bounded by a watchdog even on the streaming path; the reply is delivered live before persistence so a slow persistence tail cannot swallow it; error turns are persisted exactly once; ending a session or terminating an execution cancels the pending turn and closes out the operator UI.
+
+```mermaid
+sequenceDiagram
+    participant U as User
+    participant UI as Conversation UI
+    participant CH as Communication Hub
+    participant AR as Agent Runtime
+
+    U->>UI: send message
+    UI->>CH: turn over WebSocket (token · session id)
+    CH->>CH: bind tenant from verified token
+    CH->>AR: delegate turn (signed tenant headers)
+    loop while the turn is in flight
+        AR-->>CH: status · tool use · delegation
+        CH-->>UI: thinking heartbeat
+    end
+    AR-->>CH: reply
+    CH-->>UI: reply on the live socket
+    CH->>CH: persist the turn
+    Note over CH: a mid-turn reconnect still receives on the live socket
+```
+
 ## Intervention Routing and External Agents
 
 ```mermaid
@@ -92,14 +123,37 @@ flowchart TB
     S1 --> UI
 ```
 
-## Dual Authentication Paths
+## Authentication Paths
 
-Communication Hub accepts agents through two parallel authentication paths, converging at the same MCP proxy layer:
+Communication Hub accepts agents through parallel authentication paths that converge at the same MCP proxy layer:
 
 | Auth Path | Credential | Agent Type | Token Handling |
 |-----------|-----------|------------|----------------|
 | **mTLS Certificate** | X.509 client cert issued by CC CA | Internal Agent Runtime | AR receives decrypted identity token |
 | **API Key** | Bearer token or query parameter | External third-party agents | CH holds identity token internally; never exposed |
+| **OAuth Bearer (user)** | The signed-in user's OIDC access token | The in-app assistant, and any MCP client acting as that user | Validated at the hub; user identity, tenant, and scope resolved from Control Center; the token is held server-side only |
+
+**OAuth is the identity plane for management.** An OAuth-authenticated MCP session *is* the user: its permission scope is the user's own scope, resolved against the same resource types and actions as the REST surface. There is no service-account scope and no elevated path. Opaque API keys and JWTs are distinguishable, so a non-JWT credential falls through to the API-key path unchanged and an invalid or expired token is rejected fail-closed.
+
+```mermaid
+flowchart LR
+    CL["MCP client<br/>in-app assistant or external tool"]
+    EP["MCP Protocol Server<br/>/mcp"]
+    OA["OAuth Bearer Auth"]
+    IDP["Tenant OIDC Provider"]
+    CC["Control Center<br/>resolve user scope"]
+    BR["Tool Registry Bridge<br/>permission-filtered catalogue"]
+    DB[("Platform DB")]
+
+    CL -->|"Bearer: user's access token"| EP
+    EP --> OA
+    OA -->|"JWKS validation"| IDP
+    OA -->|"user identity + tenant"| CC
+    CC --> DB
+    OA -->|"user scope seeded in the session"| BR
+```
+
+One tool surface serves two consumers — the in-app assistant and any external MCP client presenting the user's own credentials — so both are subject to exactly the same catalogue and permission decisions.
 
 ```mermaid
 flowchart LR
@@ -121,6 +175,22 @@ flowchart LR
 ```
 
 External agents do not receive identity tokens. The MCP Protocol Endpoint accepts the standard MCP handshake (SSE + Streamable HTTP) and fronts the API Key Validator, which calls Control Center's internal validation endpoint over mTLS, receives a resolved identity token, and holds it internally. CH injects the token only when proxying MCP tool requests to downstream servers.
+
+## Tool Catalogue and Permission Filtering
+
+`tools/list` and `tools/call` are built by the Tool Registry Bridge from four sources, each evaluated against the authenticated session's scope:
+
+| Source | Contents | Filter |
+|---|---|---|
+| **Skill tool bindings** | Tool definitions contributed by the role's resolved skills and SOPs (skill resolution also returns updated-at for incremental refresh) | Role grants |
+| **Management tools** (`cc____`) | Control Center management and meta tools | Per-tool permission parity |
+| **Decision tools** (`decision____`) | Tenant decision tools | Grants |
+| **Proxied MCP tools** (`server____tool`) | Tenant-namespaced tools of registered MCP servers | Grants |
+
+- **Management filtering** — an OAuth session lists only the management tools the user's own scope satisfies; a direct call without that scope gets a structured denial, and delete-shaped or out-of-scope requests get a fixed "not supported" result before any write. Listing and invocation are enforced separately, so hiding a tool is never the only control.
+- **Entity visibility vs invocation** — the `integration::control_center` permission governs the MCP Hub *administration* surface (seeing and defining the Control Center entity); invocation remains governed by tool grants plus parity.
+- **Skill bindings are the grantable unit** — a skill contributes exactly the tools it is bound to (including `cc` tools); a skill with no bindings contributes nothing, which is surfaced as a warning on write so an inert skill is caught at authoring time rather than at run time.
+- **Listing guarantees** — the MCP Hub tool listing is complete (not truncated by page size), deterministically ordered, permission-filtered *before* pagination, and reports a true total, so a server's tools never silently disappear from the browser or the skill editor. A `cc` tool already referenced by a skill is individually resolvable read-only for that dependency.
 
 ## Execution Preflight Gate
 
@@ -163,10 +233,12 @@ sequenceDiagram
 - **Intervention Router**: Inspects `human_intervene` suspend signals for a `conversation_session_id`. When present, routes the intervention request to the connected WebSocket client of the parent conversation. When absent, falls through to the existing dashboard-based intervention flow.
 - **Intervention Queue**: Per-conversation-session FIFO queue for intervention requests. When multiple delegated sub-agents request intervention concurrently, requests are delivered sequentially.
 - **Task Delegation Event Router**: In-memory router that manages delivery of non-conversational delegation status events and intervention requests to execution log viewer clients. Maintains a mapping of active log viewer connections to parent task agent sessions. Pushes delegation status events (`delegation_started`, `delegation_waiting`, `delegation_resumed`, `delegation_depth_blocked`, `delegation_timeout`, `delegation_failed`) and intervention requests to the correct log viewer. Falls back to poll-based delivery when no live viewer is connected.
+- **Conversation Turn Runner**: Owns the WebSocket turn lifecycle — binds the tenant from the verified token, delegates the turn to Agent Runtime, relays status events and heartbeats, resolves the live socket at send time for replies and interventions, enforces the whole-turn watchdog, and persists error turns exactly once. Cancels a pending turn when the session is ended or the execution is terminated.
+- **Live Session Registry**: Maps conversation session → connected socket for reply and intervention routing. Newest registration wins, so a reconnect mid-turn never loses delivery and an older connection's cleanup never evicts a newer one.
 - **System Tool Router**: Maps bare tool names (`save_data`, `get_data`, `get_output`, `query_result`, `load_skills`) to Control Center internal system-tool endpoints. No new structural components are needed; existing permission-check and certificate-forwarding infrastructure handles these tool calls automatically.
-- **MCP Protocol Server**: Bridges standard MCP JSON-RPC methods (`initialize`, `tools/list`, `tools/call`) over SSE and Streamable HTTP transports to the existing tool registry and proxy path. Listings and call resolution are **per-tenant**: an API-key-authenticated MCP client sees and calls only its tenant's namespaced tools (slug uniqueness and resolution are `(tenant, slug)` — see [MCP Hub Architecture](../mcp-hub/architecture.md)).
+- **MCP Protocol Server**: Bridges standard MCP JSON-RPC methods (`initialize`, `tools/list`, `tools/call`) over SSE and Streamable HTTP transports to the existing tool registry and proxy path. Clients authenticate by mTLS (internal Agent Runtime), API key (external agents), or the user's OAuth Bearer token (management surface). Listings and call resolution are **per-tenant**: a client authenticated for a tenant sees and calls only that tenant's namespaced tools (slug uniqueness and resolution are `(tenant, slug)` — see [MCP Hub Architecture](../mcp-hub/architecture.md)).
 - **MCP Session Manager**: Tracks per-connection protocol state — capability negotiation from `initialize`, per-session identity context — across the SSE and Streamable HTTP transports.
-- **Tool Registry Bridge**: Resolves canonical tool names, enforces the permission set carried on the authenticated session, and dispatches system tools to Control Center's system-tool endpoint and proxied MCP tools to the MCP proxy engine.
+- **Tool Registry Bridge**: Resolves canonical tool names, enforces the permission set carried on the authenticated session, and dispatches system tools to Control Center's system-tool endpoint, management (`cc____`) tools to the management handler with parity re-enforced per call, and proxied MCP tools to the MCP proxy engine.
 
 ## WebSocket Messages
 

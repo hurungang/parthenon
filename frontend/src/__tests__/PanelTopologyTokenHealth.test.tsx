@@ -69,6 +69,7 @@ const LABELS = {
     tools: { title: 'tools', subtitle: '' },
   },
   noTools: 'no tools',
+  loading: 'loading',
 }
 
 const DRAFT: AgentDraftComposition = {

@@ -177,3 +177,24 @@ Covers the migration from flat resource type identifiers to namespaced `module::
 | Backend — DB | `test_namespace_migration.py`, `test_namespace_permission_evaluation.py` | ✅ COMPLETE (9 tests) |
 | Frontend (Vitest) | `AddStatementDialog.test.tsx`, `ResourceTypeManifestMirror.test.ts`, `RolePolicyDialog.test.tsx`, `RolePolicyDialog.validation.test.tsx` | ✅ COMPLETE (58 tests) |
 | E2E (Playwright) | `namespace-resource-types.spec.ts`, `namespace-migration-visibility.spec.ts`, `namespace-validation-errors.spec.ts`, `role-policy-management.spec.ts`, `role-policy-dialog.spec.ts` | ✅ COMPLETE (33 tests) |
+
+---
+
+## control-center-chatbot Update (2026-11)
+
+One additional namespaced resource type enters the manifest and the integration module group.
+
+- `integration::control_center` (read, manage) — gates visibility and mutation of the Control
+  Center MCP entity and the assistant's management surface. `integration::*` now expands to three
+  integration submodules.
+- Registration must happen in both `backend/app/core/resource_types.py` and
+  `frontend/src/constants/resourceTypes.ts` (manifest + module group); an unregistered type would
+  fail closed for every user including wildcard holders.
+- No agent-scoped type was added by this change; management MCP tools reuse `agent::*` /
+  `integration::mcp_hub`.
+
+**Test files added/updated (verified present):**
+- `backend/tests/unit/test_resource_type_manifest.py` — entry count and integration-group membership.
+- `backend/tests/unit/test_cc_integration_permission.py` — enforcement parity for the new type.
+- `backend/tests/integration/test_namespace_permission_evaluation.py` — refreshed fixtures.
+- `frontend/src/__tests__/ResourceTypeManifestMirror.test.ts` — frontend mirror parity.

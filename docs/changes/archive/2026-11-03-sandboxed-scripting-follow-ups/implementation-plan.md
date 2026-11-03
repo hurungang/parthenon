@@ -45,7 +45,7 @@ Hardening change closing eight deferred defects from the sandboxed-scripting epi
 ### Phase 5 — Master UX Prototype
 
 - [x] phase.5 Create `docs/master/ux/prototype/` derived from the shipped Optimized Plan / Scripts UI
-- [ ] phase.5 Reference the prototype from master documentation
+- [x] phase.5 Reference the prototype from master documentation
 
 **Done when:** prototype exists and is linked from master docs.
 
@@ -63,5 +63,5 @@ Hardening change closing eight deferred defects from the sandboxed-scripting epi
 - [ ] All acceptance criteria in prd.md verified
 - [ ] All three test layers pass (backend pytest, frontend Vitest, E2E Playwright)
 - [x] Alembic migration applied (`alembic upgrade head`) before testing
-- [ ] `docs/master/` updated per architecture.md §5
+- [x] `docs/master/` updated per architecture.md §5
 - [ ] `.change.yaml` updated; docs reviewed by es-Document Reviewer

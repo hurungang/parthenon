@@ -12,6 +12,18 @@ export const RESERVED_SERVER_NAMES: readonly string[] = ['system', 'decision']
 
 export const DECISION_SERVER_SLUG = 'decision'
 
+/**
+ * Per-tenant Control Center MCP entity slug (FIX-20261101-014511).
+ * A protected integration: only roles granted
+ * `integration::control_center:read` see it; `manage` is required to
+ * configure anything around it.
+ */
+export const CONTROL_CENTER_SERVER_SLUG = 'cc'
+
+export function isControlCenterServer(name: string): boolean {
+  return name === CONTROL_CENTER_SERVER_SLUG
+}
+
 export function buildToolName(server: string, tool: string): string {
   return `${server}${TOOL_SEPARATOR}${tool}`
 }

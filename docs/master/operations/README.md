@@ -31,10 +31,13 @@ This section contains all operational reference material for running and maintai
 | **Super Admin & Auth Pipeline** | Auth pipeline tier distribution (super_admin, oidc_user, oidc_agent, public), super admin login success/failure rate, OIDC JWT validation failures by reason, auth pipeline latency per tier |
 | **Service Segregation Boundary Enforcement** | Allowed vs denied internal calls by caller type, top deny reasons, unknown caller and certificate mismatch trends, revocation health, internal auth latency, and system-tools unauthenticated rejects |
 | **Tenancy** | Tenant resolution outcomes and fail-closed rejections, cross-tenant attempt trends by surface, per-tenant OIDC validation failures, tenant lifecycle activity, per-tenant resource usage / noisy-neighbor share (emitted only while `multi_tenancy_enabled` is on) |
+| **Control Center Assistant** | Delegated `cc____` management-action volume by outcome, permission-denial rate by resource type, delete/out-of-scope rejections, tool latency p99, identity-resolution failures, MCP OAuth auth rejections, assistant seed health, turn watchdog/LLM timeouts, conversational iteration-limit stops, intervention approval/denial/timeout counts, WebSocket disconnect/heartbeat health, and catalog anomalies |
 
 For metric definitions and alert thresholds, see [monitoring.md](monitoring.md).
 
 Agent execution guardrail metrics and alerts are defined in [monitoring.md](monitoring.md) under Agent Execution Guardrails.
+
+Control Center Assistant metrics, alerts, and the log-based fallbacks (most assistant signals are log-derived today) are defined in [monitoring.md](monitoring.md) under Control Center Assistant.
 
 Boundary policy metrics and alerts for internal caller segregation are defined in [monitoring.md](monitoring.md) under Service Segregation Boundary Enforcement.
 
@@ -56,6 +59,8 @@ Agent execution guardrail event taxonomy, required fields, and sensitive-data ex
 Boundary event catalog and required fields for allowlist enforcement are defined in [logging.md](logging.md) under Internal API Boundary Log Events.
 
 Multi-tenancy event prefixes (`tenant.resolution.*`, `tenant.claim.*`, `tenant.scope.*`, `tenant.oidc.*`, `tenant.adoption.*`, `tenant.signature.*`, `no_access_to_workspace`) and per-log-file search keywords are defined in [logging.md](logging.md) under Multi-Tenancy Log Events.
+
+Control Center Assistant events — `cc____` management-tool outcomes, `mcp.oauth.*`, `cc` entity guards, conversation turn lifecycle, intervention lifecycle, assistant seed, meta-tool dispatch, and catalog anomalies — are defined in [logging.md](logging.md) under Control Center Assistant Events.
 
 ---
 
@@ -119,5 +124,6 @@ Each operation logs structured events to stdout (see [logging.md](logging.md) fo
 | [tenant-signin-failure.md](runbooks/tenant-signin-failure.md) | One or all tenants cannot sign in while the tenancy switch is on; `tenant.resolution` outcome `suspended` or `tenant.oidc.*` failures in `control-center.log`; browser cannot reach `https://<slug>.<base-domain>` |
 | [tenant-adoption-and-scope-denials.md](runbooks/tenant-adoption-and-scope-denials.md) | 403/404 spikes after enabling the tenancy switch; `tenant.adoption.*` ERROR or `oidc.registry.*` events in `control-center.log`; suspected cross-tenant isolation probing |
 | [tenant-context-missing.md](runbooks/tenant-context-missing.md) | Agent Runtime / Communication Hub reject all internal calls with `tenant context` / `rejected` after enabling the tenancy switch |
+| [control-center-assistant.md](runbooks/control-center-assistant.md) | Assistant chat fails with 401/403, permission-denied on actions the UI allows, blank/missing assistant, turns hang or time out, replies not delivered after reconnect, end-session never stops the turn, `cc` entity errors, skill tool-binding failures |
 
 For boundary incidents that involve certificate class or identity problems, use [service-segregation-boundary-enforcement.md](runbooks/service-segregation-boundary-enforcement.md) for initial triage and [certificate-security.md](runbooks/certificate-security.md) for certificate lifecycle remediation.

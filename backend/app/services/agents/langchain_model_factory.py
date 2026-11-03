@@ -89,6 +89,18 @@ class LangChainModelFactoryError(Exception):
     """Raised when LangChainModelFactory cannot create a model."""
 
 
+def _conversation_llm_timeout() -> float:
+    """Bounded per-completion HTTP timeout (FIX-20261031-091657).
+
+    A hanging/unreachable provider endpoint previously blocked the whole
+    conversational turn forever (no timeout on the chain). Default bound:
+    ``conversation_llm_timeout_seconds`` (120s).
+    """
+    from app.core.config import get_settings
+
+    return float(max(30, int(getattr(get_settings(), "conversation_llm_timeout_seconds", 120))))
+
+
 class LangChainModelFactory:
     """Factory that creates LangChain ChatModel instances from provider configuration.
 
@@ -232,6 +244,8 @@ class LangChainModelFactory:
             "api_key": api_key or "placeholder",  # Some providers need non-empty key
             "base_url": effective_base,
             "max_tokens": max_tokens,
+            # FIX-20261031-091657: bounded HTTP completion requests.
+            "request_timeout": _conversation_llm_timeout(),
         }
 
         async_client = _shared_async_http_client()
@@ -262,6 +276,7 @@ class LangChainModelFactory:
             "api_key": api_key or "placeholder",
             "api_version": "2024-02-01",
             "max_tokens": max_tokens,
+            "request_timeout": _conversation_llm_timeout(),
         }
         async_client = _shared_async_http_client()
         if async_client is not None:
@@ -282,6 +297,7 @@ class LangChainModelFactory:
         kwargs: dict[str, Any] = {
             "model": model_id,
             "max_tokens": max_tokens,
+            "timeout": _conversation_llm_timeout(),
         }
         if api_key:
             kwargs["api_key"] = api_key

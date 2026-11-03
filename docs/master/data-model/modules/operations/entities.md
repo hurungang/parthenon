@@ -127,7 +127,7 @@ erDiagram
     ScriptExecutionRecord {
         uuid session_id "AgentJob the run belongs to"
         uuid script_version_id
-        enum outcome "success | fell_back"
+        enum outcome "success | validation_failure | fell_back | partial_failure"
         int tokens_saved_actual "measured vs reference LLM run"
         boolean sandbox_termination "cap safe-kill occurred"
         text sandbox_violation_detail "one-line human-readable"
@@ -151,5 +151,5 @@ erDiagram
 
 | Entity | Description |
 |--------|-------------|
-| **ScriptExecutionRecord** | One row per scripted execution (whole-script or script-segment run) within an AgentJob. Records the outcome (success or LLM fallback), the script version served, **measured** `tokens_saved_actual` (real tokens avoided versus the reference LLM run — the legacy `tokens_saved_estimate` remains only on historical rows), and sandbox failure provenance: `sandbox_termination` marks cap safe-kills and `sandbox_violation_detail` carries a one-line human-readable reason (no truncated JSON blobs). Tenant-scoped (`SET NULL`). |
+| **ScriptExecutionRecord** | One row per scripted execution (whole-script or script-segment run) within an AgentJob. Records the outcome (`success`, `validation_failure`, `fell_back`, or `partial_failure` — the last reserved for a semantic error report inside an otherwise successful tool envelope; the value exists but automatic detection is not yet implemented), the script version served, **measured** `tokens_saved_actual` (real tokens avoided versus the reference LLM run — the legacy `tokens_saved_estimate` remains only on historical rows), and sandbox failure provenance: `sandbox_termination` marks cap safe-kills and `sandbox_violation_detail` carries a one-line human-readable reason (no truncated JSON blobs). Tenant-scoped (`SET NULL`). |
 | **LLMMockRecording** | A recorded LLM request/response pair captured in record mode for deterministic replay and prompt assertions in tests. Keyed by `recording_key` (deterministic hash of the request); identical inputs replay identically. Test-infrastructure data: written only in test/recording modes, related to the capturing AgentJob/session but unrelated to ScriptVersion, and carries **prompt + response + usage only — never API keys or identity tokens**. Tenant-scoped (`SET NULL`). |

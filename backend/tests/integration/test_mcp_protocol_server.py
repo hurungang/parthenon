@@ -138,3 +138,67 @@ async def test_full_initialize_list_call_flow(bridge: ToolRegistryBridge) -> Non
         session,
     )
     assert denied["error"]["code"] == -32602
+
+
+async def test_oauth_session_flow_with_management_tools(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """OAuth-authenticated session: management-only catalog + permitted call +
+    delete-shaped decline, all through the real protocol server."""
+    monkeypatch.setenv("CONTROL_CENTER_URL", "http://control-center")
+    bridge = ToolRegistryBridge()
+
+    async def _post_cc(
+        request: Any, cc_base: str, path: str, payload: dict[str, Any]
+    ) -> dict[str, Any]:
+        if path.endswith("/management-tools/create_skill"):
+            assert payload["user_sub"] == "user-123"
+            return {"result": {"record": {"id": "s-1", "name": "x"}}}
+        return {"result": {}}
+
+    monkeypatch.setattr(bridge, "_post_cc", _post_cc)
+
+    manager = McpSessionManager()
+    server = McpProtocolServer()
+    server._bridge = bridge
+
+    session = manager.create_session(
+        auth_method="oauth",
+        user_sub="user-123",
+        platform_user_id="pu-1",
+        permissions=["cc____create_skill", "cc____list_skills"],
+    )
+
+    # tools/list — management tools only (no load_skills meta tool).
+    listed = await server.handle(
+        None, {"id": 1, "method": "tools/list"}, session
+    )
+    names = [t["name"] for t in listed["result"]["tools"]]
+    assert "cc____create_skill" in names
+    assert "cc____list_skills" in names
+    assert "load_skills" not in names
+
+    # tools/call permitted management tool — routed to CC with the user's sub.
+    call = await server.handle(
+        None,
+        {
+            "id": 2,
+            "method": "tools/call",
+            "params": {"name": "cc____create_skill", "arguments": {"name": "x"}},
+        },
+        session,
+    )
+    assert call["result"]["content"][0]["type"] == "text"
+
+    # tools/call delete-shaped — declined in-band (not a JSON-RPC error).
+    decline = await server.handle(
+        None,
+        {
+            "id": 3,
+            "method": "tools/call",
+            "params": {"name": "cc____delete_skill", "arguments": {}},
+        },
+        session,
+    )
+    assert "result" in decline
+    assert "deletion_not_supported" in decline["result"]["content"][0]["text"]

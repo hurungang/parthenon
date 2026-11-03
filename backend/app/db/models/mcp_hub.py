@@ -30,6 +30,16 @@ class McpServerStatus(str, enum.Enum):
     error = "error"
 
 
+# FIX-20261101-090438 — slugs that denote SYSTEM-MANAGED MCP entities.
+# This is the existing marking convention (the virtual "system"/"decision"
+# entities are recognised by slug; creating rows with these slugs is
+# blocked by the router).  The per-tenant Control Center entity (``cc``,
+# seeded by assistant_seeder) is the only DB-backed member: it cannot be
+# edited, deleted, synced, OAuth-configured, and supports NO sessions —
+# the seeder is its only writer; access flows through role/skill grants.
+SYSTEM_MANAGED_SERVER_SLUGS = frozenset({"system", "decision", "cc"})
+
+
 class McpServer(Base):
     """A registered external tool server.
 

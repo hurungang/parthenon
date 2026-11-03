@@ -196,6 +196,7 @@ This is the same model used by internal agents — the API key provides an alter
 
 - **Conversation Intervention Turns**: Extension of `ConversationTurn` persistence to support `intervene_request` and `intervene_response` turn types. Stores intervention type (approval/choice/text), prompt text, available options, operator identity, response value, and timestamp. Turns are persisted in chronological order within the conversation stream for audit traceability.
 - **Intervene Request Store**: Extended to accept and persist conversation context fields (`conversation_session_id`, `delegation_depth`) on `InterveneRequest`. Automatically creates paired `intervene_response` conversation turns when responses are submitted to conversation-scoped requests. Non-conversational flow (no `conversation_session_id`) is unchanged.
+- **Conversation-only interventions**: requests raised inside a conversational turn (no execution job behind them) are first-class — the job reference is optional and the conversation session carries the context. Replays are idempotent: a repeated pending request is returned de-duplicated, and an already-answered request returns the stored operator response instead of prompting again.
 
 ## Task Delegation Event Persistence
 
@@ -345,6 +346,102 @@ The live channel enforces the same access model as the read endpoint: the presen
 ## Schema Validation Service
 
 - **Schema Validation Service**: Lightweight payload validator invoked by Agent Runtime via mTLS. Accepts a data type ID and a payload, fetches the schema from the Data Type Registry, validates field types (string, number, boolean, ISO 8601 date, enum membership), required field presence, and default values. Returns validation result with field-level error details. Validation failure does not block execution — results are persisted with `validation_error` status and the raw output as fallback.
+
+## Control Center Assistant
+
+The Control Center Assistant is a **seeded, system-provided conversational agent type** that lets a Control Center user perform Agents-menu management tasks — create / update / read of skills, SOPs, agent types, roles, identities, model configurations, schedules, data types, and MCP Hub connections — from natural language. It is an ordinary agent: it executes in Agent Runtime and reaches management capability **only** through MCP tools. There is no Control Center-internal bypass and no elevated service path.
+
+- **System-provided agent type** — provisioned idempotently for every tenant and marked system-protected (no user edit or delete), mirroring the system skill/role convention. Model selection stays a per-tenant operator decision; the chat surface guides the operator when no model is selected.
+- **Knowledge-driven, not scripted** — a deterministic platform knowledge corpus plus an always-on instruction digest carry generic principles (understand before acting, resource completeness, prerequisite ordering, grant at the right level, reuse first) and reference facts, retrieved on demand during a turn. Seeded provisioning refreshes drifted knowledge/instruction text on restart.
+- **Progressive tool disclosure** — the conversational context carries only a small constant meta set (dispatch a management tool, fetch one tool's schema, list the catalogue, search knowledge, request human approval); the full execution toolset stays registered for dispatch, grants, and external MCP clients.
+- **No destructive operations** — deletion is not registered as a tool at any layer.
+
+```mermaid
+flowchart LR
+    subgraph CC["Control Center (sole DB owner)"]
+        SEED["Assistant Seeder<br/>per-tenant · idempotent"]
+        AT["Assistant Agent Type<br/>system-provided"]
+        KN["Knowledge Corpus<br/>principles + facts"]
+        MT["Management MCP Tools<br/>create · update · read"]
+        PAR["Permission Parity Map"]
+        PE["Permission Engine"]
+        DB[("PostgreSQL")]
+    end
+    AR["Agent Runtime"]
+    CH["Communication Hub"]
+
+    SEED --> AT
+    SEED --> MT
+    AT --> KN
+    AR -->|"tools/call"| CH
+    CH -->|"authorized dispatch"| MT
+    MT --> PAR
+    PAR --> PE
+    MT --> DB
+    PE --> DB
+```
+
+## Management MCP Toolset & Control Center MCP Entity
+
+Management capability is served as MCP tools on a dedicated, per-tenant **Control Center MCP entity** (reserved slug `cc`), separate from the System entity that carries general system tools and from the decision namespace.
+
+- **Namespace split** — management tools are canonically `cc____<verb>_<resource>`; general system tools keep `system____<bare>` and decision tools `decision____<name>`. `cc` is a reserved server slug, so no custom MCP server can collide with it. Splitting the families makes management capability independently grantable and keeps general agent tooling untouched.
+- **Entity contents** — the create/update/read execution tools for the nine resource families plus the assistant meta tools. Read covers `list_*` / `get_*`; no delete verb exists in the namespace.
+- **System-managed lifecycle** — the seeder is the only writer. The entity is immutable (update, delete, sync, and OAuth configuration are refused for everyone, including `manage` holders) and sessionless (no MCP sessions; access flows through role/skill grants). Reads expose the system-managed flag and the UI presents it as a protected integration; tool grants onto its tools remain available to `manage` holders.
+- **Visibility permission** — `integration::control_center` with `read` (see the entity, its tools, and management-toolset reads) and `manage` (grant/revoke its tools and define configuration around it). Deny-by-default; existing `integration::*` and `*::*` wildcards cover administrators. The type is registered in both the backend manifest and the frontend mirror.
+- **Read-only dependency visibility** — a `cc` tool already referenced by a tenant's skill stays visible (read-only) to a caller without the entity permission, so saving can never silently drop a dependency; the rest of the catalogue is never exposed.
+
+**Permission parity** — every management tool is keyed to the same `(resource_type, action)` its REST equivalent enforces, so an MCP call can never perform an action the REST API would deny:
+
+| Resource family | Resource type | Write action | Read action |
+|---|---|---|---|
+| Skills | `agent::skills` | `create` / `update` | `read` |
+| SOPs | `agent::sops` | `manage` | `read` |
+| Agent types | `agent` | `create` / `update` | `read` |
+| Agent roles | `agent` | `create` / `update` | `read` |
+| Agent identities | `agent` | `create` / `update` | `read` |
+| Model configurations | `agent` | `create` / `update` | `read` |
+| Schedules | `agent::schedules` | `create` / `update` | `read` |
+| Data types | `agent::data_types` | `create` / `update` | `read` |
+| MCP Hub connections | `integration::mcp_hub` | `create` / `update` | `read` |
+
+Parity is evaluated twice: when the catalogue is listed (only tools the caller may invoke are shown) and again before the write is executed. Out-of-scope resources and delete-shaped requests are declined in-band before any mutation.
+
+### Confirmation & Human-in-the-Loop Flow
+
+Every **create or update** is previewed and approved before execution; reads are unaffected.
+
+- **Canonical preview** — a heading plus one field/value table of the exact payload (updates: only changed fields, old → new). Agent-type creation previews model, identity, role, skills, and grants, and an agent type without a working model and an identity or role is never created.
+- **Approval as a tool call** — approval is requested through the platform human-intervention mechanism, so the same policy, audit, and UI path serves the assistant as any other agent.
+- **Suspension, not replay** — on the conversational path the turn suspends inside the tool call and resumes when the operator responds; a replayed request is de-duplicated and an already-answered one returns the stored operator response, so approval can never execute twice.
+- **Rejection and timeout are explicit** — a rejection executes nothing; a timeout returns an explicit "not executed" result to the agent rather than a silent success.
+
+```mermaid
+sequenceDiagram
+    participant U as User
+    participant AS as Assistant (Agent Runtime)
+    participant CH as Communication Hub
+    participant CC as Control Center
+
+    U->>AS: "Create a skill that ..."
+    AS->>AS: discover + assemble complete payload
+    AS->>CH: request approval (human intervention)
+    CH->>U: intervention request with table preview
+    Note over AS: turn suspends · in-process wait
+    U->>CH: approve
+    CH->>CC: intervention response
+    CC-->>AS: resume the suspended turn
+    AS->>CH: tools/call cc____create_skill
+    CH->>CC: user-scope dispatch + parity check
+    CC-->>AS: result
+    AS-->>U: natural-language confirmation
+```
+
+### Guardrails, Timeouts and Turn Supervision
+
+- **Iteration budget** — the assistant is seeded with a guardrail iteration budget sized for multi-step management workflows (several discovery calls plus the writes), far above the platform default; the per-agent-type policy is the single source of truth for the runtime monitor.
+- **Layered time bounds** — the strict per-turn model timeout still fires on a hung provider; while an approval is pending the wait is re-armed up to a longer intervention timeout, kept below the Communication Hub turn watchdog. Session end terminates in-flight work.
+- **Actionable failures** — guardrail stops and turn failures are mapped to structured, human-readable error turns persisted exactly once, so a long management turn never ends in silence.
 
 ## Script Registry, Optimized Plans & LLM Mock Recordings
 

@@ -94,6 +94,16 @@ _CH_ALLOWLIST: set[tuple[str, str]] = {
     ("POST", "/api/v1/internal/system-tools/get-script"),
     ("POST", "/api/v1/internal/system-tools/get-scripts"),
     ("POST", "/api/v1/internal/system-tools/get-execution-log"),
+    # Management tools (Control Center Assistant) — CH forwards on the
+    # user's behalf; CC is the sole DB owner and re-authorizes per call.
+    ("POST", "/api/v1/internal/management-tools/resolve"),
+    ("POST", "/api/v1/internal/management-tools/{tool_name}"),
+    # Assistant meta tools (progressive tool disclosure) — literal routes
+    # declared on meta_router; dispatch is re-authorized per invocation.
+    ("POST", "/api/v1/internal/management-tools/invoke_management_tool"),
+    ("POST", "/api/v1/internal/management-tools/get_management_tool_schema"),
+    ("POST", "/api/v1/internal/management-tools/list_management_tools"),
+    ("POST", "/api/v1/internal/management-tools/search_assistant_knowledge"),
 }
 
 _INTERNAL_ALLOWLISTS: dict[str, set[tuple[str, str]]] = {
@@ -554,6 +564,48 @@ async def authorize_identity(
     )
 
     return claims
+
+
+async def identity_has_permission(
+    request: Request, db: AsyncSession, module: str, action: str
+) -> bool:
+    """Non-raising permission probe for the request's identity.
+
+    FIX-20261101-014511: lets handlers gate *entity visibility* (e.g. the
+    per-tenant Control Center MCP entity, slug ``cc``) beyond the static
+    router-level ``require_permission`` — the caller's tenant context and
+    identity claims (already resolved by auth middleware) are evaluated
+    against the permission engine.  Super admin bypasses; unknown identity
+    or any denial yields ``False`` (never raises).
+    """
+    from sqlalchemy import select
+
+    from app.core.tenant_context import get_tenant_context
+    from app.db.models.platform_user import PlatformUser
+    from app.db.tenant_scoping import execute_unscoped
+    from app.services.permissions.permission_engine import PermissionEngine
+
+    if bool(getattr(request.state, "is_super_admin", False)):
+        return True
+    claims: dict[str, Any] = getattr(request.state, "identity", {}) or {}
+    sub = claims.get("sub")
+    if not sub:
+        return False
+    result = await execute_unscoped(db, select(PlatformUser).where(PlatformUser.sub == sub))
+    user = result.scalar_one_or_none()
+    if user is None:
+        return False
+    tenant_context = get_tenant_context(request)
+    auth = await PermissionEngine().authorize(
+        db=db,
+        user_id=user.id,
+        module=module,
+        action=action,
+        resource_id="*",
+        resource_tags={},
+        tenant_id=(tenant_context.tenant_id if tenant_context.is_set else None),
+    )
+    return bool(auth.allowed)
 
 
 def require_permission(module: str, action: str) -> Callable:

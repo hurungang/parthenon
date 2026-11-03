@@ -33,7 +33,12 @@ flowchart LR
 - **Expiry monitoring** — Polls token expiry metadata at a configured cadence; flags tokens that are expiring soon
 - **Proactive refresh** — Issues OAuth 2.0 refresh token grants against the `ai_agents` realm before the access token expires
 - **Token Store update** — Writes the new encrypted access token back to the Token Store; the expiry timestamp is updated accordingly
-- **Failure handling** — If a refresh grant fails (e.g. the refresh token is expired or revoked), the identity status is updated to `expired`; no further refresh is attempted until an administrator re-authenticates
+- **Failure handling** — Refresh failures are split by recoverability. A
+  **transient** failure (network, 5xx, rate limit) is retried without
+  touching session health. An **unrecoverable** failure (refresh token
+  expired or revoked) sets `requires_reauth` + `last_refresh_error` on the
+  affected MCP session and stops refreshing it until the user re-authenticates
+  in place. For agent identity tokens the identity status becomes `expired`.
 - **Status surfacing** — Token status (`valid` / `expiring_soon` / `expired`) is surfaced in the Identity Management UI, enabling admins to act before sessions fail
 
 ## Token Lifecycle States
@@ -43,6 +48,44 @@ flowchart LR
 | **valid** | Access token is current; no action needed | Refresh Service monitors expiry |
 | **expiring_soon** | Access token is within the refresh window | Refresh Service issues refresh grant |
 | **expired** | Refresh token is expired or revoked | Admin must re-authenticate via OAuth sign-in |
+
+## MCP Session Re-Auth State (`requires_reauth`)
+
+OAuth credentials for an MCP session can fail to refresh for two very
+different reasons, and treating them alike is what stranded agents silently.
+The session therefore carries a health pair: a boolean **`requires_reauth`**
+and the stored failure reason **`last_refresh_error`**. Detection lives in
+the refresh path; the Token Health Service classification below is a
+separate, read-only view.
+
+```mermaid
+stateDiagram-v2
+    [*] --> Active
+    Active --> Active: transient failure<br/>(network · 5xx · rate limit)<br/>retried, flag NOT set
+    Active --> Active: successful refresh<br/>flag + reason cleared
+    Active --> RequiresReauth: unrecoverable failure<br/>(invalid_grant · no such<br/>refresh token · revoked)
+    RequiresReauth --> RequiresReauth: reason stored in<br/>last_refresh_error
+    RequiresReauth --> Active: in-place re-auth<br/>(same session updated,<br/>flag + reason cleared)
+```
+
+- **Active** — the normal state. Access tokens refresh on schedule. A
+  **transient** failure (network error, 5xx, rate limit) leaves the session
+  Active and is simply retried on the next cycle; it never sets the flag.
+- **RequiresReauth** — entered only on an **unrecoverable** refresh failure:
+  the identity provider reports the refresh token itself is no longer usable
+  (e.g. `invalid_grant`, "No such refresh token found", revoked). The failure
+  text is stored in `last_refresh_error` so the *reason* survives, and the
+  session is surfaced in the MCP Hub session UI as **"Needs
+  re-authentication"** — an error-state token badge whose tooltip carries the
+  stored reason, alongside the re-authenticate action.
+- **Recovery** — the user re-authenticates **in place**: the *same* session
+  row is updated with the new token pair, `requires_reauth` returns to false
+  and `last_refresh_error` is cleared — no session re-creation, no
+  reconfiguration. Any later successful refresh also clears both fields.
+
+The blast radius is a single session: other sessions, other servers, and
+unrelated identities are untouched, and an ordinary transient failure stays
+invisible to the user.
 
 ## Expiry Classification (Token Health Service)
 

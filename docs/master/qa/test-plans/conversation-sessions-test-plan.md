@@ -136,3 +136,28 @@ This test plan validates the persistent conversation session lifecycle for conve
 
 **Delegation visibility coverage:**
 - `e2e/tests/conversation-delegation-visibility.spec.ts` — conversational thinking/delegating/waiting/final visibility, folded snippets by default, and snippet expand/collapse interactions
+
+---
+
+## control-center-chatbot Update (2026-11)
+
+Extends the conversational session lifecycle for the Control Center Assistant surface. Scenarios
+above remain valid; the following are added.
+
+**Behaviour deltas:**
+- Closing the dialog is a disconnect only — the session stays `active` and the next open resumes the most recent active session for that agent type. Only an explicit End closes it.
+- End is now a compound action: it closes the session AND best-effort terminates any in-flight execution (CC → CH → AR); a termination failure must never fail the end call. End also sets a per-agent-type force-new flag so the next open starts a NEW session; Exit does not.
+- View All Sessions: active-only by default, 7-day default window, "ended" toggle (closed + archived + error), pagination with a full filtered total, explicit date range with inclusive day boundaries, and ended rows marked non-resumable.
+- Four-option action bar (View All Sessions / New Session / End Session / Exit); New Session must not end or archive the current session; all actions are disabled while a turn is streaming.
+- A new paginated sessions endpoint sits alongside the legacy list, which must stay backward compatible.
+
+**Test files added (verified present):**
+- `backend/tests/integration/test_conversations_sessions_query.py` — ordering, default/`all_time`/explicit windows, `active`/`ended`/`all` status semantics, pagination + total, tenant isolation, legacy compatibility, configurable default window.
+- `backend/tests/api/test_conversations_end_termination.py` — `/end` termination forwarding and failure tolerance.
+- `frontend/src/__tests__/ConversationDialog.sessionsView.test.tsx` — default window, ended toggle, pagination, date-range refetch, resume-in-place.
+- `frontend/src/__tests__/ConversationDialog.actionBar.test.tsx` — the four actions and their exact API-call semantics, streaming disablement.
+- `frontend/src/__tests__/AppShell.forceNewAfterEnd.test.tsx`, `AppShell.assistantSession.test.tsx` — force-new after End vs. resume-latest on plain close.
+- `frontend/src/__tests__/ConversationDialog.resumeLiveDelivery.test.tsx` — mid-turn reconnect re-merges persisted turns without duplicates.
+- `frontend/src/__tests__/useChatSession.heartbeat.test.ts` — `thinking_heartbeat` refreshes the thinking timestamp; `timeout_or_failed` is the terminal status.
+
+See `control-center-assistant-test-plan.md` for the assistant-wide coverage map.

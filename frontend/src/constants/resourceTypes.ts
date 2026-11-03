@@ -24,6 +24,7 @@ export const RESOURCE_TYPE_MANIFEST = {
   "agent::scripts": { actions: ["read", "manage"] },
   "integration::mcp_hub": { actions: ["create", "read", "update", "delete", "execute", "manage"] },
   "integration::notifications": { actions: ["read", "manage"] },
+  "integration::control_center": { actions: ["read", "manage"] },
   "system::observability": { actions: ["read"] },
   "system::permissions": { actions: ["create", "read", "update", "delete", "manage", "approve", "reject"] },
   "system::system_config": { actions: ["read", "manage"] },
@@ -73,6 +74,7 @@ export const MODULE_GROUPS: Record<string, ModuleGroup> = {
     submodules: [
       "integration::mcp_hub",
       "integration::notifications",
+      "integration::control_center",
     ],
   },
   system: {

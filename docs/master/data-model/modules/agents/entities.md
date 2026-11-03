@@ -102,6 +102,7 @@ erDiagram
         json output_schema
         uuid output_data_type_id "optional; linked when output_type=typed"
         boolean is_active
+        boolean is_system "system-provided agent type (e.g. Control Center Assistant); protected from user edit/delete"
         datetime created_at
         datetime updated_at
     }
@@ -135,7 +136,7 @@ erDiagram
     }
     InterveneRequest {
         uuid id
-        uuid agent_session_id
+        uuid agent_session_id "nullable; NULL for conversation-scoped requests (no backing agent job)"
         uuid agent_type_id
         uuid conversation_session_id
         enum intervention_type "approval | choice | text"
@@ -282,7 +283,7 @@ erDiagram
     AgentType }o--|| AgentRole : "governed by"
     AgentType }o--|| AgentIdentity : "authenticates as"
     AgentSession }o--|| AgentType : "executes"
-    InterveneRequest }o--|| AgentSession : "originates from"
+    InterveneRequest }o--o| AgentSession : "originates from (null for conversation-scoped)"
     InterveneRequest }o--|| AgentType : "initiated by"
     InterveneRequest }o--|| ConversationSession : "surfaced in"
     InterveneRequest ||--o| InterveneResponse : "resolved by"
@@ -322,11 +323,11 @@ erDiagram
 | **AgentRoleSkill** | Join table linking an AgentRole to a Skill directly (outside of any SOP). Contributes the Skill's required MCP tools to the role's allowed tool set. |
 | **AgentRoleMcpSession** | Join table associating an MCP Session with an AgentRole, providing credential and resource context for MCP tool calls. At most one session per MCP server per role. |
 | **AgentIdentity** | Represents an agent's user account in a dedicated identity provider realm (e.g., `ai_agents`). Stores encrypted OAuth tokens used at runtime; refresh tokens are stored encrypted and refreshed automatically. `token_status` tracks the current refresh state (`active`, `expired`, `refresh_failed`); `last_token_refresh_at` records the most recent successful refresh. If `token_status` becomes `refresh_failed`, agent execution is blocked until operator intervention. Token health fields (`refresh_token_expires_at`, `last_token_refresh_outcome`, `token_health_state`) carry the computed health state (`healthy | expiring ≤7d | expired | unknown`) surfaced on dashboard and topology, refreshed on token refresh and dashboard read. Identity slug/name is treated as a slug-safe runtime identifier, while display labels remain user-friendly. |
-| **AgentType** | The definition of an agent class: its identity, permission role, model selection, system instruction, and input/output schema. When `output_type` is `typed`, `output_data_type_id` links to the `AgentDataType` that defines the expected output schema. The `model_id` is resolved at runtime against active `ModelConfig.enabled_models`; there is no direct FK to ModelConfig. Agent type slug is the canonical routing key for delegation and protocol metadata. Agent Types store curated SOP and skill bindings via `AgentTypeSopBinding` and `AgentTypeSkillBinding` join tables. |
+| **AgentType** | The definition of an agent class: its identity, permission role, model selection, system instruction, and input/output schema. When `output_type` is `typed`, `output_data_type_id` links to the `AgentDataType` that defines the expected output schema. The `model_id` is resolved at runtime against active `ModelConfig.enabled_models`; there is no direct FK to ModelConfig. Agent type slug is the canonical routing key for delegation and protocol metadata. Agent Types store curated SOP and skill bindings via `AgentTypeSopBinding` and `AgentTypeSkillBinding` join tables. `is_system = true` marks a **platform-supplied** agent type (e.g. the seeded Control Center Assistant) that the UI surfaces specially and that users cannot modify or delete. |
 | **AgentTypeSopBinding** | Join entity linking an AgentType to a Sop with an explicit ordering position. Each pair (agent_type_id, sop_id) is unique. The order field determines the sequence in the merged binding list alongside skill bindings. Used by system instruction generation and Agent Plan Mode. |
 | **AgentTypeSkillBinding** | Join entity linking an AgentType to a Skill with an explicit ordering position. Each pair (agent_type_id, skill_id) is unique. The order field determines the sequence in the merged binding list alongside SOP bindings. |
 | **AgentSession** | A single agent execution instance from submission through completion. Serves as the agent instance record for the dashboard. Stores input, output, status, timing, and (for conversational agents) the full `conversation_history`. Provides session context for `get_data` and `get_output` queries. `output_id` provides an optional convenience link to the session's typed output record when one exists. Status includes `waiting_for_human` when the agent is paused pending operator response to an intervene request. |
-| **InterveneRequest** | An agent-initiated request for human intervention during execution. Supports three intervention types: `approval` (yes/no), `choice` (select one from a list), and `text` (free-form input). Tracks lifecycle from `pending` through `responded`, `cancelled`, or `expired`. Links to the parent `ConversationSession` (when surfaced in a conversational context) and preserves `delegation_depth` from the originating `AgentJob` for audit. |
+| **InterveneRequest** | An agent-initiated request for human intervention during execution. Supports three intervention types: `approval` (yes/no), `choice` (select one from a list), and `text` (free-form input). Tracks lifecycle from `pending` through `responded`, `cancelled`, or `expired`. `agent_session_id` is **optional**: conversation-scoped requests (e.g. raised by the Control Center Assistant) have no backing `AgentJob` and carry NULL, resuming from `conversation_session_id` instead. Links to the parent `ConversationSession` (when surfaced in a conversational context) and preserves `delegation_depth` from the originating `AgentJob` for audit. |
 | **InterveneResponse** | The operator's response to an intervene request. Exactly one response per request. The response field populated depends on the intervention type: `approval_value` (boolean) for approval requests, `selected_choice` (string) for choice requests, `text_value` (string) for text requests. |
 | **AgentA2ASessionLink** | Tracks A2A requester/receiver linkage for delegated runs. Supports shared-session lifecycle tracking, receiver cleanup decisions, and delegated execution status visibility. |
 | **AgentData** | A named, typed data record explicitly saved via the `save_data` tool during an agent execution session. Multiple AgentData records may exist per session (intermediate, optional); each is scoped to an AgentType and AgentSession. Queried at runtime via `get_data` by data_name and session. |
@@ -353,6 +354,9 @@ erDiagram
 - `AgentOutput.validation_status` is `valid` when `field_values` passes schema validation against the referenced `AgentDataType.fields`, `validation_error` otherwise.
 - `AgentOutput.raw_output` stores the unparsed agent output as a fallback for UI rendering when validation fails.
 - `AgentOutput.field_values` is soft-referenced to the data type schema — the schema is resolved at read time via `data_type_id`.
+- **System-provided agent types are protected**: `is_system = true` (e.g. the Control Center Assistant) means the UI surfaces the agent type specially and users cannot modify or delete it. The flag is set only by platform seeding, never by tenant users, mirroring `Skill.is_system`, `Role.is_system`, and `DecisionTool.is_system`.
+- **The Control Center Assistant is a seeded agent type**: every tenant receives its own `control-center-assistant` row during assistant seeding — conversational input, `is_system = true`, bound to the `control-center-management` skill and its management MCP tools. It is not a separate business entity; it is configuration of an `AgentType` plus its skill/MCP bindings.
+- **Conversation-scoped interventions**: an `InterveneRequest` raised from a conversational turn carries `agent_session_id = NULL` (no backing `AgentJob`) and resumes from `conversation_session_id`; job-scoped requests continue to set `agent_session_id`.
 
 ## Model Guardrail and Runtime Control Entities
 
@@ -511,6 +515,7 @@ erDiagram
         json plan_steps "authored composition"
         boolean fully_scripted "zero-LLM vs scripts-as-tools"
         enum status "generating|ready|failed|needs_feedback|retired"
+        text error "populated whenever status is needs_feedback"
         json feedback_comments
     }
     ScriptDefinition {
@@ -551,7 +556,7 @@ erDiagram
 
 | Entity | Description |
 |--------|-------------|
-| **OptimizedImplementationPlan** | The model-authored workflow composition for an agent type — a separate entity from the high-level base plan. Carries the authored composition (`plan_steps`: sandboxed Python script segments, LLM bridge steps, output decision), the `fully_scripted` execution-semantics mark (only a fully-scripted plan is served zero-LLM; otherwise its scripts become invocable tools the LLM orchestrates), lifecycle status (`generating`/`ready`/`failed`/`needs_feedback`/`retired`), a one-line failure reason, and an accumulated `feedback_comments` memory that is included when the plan is regenerated. Served only while **fresh** (ready and newer than the base plan); "Retire plan" marks the row `retired` (kept for reference, never gates execution). |
+| **OptimizedImplementationPlan** | The model-authored workflow composition for an agent type — a separate entity from the high-level base plan. Carries the authored composition (`plan_steps`: sandboxed Python script segments, LLM bridge steps, output decision), the `fully_scripted` execution-semantics mark (only a fully-scripted plan is served zero-LLM; otherwise its scripts become invocable tools the LLM orchestrates), lifecycle status (`generating`/`ready`/`failed`/`needs_feedback`/`retired`), a one-line failure reason (`error`, reliably populated whenever the plan ends in `needs_feedback` — this is what the Optimized Plan tab renders), and an accumulated `feedback_comments` memory that is included when the plan is regenerated. Served only while **fresh** (ready and newer than the base plan); "Retire plan" marks the row `retired` (kept for reference, never gates execution). |
 | **CommandPrompt** | A stored, named command mission (e.g. `optimize-and-verify`) that drives a special agent side execution: at launch, the mission text is used as the execution prompt (with the target agent type interpolated) instead of the agent type's own system instruction. Deliberately not a Skill/SOP — a command is a mission, not a permission-grantable capability. |
 | **ScriptDefinition** | A versioned, named script owned by exactly one AgentType (name unique per tenant); the script inherits the agent's identity and permissions. Lifecycle: `draft → verified → compiled → retired`. Carries lineage to the base plan, the optimized plan that authored it (`source_optimized_plan_id`), and/or the observed session, a `current_version` serving pointer, aggregate `health_status` derived from fallback behaviour, and the `fully_scripted` execution-semantics mark (set from the plan's mark at promotion). |
 | **ScriptVersion** | Immutable revision of a ScriptDefinition. Carries the model-authored `python_source` (sandboxed Python), per-version sandbox resource caps (`cpu_limit_seconds`, `memory_limit_mb`, `wall_time_limit_seconds`; platform defaults when null), the sandbox-validation outcome (`sandbox_validation_status` + recorded `sandbox_validation_reason`), the deprecated-but-retained `declarative_step_graph`, and repair lineage (`repaired_from`). Content + caps are immutable and auditable per version. |

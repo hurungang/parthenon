@@ -143,7 +143,7 @@ sequenceDiagram
 
 ## Agent Authentication Paths
 
-Both agent authentication paths converge at the same permission engine. The resolution chain — `identity → role → policy evaluation → allowed tools/skills/SOPs` — is identical regardless of whether the agent authenticated via mTLS certificate or API key. For the full dual-auth architecture with Mermaid diagrams, see [Communication Hub Architecture](communication-hub/architecture.md#dual-authentication-flow).
+Both agent authentication paths converge at the same permission engine. The resolution chain — `identity → role → policy evaluation → allowed tools/skills/SOPs` — is identical regardless of whether the agent authenticated via mTLS certificate or API key. For the full authentication architecture with Mermaid diagrams, see [Communication Hub Architecture](communication-hub/architecture.md#authentication-paths).
 
 ## Agent Identity Token Health
 

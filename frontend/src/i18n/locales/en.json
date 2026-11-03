@@ -39,6 +39,13 @@
     "view": "View",
     "rowsPerPage": "Rows per page:"
   },
+  "assistant": {
+    "launch": "Control Center Assistant",
+    "modelNotConfiguredTitle": "The assistant needs a model configured for this workspace",
+    "modelNotConfiguredBody": "No model is configured for this workspace yet. An administrator can select one under System Config → Assistant model.",
+    "modelNotConfiguredCta": "Configure model",
+    "modelNotConfiguredInputDisabled": "Configure an assistant model to start chatting"
+  },
   "nav": {
     "apiKeys": "API Keys",
     "dashboard": "Dashboard",
@@ -251,6 +258,11 @@
       "authTypeOAuth2Desc": "Authenticate via OAuth 2.0 authorization code flow. The platform manages token refresh automatically.",
       "authTypeNoneDesc": "No authentication. Use for publicly accessible MCP servers that do not require credentials.",
       "authTypePassthroughDesc": "Forward the calling agent's JWT identity token directly. The MCP server validates the original caller."
+    },
+    "controlCenter": {
+      "chip": "Control Center",
+      "tooltip": "Protected integration — visible only to roles granted the Control Center integration permission (integration::control_center).",
+      "systemManaged": "System-managed"
     }
   },
   "skills": {
@@ -262,6 +274,9 @@
     "noTools": "No tools bound",
     "selectTools": "Select MCP tools",
     "toolCount": "Tools",
+    "toolCountValue": "{{count}} tools",
+    "noToolsBound": "No tools bound",
+    "toolServer": "{{server}}:",
     "assignedRoles": "Assigned Roles",
     "instructions": "Workflow",
     "roles": "Roles",
@@ -285,6 +300,10 @@
       "previewWorkflow": "Preview Workflow",
       "workflowPreviewTitle": "Workflow Preview (Model: {{model}})",
       "generatedToolReference": "Generated Tool Reference",
+      "boundTools": "Bound Tools",
+      "referencedTools": "Referenced (read-only)",
+      "referencedToolReadOnlyNote": "Access to this tool requires the Control Center integration permission — shown read-only because this skill uses it.",
+      "removeTool": "Remove {{name}}",
       "generatedToolReferenceHint": "Auto-generated from selected tools — read-only. This is appended to the workflow file at runtime.",
       "filterByServer": "Filter by MCP Server",
       "noToolsAvailable": "No tools available. Register an MCP server and sync its tools first.",
@@ -355,6 +374,7 @@
       "topologyZoomOut": "Zoom out",
       "topologyZoomFit": "Fit to screen",
       "topologyOutputLocked": "Output locked — conversational",
+      "topologyLoading": "Loading…",
       "savedChip": "saved",
       "unsavedChip": "unsaved changes",
       "equipment": "Equipment",
@@ -531,6 +551,8 @@
       "deleteConfirm": "Delete agent type \"{{name}}\"? This cannot be undone.",
       "runAgent": "Run Agent",
       "startChat": "Start Chat",
+      "systemBadge": "System",
+      "systemProtected": "System agent types cannot be modified or deleted",
       "noPlan": "No plan generated yet. Save the agent type to generate a plan.",
       "noDescription": "No description",
       "systemPrompt": "System Prompt",
@@ -1318,10 +1340,21 @@
         "typeApproval": "Approval Required",
         "typeChoice": "Choice Required",
         "typeText": "Text Input Required",
+        "expand": "Expand",
+        "collapse": "Collapse",
+        "previewTitle": "Approval Preview",
         "cancelled": "Intervention cancelled — conversation resumed",
         "responded": "Response sent",
         "placeholderText": "Type your response..."
-      }
+      },
+      "viewAllSessions": "View All Sessions",
+      "viewAllSessionsTitle": "All sessions for this agent",
+      "newSession": "New Session",
+      "currentSession": "Current",
+      "showEnded": "Show ended sessions",
+      "dateFrom": "From",
+      "dateTo": "To",
+      "endedTag": "Ended"
     }
   },
   "chat": {
@@ -1737,10 +1770,15 @@
     },
     "saveSuccess": "Settings saved successfully",
     "workflowSection": "Workflow Generation Model",
-    "workflowHint": "Select the default model used for automatically generating workflow plans (for Skills and SOPs).",
+    "workflowHint": "Select the model used for AI workflow generation (Skills and SOPs) in this workspace. Each workspace configures its own model.",
     "workflowModel": "Workflow Generation Model",
-    "workflowNotConfigured": "Not configured (uses platform default)",
-    "workflowNoOptions": "No model configurations available. Add a model configuration first.",
+    "workflowNotConfigured": "Not configured",
+    "workflowNoOptions": "No model configurations available in this workspace. Add a model configuration first.",
+    "assistantSection": "Control Center Assistant Model",
+    "assistantHint": "Select the model used by the Control Center Assistant for your workspace. The choice is per tenant and only applies to this workspace.",
+    "assistantModel": "Assistant Model",
+    "assistantNotConfigured": "Not configured (assistant cannot converse until a model is selected)",
+    "assistantNoOptions": "No model configurations available in this workspace. Add a model configuration first.",
     "tabs": {
       "userIdentityProvider": "User Identity Provider",
       "agentIdentityProvider": "Agent Identity Provider",

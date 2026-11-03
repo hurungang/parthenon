@@ -129,3 +129,33 @@
 | Change | Description | Added |
 |--------|-------------|-------|
 | ai-assisted-workflow-authoring-for-sop-and-skill | Added workflow terminology rename coverage, Skill/SOP workflow generate+preview coverage, configured-model dependency checks, and preview freshness/security assertions across backend/frontend/e2e | 2026-05-29 |
+| control-center-chatbot | Skill ↔ tool binding through the management toolset (names/ids, additive merge, tenant-scoped 404, `cc____` bindable); `tool_bindings` read payload; zero-binding non-fatal warning; single-surface skill editor with locked referenced-`cc` entries; table count + tooltip | 2026-11-02 |
+
+## control-center-chatbot Update (2026-11)
+
+Skills gained a first-class tool-association path used by the Control Center Assistant and any
+external MCP client. Existing skill/SOP CRUD scenarios are unchanged.
+
+**Behaviour deltas:**
+- `create_skill` / `update_skill` accept `tool_names` and/or `tool_ids`; unknown or foreign-tenant
+  references return a structured 404 with **no partial write**; re-binding an existing pair is an
+  idempotent no-op and updates merge additively.
+- `cc____` management tools are bindable like any other tool; `get_mcp_server` returns its tools.
+- A skill created or updated with zero bound tools still succeeds but carries a non-fatal
+  `warnings` entry — the assistant must surface this rather than claim a complete skill.
+- Skill read payloads (`get_skill`, `list_skills`, `SkillRead`) expose `tool_bindings`
+  (original name, canonical name, server slug/name).
+- The editor presents exactly one bound-tools surface: the picker toggles that same list,
+  referenced `cc` tools appear as locked read-only entries, and the list view/edit view show the
+  full bound-tool list while the table shows a count with a tooltip.
+- Assistant knowledge returns the `skill-tool-binding` rule for association intents.
+
+**Test files added (verified present):**
+- `backend/tests/unit/test_skill_tool_bindings_management.py` — binding by names/ids, additive merge, idempotent re-bind, unknown/foreign-tenant 404 with no write, `cc____` bindability, knowledge rule.
+- `backend/tests/unit/test_fix_20261101_223511_skill_bindings_visibility.py` — warnings contract and `tool_bindings` in records.
+- `frontend/src/__tests__/SkillEditor.singleSurface.test.tsx` — single surface, locked referenced tools, union preserved on save, view mode, zero bindings.
+- `frontend/src/__tests__/SkillEditor.boundTools.test.tsx` — full bound-tool list in view/edit modes.
+- `frontend/src/__tests__/SkillsToolBindingsVisibility.test.tsx` — count column, tooltip, zero-binding indicator.
+- `frontend/src/__tests__/useMcpServers.pagination.test.tsx` — complete paging past the 200 cap for the tool picker.
+
+See `control-center-assistant-test-plan.md` for the assistant-wide coverage map.

@@ -28,6 +28,8 @@ erDiagram
         datetime last_token_refresh_at "nullable; last CC OAuth refresh of this session"
         enum last_token_refresh_outcome "success | failure (nullable)"
         enum token_health_state "healthy | expiring | expired | unknown (computed, nullable)"
+        boolean requires_reauth "set only on an unrecoverable token-refresh failure"
+        string last_refresh_error "nullable; failure reason recorded when flagged"
         boolean is_active
         boolean is_default
         datetime created_at
@@ -63,11 +65,12 @@ erDiagram
 - `McpTool.tenant_id` is a **denormalized, mandatory tenant stamp** (defense in depth): tool lookups in hot paths (tool naming, permission resolution, skill binding validation) prove tenant containment on the row itself without joining through the server. The server remains the source of truth; the tool's binding must always equal its server's tenant and is kept consistent by tool sync.
 - Tool **permission grants** (role → tool) resolve within the granting tenant: a grant in tenant A never authorizes a tool in tenant B (roles and tools share the same tenant scope).
 - At most one `McpSession` per `McpServer` may be marked `is_default = true`; a sole session is automatically treated as default. Sessions inherit tenant scope through their server (no own tenant column).
+- **OAuth re-auth flag:** `requires_reauth` is set — with `last_refresh_error` recording the reason — only when a token refresh fails **unrecoverably** (e.g. the identity provider reports the refresh token no longer exists). It is cleared when the user completes in-place re-auth on the **same** session; transient failures (network, temporary provider errors) never set it.
 
 | Entity | Description |
 |--------|-------------|
 | **McpServer** | A tenant-owned registered external tool server with a slug unique per tenant; its status (active/inactive) is tracked by the platform. |
-| **McpSession** | A named connection configuration on a server that carries a specific identity, credential binding, and session-level config for outbound calls; supports structured identity binding and per-session credential configuration. `auth_type` may be `passthrough`, in which case the executing agent's identity is forwarded at call time and no credentials are stored. `is_default` designates the session used for sync operations and default tool calls when no specific session is requested. Token health fields (`last_token_refresh_at`, `last_token_refresh_outcome`, `token_health_state`) carry the computed health state (`healthy | expiring ≤7d | expired | unknown`) surfaced on dashboard and topology. |
+| **McpSession** | A named connection configuration on a server that carries a specific identity, credential binding, and session-level config for outbound calls; supports structured identity binding and per-session credential configuration. `auth_type` may be `passthrough`, in which case the executing agent's identity is forwarded at call time and no credentials are stored. `is_default` designates the session used for sync operations and default tool calls when no specific session is requested. Token health fields (`last_token_refresh_at`, `last_token_refresh_outcome`, `token_health_state`) carry the computed health state (`healthy | expiring ≤7d | expired | unknown`) surfaced on dashboard and topology. `requires_reauth` flags an unrecoverable token-refresh failure (with `last_refresh_error` as the reason); it is cleared by in-place re-auth on the same session, and transient failures never set it. |
 | **McpTool** | A capability synced from an external server; namespaced under the server's slug, unique within the tenant, and carrying its own denormalized tenant binding. |
 | **ToolPermission** | Grants a Role or Identity the right to invoke a specific tool — always within one tenant's role space. |
 

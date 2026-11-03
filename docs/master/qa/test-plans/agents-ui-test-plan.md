@@ -360,3 +360,25 @@ Covers frontend UI tests for agent navigation structure, `AgentTypeDetailsDialog
 | expand-model-config-providers | Added Model Configurations — Expanded Provider Dropdown coverage (12-provider dropdown, chip colour uniqueness, full CRUD lifecycle, dialog error pattern, i18n labels, reload-free parent table refresh) | 2026-06-03 |
 | improve-role-mcp-session-assignment | Added inline MCP session assignment coverage (dynamic server detection, inline dropdowns, pre-save validation, refresh, passthrough badges) | 2026-06-20 |
 | unify-agent-topology-diagram | Added unified topology canvas in agent preview coverage (Section 13): preview renders the same `PanelTopologyCanvas` as the panel via a pure agent-type → draft mapping; zoom/fullscreen/node-click parity; conversation-topology path removed; panel regression and out-of-scope `AgentPlanContent` consumers guarded | 2026-10-27 |
+| control-center-chatbot | Agent Types list marks `is_system` types (System badge, Edit/Delete disabled) for the seeded assistant; topology pending-load states — every loading entity renders a spinner + localized "Loading…" instead of a raw id, while resolved-missing and deliberate `None`/`Auto`/conversation slots keep their existing fallbacks | 2026-11-02 |
+
+## control-center-chatbot Update (2026-11)
+
+**Behaviour deltas:**
+- `is_system` agent types (the seeded Control Center Assistant) render a System badge in the Agent
+  Types list with Edit and Delete disabled; non-system types keep their actions unchanged.
+- `PanelTopologyCanvas` / `TopologyDiagramRenderer` render a pending state (spinner +
+  localized label/title) for any entity whose referenced data is still loading — identity, role,
+  model, input/output data type, skills, SOPs, SOP composition children, and MCP tools — instead of
+  showing a raw id or a misleading "empty" placeholder.
+- Resolved-but-missing references keep the raw-id fallback; deliberate contract states (`None`,
+  `Conversation`, `Auto`, unfilled typed slots) never become pending; pending nodes are
+  non-clickable.
+- Pending geometry and font caps stay in viewBox units so zoom reveals more rather than magnifying.
+
+**Test files added/updated (verified present):**
+- `frontend/src/__tests__/AgentManagementPage.test.tsx` — System badge and disabled controls.
+- `frontend/src/__tests__/PanelTopologyCanvas.test.tsx` — composer + canvas pending matrix, resolved/deliberate-state regressions.
+- `frontend/src/__tests__/TopologyDiagramRenderer.test.tsx` — accessible spinner node, viewBox-unit geometry, no node-click while pending.
+
+See `control-center-assistant-test-plan.md` for the assistant-wide coverage map.

@@ -15,7 +15,9 @@ Conversation Management ensures that all interactions—across users, agents, an
 - Provides persistent, user-named conversation sessions for conversation-type agents
 - Automatically generates session titles from the first user message
 - Enables users to start, resume, end, and archive conversation sessions
-- Lists all user's conversation sessions in a Sessions tab within the agent type view
+- Lists all user's conversation sessions in a Sessions tab within the agent type view, with an active/ended filter, a default recent time window that can be narrowed by date range, and pagination
+- Provides a four-action session bar in every conversational chat — View All Sessions, New Session, End Session, Exit — where Exit only closes the view (the session stays active and resumes with full history on reopen) and End closes the session and stops any work still in flight
+- Serves the management-scoped [Control Center Assistant](control-center-assistant.md) as a consumer of the same conversational infrastructure
 - Shows continuously updated current-session token usage in conversational session views
 - Allows active conversations to continue when only token budget thresholds are reached
 - Shows a clear thinking indicator while the primary conversational agent is processing
@@ -33,6 +35,8 @@ Conversation Management ensures that all interactions—across users, agents, an
 ## Key Concepts
 - **Conversation Persistence**: Storing all conversation data for future access
 - **Conversation Agent Session**: A persistent, bounded conversation with a conversation-type agent; includes automatic title generation, session lifecycle management (active → closed → archived), and full turn history
+- **Session Action Bar**: A consistent four-action control in every conversational chat — View All Sessions (browse and resume in place), New Session (start fresh; the previous session stays active), End Session (close the session and stop in-flight work; the next open starts fresh), and Exit (close the view only). Switching or ending is unavailable while a turn is still running
+- **Exit vs End**: Exit preserves the session for later; End deliberately closes it. Reopening a conversation always resumes the most recent active session
 - **Session Auto-Naming**: Automatic generation of session titles from the first user prompt using the agent's configured LLM
 - **Session Lifecycle**: Transitions between active (accepting messages), closed (ended by user), and archived (hidden from active list but retained for audit)
 - **Current-Session Token Visibility**: Ongoing display of conversational token consumption during active sessions
@@ -52,6 +56,11 @@ Conversation Management ensures that all interactions—across users, agents, an
 - Users can resume previous sessions with full turn history restored
 - Users can end or archive sessions to manage their workspace
 - Sessions are user-scoped (users only see their own sessions)
+- Every conversational chat offers a session action bar with view all / new / end / exit actions
+- Closing the view (exit) keeps the session active and the most recent active session resumes with full history when reopened
+- Viewing all sessions shows active and ended sessions, defaults to a recent time window, supports a chosen date range, and is paginated; ended sessions are clearly marked and cannot be resumed
+- Starting a new session leaves the previous session active; ending a session closes it and stops any work still in progress
+- Session switching and ending are unavailable while a turn is still being processed
 - Conversations can be searched, audited, and replayed from the UI
 - All turn types are captured and classified, including intervene request creation (context, type, options) and intervene response (operator, value, timestamp)
 - Conversation history is available for compliance and operational review
