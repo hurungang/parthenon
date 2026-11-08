@@ -10,6 +10,11 @@ export interface ChatMessage {
   role: ChatRole
   content: string
   timestamp: string
+  /** Persisted turn type — set for history turns so intervene Q&A turns can
+   * be rendered as resolved-intervention bubbles instead of plain text. */
+  turnType?: 'message' | 'intervene_request' | 'intervene_response'
+  /** Links an intervene turn pair (question ↔ response) for grouping. */
+  interveneRequestId?: string | null
 }
 
 export interface ConversationalGuardrailUsage {
@@ -254,6 +259,14 @@ export function useChatSession(sessionId: string | null, convSessionId?: string 
   const intentionalCloseRef = useRef(false)
   const reconnectAttemptsRef = useRef(0)
   const turnInFlightAtDisconnectRef = useRef(false)
+  // FIX: invariant — from the moment the user sends a message until the
+  // turn's final agent reply (or a terminal timeout_or_failed status), the
+  // UI must always render an activity indicator regardless of which
+  // chatStatus transitions occur. `turnInFlight` tracks that window
+  // explicitly so the dialog can fall back to a thinking-equivalent when a
+  // status change would otherwise render nothing.
+  const [turnInFlight, setTurnInFlight] = useState(false)
+  const turnInFlightRef = useRef(false)
   const [recoveryEpoch, setRecoveryEpoch] = useState(0)
   const chatStatusRef = useRef<ChatStatus | null>(null)
   const delegationCyclesRef = useRef<DelegationCycle[]>([])
@@ -269,6 +282,15 @@ export function useChatSession(sessionId: string | null, convSessionId?: string 
   useEffect(() => {
     chatStatusRef.current = chatStatus
   }, [chatStatus])
+
+  useEffect(() => {
+    turnInFlightRef.current = turnInFlight
+  }, [turnInFlight])
+
+  const markTurnInFlight = useCallback((inFlight: boolean) => {
+    turnInFlightRef.current = inFlight
+    setTurnInFlight(inFlight)
+  }, [])
 
   useEffect(() => {
     delegationCyclesRef.current = delegationCycles
@@ -322,6 +344,19 @@ export function useChatSession(sessionId: string | null, convSessionId?: string 
       // been missed — signal the dialog to refresh persisted history.
       if (turnInFlightAtDisconnectRef.current) {
         turnInFlightAtDisconnectRef.current = false
+        // The turn is still running server-side — restore a visible activity
+        // indicator (a stale/pre-close kind may no longer render) until the
+        // recovered reply or the next status event arrives.
+        setChatStatus({
+          kind: 'thinking',
+          agentType: chatStatusRef.current?.agentType ?? null,
+          toolName: null,
+          receiverSessionId: null,
+          timestamp: new Date().toISOString(),
+        })
+        // The turn is still running server-side — keep the in-flight window
+        // open so the fallback indicator stays visible until the reply lands.
+        markTurnInFlight(true)
         setRecoveryEpoch((epoch) => epoch + 1)
       }
     }
@@ -378,6 +413,11 @@ export function useChatSession(sessionId: string | null, convSessionId?: string 
             interventionActiveRef.current = false
             setChatStatus((prev) => {
               const agentType = prev?.agentType ?? null
+              if (statusVal === 'responded') {
+                // The resumed turn is processing again — show the thinking
+                // indicator instead of a silent gap until the next tool call.
+                return { kind: 'thinking', agentType, toolName: null, receiverSessionId: null, timestamp: new Date().toISOString() }
+              }
               return { kind: 'waiting', agentType, toolName: null, receiverSessionId: null, timestamp: new Date().toISOString() }
             })
           }
@@ -418,7 +458,25 @@ export function useChatSession(sessionId: string | null, convSessionId?: string 
 
           setChatStatus(parsedStatus)
 
+          if (parsedStatus.kind === 'timeout_or_failed') {
+            // Terminal status — the turn is over; close the in-flight window.
+            markTurnInFlight(false)
+          }
+
           if (parsedStatus.kind === 'delegation_resumed') {
+            // FIX: `delegation_resumed` has no dedicated rendering in
+            // ConversationDialog (thinking bubble / standalone line / in-cycle
+            // line all exclude it), and `thinking_heartbeat` preserves the
+            // previous kind forever — so the window went blank while the parent
+            // agent kept working after a delegation resumed. Store it as a
+            // `thinking`-equivalent so an indicator is always visible.
+            setChatStatus({
+              kind: 'thinking',
+              agentType: parsedStatus.agentType,
+              toolName: null,
+              receiverSessionId: parsedStatus.receiverSessionId,
+              timestamp: parsedStatus.timestamp,
+            })
             const targetCycleId = activeDelegationCycleIdRef.current
             if (targetCycleId) {
               const resumeLine: DelegationSnippetLine = {
@@ -516,10 +574,18 @@ export function useChatSession(sessionId: string | null, convSessionId?: string 
           return
         }
 
+        // Guard: server events with no textual content (e.g. an empty
+        // chat_message emitted when a turn suspends on an intervention)
+        // must never render as an empty bubble.
+        const rawContent = typeof data.content === 'string' ? data.content : ''
+        if (!rawContent.trim()) {
+          return
+        }
+
         const msg: ChatMessage = {
           id: crypto.randomUUID(),
           role: data.sender_role ?? 'agent',
-          content: data.content ?? '',
+          content: rawContent,
           timestamp: data.timestamp ?? new Date().toISOString(),
         }
         setMessages((prev) => [...prev, msg])
@@ -551,7 +617,54 @@ export function useChatSession(sessionId: string | null, convSessionId?: string 
         }
 
         if (data.sender_role === 'agent') {
-          setChatStatus((prev) => (prev?.kind === 'timeout_or_failed' ? prev : null))
+          const isAskUserTurn = (data.content ?? '').startsWith('?')
+          const wasTurnInFlight = turnInFlightRef.current
+          const statusKindNow = chatStatusRef.current?.kind
+          // An agent message arriving mid-delegation (an active delegation
+          // cycle, or a delegation status kind in flight) is an INTERMEDIATE
+          // sub-agent message — the turn keeps running afterwards. A plain
+          // in-flight turn's agent message is the turn's FINAL reply.
+          const isIntermediateMidTurn =
+            wasTurnInFlight &&
+            activeDelegationCycleIdRef.current !== null &&
+            (statusKindNow === 'delegating' || statusKindNow === 'waiting' || statusKindNow === 'delegation_resumed')
+          if (wasTurnInFlight && !isAskUserTurn && !isIntermediateMidTurn) {
+            // The turn's FINAL reply arrived while in flight — close the
+            // in-flight window exactly once and clear the status as today.
+            markTurnInFlight(false)
+          }
+          setChatStatus((prev) => {
+            if (prev?.kind === 'timeout_or_failed') return prev
+            if (isAskUserTurn || isIntermediateMidTurn) {
+              // Mid-turn agent message (ask-user or intermediate during an
+              // active delegation): the turn continues — keep a visible
+              // indicator instead of blanking the window.
+              return {
+                kind: 'thinking',
+                agentType: prev?.agentType ?? null,
+                toolName: null,
+                receiverSessionId: null,
+                timestamp: new Date().toISOString(),
+              }
+            }
+            if (wasTurnInFlight) {
+              // Final reply of the in-flight turn: clear the indicator.
+              return null
+            }
+            // Intermediate agent message while the turn is still running
+            // (no ask-user marker): demote to `thinking` — never blank the
+            // window mid-turn.
+            if (turnInFlightRef.current) {
+              return {
+                kind: 'thinking',
+                agentType: prev?.agentType ?? null,
+                toolName: null,
+                receiverSessionId: null,
+                timestamp: new Date().toISOString(),
+              }
+            }
+            return null
+          })
         }
         if (data.sender_role === 'agent' && (data.content ?? '').startsWith('?')) {
           setPendingQuestion(data.content ?? null)
@@ -580,7 +693,7 @@ export function useChatSession(sessionId: string | null, convSessionId?: string 
     }
 
     ws.onerror = () => ws.close()
-  }, [sessionId, convSessionId, flushOutboundQueue])
+  }, [sessionId, convSessionId, flushOutboundQueue, markTurnInFlight])
 
   const activeDelegationCycle =
     delegationCycles.find((cycle) => cycle.id === activeDelegationCycleId) ?? null
@@ -685,6 +798,9 @@ export function useChatSession(sessionId: string | null, convSessionId?: string 
       // Mark the close as intentional so onclose never schedules a reconnect
       // for a torn-down dialog.
       intentionalCloseRef.current = true
+      // Dialog closed or session switched — the in-flight window belongs to
+      // the previous turn and must not leak into the next session.
+      markTurnInFlight(false)
       wsRef.current?.close()
       outboundQueueRef.current = []
       if (reconnectTimerRef.current) clearTimeout(reconnectTimerRef.current)
@@ -713,6 +829,10 @@ export function useChatSession(sessionId: string | null, convSessionId?: string 
     }
     pendingNewDelegationCycleRef.current = true
     setMessages((prev) => [...prev, msg])
+    // The turn is in flight from the moment the user message is sent until
+    // its final agent reply (or a terminal status) — keeps an indicator
+    // visible regardless of intermediate status transitions.
+    markTurnInFlight(true)
     setChatStatus({
       kind: 'thinking',
       agentType: null,
@@ -876,6 +996,13 @@ export function useChatSession(sessionId: string | null, convSessionId?: string 
       text_value?: string
     }) => {
       if (wsRef.current?.readyState === WebSocket.OPEN) {
+        // Best-effort: refresh the server-side cached JWT right before an
+        // intervention response so management tool calls keep a valid token
+        // even if the scheduled silent-renew push was missed.
+        const currentToken = localStorage.getItem('access_token')
+        if (currentToken) {
+          wsRef.current.send(JSON.stringify({ type: 'token_refresh', token: currentToken }))
+        }
         wsRef.current.send(
           JSON.stringify({
             type: 'intervene_response',
@@ -921,6 +1048,30 @@ export function useChatSession(sessionId: string | null, convSessionId?: string 
     return false
   }, [])
 
+  // ── Live token refresh ─────────────────────────────────────────────────────
+  // The backend caches the user JWT once at WS connect; OIDC tokens expire
+  // while a conversation stays open (e.g. suspended awaiting a human
+  // intervention), breaking CC management tool identity resolution. The
+  // backend accepts {type:'token_refresh', token} to update the cache.
+
+  const sendTokenRefresh = useCallback((token: string): boolean => {
+    if (wsRef.current?.readyState !== WebSocket.OPEN) return false
+    wsRef.current.send(JSON.stringify({ type: 'token_refresh', token }))
+    return true
+  }, [])
+
+  // (a) Whenever the auth layer silently renews the access token, push the
+  // fresh JWT through this live socket so the server-side cache stays valid.
+  useEffect(() => {
+    const handler = (event: Event) => {
+      const detail = (event as CustomEvent<{ token?: string }>).detail
+      const token = typeof detail?.token === 'string' ? detail.token : ''
+      if (token) sendTokenRefresh(token)
+    }
+    window.addEventListener('parthenon:access_token_refreshed', handler)
+    return () => window.removeEventListener('parthenon:access_token_refreshed', handler)
+  }, [sendTokenRefresh])
+
   return {
     messages,
     connected,
@@ -938,6 +1089,9 @@ export function useChatSession(sessionId: string | null, convSessionId?: string 
     /** Bumped after a reconnect that happened while a turn was in flight —
      * consumers should refresh persisted history to recover missed replies. */
     recoveryEpoch,
+    /** True from user-message send until the turn's final agent reply or a
+     * terminal status — drives the fallback activity indicator. */
+    turnInFlight,
     setDelegationSnippetsCollapsed,
     toggleDelegationSnippetsCollapsed,
     hydrateDelegationFromHistory,
@@ -949,5 +1103,6 @@ export function useChatSession(sessionId: string | null, convSessionId?: string 
     interventionQueueLength,
     sendInterventionResponse,
     cancelIntervention,
+    sendTokenRefresh,
   }
 }

@@ -5,6 +5,9 @@
 ## Overview
 The Agent Gateway provides a centralized, secure, and observable entry point for agent execution, session tracking, and asynchronous result delivery. With the unified "AI Agent" menu, all agent execution, monitoring, and log features are accessible from a single navigation structure. The gateway enforces permission logic, validates identity-role assignments, and routes results to users and systems. All references to old, disconnected navigation patterns have been removed.
 
+## Third-Party Client Invocations
+Third-party [clients](third-party-agent-integration.md) enter through the Agent Gateway as an additional caller class: a client authenticates with its own secret or publishable credential and invokes only the bound agent type's input interface (a stateful conversation or a typed request/response). Client invocations are tenant-scoped, rate-limited, and audited, and can never reach tools, the MCP hub, or an agent identity. Existing identity-based invocation is unchanged.
+
 ## Who Uses It
 - Platform Administrators: Configure agent exposure, monitor interactions, and manage gateway policies
 - Business Users: Launch and interact with agents through supported protocols

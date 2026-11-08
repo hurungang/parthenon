@@ -34,12 +34,15 @@ class AgentSessionService:
         db: AsyncSession,
         parent_job_id: uuid.UUID | None = None,
         tenant_id: uuid.UUID | None = None,
+        client_id: uuid.UUID | None = None,
     ) -> AgentJob:
         """Create a new AgentJob with status=queued and return it immediately.
 
         ``tenant_id`` stamps the owning (calling) tenant so the job is
         tenant-bound from creation — delegation must never create a
         tenant-less session (strict tenant isolation).
+        ``client_id`` records third-party client invocation provenance
+        (integration gateway) for the runtime monitor's trigger column.
         """
         with tracer.start_as_current_span(
             "session_service.enqueue",
@@ -66,6 +69,7 @@ class AgentSessionService:
                 tenant_id=tenant_id,
                 agent_type_id=agent_type_id,
                 triggered_by_user_id=effective_user_id,
+                triggered_by_client_id=client_id,
                 input_data=input_data,
                 status=AgentJobStatus.queued,
                 parent_job_id=parent_job_id,

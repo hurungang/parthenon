@@ -16,6 +16,8 @@ interface HistoryMessage {
   role: 'user' | 'agent' | 'system'
   content: string
   timestamp: string
+  turnType?: ConversationTurn['turn_type']
+  interveneRequestId?: string | null
 }
 
 function normalizeText(value: unknown): string | null {
@@ -211,6 +213,8 @@ export function buildHistoryMessagesFromTurns(
       role: turn.role === 'agent' ? 'agent' : turn.role === 'user' ? 'user' : 'system',
       content: turn.content,
       timestamp: turn.created_at,
+      turnType: turn.turn_type,
+      interveneRequestId: turn.intervene_request_id,
     })
   }
 

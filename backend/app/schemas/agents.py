@@ -792,6 +792,9 @@ class RuntimeTopologyNodeRead(BaseModel):
     schedule_id: uuid.UUID | None = None
     schedule_cron: str | None = None
     schedule_description: str | None = None
+    # The client entity's own details (client-triggered nodes only).
+    trigger_client_id: uuid.UUID | None = None
+    trigger_client_name: str | None = None
     # Tool-call history (latest first), each resolved to an MCP server slug.
     tool_calls: list[ToolCallRouteRead] = []
 

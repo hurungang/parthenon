@@ -15,6 +15,8 @@ import {
   Typography,
 } from '@mui/material'
 import DeleteIcon from '@mui/icons-material/Delete'
+import PlayArrowIcon from '@mui/icons-material/PlayArrow'
+import VisibilityIcon from '@mui/icons-material/Visibility'
 import { useQueryClient } from '@tanstack/react-query'
 import { useAgentType, useAgentTypes, useDeleteAgentType } from '../../hooks/useAgentTypes'
 import { useAgentDraftComposition } from '../../hooks/useAgentDraftComposition'
@@ -35,6 +37,10 @@ import {
   defaultAgentTypeFormValues,
   type AgentTypeFormValues,
 } from './AgentTypeForm'
+import { AgentJobLaunchDialog } from './AgentJobLaunchDialog'
+import { AgentTypeDetailsDialog } from '../../components/agents/AgentTypeDetailsDialog'
+import { AgentExecutionDetailsDialog } from '../../components/agents/AgentExecutionDetailsDialog'
+import { ConversationDialog } from '../../components/agents/ConversationDialog'
 import type {
   AgentDataType,
   AgentEquipmentSlotId,
@@ -45,6 +51,14 @@ import type {
 
 const SLUG_PATTERN = /^[a-z0-9-]+$/
 const TOKEN_BUDGET_UNIT = 1000
+// Hard cap for descriptions shown in the panel header: substrings in JS so
+// extremely long text can never affect layout, only content.
+const HEADER_DESCRIPTION_MAX_LENGTH = 120
+
+function truncateText(value: string, maxLength = HEADER_DESCRIPTION_MAX_LENGTH): string {
+  if (value.length <= maxLength) return value
+  return `${value.slice(0, maxLength).trimEnd()}…`
+}
 
 function tokenBudgetKToRaw(value: string): number {
   const parsed = Number(value)
@@ -83,6 +97,17 @@ export function AgentManagementPanelPage() {
   // ── Delete state ──────────────────────────────────────────────────────────
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false)
   const deleteMutation = useDeleteAgentType()
+
+  // ── Launch state (run button — same behavior as the agent list) ───────────
+  const [launchType, setLaunchType] = useState<AgentType | null>(null)
+  const [launchOpen, setLaunchOpen] = useState(false)
+  const [conversationAgentType, setConversationAgentType] = useState<AgentType | null>(null)
+  const [conversationDialogOpen, setConversationDialogOpen] = useState(false)
+  const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null)
+  const [executionDetailsDialogOpen, setExecutionDetailsDialogOpen] = useState(false)
+
+  // ── Details dialog state (view agent in a dialog, same as the list) ───────
+  const [detailsDialogTypeId, setDetailsDialogTypeId] = useState<string | null>(null)
 
   // ── Shared dialog host state (one dialog at a time) ───────────────────────
   const [dialogRequest, setDialogRequest] = useState<PanelDialogRequest | null>(null)
@@ -258,8 +283,29 @@ export function AgentManagementPanelPage() {
     draftApi.discard()
   }
 
+  // ── Launch handler — mirrors the agent list's run button ─────────────────
+  const handleLaunch = (at: AgentType) => {
+    if (at.input_type === 'conversation') {
+      setConversationAgentType(at)
+      setConversationDialogOpen(true)
+    } else {
+      setLaunchType(at)
+      setLaunchOpen(true)
+    }
+  }
+
   return (
-    <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column', gap: 2 }}>
+    <Box
+      sx={{
+        height: '100%',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 2,
+        minWidth: 0,
+        maxWidth: '100%',
+        overflowX: 'hidden',
+      }}
+    >
       <Box>
         <Typography variant="h4" fontWeight={700}>
           {t('agents.panel.title')}
@@ -273,10 +319,22 @@ export function AgentManagementPanelPage() {
         sx={{
           flex: 1,
           minHeight: 0,
+          width: '100%',
+          maxWidth: '100%',
+          overflow: 'hidden',
           display: 'grid',
-          gridTemplateColumns: { xs: '1fr', md: '280px 1fr 360px' },
+          // minmax(0, 1fr) instead of 1fr for the middle track: plain 1fr has
+          // an auto minimum, so long content could expand the track and
+          // stretch every column (sidebar items, buttons) with it.
+          gridTemplateColumns: { xs: 'minmax(0, 1fr)', md: '280px minmax(0, 1fr) 360px' },
           gap: 2,
           alignItems: 'stretch',
+          // Every region stays strictly inside its column.
+          '& > *': {
+            minWidth: 0,
+            maxWidth: '100%',
+            overflow: 'hidden',
+          },
         }}
       >
         {/* ── Region 1: agent list sidebar ─────────────────────────────── */}
@@ -293,7 +351,7 @@ export function AgentManagementPanelPage() {
 
         {/* ── Region 2: header card + live topology ────────────────────── */}
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, minHeight: 0 }}>
-          <Paper sx={{ p: 2 }} elevation={1}>
+          <Paper sx={{ p: 2, overflow: 'hidden' }} elevation={1}>
             {detailLoading && selectedAgentId && <CircularProgress size={24} />}
             {!selectedAgentId && (
               <Typography variant="body2" color="text.secondary">
@@ -306,8 +364,22 @@ export function AgentManagementPanelPage() {
                   <Typography variant="h6" fontWeight={600} noWrap>
                     {selectedAgent.name}
                   </Typography>
-                  <Typography variant="body2" color="text.secondary">
-                    {selectedAgent.description ?? t('agents.panel.headerDescription')}
+                  <Typography
+                    variant="body2"
+                    color="text.secondary"
+                    sx={{
+                      // Contain long descriptions: clamp to 2 lines instead of
+                      // stretching the header card.
+                      display: '-webkit-box',
+                      WebkitBoxOrient: 'vertical',
+                      WebkitLineClamp: 2,
+                      overflow: 'hidden',
+                      wordBreak: 'break-word',
+                      overflowWrap: 'anywhere',
+                      maxWidth: '100%',
+                    }}
+                  >
+                    {truncateText(selectedAgent.description ?? t('agents.panel.headerDescription'))}
                   </Typography>
                   <Box mt={1} display="flex" gap={1} flexWrap="wrap">
                     <Chip
@@ -321,6 +393,36 @@ export function AgentManagementPanelPage() {
                   </Box>
                 </Box>
                 <Box display="flex" gap={0.5} flexShrink={0}>
+                  <Tooltip
+                    title={
+                      selectedAgent.input_type === 'conversation'
+                        ? t('agents.types.startChat')
+                        : t('agents.types.runAgent')
+                    }
+                  >
+                    <IconButton
+                      size="small"
+                      color="primary"
+                      aria-label={
+                        selectedAgent.input_type === 'conversation'
+                          ? t('agents.types.startChat')
+                          : t('agents.types.runAgent')
+                      }
+                      onClick={() => handleLaunch(selectedAgent)}
+                    >
+                      <PlayArrowIcon fontSize="small" />
+                    </IconButton>
+                  </Tooltip>
+                  <Tooltip title={t('app.view')}>
+                    <IconButton
+                      size="small"
+                      color="secondary"
+                      aria-label={t('app.view')}
+                      onClick={() => setDetailsDialogTypeId(selectedAgent.id)}
+                    >
+                      <VisibilityIcon fontSize="small" />
+                    </IconButton>
+                  </Tooltip>
                   <Tooltip title={t('app.delete')}>
                     <IconButton
                       size="small"
@@ -455,6 +557,67 @@ export function AgentManagementPanelPage() {
           </Button>
         </DialogActions>
       </Dialog>
+
+      {/* Agent Type Details Dialog — view everything about the agent */}
+      {detailsDialogTypeId !== null && (
+        <AgentTypeDetailsDialog
+          open={true}
+          agentTypeId={detailsDialogTypeId}
+          initialTab={0}
+          onClose={() => setDetailsDialogTypeId(null)}
+        />
+      )}
+
+      {/* Session Launch Dialog (run button, non-conversation agents) */}
+      {launchType && launchOpen && (
+        <AgentJobLaunchDialog
+          open={true}
+          agentType={launchType}
+          onClose={() => {
+            setLaunchOpen(false)
+            setLaunchType(null)
+          }}
+          onLaunched={(sessionId) => {
+            setLaunchOpen(false)
+            setLaunchType(null)
+            setSelectedSessionId(sessionId)
+            setExecutionDetailsDialogOpen(true)
+          }}
+          onRegeneratePlan={async () => {
+            await apiClient.post(`/agents/types/${launchType.id}/regenerate-plan`)
+            await queryClient.invalidateQueries({ queryKey: ['agents', 'types', launchType.id] })
+            await queryClient.invalidateQueries({ queryKey: ['agents', 'types'] })
+            setDetailsDialogTypeId(launchType.id)
+          }}
+        />
+      )}
+
+      {/* Execution Details Dialog for non-conversation launches */}
+      {executionDetailsDialogOpen && selectedSessionId && (
+        <AgentExecutionDetailsDialog
+          open={true}
+          sessionId={selectedSessionId}
+          onClose={() => {
+            setExecutionDetailsDialogOpen(false)
+            setSelectedSessionId(null)
+          }}
+        />
+      )}
+
+      {/* Conversation Dialog for conversation agents */}
+      {conversationAgentType && conversationDialogOpen && (
+        <ConversationDialog
+          open={true}
+          sessionId={null}
+          agentTypeId={conversationAgentType.id}
+          agentTypeName={conversationAgentType.name}
+          onClose={() => {
+            setConversationDialogOpen(false)
+            setConversationAgentType(null)
+            void queryClient.invalidateQueries({ queryKey: ['conversations', 'sessions'] })
+          }}
+        />
+      )}
 
       {/* Delete confirmation */}
       <ConfirmDialog

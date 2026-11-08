@@ -68,6 +68,19 @@ flowchart LR
 
 The internal validation endpoint is restricted to the Communication Hub caller scope, enforced by mTLS service certificate validation at the edge. External agents cannot call this endpoint directly.
 
+## Two Credential Classes
+
+Third-party [agent integration](../product/features/third-party-agent-integration.md) introduces a second, separate credential class. The two classes are distinct and governed independently:
+
+| | **API Keys** | **Clients** |
+|---|---|---|
+| Purpose | Authenticate an external agent to the MCP protocol surface | Grant a third party access to one agent type's input interface |
+| Identity | Bound to an agent identity + role (identity credential) | **Not** an identity — no tool access, no impersonation |
+| Credential types | API key (hashed, shown once) | Secret (server-to-server) or publishable (browser-safe, origin-allowlisted) |
+| Use case | Third-party AI agents calling tools/skills/SOPs | Embedded white-label chatbots, request/response integrations, server-to-server agent use |
+
+API keys (identity credentials) are **unchanged** by third-party agent integration. Clients are a non-identity credential class: they carry no agent identity, inherit no role permission set, and can never authenticate to the MCP protocol server — only to the client-invocation gateway.
+
 ## Permission Model
 
 API keys do not define their own permission scope. They inherit the **full permission set** of the bound identity + role:
@@ -75,3 +88,20 @@ API keys do not define their own permission scope. They inherit the **full permi
 `API Key → bound agent identity → bound agent role → policy evaluation → allowed tools/skills/SOPs`
 
 To restrict an external agent's access, administrators assign a narrowly-scoped role when creating the key. The permission resolution chain is identical to that used by internal Agent Runtime agents — the API key simply provides an alternative entry point.
+
+## Two Credential Classes
+
+Parthenon distinguishes two credential classes entering through the Communication Hub:
+
+| Class | What it authenticates | Capability |
+|---|---|---|
+| **API Keys** | An agent **identity** (+ role) | MCP tool access (`tools/list` / `tools/call`) with the bound identity's permission set |
+| **Clients** | Access to an agent type's **input interface** (conversational turn or typed submit) | Third-party invocation of the agent type — **not** an identity |
+
+- A client is **not an identity**: it receives no agent identity token, cannot list or call MCP tools, cannot reach the MCP hub, and cannot impersonate an agent. The target agent type runs with its own identity + role exactly as configured.
+- Client credentials come in two types: **`secret`** (server-to-server) and **`publishable`** (browser-safe).
+- **Publishable keys** are safe for browser embedding. Abuse is mitigated per client with an **origin allowlist** enforced at the Communication Hub edge plus a **per-client rate limit** — not by secrecy of the credential.
+- A `secret` client may additionally carry an optional end-user token (server-side dual identity); the publishable path carries no user identity.
+- Both API keys and clients are tenant-scoped; lifecycle and authentication events carry tenant attribution in audit logs.
+
+See [Third-Party Agent Integration](../modules/third-party-agent-integration/architecture.md) for the integration architecture.

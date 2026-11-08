@@ -139,7 +139,7 @@ export function InterveneResponseDialog({
           </Typography>
         </Box>
         <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 2, fontFamily: 'monospace', wordBreak: 'break-all' }}>
-          {t('intervene.sessionLabel', 'Session')}: {request.agent_session_id}
+          {t('intervene.sessionLabel', 'Session')}: {request.agent_session_id ?? '—'}
         </Typography>
 
         {request.intervention_type === 'approval' && (
@@ -226,11 +226,12 @@ export function InterveneResponseDialog({
         {submitting && <LinearProgress sx={{ mt: 2 }} />}
       </DialogContent>
       <DialogActions>
-        {onTerminate && (
+        {onTerminate && request.agent_session_id && (
           <Button
             color="error"
             disabled={submitting || terminating}
             onClick={async () => {
+              if (!request.agent_session_id) return
               try {
                 setTerminating(true)
                 await onTerminate(request.agent_session_id, request.id)

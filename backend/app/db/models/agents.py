@@ -710,6 +710,10 @@ class AgentType(Base):
     output_data_type: Mapped["AgentDataType | None"] = relationship(
         "AgentDataType", back_populates="agent_types", foreign_keys=[output_data_type_id]
     )
+    # Third-party integration: clients that grant access to this type's input interface.
+    clients: Mapped[list["AgentClient"]] = relationship(
+        "AgentClient", back_populates="agent_type", cascade="all, delete-orphan"
+    )
     # Software 3.0: scripts owned by this agent type (script inherits its identity/permissions)
     script_definitions: Mapped[list["ScriptDefinition"]] = relationship(
         "ScriptDefinition",
@@ -865,6 +869,13 @@ class AgentJob(Base):
     )
     triggered_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("identities.id", ondelete="SET NULL"), nullable=True
+    )
+    # Third-party client invocation provenance (integration gateway).
+    # Null for user/schedule-triggered jobs.
+    triggered_by_client_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("agent_clients.id", ondelete="SET NULL"),
+        nullable=True,
     )
     parent_job_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("agent_jobs.id", ondelete="SET NULL"), nullable=True

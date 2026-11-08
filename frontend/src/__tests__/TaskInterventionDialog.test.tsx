@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { TaskInterventionDialog } from '../components/executions/TaskInterventionDialog'
 import type { InterveneRequest } from '../types'
 
@@ -21,6 +21,7 @@ vi.mock('react-i18next', () => ({
         'executions.taskIntervention.requestedBy': 'Requested by',
         'app.saving': 'Submitting...',
         'app.error': 'Error',
+        'conversations.sessions.intervention.orProvideOwnAnswer': 'Or provide your own answer',
       }
       let val = defaults[k] ?? k
       if (vars) {
@@ -103,6 +104,23 @@ describe('TaskInterventionDialog', () => {
         <TaskInterventionDialog request={makeRequest()} onSubmit={noop} onDismiss={() => {}} />,
       )
       expect(screen.getByText(/Dismiss/)).toBeDefined()
+    })
+
+    it('shows the free-text answer option and enables submit when text is typed', async () => {
+      const onSubmit = vi.fn(() => Promise.resolve())
+      render(
+        <TaskInterventionDialog request={makeRequest()} onSubmit={onSubmit} onDismiss={() => {}} />,
+      )
+      // Free-text section is always shown, even for approval type
+      expect(screen.getByText('Or provide your own answer')).toBeDefined()
+      const input = screen.getByPlaceholderText('Enter your response here...')
+      const submit = screen.getByText('Submit Response')
+      // Submit disabled until an answer exists (no approval selected, no text)
+      expect((submit as HTMLButtonElement).disabled).toBe(true)
+      fireEvent.change(input, { target: { value: 'Approved with condition X' } })
+      expect((submit as HTMLButtonElement).disabled).toBe(false)
+      fireEvent.click(submit)
+      await waitFor(() => expect(onSubmit).toHaveBeenCalledWith('req-123', { text_value: 'Approved with condition X' }))
     })
   })
 

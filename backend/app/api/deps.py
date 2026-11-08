@@ -80,6 +80,13 @@ _CH_ALLOWLIST: set[tuple[str, str]] = {
     ("POST", "/api/v1/internal/data/intervene/respond"),
     ("POST", "/api/v1/internal/data/sessions/{session_id}/log"),
     ("POST", "/api/v1/internal/auth/validate-api-key"),
+    # Third-party agent integration (clients): validate credential, invoke the
+    # agent type, and poll the execution session.
+    ("POST", "/api/v1/internal/clients/validate"),
+    ("POST", "/api/v1/internal/clients/invoke"),
+    ("GET", "/api/v1/internal/clients/session/{session_id}"),
+    ("POST", "/api/v1/internal/clients/conversations"),
+    ("POST", "/api/v1/internal/clients/conversations/{conversation_id}/end"),
     ("POST", "/api/v1/internal/system-tools/skills/resolve"),
     ("POST", "/api/v1/internal/system-tools/decision/list"),
     ("POST", "/api/v1/internal/system-tools/decision/execute"),

@@ -9,12 +9,16 @@ Run Parthenon's test suite across all three test layers.
 | Backend unit/integration | `.venv/bin/python -m pytest backend/tests/ -v` | `backend/tests/` |
 | Frontend component | `npx vitest run src/__tests__/ --reporter=verbose` (from `frontend/`) | `frontend/src/__tests__/` |
 | E2E | `npm test` (from `e2e/`) | `e2e/tests/` |
+| MCP demo app | `.venv/bin/python -m pytest mcp-demo-app/tests/ -v` | `mcp-demo-app/tests/` |
+
+Note: `mcp-demo-app/tests/unit/test_config.py::test_settings_missing_keycloak_url` fails when a local `mcp-demo-app/.env` exists (env file re-supplies `KEYCLOAK_URL` after `monkeypatch.delenv`) — pre-existing environmental issue, not a regression.
 
 ## Flags
 
 - `--backend` — Run only backend tests (pytest)
 - `--frontend` — Run only frontend tests (vitest)
 - `--e2e` — Run only E2E tests (playwright)
+- `--demo` — Run only MCP demo app tests (pytest in `mcp-demo-app/tests/`)
 - `--filter <pattern>` — Filter tests by name across ALL three layers
   - Backend: `pytest -k <pattern>`
   - Frontend: `vitest run --reporter=verbose` + grep test names

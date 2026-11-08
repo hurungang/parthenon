@@ -24,7 +24,7 @@ class InterveneRequestRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: uuid.UUID
-    agent_session_id: uuid.UUID
+    agent_session_id: uuid.UUID | None = None
     agent_type_id: uuid.UUID
     conversation_session_id: uuid.UUID | None = None
     intervention_type: InterventionType

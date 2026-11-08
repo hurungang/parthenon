@@ -49,15 +49,73 @@ _KNOWLEDGE_ENTRIES: tuple[dict[str, Any], ...] = (
             "'**Create Skill: sql-runner**'). Updates list ONLY the changed "
             "fields, with the value showing old → new. For agent-type "
             "creation the table MUST include model, identity, role, skills, "
-            "and grants rows. Example:\n"
+            "and grants rows. Every field the operation sets gets its own "
+            "row — including enum choices (status, input_type, output_type, "
+            "provider_type, guardrail modes), role/identity assignments "
+            "(identity_id / role_id / role_ids), and list fields "
+            "(skill_ids, sop_ids, tool_ids, tool_names, enabled_models); "
+            "for list fields write the ADDED entries, e.g. "
+            "'Skills (add) | sql-runner, report-gen' — existing entries are "
+            "kept, nothing is removed. SOP create/update previews MUST show "
+            "the ordered steps as numbered rows (e.g. 'Steps | 1. "
+            "skill_invocation: check-credit-score, 2. agent_delegation: "
+            "FraudCheckAgent'); updates show the full old → new step list "
+            "because 'steps' REPLACES the whole list (omitted steps are "
+            "deleted). Example:\n"
             "**Create Skill: sql-runner**\n"
             "| Field | Value |\n|-------|-------|\n"
             "| Operation | create |\n| Resource Type | skill |\n"
             "| Name | sql-runner |\n| Description | Runs SQL |\n"
-            "| Tools | supabase____run_sql |\n"
+            "| Tools (add) | supabase____run_sql |\n"
             "Never improvise other layouts — no bullet lists, no prose-only "
             "previews, no extra headings: consistency beats prose. The "
             "intervention prompt IS this table."
+        ),
+    },
+    {
+        "id": "structured-error-self-correction",
+        "topic": (
+            "STRUCTURED VALIDATION ERRORS — read field + remedy, fix, and retry "
+            "autonomously"
+        ),
+        "keywords": [
+            "validation error", "structured error", "retry", "fix", "self-correct",
+            "400", "bad request", "invalid", "invalid enum", "unknown id",
+            "unknown name", "404", "missing slug", "slug required", "conflict",
+            "conversational", "typed output", "error payload", "remedy",
+            "problems", "field", "correct", "resubmit",
+        ],
+        "rule_text": (
+            "STRUCTURED-ERROR SELF-CORRECTION RULE: when a management create/"
+            "update call fails validation, the error payload is STRUCTURED — "
+            "{'error': 'validation_failed', 'problems': [{'field', 'problem', 'remedy'}, ...]}. "
+            "Read the 'field' and 'remedy' of EACH problem, fix exactly "
+            "those fields (never change unrelated ones), and RETRY the same "
+            "call autonomously — you do not need to ask the user to retry; "
+            "the user already approved the operation, you are only correcting "
+            "the payload shape. Known failure shapes and their remedies: "
+            "(1) MISSING SLUG (create_data_type / create_mcp_server without "
+            "slug) — remedy names the URL-safe slug pattern "
+            "(lowercase letters, digits, hyphens); derive the slug from the "
+            "name (e.g. 'Incident Report' → 'incident-report') and retry. "
+            "(2) INVALID ENUM (e.g. status='enabled', input_type='chat') — "
+            "the remedy lists the allowed values; pick the closest allowed "
+            "value (status: active/suspended/deprovisioned; input_type: "
+            "none/typed/conversation; output_type: auto/typed/markdown; "
+            "provider_type: openai/anthropic/...) and retry. "
+            "(3) UNKNOWN ID/NAME (a reference field like role_id, "
+            "identity_id, output_data_type_id, target_id, skill_ids) — 404 "
+            "with no partial write; discover the correct entity with the "
+            "list_* tools, use its exact id or name, and retry (see "
+            "prerequisite-ordering if the entity must be created first). "
+            "(4) CONVERSATIONAL-vs-TYPED-OUTPUT CONFLICT "
+            "(input_type=conversation together with output_data_type_id) — "
+            "conversational agent types cannot take a typed output data "
+            "type; either drop output_data_type_id (keep it conversational) "
+            "or change input_type to typed/none, matching what the user "
+            "asked for, and retry. If the SAME problem persists after two "
+            "corrections, stop and ask the user. A validation failure writes "
+            "NOTHING — no rollback or cleanup is ever needed."
         ),
     },
     {
@@ -493,7 +551,40 @@ _KNOWLEDGE_ENTRIES: tuple[dict[str, Any], ...] = (
             "an SOP to a role makes its composed skills' tools available to "
             "that role's agents. The constituent skills must exist before the "
             "SOP can reference them (prerequisite-ordering); the composition "
-            "order itself is whatever the procedure requires."
+            "order itself is whatever the procedure requires.\n"
+            "STEP AUTHORING (create_sop / update_sop 'steps'): a SOP is an "
+            "ORDERED list of steps. A skill_invocation step references a "
+            "skill by id or exact name (skill_id — REQUIRED for that step "
+            "type); an agent_delegation step references a target agent type "
+            "by id or exact name (target_agent_type_id — REQUIRED for that "
+            "step type; delegation steps gate the role permissions of every "
+            "role bound to the SOP)."
+        ),
+    },
+    {
+        "id": "sop-steps-replace-semantics",
+        "topic": "SOP steps REPLACE the whole list on update — send the complete desired list",
+        "keywords": [
+            "sop step", "sop steps", "steps", "replace", "replace steps",
+            "step list", "update sop", "create sop", "ordered steps",
+            "step order", "delegation step", "skill_invocation",
+            "agent_delegation", "step preview",
+        ],
+        "rule_text": (
+            "SOP STEPS REPLACE SEMANTICS: the 'steps' array on create_sop / "
+            "update_sop is a FULL-LIST REPLACE, never an additive merge — on "
+            "update_sop, a present 'steps' array REPLACES the entire ordered "
+            "step list and every step you omit is DELETED, so ALWAYS send the "
+            "complete desired list; an absent 'steps' array leaves the "
+            "existing steps untouched. Each step needs an integer 'order' and "
+            "a step_type: skill_invocation steps REQUIRE skill_id (skill id "
+            "or exact name); agent_delegation steps REQUIRE "
+            "target_agent_type_id (agent type id or exact name) — a skill_id "
+            "XOR target_agent_type_id, never both. In the canonical "
+            "confirmation preview table, show the ordered steps as numbered "
+            "rows (e.g. 'Steps | 1. skill_invocation: check-credit-score, "
+            "2. agent_delegation: FraudCheckAgent'); on updates show the full "
+            "old → new step list, and warn that omitted steps are deleted."
         ),
     },
     {
@@ -530,6 +621,57 @@ _KNOWLEDGE_ENTRIES: tuple[dict[str, Any], ...] = (
             "target_id, e.g. an agent type). Creating a schedule registers "
             "it with the scheduler; deletion is not available through the "
             "assistant."
+        ),
+    },
+    {
+        "id": "role-mcp-session-mappings",
+        "topic": (
+            "Agent roles need an MCP session mapped for every MCP server "
+            "their skills touch, or the MCP tools will not work"
+        ),
+        "keywords": [
+            "mcp session", "session mapping", "mcp_session_mappings",
+            "passthrough", "oauth2", "external auth session", "role session",
+            "agent role", "mcp tools not working", "credentials", "harry",
+            "which session", "session warning", "auth type", "mapped session",
+        ],
+        "rule_text": (
+            "REFERENCE FACT: MCP tools only work for an agent if its role has "
+            "an MCP session mapped for each MCP server involved. Two kinds of "
+            "sessions exist: passthrough sessions forward the agent's own "
+            "identity to the MCP server, while external-auth sessions "
+            "(bearer token, basic auth, oauth2) are named credential sessions "
+            "configured on the server (for example identity test_agent_1 "
+            "using session 'harry' on the supabase MCP server). MECHANICS: "
+            "create_agent_role / update_agent_role accept mcp_session_mappings "
+            "(a list of {server, session} objects, both id-or-name; the "
+            "session must belong to the given server) — mappings are additive "
+            "and one per server per role; re-mapping a server to a different "
+            "session is a 409 conflict. DEFAULTS run automatically after "
+            "explicit mappings so EVERY server ends up mapped: a server with "
+            "a passthrough session defaults to passthrough; a server with "
+            "exactly one session defaults to that session; a server with "
+            "MULTIPLE sessions defaults to the FIRST one (is_default first, "
+            "then oldest created) — the tool response carries a warnings "
+            "list naming the defaulted session and the alternatives, and you "
+            "MUST confirm the defaulted session with the user (offering the "
+            "alternatives for re-mapping) before finishing. CRITICAL NAMING "
+            "FACT: 'passthrough' "
+            "is an auth TYPE, not a session name — NEVER pass "
+            "session: 'passthrough' in a mapping. Explicit mappings are for "
+            "EXTERNAL credential sessions only (for example {server: "
+            "'supabase', session: 'harry'}); for servers whose session is "
+            "passthrough-auth, NO explicit mapping is needed (the default "
+            "rule auto-maps it) — or reference the actual session name "
+            "(e.g. 'default'). If you mistakenly pass an auth type as a "
+            "session name, the tool resolves it to that server's session "
+            "with that auth type when one exists — but never rely on this; "
+            "use the real session name from get_mcp_server. On every role "
+            "create/update, check "
+            "the returned warnings and confirm any defaulted multi-session "
+            "mappings with the user before finishing. Confirmation preview rows for mappings use "
+            "the form: supabase → session harry (oauth2). Sessions and "
+            "credential material are never echoed — only the auth type."
         ),
     },
     {

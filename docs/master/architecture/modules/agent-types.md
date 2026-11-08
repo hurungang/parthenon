@@ -73,3 +73,7 @@ flowchart LR
 - **Agent Type Details Dialog** — conversation topology includes the hub node; the plan tab renders through the plan content component.
 - **Plan previews** — both plan surfaces append the hub node client-side at render time via the shared helper.
 - **Agent Management Panel** — zoned composition of the draft, including the hub bar; see [Agent Management Panel](agent-management-panel.md).
+
+## Third-Party Exposure via Clients
+
+An agent type may be exposed to third parties through one or more **clients**: each client is bound to exactly one agent type and grants access to its *input interface* (conversational turn or typed submit) via the Communication Hub integration surface. A client carries a `secret` or `publishable` credential and is **not** an identity — the agent type always runs with its own identity + role as configured. See [Third-Party Agent Integration](third-party-agent-integration/architecture.md).

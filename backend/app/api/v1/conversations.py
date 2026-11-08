@@ -31,6 +31,72 @@ logger = logging.getLogger(__name__)
 
 ConversationRouter = APIRouter(prefix="/conversations", tags=["Conversations"])
 
+#: Terminal assistant message delivered when a suspended conversational turn
+#: cannot be resumed (e.g. a service restart orphaned the pending HITL state).
+_INTERRUPTION_NOTICE = (
+    "This conversation was interrupted by a service restart and the pending "
+    "action was lost. Please resend your request."
+)
+
+
+async def _deliver_interruption_notice(
+    session_id: uuid.UUID,
+    db: AsyncSession,
+    intervene_req,  # InterveneRequest ORM row
+) -> None:
+    """Persist a terminal assistant turn and push it to the live chat socket.
+
+    Best-effort: persistence failure is logged (the intervention response was
+    already committed); a missing live WebSocket is fine — the client re-fetches
+    the turns on reconnect.
+    """
+    from app.db.models.conversations import TurnRole, TurnType
+
+    try:
+        await _store.add_turn(
+            session_id=session_id,
+            role=TurnRole.agent,
+            content=_INTERRUPTION_NOTICE,
+            db=db,
+            turn_type=TurnType.message,
+            intervene_request_id=getattr(intervene_req, "id", None),
+        )
+        await db.commit()
+        logger.info(
+            "Persisted interruption notice turn for conversation session %s",
+            session_id,
+        )
+    except Exception:
+        logger.warning(
+            "Failed to persist interruption notice for conversation session %s",
+            session_id,
+            exc_info=True,
+        )
+
+    # Best-effort live push via the Communication Hub so an open chat
+    # unblocks immediately instead of waiting for a reconnect re-fetch.
+    try:
+        from app.services.control_center.comm_hub_client import (
+            CommunicationHubClient,
+        )
+        client = CommunicationHubClient()
+        await client.dispatch_message(
+            session_id=session_id,
+            message_type="chat_message",
+            content={
+                "type": "chat_message",
+                "sender_role": "agent",
+                "content": _INTERRUPTION_NOTICE,
+            },
+        )
+    except Exception:
+        logger.info(
+            "No live dispatch of interruption notice for conversation "
+            "session %s (client will re-fetch on reconnect)",
+            session_id,
+            exc_info=True,
+        )
+
 _store = ConversationStore()
 _manager = ConversationSessionManager()
 _intervene_store = InterveneRequestStore()
@@ -282,6 +348,7 @@ async def respond_to_conversation_intervention(
     await db.commit()
 
     # Resume the agent session
+    resume_status: str | None = "resumed"
     if agent_session_id is not None:
         try:
             from app.api.v1.intervene import _resume_agent_session
@@ -290,13 +357,21 @@ async def respond_to_conversation_intervention(
                 agent_session_id,
                 response_value,
             )
-            await _resume_agent_session(agent_session_id, response_value)
+            resume_status = await _resume_agent_session(agent_session_id, response_value)
         except Exception:
+            resume_status = None
             logger.warning(
                 "Failed to resume agent session %s after conversation intervention response",
                 agent_session_id,
                 exc_info=True,
             )
+
+    if agent_session_id is None or resume_status != "resumed":
+        # FIX (conversational resume orphan): the suspended conversational
+        # turn could not be resumed (registry miss after a service restart,
+        # or a resume failure). Deliver a terminal assistant turn so the
+        # user's chat unblocks instead of staying in "thinking" forever.
+        await _deliver_interruption_notice(session_id, db, intervene_req)
 
     return response_data
 

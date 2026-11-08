@@ -39,6 +39,7 @@ def _make_agent_job(
     agent_type_id: uuid.UUID,
     status: AgentJobStatus = AgentJobStatus.running,
     triggered_by_user_id: uuid.UUID | None = None,
+    triggered_by_client_id: uuid.UUID | None = None,
     parent_job_id: uuid.UUID | None = None,
     input_data: dict | None = None,
 ) -> MagicMock:
@@ -50,6 +51,7 @@ def _make_agent_job(
     job.created_at = datetime.now(timezone.utc)
     job.termination_category = None
     job.triggered_by_user_id = triggered_by_user_id
+    job.triggered_by_client_id = triggered_by_client_id
     # Mirror real model defaults — the controller consumes these fields
     # (delegation edges + conversation linkage), so they must not be
     # MagicMock auto-attributes.
@@ -73,6 +75,8 @@ def _make_conv(
     conv.agent_job_id = agent_job_id
     conv.title = title
     conv.created_at = datetime.now(timezone.utc)
+    conv.triggered_by_user_id = None
+    conv.triggered_by_client_id = None
     return conv
 
 
@@ -97,6 +101,7 @@ def _build_db(
     statements: list | None = None,
     *,
     identity_rows: list[tuple[uuid.UUID, str]] | None = None,
+    client_rows: list[tuple[uuid.UUID, str]] | None = None,
     schedule_rows: list[tuple[dict, str, uuid.UUID, str | None, str | None]] | None = None,
     tool_call_rows: list[tuple[uuid.UUID, uuid.UUID | None, str, datetime]] | None = None,
     runtime_tool_call_rows: list[
@@ -182,6 +187,8 @@ def _build_db(
     intervention_result.fetchall.return_value = list(pending_interventions or [])
     identity_result = MagicMock()
     identity_result.fetchall.return_value = list(identity_rows or [])
+    client_result = MagicMock()
+    client_result.fetchall.return_value = list(client_rows or [])
     schedule_result = MagicMock()
     schedule_result.fetchall.return_value = list(schedule_rows or [])
     runtime_tool_result = MagicMock()
@@ -216,6 +223,8 @@ def _build_db(
             return intervention_result
         if "FROM identities" in sql:
             return identity_result
+        if "FROM agent_clients" in sql:
+            return client_result
         if "FROM job_executions" in sql:
             return schedule_result
         if "runtime_tool_calls" in sql:
@@ -839,6 +848,48 @@ async def test_delegated_node_resolves_parent_trigger_source():
 
     parent_node = next(n for n in projection.nodes if n.session_id == parent_id)
     assert parent_node.trigger_source == "user"
+
+
+@pytest.mark.asyncio
+async def test_client_triggered_node_resolves_client_name():
+    """A job triggered by a third-party client (integration gateway) returns
+    ``trigger_source="client"`` with the client NAME as ``trigger_source_label``
+    and the client entity's own id/name resolved — the client is NOT a person,
+    so ``trigger_user_label`` stays ``None``.
+    """
+    job_id = uuid.uuid4()
+    client_id = uuid.uuid4()
+    job = _make_agent_job(
+        job_id, uuid.uuid4(), triggered_by_user_id=None, triggered_by_client_id=client_id
+    )
+    db = _build_db(agent_jobs=[job], client_rows=[(client_id, "acme-portal")])
+    projection = await RuntimeTopologyController().get_active_topology(db)
+
+    node = projection.nodes[0]
+    assert node.trigger_source == "client"
+    assert node.trigger_source_label == "acme-portal"
+    assert node.trigger_client_id == client_id
+    assert node.trigger_client_name == "acme-portal"
+    assert node.trigger_user_label is None
+    assert node.trigger_user_id is None
+
+
+@pytest.mark.asyncio
+async def test_client_triggered_conversation_resolves_client_name():
+    """A conversation created via the integration gateway (client provenance)
+    is attributed to the client, not ``unknown``.
+    """
+    conv_id = uuid.uuid4()
+    client_id = uuid.uuid4()
+    conv = _make_conv(conv_id, uuid.uuid4(), status=ConversationStatus.active)
+    conv.triggered_by_client_id = client_id
+    db = _build_db(agent_jobs=[], convs=[conv], client_rows=[(client_id, "web-widget")])
+    projection = await RuntimeTopologyController().get_active_topology(db)
+
+    node = next(n for n in projection.nodes if n.session_id == conv_id)
+    assert node.trigger_source == "client"
+    assert node.trigger_source_label == "web-widget"
+    assert node.trigger_client_name == "web-widget"
 
 
 @pytest.mark.asyncio

@@ -65,12 +65,26 @@ export function TaskInterventionDialog({
         text_value?: string
       } = {}
 
+      const hasText = textValue.trim().length > 0
+
       if (request.intervention_type === 'approval') {
-        if (approvalValue === null) return
-        value.approval_value = approvalValue
+        // Free-text answers are ALWAYS accepted for any intervention type;
+        // if the user typed one, it takes precedence over approve/deny.
+        if (hasText) {
+          value.text_value = textValue.trim()
+        } else if (approvalValue === null) {
+          return
+        } else {
+          value.approval_value = approvalValue
+        }
       } else if (request.intervention_type === 'choice') {
-        if (!selectedChoice) return
-        value.selected_choice = selectedChoice
+        if (hasText) {
+          value.text_value = textValue.trim()
+        } else if (!selectedChoice) {
+          return
+        } else {
+          value.selected_choice = selectedChoice
+        }
       } else if (request.intervention_type === 'text') {
         if (!textValue.trim()) return
         value.text_value = textValue.trim()
@@ -90,14 +104,16 @@ export function TaskInterventionDialog({
     setSelectedChoiceIdx(idx)
   }
 
-  // Determine if submit should be enabled
+  // Determine if submit should be enabled. Free text is always a valid
+  // answer regardless of the intervention type.
+  const hasText = textValue.trim().length > 0
   const canSubmit =
     !submitting &&
     !resolved &&
     !expired &&
-    (request.intervention_type === 'approval' ? approvalValue !== null
-      : request.intervention_type === 'choice' ? selectedChoice !== ''
-        : request.intervention_type === 'text' ? textValue.trim().length > 0
+    (request.intervention_type === 'approval' ? (approvalValue !== null || hasText)
+      : request.intervention_type === 'choice' ? (selectedChoice !== '' || hasText)
+        : request.intervention_type === 'text' ? hasText
           : false)
 
   // ── Resolved state ──
@@ -122,7 +138,7 @@ export function TaskInterventionDialog({
               {t('intervene.responseDialogTitle', { defaultValue: 'Human Intervention Required' })}
             </Typography>
             <Typography variant="caption" sx={{ color: '#A16207' }}>
-              {t('executions.taskIntervention.requestedBy', { defaultValue: 'Requested by' })} <strong>{request.agent_name ?? request.agent_session_id.slice(0, 8)}</strong>
+              {t('executions.taskIntervention.requestedBy', { defaultValue: 'Requested by' })} <strong>{request.agent_name ?? request.agent_session_id?.slice(0, 8) ?? '—'}</strong>
             </Typography>
           </Box>
         </Box>
@@ -182,7 +198,7 @@ export function TaskInterventionDialog({
           <Typography variant="caption" sx={{ color: '#A16207', display: 'block', lineHeight: 1.4 }}>
             {t('executions.taskIntervention.requestedByMeta', {
               defaultValue: 'Requested by {{agent}} during delegation',
-              agent: request.agent_name ?? request.agent_session_id.slice(0, 8),
+              agent: request.agent_name ?? request.agent_session_id?.slice(0, 8) ?? '—',
             })}
           </Typography>
           <Box
@@ -326,27 +342,40 @@ export function TaskInterventionDialog({
           </RadioGroup>
         )}
 
-        {/* Text mode */}
-        {!expired && request.intervention_type === 'text' && (
-          <TextField
-            value={textValue}
-            onChange={(e) => setTextValue(e.target.value)}
-            fullWidth
-            multiline
-            minRows={3}
-            maxRows={6}
-            placeholder={t('executions.taskIntervention.textPlaceholder', { defaultValue: 'Enter your response here...' })}
-            sx={{
-              '& .MuiOutlinedInput-root': {
-                fontSize: 13.5,
-                fontFamily: 'inherit',
-              },
-            }}
-            slotProps={{
-              htmlInput: { maxLength: 2000 },
-            }}
-            helperText={`${textValue.length}/2000`}
-          />
+        {/* Text input — ALWAYS available regardless of intervention type
+            (backend accepts text_value for any type). For approval/choice
+            requests it appears below the primary controls as an alternative
+            free-form answer. */}
+        {!expired && (
+          <Box>
+            {request.intervention_type !== 'text' && (
+              <Typography
+                variant="caption"
+                sx={{ display: 'block', mb: 0.5, color: 'text.secondary', fontSize: 11 }}
+              >
+                {t('conversations.sessions.intervention.orProvideOwnAnswer')}
+              </Typography>
+            )}
+            <TextField
+              value={textValue}
+              onChange={(e) => setTextValue(e.target.value)}
+              fullWidth
+              multiline
+              minRows={request.intervention_type === 'text' ? 3 : 2}
+              maxRows={6}
+              placeholder={t('executions.taskIntervention.textPlaceholder', { defaultValue: 'Enter your response here...' })}
+              sx={{
+                '& .MuiOutlinedInput-root': {
+                  fontSize: 13.5,
+                  fontFamily: 'inherit',
+                },
+              }}
+              slotProps={{
+                htmlInput: { maxLength: 2000 },
+              }}
+              helperText={`${textValue.length}/2000`}
+            />
+          </Box>
         )}
       </Box>
 

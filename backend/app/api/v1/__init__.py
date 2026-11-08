@@ -2,6 +2,7 @@
 from fastapi import APIRouter
 
 from app.api.v1.api_keys import AdminApiKeyRouter
+from app.api.v1.agent_clients import AdminAgentClientRouter
 from app.api.v1.agents import (
     AgentIdentityRouter,
     AgentInstanceRouter,
@@ -21,6 +22,8 @@ from app.api.v1.identity import IdentityRouter, PermissionRouter, RoleRouter
 from app.api.v1.internal.agent_data import InternalAgentDataRouter
 from app.api.v1.internal.authorization import InternalAuthorizationRouter
 from app.api.v1.internal.validate_api_key import InternalAuthRouter
+from app.api.v1.internal.agent_client_validation import InternalAgentClientRouter
+from app.api.v1.internal.agent_client_invoke import InternalAgentClientInvokeRouter
 from app.api.v1.internal.bootstrap import InternalBootstrapRouter
 from app.api.v1.internal.certificates import InternalCertificatesRouter
 from app.api.v1.internal.llm_mocking import InternalLLMMockRouter
@@ -109,6 +112,8 @@ router.include_router(CertificatesRouter)
 
 # Internal service-to-service endpoints (should be network-isolated in production)
 router.include_router(InternalAuthRouter)
+router.include_router(InternalAgentClientRouter)
+router.include_router(InternalAgentClientInvokeRouter)
 router.include_router(InternalBootstrapRouter)
 router.include_router(InternalCertificatesRouter)
 router.include_router(InternalAuthorizationRouter)
@@ -154,6 +159,9 @@ router.include_router(RuntimeControlRouter)
 
 # API Keys
 router.include_router(AdminApiKeyRouter)
+
+# Third-party agent integration clients (input-interface-only access grants)
+router.include_router(AdminAgentClientRouter)
 
 # Data Types, Agent Data & Agent Outputs
 router.include_router(DataTypeRouter)

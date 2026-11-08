@@ -24,6 +24,11 @@ CH_KEY="$(grep '^COMM_HUB_BOOTSTRAP_KEY=' .env | cut -d= -f2)"
 pkill -9 -f "uvicorn app.main" 2>/dev/null
 pkill -9 -f "uvicorn app.communication_hub" 2>/dev/null
 pkill -9 -f "uvicorn app.agent_runtime" 2>/dev/null
+# Orphaned multiprocessing workers (--reload spawn children) survive their
+# parents and keep the ports bound — kill any listener on the service ports.
+for port in 8000 8001 8002; do
+  lsof -tiTCP:$port -sTCP:LISTEN 2>/dev/null | xargs kill -9 2>/dev/null
+done
 # Frontend: kill stale Vite dev (5173) and preview (4173) servers
 lsof -tiTCP:5173 -sTCP:LISTEN 2>/dev/null | xargs kill -9 2>/dev/null
 lsof -tiTCP:4173 -sTCP:LISTEN 2>/dev/null | xargs kill -9 2>/dev/null

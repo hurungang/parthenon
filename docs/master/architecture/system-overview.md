@@ -175,6 +175,22 @@ For the MCP hub, tool naming (`server____tool` / `agent____<slug>` unchanged on 
 
 The Communication Hub serves as an MCP endpoint for both internal and external agents. Internal Agent Runtime instances authenticate via mTLS certificates; external third-party AI agents use API keys. A third path authenticates the MCP session **as the user** when a client presents the user's own OIDC Bearer token — that session's permission scope is the user's own scope, with no elevated identity. For external clients, CH exposes a standard MCP protocol endpoint (SSE + Streamable HTTP) in addition to the existing REST skills-loading endpoint — all fronted by the same authentication layer. In every case, identity tokens are held exclusively by the Communication Hub — agents never receive them directly. For full architecture, see [Communication Hub Architecture](modules/communication-hub/architecture.md).
 
+### Third-Party Agent Integration (Client Path)
+
+A second, client-based external path lets third parties consume an agent type's *input interface* (conversational turn or typed submit) through the Communication Hub governed surface. It uses **client credentials** of two classes — `secret` (server-to-server) and `publishable` (browser-safe) — which are **distinct from API keys**: a client is not an identity, receives no agent identity token, cannot call MCP tools, and cannot impersonate an agent. The target agent type always runs with its own identity + role exactly as configured. For full architecture, see [Third-Party Agent Integration](modules/third-party-agent-integration/architecture.md).
+
+```mermaid
+flowchart LR
+    TP["Third Party<br/>integrator or browser"]
+    CH["Communication Hub<br/>integration gateway · governed surface"]
+    CC["Control Center<br/>client management + resolution"]
+    AR["Agent Runtime<br/>agent type runs as itself"]
+
+    TP -->|"secret / publishable client credential"| CH
+    CH -->|"mTLS · resolve client → agent type"| CC
+    CH -->|"delegate input"| AR
+```
+
 ## Permission Authorization
 
 Parthenon uses a **deny-by-default** authorization model with **policy-based allow**. The Permission Engine resolves effective permissions through a role → policy → resource type chain using the `module::submodule` naming convention. Permissions are **contained within the session's resolved tenant**: every grant (including wildcards) is evaluated only inside the session's tenant — global tenant-less roles no longer exist (legacy global roles migrated into the root tenant), so a tenant user can never hold `platform::` grants that exist only in the root tenant's role space. For the full authorization flow, wildcard evaluation rules, and policy management architecture, see [IAM Module Architecture](modules/iam.md).

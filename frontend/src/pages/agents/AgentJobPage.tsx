@@ -547,7 +547,7 @@ export function AgentJobPage({ sessionId: sessionIdProp, hideResults = false, hi
                 >
                   {msg.role !== 'user' ? (
                     <MaximizableContent title="Agent Response">
-                      <ContentRenderer mode="chat" content={msg.content} />
+                      <ContentRenderer mode="auto" content={msg.content} />
                     </MaximizableContent>
                   ) : (
                     <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap' }}>
@@ -691,7 +691,7 @@ export function AgentJobPage({ sessionId: sessionIdProp, hideResults = false, hi
                 >
                   {msg.role !== 'user' ? (
                     <MaximizableContent title="Agent Response">
-                      <ContentRenderer mode="chat" content={msg.content} />
+                      <ContentRenderer mode="auto" content={msg.content} />
                     </MaximizableContent>
                   ) : (
                     <Typography

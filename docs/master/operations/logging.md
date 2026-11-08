@@ -27,6 +27,9 @@ Update this table whenever new components are added or new log events are instru
 | **MCP Protocol Server (Communication Hub)** | MCP handshake and tool activity (`mcp.initialize`, `mcp.tools_list`, `mcp.tools_call`); expired-key rejections (`api_key.auth.failed` with reason `expired`) |
 | **MCP OAuth Bearer Auth (Communication Hub)** | OAuth/OIDC user-token validation on `/mcp*`: authenticated user, bound tenant, invalid/expired token, missing `sub`, and Control Center `/resolve` failures (`OAuth middleware:*` lines) |
 | **Control Center Assistant (Control Center)** | Management-tool session resolution and dispatch (`Management resolve:*`), permission denials and in-band scopes/deletes (returned to the caller, logged as request outcomes), assistant seeding (`AssistantSeeder:*`) |
+| **Third-Party Client Auth (Communication Hub)** | Edge-level client rejections — origin, rate limit, invalid/revoked/expired credential (`integration.client.*` lines with masked credential prefix and reason) |
+| **Integration Gateway (Communication Hub)** | `/integrate/*` request routing — conversation sessions, typed submit, session polling, SDK serving (`integration.gateway.*` lines) |
+| **Client Management (Control Center)** | Client lifecycle events (`client.created`, `client.credential_rotated`, `client.status_changed`, `client.deleted`); internal credential resolution (`client.validation`) |
 | **All components** | Service startup and shutdown with configuration summary; health check results; unhandled exceptions with full stack trace |
 | **Startup Validation** | `startup.validation.*` events — dependency reachability checks at service boot (PostgreSQL, Keycloak, Redis, Control Center); pass/fail with latency and error detail |
 | **Configuration Source** | `config.*.resolved` events — infrastructure connection source resolution (database, redis, OIDC, telemetry); emitted at INFO on every startup |
@@ -750,3 +753,59 @@ The log level for the telemetry system is set once at startup and cannot be chan
 - Perform a rolling restart of the backend
 
 Component-level overrides (e.g., setting `sqlalchemy` to `WARNING` while keeping the rest at `DEBUG`) are specified as sub-keys under `log_levels` in `config/telemetry.yaml`. See `config/telemetry.yaml` for the annotated sample.
+
+---
+
+## Third-Party Client Integration Log Events
+
+All client invocations (success **and** failure) are recorded in the `AgentClientUsageLog` database table, keyed to the client; the credential value is never stored.
+
+### Audit Table: `AgentClientUsageLog`
+
+| Column | Description |
+|--------|-------------|
+| `agent_client_id` | Reference to the `AgentClient` row; enables per-client audit queries |
+| `action` | `conversation_turn` or `submit_request` |
+| `outcome` | `success` or the failure reason (`rate_limited`, `origin_denied`, `invalid_credential`, `revoked_credential`, `error`) |
+| `response_ms` | Gateway response latency for the invocation |
+| `ip_address` | Caller IP that submitted the request |
+| `timestamp` | UTC timestamp of the invocation |
+
+**Retention**: 90 days in the active database; archive to cold storage for longer-term compliance.
+
+### Communication Hub — Edge Events
+
+**Log source**: `backend/logs/communication-hub.log`
+
+| Event | Level | Key Fields | When Logged |
+|-------|-------|-----------|-------------|
+| `integration.client.auth.success` | INFO | `key_prefix`, `client_id`, `agent_type_id`, `origin` | Client credential resolved; origin allowlisted |
+| `integration.client.auth.failed` | WARN | `key_prefix`, `reason` (`origin_denied`/`invalid_credential`/`revoked_credential`/`rate_limited`), `origin` | Edge-level rejection with masked credential prefix and reason |
+| `integration.gateway.request` | INFO | `client_id`, `endpoint`, `outcome`, `response_ms` | `/integrate/*` request completed (all traffic OTEL-instrumented) |
+
+### Control Center — Resolution & Lifecycle Events
+
+**Log source**: `backend/logs/control-center.log`
+
+| Event | Level | Key Fields | When Logged |
+|-------|-------|-----------|-------------|
+| `client.created` | INFO | `client_id`, `key_type`, `agent_type_id`, `created_by` | New client issued |
+| `client.credential_rotated` | INFO | `client_id`, `rotated_by` | Credential rotated; clear-text shown once |
+| `client.status_changed` | INFO | `client_id`, `status` (`active`/`inactive`/`revoked`) | Client activated/deactivated/revoked |
+| `client.deleted` | WARN | `client_id`, `deleted_by` | Client hard-deleted (usage logs cascade) |
+| `client.validation` | DEBUG | `key_prefix`, `outcome`, `duration_ms` | Internal mTLS credential resolution for CH |
+
+### Sensitive Data Exclusions
+
+- Never log the full client credential, its SHA-256 hash, or any part beyond the prefix.
+- The resolved agent identity token (and optional `secret`-client end-user token) is held CH-side in-memory only and is never logged.
+
+### Where to Find Integration Logs
+
+| Concern | Source | Access |
+|---------|--------|--------|
+| Edge rejections (origin/rate/credential) | Communication Hub | `backend/logs/communication-hub.log` — search for `integration.client` |
+| Gateway request outcomes | Communication Hub | `backend/logs/communication-hub.log` — search for `integration.gateway` |
+| Client management CRUD | Control Center | `backend/logs/control-center.log` — search for `client.created` / `client.credential_rotated` |
+| Per-client usage audit trail | Database | Query `agent_client_usage_logs`, filter by `agent_client_id` or date range |
+| Distributed trace correlation | All services | Use `trace_id` from any log line to jump to the full trace in Jaeger |

@@ -103,17 +103,21 @@ async def test_tools_list_returns_200(client):
     assert response.status_code == 200
 
 
-async def test_tools_list_returns_three_tools(client):
-    """tools/list returns exactly three tool descriptors."""
+async def test_tools_list_returns_all_ten_tools(client):
+    """tools/list returns all ten tool descriptors (3 greeting + 7 booking)."""
     body = (
         await client.post(
             "/mcp", json={"jsonrpc": "2.0", "id": 1, "method": "tools/list"}
         )
     ).json()
     tools = body["result"]["tools"]
-    assert len(tools) == 3
+    assert len(tools) == 10
     names = {t["name"] for t in tools}
-    assert names == {"helloWorld", "helloAgent", "helloUser"}
+    assert names == {
+        "helloWorld", "helloAgent", "helloUser",
+        "searchFlights", "bookTicket", "generatePaymentLink",
+        "checkTicketStatus", "checkInPassenger", "selectSeat", "cancelBooking",
+    }
 
 
 async def test_tools_list_no_auth_required(client):

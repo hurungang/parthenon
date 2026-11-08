@@ -9,12 +9,14 @@ import type { RuntimeTopologyNode, RuntimeTopologyProjection } from '../types'
  *
  * Active (non-sleep) nodes are visible by default.  Sleeping nodes are
  * only visible by default when they are awaiting human intervention
- * (`needs_intervention === true`); otherwise they are hidden so the map
- * is not dominated by idle conversations.
+ * (`needs_intervention === true`) or when they were triggered by a
+ * third-party client (`trigger_source === 'client'`) — client invocations
+ * are the trigger provenance the monitor must surface, so an idle
+ * integration conversation still shows its client entity.
  */
 export function isNodeVisibleByDefault(node: RuntimeTopologyNode): boolean {
   if (node.status === 'sleep') {
-    return node.needs_intervention === true
+    return node.needs_intervention === true || node.trigger_source === 'client'
   }
   return true
 }

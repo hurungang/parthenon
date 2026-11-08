@@ -45,6 +45,35 @@ class AgentExecuteResponse(BaseModel):
     warnings: list[str] = []
 
 
+async def _fail_a2a_wait(session_id: uuid.UUID, error: str) -> None:
+    """Best-effort: mark the A2A wait for this receiver session as FAILED.
+
+    When Control Center delegates to a sub-agent, the parent polls
+    ``GET /internal/a2a/wait/<receiver_session_id>`` until completion. If a
+    pre-execution failure (token preflight BLOCKED, Agent Runtime
+    unavailable, …) occurs after the receiver session id exists, the parent
+    would otherwise poll the full delegation cap (30 min) without ever
+    learning the real reason. This publishes an ``agent_result`` failure
+    message on the session's channel AND persists a sticky failure record,
+    so ``wait_for_a2a_response`` returns ``{"status": "failed", ...}``
+    immediately with the actionable error.
+    """
+    try:
+        from app.services.comm_hub.broker import MessageBroker
+
+        broker = MessageBroker()
+        try:
+            await broker.publish_session_failure(str(session_id), error)
+        finally:
+            await broker.close()
+    except Exception as exc:
+        logger.warning(
+            "Could not fail A2A wait for session=%s (parent will time out): %s",
+            session_id,
+            exc,
+    )
+
+
 @router.post("/execute", response_model=AgentExecuteResponse)
 async def trigger_agent_execution(
     body: AgentExecuteRequest,
@@ -99,8 +128,10 @@ async def trigger_agent_execution(
             session_id=body.session_id,
         )
     except AgentPreflightBlocked as exc:
+        await _fail_a2a_wait(body.session_id, str(exc))
         raise HTTPException(status_code=422, detail=str(exc))
     except AgentPreflightUnavailable as exc:
+        await _fail_a2a_wait(body.session_id, str(exc))
         raise HTTPException(status_code=503, detail=str(exc))
     
     # Get Agent Runtime URL
@@ -268,8 +299,10 @@ async def trigger_agent_execution(
     if isinstance(last_error, (httpx.ConnectError, httpx.TimeoutException)):
         error_msg = "Agent Runtime unavailable after retries - request timed out or connection failed"
         logger.error("%s: session=%s", error_msg, body.session_id)
+        await _fail_a2a_wait(body.session_id, error_msg)
         raise HTTPException(status_code=503, detail=error_msg)
     else:
         error_msg = f"Failed to trigger agent execution after {max_retries} retries: {last_error}"
         logger.error("%s: session=%s", error_msg, body.session_id)
+        await _fail_a2a_wait(body.session_id, error_msg)
         raise HTTPException(status_code=502, detail=error_msg)

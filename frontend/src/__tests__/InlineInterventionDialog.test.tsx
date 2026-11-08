@@ -22,6 +22,7 @@ vi.mock('react-i18next', () => ({
         'conversations.sessions.intervention.submitResponse': 'Submit Response',
         'conversations.sessions.intervention.dismissCancel': 'Dismiss / Cancel',
         'conversations.sessions.intervention.placeholderText': 'Enter your response...',
+        'conversations.sessions.intervention.orProvideOwnAnswer': 'Or provide your own answer',
         'app.error': 'An error occurred',
       }
       return map[k] ?? k
@@ -109,6 +110,60 @@ describe('InlineInterventionDialog', () => {
     )
     fireEvent.click(screen.getByText('Deny'))
     await waitFor(() => expect(onDeny).toHaveBeenCalledTimes(1))
+  })
+
+  // ── Free-text answer always available (any intervention type) ────────────
+
+  it('shows the free-text answer option for approval type', () => {
+    render(
+      <InlineInterventionDialog
+        request={baseRequest}
+        onApprove={onApprove}
+        onDeny={onDeny}
+        onSelectChoice={onSelectChoice}
+        onSubmitText={onSubmitText}
+        onDismiss={onDismiss}
+      />,
+    )
+    expect(screen.getByText('Or provide your own answer')).toBeDefined()
+    expect(screen.getByPlaceholderText('Enter your response...')).toBeDefined()
+  })
+
+  it('submits a free-text answer for approval type via onSubmitText', async () => {
+    render(
+      <InlineInterventionDialog
+        request={baseRequest}
+        onApprove={onApprove}
+        onDeny={onDeny}
+        onSelectChoice={onSelectChoice}
+        onSubmitText={onSubmitText}
+        onDismiss={onDismiss}
+      />,
+    )
+    const input = screen.getByPlaceholderText('Enter your response...')
+    fireEvent.change(input, { target: { value: 'Approved with conditions X' } })
+    fireEvent.click(screen.getByText('Submit Response'))
+    await waitFor(() => expect(onSubmitText).toHaveBeenCalledWith('Approved with conditions X'))
+  })
+
+  it('shows the free-text answer option for choice type', () => {
+    render(
+      <InlineInterventionDialog
+        request={{
+          ...baseRequest,
+          intervention_type: 'choice',
+          reason: 'Select an option:',
+          choices: ['Option A', 'Option B'],
+        }}
+        onApprove={onApprove}
+        onDeny={onDeny}
+        onSelectChoice={onSelectChoice}
+        onSubmitText={onSubmitText}
+        onDismiss={onDismiss}
+      />,
+    )
+    expect(screen.getByText('Or provide your own answer')).toBeDefined()
+    expect(screen.getByPlaceholderText('Enter your response...')).toBeDefined()
   })
 
   // ── Choice type ──────────────────────────────────────────────────────────

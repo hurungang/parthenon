@@ -63,6 +63,14 @@ from app.db.models.agent_api_key import (  # noqa: F401
     ApiKeyStatus,
     ApiKeyUsageAction,
 )
+from app.db.models.agent_client import (  # noqa: F401
+    AgentClient,
+    AgentClientAction,
+    AgentClientKeyType,
+    AgentClientRateLimitWindow,
+    AgentClientStatus,
+    AgentClientUsageLog,
+)
 from app.db.models.agent_data_type import AgentDataType  # noqa: F401
 from app.db.models.agent_output import (  # noqa: F401
     AgentOutput,

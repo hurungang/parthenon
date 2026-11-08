@@ -8,7 +8,7 @@ from fastapi.responses import JSONResponse
 
 from app.auth import get_agent_identity, get_user_identity
 from app.config import settings
-from app.tools import TOOL_MANIFEST, tool_registry
+from app.tools import BOOKING_TOOL_NAMES, TOOL_MANIFEST, tool_registry
 
 logger = logging.getLogger(__name__)
 
@@ -16,7 +16,12 @@ mcp_router = APIRouter()
 
 _SERVER_INFO = {
     "name": "MCP Demo App",
-    "version": "0.1.0",
+    "version": "0.2.0",
+    "description": (
+        "Dual-mode MCP demo server: greeting tools (identity-propagation "
+        "demo) and fictional airline booking tools (scenario demo backed by "
+        "an in-memory, seed-reset store)."
+    ),
 }
 
 _PROTOCOL_VERSION = "2024-11-05"
@@ -76,7 +81,11 @@ async def mcp_endpoint(request: Request) -> JSONResponse:
             identity.get("mcp_role"),
         )
 
-        tool_result = handler(identity)
+        tool_result = (
+            handler(identity, params.get("arguments") or {})
+            if tool_name in BOOKING_TOOL_NAMES
+            else handler(identity)
+        )
         if isinstance(tool_result, dict) and tool_result.get("access_denied"):
             logger.warning(
                 "MCP tools/call ACCESS DENIED: tool=%s reason=%s",

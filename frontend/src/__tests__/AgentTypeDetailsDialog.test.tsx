@@ -261,6 +261,38 @@ describe('AgentTypeDetailsDialog', () => {
     expect(screen.getAllByText('Research Agent').length).toBeGreaterThan(0)
   })
 
+  it('renders a functional edit button for a non-system agent type', async () => {
+    mockAgentTypeData = MOCK_AGENT_TYPE
+
+    const { AgentTypeDetailsDialog } = await import(
+      '../components/agents/AgentTypeDetailsDialog'
+    )
+    render(<AgentTypeDetailsDialog open agentTypeId="at-1" onClose={vi.fn()} />, { wrapper })
+
+    const editBtn = await screen.findByRole('button', { name: 'app.edit' })
+    expect(editBtn).toBeDefined()
+    expect((editBtn as HTMLButtonElement).disabled).toBe(false)
+    expect(screen.queryByTestId('edit-agent-type-disabled')).toBeNull()
+  })
+
+  it('marks a system agent type read-only — edit is disabled, never navigates', async () => {
+    mockAgentTypeData = { ...MOCK_AGENT_TYPE, is_system: true }
+
+    const { AgentTypeDetailsDialog } = await import(
+      '../components/agents/AgentTypeDetailsDialog'
+    )
+    render(<AgentTypeDetailsDialog open agentTypeId="at-1" onClose={vi.fn()} />, { wrapper })
+
+    // No functional edit button
+    expect(screen.queryByRole('button', { name: 'app.edit' })).toBeNull()
+    // Disabled stand-in keeps the edit affordance visibly unavailable
+    const disabled = screen.getByTestId('edit-agent-type-disabled') as HTMLButtonElement
+    expect(disabled.disabled).toBe(true)
+    // Clicking the disabled control must NOT navigate to the edit form
+    fireEvent.click(disabled)
+    expect(mockNavigate).not.toHaveBeenCalled()
+  })
+
   it('renders Details tab with correct field values', async () => {
     mockAgentTypeData = MOCK_AGENT_TYPE
 
@@ -278,7 +310,7 @@ describe('AgentTypeDetailsDialog', () => {
     }, { timeout: 3000 })
   })
 
-  it('renders four tabs — the Scripts tab is removed, Optimized Plan remains', async () => {
+  it('renders five tabs — Scripts removed, Optimized Plan and Clients remain', async () => {
     mockAgentTypeData = MOCK_AGENT_TYPE
 
     const { AgentTypeDetailsDialog } = await import(
@@ -287,7 +319,7 @@ describe('AgentTypeDetailsDialog', () => {
     render(<AgentTypeDetailsDialog open agentTypeId="at-1" onClose={vi.fn()} />, { wrapper })
 
     const tabs = screen.getAllByRole('tab')
-    expect(tabs.length).toBe(4)
+    expect(tabs.length).toBe(5)
     expect(tabs[0].textContent).toBe('agents.types.detailsTab')
     expect(tabs[1].textContent).toBe('agents.types.agentPreviewTab')
     expect(tabs[2].textContent).toBe('agents.types.executionLogsTab')
@@ -296,6 +328,9 @@ describe('AgentTypeDetailsDialog', () => {
     // The Optimized Plan tab now maps to panel index 4.
     expect(tabs[3].textContent).toBe('agents.optimizedPlan.tab')
     expect(tabs[3]).toHaveAttribute('aria-controls', 'agent-details-tabpanel-4')
+    // The Clients tab (third-party integration) maps to panel index 5.
+    expect(tabs[4].textContent).toBe('agents.types.clientsTab')
+    expect(tabs[4]).toHaveAttribute('aria-controls', 'agent-details-tabpanel-5')
   })
 
   it('opens the script view dialog directly from the Optimized Plan tab step link', async () => {

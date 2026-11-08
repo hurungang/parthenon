@@ -164,6 +164,19 @@ describe('AgentRuntimeMapCanvas', () => {
     expect(screen.getByText('agents.sessions.runtimeMonitorEmpty')).toBeDefined()
   })
 
+  it('renders the Agent Runtime region wrapping all agent containers', async () => {
+    renderCanvas({ topology: mkTopology([mkNode({ session_id: 'r1' })]) })
+    await settle()
+    const region = screen.getByTestId('agent-runtime-region')
+    expect(region).toBeDefined()
+    // The team container sits inside the runtime region on screen.
+    const team = screen.getByTestId('team-container-r1')
+    expect(
+      sxValue(region, 'background-color') ?? sxValue(region, 'backgroundColor'),
+    ).toBeTruthy()
+    expect(team).toBeDefined()
+  })
+
   it('auto-fits content on mount (zoom leaves the 100% default)', async () => {
     renderCanvas({ topology: mkTopology([mkNode()]) })
     await settle()
@@ -199,19 +212,14 @@ describe('AgentRuntimeMapCanvas', () => {
     expect(sxValue(world, 'background-color')).toBeNull()
   })
 
-  it('renders the hub full canvas height on a zero-agent load from the first paint', () => {
+  it('hides the Communication Hub when there are no agents on the map', () => {
     renderCanvas({ topology: mkTopology([]) })
 
-    // The full map renders (not a bare placeholder): the hub is a
-    // full-height fixture pinned near the right edge of the 1000x700 stage.
-    const hub = screen.getByTestId('communication-hub-node')
-    const left = parseInt(sxValue(hub, 'left') ?? '', 10)
-    const width = parseInt(sxValue(hub, 'width') ?? '', 10)
-    const height = parseInt(sxValue(hub, 'height') ?? '', 10)
-    expect(height).toBeGreaterThanOrEqual(700)
-    expect(left).toBeGreaterThan(500)
-    expect(left).toBeLessThanOrEqual(1000 - width)
-    // …and the empty-state message shows as an overlay on top of it.
+    // No running/visible agents → the hub (and its MCP column) would sit
+    // mispositioned at the bare stage's right edge, so it is not rendered.
+    expect(screen.queryByTestId('communication-hub-node')).toBeNull()
+    expect(screen.queryByTestId(/^mcp-server-node-/)).toBeNull()
+    // …and the empty-state message shows as an overlay instead.
     expect(screen.getByTestId('runtime-monitor-empty')).toBeDefined()
     expect(screen.getByText('agents.sessions.runtimeMonitorEmpty')).toBeDefined()
   })
@@ -614,23 +622,16 @@ describe('AgentRuntimeMapCanvas', () => {
     expect(screen.getByText('agents.sessions.runtimeCommunicationHub')).toBeDefined()
   })
 
-  it('renders the hub as a full-height fixture pinned right in the filtered-empty state', () => {
+  it('hides the hub in the filtered-empty state (no visible agents)', () => {
     // One node, then hide it via the kind filter → filter-driven empty state.
     renderCanvas({ topology: mkTopology([mkNode({ session_id: 'hub-empty-1' })]) })
     openFilterPanel()
     fireEvent.click(screen.getByText('agents.sessions.runtimeKindAgent'))
     expect(screen.getByTestId('runtime-monitor-filtered-empty')).toBeDefined()
 
-    // The hub remains a fixed fixture: pinned near the right edge of the
-    // 1000px-wide stage and spanning its full 700px height.
-    const hub = screen.getByTestId('communication-hub-node')
-    const left = parseInt(sxValue(hub, 'left') ?? '', 10)
-    const width = parseInt(sxValue(hub, 'width') ?? '', 10)
-    const height = parseInt(sxValue(hub, 'height') ?? '', 10)
-    expect(left).toBeGreaterThan(500)
-    expect(left).toBeLessThanOrEqual(1000 - width)
-    expect(height).toBeGreaterThanOrEqual(700)
-    // No MCP/tool columns render without tool data in the empty state.
+    // With no visible agents the hub would sit mispositioned at the bare
+    // stage's right edge — it is hidden entirely, MCP column included.
+    expect(screen.queryByTestId('communication-hub-node')).toBeNull()
     expect(screen.queryByTestId(/^mcp-server-node-/)).toBeNull()
   })
 
@@ -1003,6 +1004,24 @@ describe('AgentRuntimeMapCanvas', () => {
     expect(screen.getByTestId('trigger-edge-schedule:hourly-run-query->sched-run-1')).toBeDefined()
     // person → directly triggered execution edge.
     expect(screen.getByTestId('trigger-edge-person:Tom->direct-1')).toBeDefined()
+  })
+
+  it('renders a client entity for a client-triggered root with a trigger edge to the tile', () => {
+    renderCanvas({
+      topology: mkTopology([
+        mkNode({
+          session_id: 'client-run-1',
+          trigger_source: 'client',
+          trigger_source_label: 'acme-portal',
+          trigger_client_name: 'acme-portal',
+          trigger_client_id: 'c1',
+        }),
+      ]),
+    })
+    expect(screen.getByTestId('trigger-entity-client:acme-portal')).toBeDefined()
+    expect(screen.getByTestId('trigger-edge-client:acme-portal->client-run-1')).toBeDefined()
+    // The client name renders on the card.
+    expect(screen.getByText('acme-portal')).toBeDefined()
   })
 
   it('gives each trigger entity its own line colour', () => {

@@ -23,12 +23,24 @@ export function MaximizableContent({ children, title }: MaximizableContentProps)
 
   return (
     <>
-      <Box sx={{ position: 'relative' }}>
+      <Box
+        sx={{
+          position: 'relative',
+          // Reserve space for the hover-revealed maximize button so content
+          // never sits under it (the button used to overlap text).
+          pr: 4.5,
+          '&:hover .maximize-content-btn, &:focus-within .maximize-content-btn': {
+            opacity: 1,
+          },
+        }}
+      >
         {/* Inline content */}
         {children}
 
-        {/* Maximize button */}
+        {/* Maximize button — hidden until the bubble is hovered or focused
+            so it never covers the content. */}
         <IconButton
+          className="maximize-content-btn"
           onClick={handleOpen}
           size="small"
           aria-label={title ? `Maximize: ${title}` : 'Maximize content'}
@@ -38,6 +50,8 @@ export function MaximizableContent({ children, title }: MaximizableContentProps)
             right: 4,
             bgcolor: 'rgba(255, 255, 255, 0.85)',
             boxShadow: 1,
+            opacity: 0,
+            transition: 'opacity 0.15s ease',
             '&:hover': { bgcolor: 'rgba(255, 255, 255, 0.95)' },
           }}
         >

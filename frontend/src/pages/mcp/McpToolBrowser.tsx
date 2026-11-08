@@ -42,12 +42,14 @@ function SkillChips({ toolId }: { toolId: string }) {
 
 export function McpToolBrowser() {
   const { t } = useTranslation()
-  const pag = usePagination({ initialRowsPerPage: 25 })
-  const { data: tools, isLoading, error } = useAllTools(pag.limit, pag.offset)
-  const { data: servers } = useMcpServers()
   const [search, setSearch] = useState('')
   const [serverFilter, setServerFilter] = useState('')
   const [testingTool, setTestingTool] = useState<McpTool | null>(null)
+  const pag = usePagination({ initialRowsPerPage: 25 })
+  // Server filter is applied server-side (GET /mcp/tools?server_id=...):
+  // changing it refetches from the API instead of filtering a loaded page.
+  const { data: tools, isLoading, error } = useAllTools(pag.limit, pag.offset, serverFilter || undefined)
+  const { data: servers } = useMcpServers()
 
   const serverMap = useMemo(() => {
     const m: Record<string, string> = {}
@@ -158,7 +160,8 @@ export function McpToolBrowser() {
         <Typography color="text.secondary">{t('app.noData')}</Typography>
       )}
 
-      {/* Pagination */}
+      {/* Pagination — extra bottom margin keeps it clear of the fixed
+          assistant FAB (right: 24, bottom: 24) */}
       <TablePagination
         component="div"
         count={-1}
@@ -168,6 +171,7 @@ export function McpToolBrowser() {
         onRowsPerPageChange={pag.onRowsPerPageChange}
         rowsPerPageOptions={pag.rowsPerPageOptions}
         labelRowsPerPage={t('app.rowsPerPage')}
+        sx={{ mb: 8 }}
       />
 
       {/* Test Tool Dialog */}

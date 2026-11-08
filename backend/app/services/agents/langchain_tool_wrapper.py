@@ -534,6 +534,19 @@ def build_langchain_tools_for_ar_path(
                                 )
                                 if _wait_result.get("status") in ("completed", "failed", "expired"):
                                     break
+                                # Sub-agent still running. Re-emit the waiting status so
+                                # (a) the conversational watchdog sees fresh activity and
+                                # extends the turn wait instead of cancelling a healthy
+                                # parent, and (b) the chat UI keeps a visible indicator.
+                                if status_event_callback is not None:
+                                    try:
+                                        await status_event_callback({
+                                            "status": "waiting",
+                                            "agent_type": slug,
+                                            "receiver_session_id": _receiver_session_id,
+                                        })
+                                    except Exception:
+                                        pass
                                 # status == "timeout" means sub-agent still running; loop again
                             else:
                                 _wait_result = {"status": "timeout", "error": "Total delegation timeout exceeded"}

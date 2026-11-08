@@ -113,7 +113,7 @@ export function InterveneRequestList({
                 <TableRow key={req.id} hover>
                   <TableCell>
                     <Typography variant="body2" fontFamily="monospace" fontSize={12}>
-                      {req.agent_session_id.slice(0, 8)}…
+                      {req.agent_session_id?.slice(0, 8) ?? '—'}…
                     </Typography>
                   </TableCell>
                   <TableCell>

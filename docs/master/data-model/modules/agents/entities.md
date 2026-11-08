@@ -568,3 +568,53 @@ erDiagram
 - Script-First execution preference: a `fully_scripted` optimized plan is served as a zero-LLM script; all other scripts are exposed as `script____<name>` tools the LLM orchestrates. Absent, stale, retired, or failed optimized plans fall back to the base-plan LLM path.
 - The base `AgentPlan.fully_scripted` mark flags workflows achievable by a single script (no/typed input); it seeds the optimized-plan authoring, not execution itself.
 - Only Control Center persists registry, plan, and execution data; Agent Runtime consumes them exclusively via CC REST APIs.
+
+## Third-Party Agent Integration Entities
+
+Clients are access grants to an agent type's *input interface* (conversation turn or typed submit) — not identities. `AgentIdentity`, `AgentApiKey`, and `AgentRole` are **unchanged** by this change: clients are a separate table and a separate credential class from API keys (see the security module). `AgentType` gains only a relationship — `AgentType 1:N AgentClient` (a type may be exposed through many clients; the type's `input_type` selects the integration surface — `conversation` → chat widget, `typed` → request/response).
+
+```mermaid
+erDiagram
+    AgentClient {
+        uuid id
+        uuid tenant_id "owning tenant"
+        string name "unique per tenant"
+        string slug "immutable unique per tenant"
+        uuid agent_type_id "FK; exactly one agent type"
+        enum key_type "secret | publishable"
+        string key_hash "SHA-256; raw key never stored"
+        string key_prefix "phn_cl_sk_ | phn_cl_pk_"
+        enum status "active | inactive | revoked"
+        json white_label_theme "publishable: name, avatar, colors"
+        json allowed_origins "publishable: serving origins (secondary control)"
+        int rate_limit "max requests per window"
+        enum rate_limit_window "per_minute | per_hour | per_day"
+        datetime expires_at "NULL = never"
+        datetime last_used_at
+        uuid created_by
+        datetime created_at
+    }
+    AgentClientUsageLog {
+        uuid id
+        uuid client_id "FK"
+        enum action "conversation_turn | submit_request"
+        boolean success
+        string ip_address
+        datetime timestamp
+    }
+    AgentType {
+        uuid id
+        string name
+        enum input_type "none | typed | conversation"
+    }
+
+    AgentType ||--o{ AgentClient : "invoked through"
+    AgentClient ||--o{ AgentClientUsageLog : "audited by"
+```
+
+**Source**: `backend/app/db/models/agent_client.py`
+
+| Entity | Description |
+|--------|-------------|
+| **AgentClient** | Tenant-owned access grant to exactly one agent type; `key_type` is `secret` (server-to-server) or `publishable` (browser-safe) and is immutable once created. Grants input-interface-only access — cannot list/call tools, cannot reach the MCP hub, and cannot impersonate an agent identity. |
+| **AgentClientUsageLog** | Append-only audit record for each client invocation (success and failure); never stores the credential value. |

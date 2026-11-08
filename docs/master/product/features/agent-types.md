@@ -24,6 +24,11 @@ Agent Types define how organizations standardize agent behavior, governance, and
 - Agent types provided by the platform (such as the [Control Center Assistant](control-center-assistant.md)) are marked as system-provided and are protected from user editing and deletion, mirroring system-provided skills and roles
 - An agent type is only considered complete and functional when it has a working model and either an identity or a role, in addition to its capability bindings; the Agent Types area and conversational creation both follow this expectation
 
+## Third-Party Exposure via Clients
+- An agent type may be exposed to third parties through one or more [clients](third-party-agent-integration.md) (one-to-many); each client is bound to exactly one agent type
+- The type's input/output shape selects the integration surface: conversational types power the embeddable white-label chat widget, typed types power the request/response flow
+- Exposure changes nothing about the type's own identity, role, or execution behavior — the type always runs with its configured identity and role
+
 ## Completeness Expectations
 
 - A saved agent type is expected to be **runnable**: a working model plus either an assigned identity or role, plus at least one bound SOP or skill

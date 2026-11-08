@@ -140,6 +140,7 @@ const NAV_GROUPS: NavGroup[] = [
     children: [
       { labelKey: 'nav.mcpHub', path: '/mcp', icon: <HubIcon /> },
       { labelKey: 'nav.apiKeys', path: '/api-keys', icon: <SecurityIcon /> },
+      { labelKey: 'nav.agentClients', path: '/clients', icon: <SecurityIcon /> },
       { labelKey: 'nav.notifications', path: '/notifications', icon: <NotificationsIcon /> },
     ],
   },

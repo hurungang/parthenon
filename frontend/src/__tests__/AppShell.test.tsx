@@ -72,6 +72,8 @@ const AGENTS_CHILDREN = [
 
 const INTEGRATIONS_CHILDREN = [
   'nav.mcpHub',
+  'nav.apiKeys',
+  'nav.agentClients',
   'nav.notifications',
 ] as const
 
@@ -137,14 +139,14 @@ describe('AppShell — sidebar structure', () => {
     expect(AGENTS_CHILDREN).toHaveLength(14)
   })
 
-  it('renders the Integrations group with exactly 2 children (in declaration order)', async () => {
+  it('renders the Integrations group with exactly 4 children (in declaration order)', async () => {
     mockPathname = '/mcp'
     const { AppShell } = await import('../app/AppShell')
     render(<AppShell />, { wrapper })
     for (const label of INTEGRATIONS_CHILDREN) {
       expect(screen.getAllByText(label).length).toBeGreaterThanOrEqual(1)
     }
-    expect(INTEGRATIONS_CHILDREN).toHaveLength(2)
+    expect(INTEGRATIONS_CHILDREN).toHaveLength(4)
   })
 
   it('renders the System group with exactly 3 children (in declaration order)', async () => {

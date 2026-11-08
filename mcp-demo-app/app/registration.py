@@ -12,6 +12,7 @@ async def register_with_hub(
     api_token: str,
     slug: str,
     app_base_url: str,
+    tenant: str = "root",
 ) -> None:
     """Register this demo app with the Parthenon MCP Hub and trigger a tool sync.
 
@@ -19,10 +20,15 @@ async def register_with_hub(
     1. POST /api/v1/mcp/servers — create the server record (slug + base_url).
        On 409, look up the existing record to get the server_id.
     2. POST /api/v1/mcp/servers/{server_id}/sync — trigger tool sync.
+
+    ``tenant`` is sent as the ``X-Tenant`` header so Control Center's
+    tenant-resolution middleware can bind the request context when
+    multi-tenancy is enabled (fail-closed without it → 403).
     """
     headers = {
         "Authorization": f"Bearer {api_token}",
         "Content-Type": "application/json",
+        "X-Tenant": tenant,
     }
     server_payload = {
         "name": "MCP Demo App",

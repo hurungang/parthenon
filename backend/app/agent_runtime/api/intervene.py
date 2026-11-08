@@ -89,6 +89,35 @@ async def resume_session(
         )
         raise HTTPException(status_code=503, detail="Agent Runtime not ready")
 
+    # FIX (conversational resume orphan): a registry miss for a
+    # CONVERSATIONAL session (no AgentJob exists) means the suspended turn
+    # was lost — most likely because a service restart wiped the in-process
+    # registry. Such a resume must NEVER fall into the job path (that
+    # previously caused ``mark_session_running`` failures on a conversation
+    # session id and left the user's chat stuck in "thinking"). Report
+    # ``not_awaiting`` so CC can unblock the chat with an actionable message.
+    try:
+        agent_job = await data_client.get_session(body.session_id)
+    except Exception:
+        logger.warning(
+            "resume_session: could not verify AgentJob for session %s — "
+            "treating as conversation-scoped resume (not_awaiting)",
+            body.session_id,
+            exc_info=True,
+        )
+        agent_job = None
+    if agent_job is None:
+        logger.warning(
+            "resume_session: conversational resume registry miss for session "
+            "%s (likely a service restart orphaned the suspended turn) — "
+            "returning not_awaiting",
+            body.session_id,
+        )
+        return ResumeResponse(
+            session_id=body.session_id,
+            status="not_awaiting",
+        )
+
     # Transition session back to running status
     await data_client.mark_session_running(body.session_id)
     logger.info(

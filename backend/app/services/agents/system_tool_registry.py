@@ -978,160 +978,482 @@ def _register_management_tools() -> None:
 _register_management_tools()
 
 
-# ── Agent-type binding schema enrichment (FIX-20261031-071721) ──────────────
+# ── Typed per-family data schemas (generalized enrichment) ──────────────────
 #
-# create_agent_type / update_agent_type accept optional ``skill_ids`` and
-# ``sop_ids`` (id or name, tenant-scoped) in their ``data`` object to
-# associate skills/SOPs with the agent type.  Semantics: ADDITIVE MERGE —
-# provided entries are added; existing bindings are never removed (no delete
-# verb in this toolset); re-binding an existing pair is an idempotent no-op.
-# Mutating the registered tools in place keeps their stable mcp_hub_ids and
-# parity pairs untouched.
-
-
-def _enrich_agent_type_binding_schemas() -> None:
-    binding_fields: dict[str, Any] = {
-        "skill_ids": {
-            "type": "array",
-            "items": {"type": "string"},
-            "description": "Skill ids or names to associate with the agent "
-            "type (tenant-scoped; unknown value → 404)",
-        },
-        "sop_ids": {
-            "type": "array",
-            "items": {"type": "string"},
-            "description": "SOP ids or names to associate with the agent "
-            "type (tenant-scoped; unknown value → 404)",
-        },
-    }
-    for tool_name, action_verb in (
-        ("create_agent_type", "created"),
-        ("update_agent_type", "updated"),
-    ):
-        tool = SystemToolRegistry.get(tool_name)
-        if tool is None:
-            continue
-        data_prop = tool.parameters.setdefault("properties", {}).setdefault(
-            "data", {"type": "object", "additionalProperties": True}
-        )
-        data_prop.setdefault("properties", {}).update(binding_fields)
-        tool.description = (
-            tool.description
-            + " The data object may include skill_ids and/or sop_ids (ids or "
-            "names) to ASSOCIATE skills/SOPs with the agent type. Bindings are "
-            "additive: provided entries are added to the existing set, existing "
-            "bindings are never removed, and re-binding an already-associated "
-            "skill/SOP is an idempotent no-op. An agent type should always have "
-            f"at least one skill/SOP associated (or an assigned role) by the time it is "
-            f"{action_verb}, otherwise it cannot act."
-        )
-
-
-_enrich_agent_type_binding_schemas()
-
-
-# ── Agent-role grant schema enrichment (FIX-20261031-131030) ────────────────
+# FIX-20261108 (cc-assistant-management-tool-coverage Phase 3): the former
+# one-off enrichment functions (_enrich_agent_type_binding_schemas,
+# _enrich_agent_role_grant_schemas, _enrich_skill_tool_binding_schemas) are
+# subsumed by this single per-family typed schema declaration.  Every
+# create_<resource> / update_<resource> tool's ``data`` object gets NAMED,
+# TYPED, DESCRIBED properties (replacing the free-form
+# ``additionalProperties: true`` pass-through) and the tool description states
+# the full field set, required-vs-optional, and additive-merge list semantics.
+# The registered tools are MUTATED IN PLACE exactly as the old enrichment did,
+# so every ``mcp_hub_id`` and parity pair stays byte-stable.
 #
-# create_agent_role / update_agent_role accept optional ``skill_ids`` and
-# ``sop_ids`` (id or name, tenant-scoped) in their ``data`` object to GRANT
-# skills/SOPs to the role.  Role-based agents resolve their runtime tool
-# access from the role's grants, so granting the skill to the agent's role is
-# what makes it accessible at runtime.  Same additive/idempotent semantics as
-# the agent-type bindings.
+# Field declarations use small schema-builder helpers.  Id-or-name FK fields
+# accept a UUID or the entity's exact name (tenant-scoped; unknown → 404).
+# Enum fields carry their exact value lists (verified against the SQLAlchemy
+# models in app.db.models.agents / scheduling).
+
+_SLUG_PATTERN_HINT = "lowercase letters, digits, hyphens (must match ^[a-z0-9](-?[a-z0-9])*$)"
 
 
-def _enrich_agent_role_grant_schemas() -> None:
-    grant_fields: dict[str, Any] = {
-        "skill_ids": {
-            "type": "array",
-            "items": {"type": "string"},
-            "description": "Skill ids or names to GRANT to the role "
-            "(tenant-scoped; unknown value → 404)",
-        },
-        "sop_ids": {
-            "type": "array",
-            "items": {"type": "string"},
-            "description": "SOP ids or names to GRANT to the role "
-            "(tenant-scoped; unknown value → 404)",
-        },
+def _s(desc: str, *, pattern: str | None = None) -> dict[str, Any]:
+    prop: dict[str, Any] = {"type": "string", "description": desc}
+    if pattern:
+        prop["pattern"] = pattern
+    return prop
+
+
+def _slist(desc: str) -> dict[str, Any]:
+    return {
+        "type": "array",
+        "items": {"type": "string"},
+        "description": desc,
     }
-    for tool_name in ("create_agent_role", "update_agent_role"):
-        tool = SystemToolRegistry.get(tool_name)
-        if tool is None:
-            continue
-        data_prop = tool.parameters.setdefault("properties", {}).setdefault(
-            "data", {"type": "object", "additionalProperties": True}
-        )
-        data_prop.setdefault("properties", {}).update(grant_fields)
-        tool.description = (
-            tool.description
-            + " The data object may include skill_ids and/or sop_ids (ids or "
-            "names) to GRANT skills/SOPs to the role. Role-based agents get "
-            "their runtime tool access from the role's grants, so every "
-            "skill/SOP the agent needs MUST be granted to its role. Grants "
-            "are additive: provided entries are added to the existing set, "
-            "existing grants are never removed, and re-granting an "
-            "already-granted skill/SOP is an idempotent no-op."
-        )
 
 
-_enrich_agent_role_grant_schemas()
-
-
-# ── Skill ↔ tool binding schema enrichment (FIX-20261101-000319) ────────────
-#
-# create_skill / update_skill accept optional ``tool_ids`` and ``tool_names``
-# (canonical ``server____tool`` names — including ``cc____`` Control Center
-# tools — or McpTool UUIDs; tenant-scoped) to associate MCP tools with the
-# skill via ``SkillToolBinding`` rows.  Same additive/idempotent semantics as
-# the agent-type/role bindings.
-
-
-def _enrich_skill_tool_binding_schemas() -> None:
-    binding_fields: dict[str, Any] = {
-        "tool_ids": {
-            "type": "array",
-            "items": {"type": "string"},
-            "description": "MCP tool UUIDs to bind to the skill "
-            "(tenant-scoped; unknown value → 404)",
-        },
-        "tool_names": {
-            "type": "array",
-            "items": {"type": "string"},
-            "description": "Canonical server____tool names to bind to the "
-            "skill (e.g. 'supabase____run_sql', 'cc____create_skill'); "
-            "tenant-scoped; unknown name → 404. Discover a server's tools "
-            "with get_mcp_server first.",
-        },
+def _objlist(desc: str) -> dict[str, Any]:
+    return {
+        "type": "array",
+        "items": {"type": "object", "additionalProperties": True},
+        "description": desc,
     }
-    for tool_name, action_verb in (
-        ("create_skill", "created"),
-        ("update_skill", "updated"),
-    ):
-        tool = SystemToolRegistry.get(tool_name)
-        if tool is None:
+
+
+def _bool_field(desc: str) -> dict[str, Any]:
+    return {"type": "boolean", "description": desc}
+
+
+def _obj_field(desc: str) -> dict[str, Any]:
+    return {"type": "object", "additionalProperties": True, "description": desc}
+
+
+def _enum_field(values: tuple[str, ...], desc: str) -> dict[str, Any]:
+    return {
+        "type": "string",
+        "enum": list(values),
+        "description": f"{desc} Allowed values: {', '.join(values)}.",
+    }
+
+
+#: Exact enum value lists (mirrors of the SQLAlchemy models — verified by the
+#: registry invariant test against app.db.models).
+_INPUT_TYPES: tuple[str, ...] = ("none", "typed", "conversation")  # AgentInputType
+_OUTPUT_TYPES: tuple[str, ...] = ("auto", "typed", "markdown")  # AgentOutputType
+_IDENTITY_TYPES: tuple[str, ...] = (
+    "realm_user",
+    "oauth",
+    "service_account",
+    "user_delegate",
+)  # AgentIdentityType
+_IDENTITY_STATUSES: tuple[str, ...] = (
+    "active",
+    "suspended",
+    "deprovisioned",
+)  # AgentIdentityStatus
+_PROVIDER_TYPES: tuple[str, ...] = (
+    "openai",
+    "anthropic",
+    "litellm_proxy",
+    "azure_openai",
+    "gemini",
+    "mistral",
+    "cohere",
+    "groq",
+    "together",
+    "fireworks",
+    "perplexity",
+    "deepseek",
+)  # ModelProvider
+_TOKEN_ENFORCEMENT_MODES: tuple[str, ...] = ("observe", "enforce")
+_TOKEN_FALLBACK_MODES: tuple[str, ...] = (
+    "observe_and_log",
+    "stop_on_next_hard_guardrail",
+)
+_CONVERSATIONAL_VISIBILITY_MODES: tuple[str, ...] = ("enabled", "disabled")
+_CONVERSATIONAL_CONTINUATION_POLICIES: tuple[str, ...] = ("allow",)
+_TARGET_TYPES: tuple[str, ...] = ("agent",)  # JobTargetType
+
+_ID_OR_NAME = "(accepts a UUID or the entity's exact name, tenant-scoped; unknown value fails with 404 and no partial write)"
+
+_GUARDRAIL_FIELDS: dict[str, Any] = {
+    "guardrail_max_iterations": {
+        "type": "integer",
+        "description": "Guardrail: max LLM iterations per execution (1–1000; default 10).",
+    },
+    "guardrail_max_delegation_depth": {
+        "type": "integer",
+        "description": "Guardrail: max agent-to-agent delegation depth (0–32; default 3).",
+    },
+    "guardrail_max_delegated_steps": {
+        "type": "integer",
+        "description": "Guardrail: max delegated steps across the delegation tree (0–5000; default 20).",
+    },
+    "guardrail_execution_timeout_seconds": {
+        "type": "integer",
+        "description": "Guardrail: whole-execution timeout in seconds (1–86400; default 300).",
+    },
+    "guardrail_token_budget": {
+        "type": "integer",
+        "description": "Guardrail: optional token budget per execution (1–10000000; omit for none).",
+    },
+    "guardrail_token_enforcement_mode": _enum_field(
+        _TOKEN_ENFORCEMENT_MODES,
+        "Guardrail token enforcement mode (default observe; conversational agent types cannot use enforce).",
+    ),
+    "guardrail_token_fallback_mode": _enum_field(
+        _TOKEN_FALLBACK_MODES,
+        "Guardrail fallback when the provider cannot hard-enforce tokens (default observe_and_log).",
+    ),
+    "guardrail_conversational_token_visibility_mode": _enum_field(
+        _CONVERSATIONAL_VISIBILITY_MODES,
+        "Whether conversational token-usage snapshots are emitted (default enabled).",
+    ),
+    "guardrail_conversational_continuation_policy": _enum_field(
+        _CONVERSATIONAL_CONTINUATION_POLICIES,
+        "Conversational continuation behavior after the token threshold is reached (default allow).",
+    ),
+}
+
+_SOP_STEP_TYPES: tuple[str, ...] = ("skill_invocation", "agent_delegation")  # SopStepType
+
+_SOP_STEP_ITEMS: dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        "order": {
+            "type": "integer",
+            "description": "REQUIRED integer position of the step in the ordered list.",
+        },
+        "step_type": _enum_field(
+            _SOP_STEP_TYPES,
+            "Kind of step (default skill_invocation).",
+        ),
+        "skill_id": _s(
+            f"Skill {_ID_OR_NAME} — REQUIRED for skill_invocation steps; not allowed on agent_delegation steps."
+        ),
+        "target_agent_type_id": _s(
+            f"Target agent type {_ID_OR_NAME} — REQUIRED for agent_delegation steps; "
+            "not allowed on skill_invocation steps. Delegation steps gate the permissions "
+            "of every role bound to this SOP."
+        ),
+        "name": _s("Optional short step name."),
+        "description": _s("Optional step description."),
+        "step_config": _obj_field("Optional JSON configuration for the step."),
+    },
+    "required": ["order"],
+    "additionalProperties": False,
+}
+
+#: Per-family ``data`` field declarations.  ``create`` / ``update`` select
+#: which optional extras apply; ``required_create`` lists fields the handler
+#: rejects a create without; ``merge`` lists additive-merge list fields.
+_MANAGEMENT_DATA_FIELDS: dict[str, dict[str, Any]] = {
+    "skill": {
+        "fields": {
+            "description": _s("Short description of what the skill does."),
+            "instructions": _s("Skill instructions shown to agents that invoke it."),
+            "is_active": _bool_field("Whether the skill is active (default true)."),
+            "tool_ids": _slist(
+                f"MCP tool UUIDs to BIND to the skill {_ID_OR_NAME}. Bindings are "
+                "additive and idempotent. Discover tools with get_mcp_server first."
+            ),
+            "tool_names": _slist(
+                "Canonical server____tool names to BIND to the skill "
+                "(e.g. 'supabase____run_sql', 'cc____create_skill'); bindings are "
+                "additive and idempotent; tenant-scoped; unknown name → 404. "
+                "cc____ tools are Control Center management capabilities."
+            ),
+        },
+        "required_create": (),
+        "merge": ("tool_ids", "tool_names"),
+        "merge_note": (
+            "TOOL BINDINGS are ADDITIVE: provided tools are added to the existing set, "
+            "existing bindings are never removed, re-binding is an idempotent no-op, and "
+            "an unknown tool fails the whole call with 404 (no partial write). A skill "
+            "without at least one bound tool cannot do anything."
+        ),
+    },
+    "sop": {
+        "fields": {
+            "description": _s("Short description of the SOP."),
+            "instructions": _s("SOP instructions / procedure body."),
+            "is_active": _bool_field("Whether the SOP is active (default true)."),
+            "steps": {
+                "type": "array",
+                "items": _SOP_STEP_ITEMS,
+                "description": (
+                    "Ordered SOP steps. REPLACE semantics: on update_sop the provided list "
+                    "REPLACES the entire existing step list — omitted steps are DELETED — so "
+                    "ALWAYS send the complete desired list (omitting 'steps' leaves them "
+                    "untouched). Each skill_invocation step REQUIRES skill_id (skill id or "
+                    "exact name); each agent_delegation step REQUIRES target_agent_type_id "
+                    "(agent type id or exact name) — delegation steps gate the role "
+                    "permissions of every role bound to the SOP."
+                ),
+            },
+        },
+        "required_create": (),
+        "merge": (),
+        "update_note": (
+            "STEP LIST is a FULL REPLACEMENT, not additive: when 'steps' is present in an "
+            "update it replaces the whole ordered list and omitted steps are deleted; when "
+            "'steps' is absent the existing steps are untouched. Replacing steps invalidates "
+            "the permission cache of every role bound to the SOP (agent_delegation steps "
+            "affect allowed agent types)."
+        ),
+    },
+    "agent_type": {
+        "fields": {
+            "description": _s("Short description of the agent type."),
+            "identity_id": _s(f"Agent identity to attach to the type {_ID_OR_NAME}."),
+            "role_id": _s(f"Agent role to attach to the type {_ID_OR_NAME}."),
+            "model_id": _s(
+                "Provider-scoped model identifier (e.g. 'gpt-4o') — must exist in an "
+                "ENABLED model of a tenant Model Configuration (see list_model_configs)."
+            ),
+            "is_active": _bool_field("Whether the agent type is active (default true)."),
+            "system_instruction": _s("System instruction for the agent."),
+            "input_type": _enum_field(
+                _INPUT_TYPES,
+                "How the agent accepts input (default none). Conversational types cannot take output_data_type_id.",
+            ),
+            "input_schema": _obj_field("JSON schema for typed input (input_type=typed)."),
+            "output_type": _enum_field(_OUTPUT_TYPES, "How the agent produces output (default auto)."),
+            "output_schema": _obj_field("JSON schema for typed output."),
+            "output_data_type_id": _s(
+                f"Agent Data Type for typed outputs {_ID_OR_NAME}. REJECTED for conversational "
+                "(input_type=conversation) agent types — structured 400."
+            ),
+            "skill_ids": _slist(f"Skill ids or names to ASSOCIATE with the agent type {_ID_OR_NAME}; bindings are additive and idempotent."),
+            "sop_ids": _slist(f"SOP ids or names to ASSOCIATE with the agent type {_ID_OR_NAME}; bindings are additive and idempotent."),
+            **_GUARDRAIL_FIELDS,
+        },
+        "required_create": (),
+        "merge": ("skill_ids", "sop_ids"),
+        "merge_note": (
+            "SKILL/SOP BINDINGS are ADDITIVE: provided entries are added, existing bindings "
+            "are never removed, re-binding is an idempotent no-op. An agent type should always "
+            "have at least one skill/SOP associated (or an assigned role) by the time it is "
+            "written, otherwise it cannot act."
+        ),
+    },
+    "agent_role": {
+        "fields": {
+            "description": _s("Short description of the role."),
+            "skill_ids": _slist(f"Skill ids or names to GRANT to the role {_ID_OR_NAME}; grants are additive and idempotent."),
+            "sop_ids": _slist(f"SOP ids or names to GRANT to the role {_ID_OR_NAME}; grants are additive and idempotent."),
+            "mcp_session_mappings": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "server": _s(f"MCP server {_ID_OR_NAME} — REQUIRED."),
+                        "session": _s(
+                            "MCP session id, or the session NAME scoped to that server "
+                            "(session names are unique per server) — REQUIRED; must belong "
+                            "to that server."
+                        ),
+                    },
+                    "required": ["server", "session"],
+                    "additionalProperties": False,
+                },
+                "description": (
+                    "Explicit MCP session mappings for the role (each {server, session}, "
+                    "both id-or-name) — one session per MCP "
+                    "server (agent MCP tools only work when the role maps a session for "
+                    "every server its skills touch). Additive: mappings are added, never "
+                    "removed or re-pointed. After explicit mappings, defaults apply "
+                    "automatically so EVERY server ends up mapped: a server with a "
+                    "passthrough session defaults to it; a server with exactly one "
+                    "session defaults to that; a server with MULTIPLE sessions defaults "
+                    "to the FIRST one (is_default first, then oldest) and the tool "
+                    "response carries a warning — CONFIRM the defaulted session with the "
+                    "user (alternatives are listed in the warning) and re-map if needed."
+                ),
+            },
+        },
+        "required_create": (),
+        "merge": ("skill_ids", "sop_ids", "mcp_session_mappings"),
+        "merge_note": (
+            "GRANTS are ADDITIVE: provided entries are added, existing grants are never "
+            "removed, re-granting is an idempotent no-op. Role-based agents get their runtime "
+            "tool access from the role's grants, so every skill/SOP the agent needs MUST be "
+            "granted to its role. MCP SESSION MAPPINGS: one session per server per role; "
+            "mappings are added, never removed or re-pointed (re-mapping a server to a "
+            "different session is a 409 conflict). Every MCP server the role's skills touch "
+            "needs a mapped session or the MCP tools will not work for agents using the "
+            "role — check the response 'warnings' for multi-session servers that were "
+            "defaulted to the first session and confirm the choice with the user "
+            "(alternatives are listed in the warning)."
+        ),
+    },
+    "agent_identity": {
+        "fields": {
+            "description": _s("Short description of the identity (not a write field on create)."),
+            "realm_name": _s("Agent-realm name the identity lives in."),
+            "realm_username": _s("Username within the agent realm."),
+            "status": _enum_field(_IDENTITY_STATUSES, "Lifecycle status (default active)."),
+            "identity_type": _enum_field(
+                _IDENTITY_TYPES,
+                "Type of OIDC principal (create only, default realm_user; not updatable).",
+            ),
+            "role_ids": _slist(
+                f"Role ids or names to ASSIGN to the identity {_ID_OR_NAME} (update only; "
+                "assignments are additive and idempotent)."
+            ),
+        },
+        "required_create": (),
+        "create_only": ("identity_type",),
+        "update_only": ("role_ids",),
+        "merge": ("role_ids",),
+        "merge_note": (
+            "ROLE ASSIGNMENTS are ADDITIVE: provided roles are added, existing assignments "
+            "are never removed, re-assigning is an idempotent no-op. Tokens and credentials "
+            "are never accepted or returned."
+        ),
+    },
+    "model_config": {
+        "fields": {
+            "display_name": _s("Display name (alternative key to the top-level name argument)."),
+            "provider_type": _enum_field(_PROVIDER_TYPES, "LLM provider (REQUIRED at create)."),
+            "api_base_url": _s("Optional API base URL override."),
+            "api_key": _s(
+                "WRITE-ONLY API key — accepted and encrypted at storage, NEVER echoed in any result."
+            ),
+            "enabled_models": _slist("Model identifiers enabled for this config."),
+            "is_disabled": _bool_field("Vendor-level disable toggle (default false)."),
+        },
+        "required_create": ("provider_type",),
+        "merge": (),
+    },
+    "schedule": {
+        "fields": {
+            "description": _s("Short description of the schedule."),
+            "cron_expression": _s(
+                "Cron expression (e.g. '0 9 * * *'); alias 'cron' accepted. REQUIRED at create."
+            ),
+            "cron": _s("Alias for cron_expression."),
+            "payload": _obj_field("JSON object payload passed to the target on each trigger."),
+            "target_type": _enum_field(
+                _TARGET_TYPES, "Schedule target type (create only, default agent; immutable after create)."
+            ),
+            "target_id": _s(
+                f"Target entity (agent type) {_ID_OR_NAME}. REQUIRED at create; immutable after create."
+            ),
+            "agent_type_id": _s("Alias for target_id for agent schedules."),
+        },
+        "required_create": ("cron_expression", "target_id"),
+        "create_only": ("target_type", "target_id", "agent_type_id", "cron"),
+        "update_only": (),
+        "merge": (),
+        "update_note": (
+            "Updates accept name, description, cron_expression and payload only — "
+            "target_type/target_id are immutable after create; changing the cron expression "
+            "re-registers the schedule with the scheduler."
+        ),
+    },
+    "data_type": {
+        "fields": {
+            "description": _s("Short description of the data type."),
+            "slug": _s(
+                f"URL-safe slug, unique per tenant (create only; REQUIRED at create; immutable after create). Pattern: {_SLUG_PATTERN_HINT}."
+            ),
+            "fields": _objlist(
+                "Typed field definitions (each: name, type one of string/number/boolean/date/enum, "
+                "required, enum values when type=enum). At least one field; duplicate field names rejected. REQUIRED at create."
+            ),
+        },
+        "required_create": ("slug", "fields"),
+        "create_only": ("slug",),
+        "merge": (),
+    },
+    "mcp_server": {
+        "fields": {
+            "description": _s("Short description of the server connection."),
+            "slug": _s(
+                f"URL-safe slug, unique per tenant (create only; REQUIRED at create; immutable after create). Pattern: {_SLUG_PATTERN_HINT}."
+            ),
+            "base_url": _s("Base URL of the MCP server (REQUIRED at create)."),
+        },
+        "required_create": ("slug", "base_url"),
+        "create_only": ("slug",),
+        "merge": (),
+    },
+}
+
+
+def _apply_typed_management_schemas() -> None:
+    """Mutate every registered create/update management tool in place.
+
+    Replaces the free-form ``data`` pass-through with the per-family typed
+    declaration and rewrites the tool description to state the full field
+    set, required-vs-optional, and additive-merge list semantics.  In-place
+    mutation keeps every ``mcp_hub_id`` and parity pair byte-stable.
+    """
+    for singular, plural, resource_type, _create_action, _update_action in _MANAGEMENT_RESOURCES:
+        decl = _MANAGEMENT_DATA_FIELDS.get(singular)
+        if decl is None:
             continue
-        data_prop = tool.parameters.setdefault("properties", {}).setdefault(
-            "data", {"type": "object", "additionalProperties": True}
-        )
-        data_prop.setdefault("properties", {}).update(binding_fields)
-        tool.description = (
-            tool.description
-            + " The data object may include tool_ids and/or tool_names "
-            "(canonical server____tool names or UUIDs) to BIND MCP tools to "
-            "the skill — a skill can only invoke tools BOUND to it. Bindings "
-            "are additive: provided tools are added to the existing set, "
-            "existing bindings are never removed, and re-binding an "
-            "already-bound tool is an idempotent no-op. Discover an MCP "
-            "server's synced tools with get_mcp_server (its 'tools' list) "
-            "before binding. cc____ tools are Control Center management "
-            "capabilities, distinct from general system____ tools. Skills "
-            "without at least one bound tool cannot do anything. An unknown "
-            "tool fails the whole call with 404 (no partial write)."
-        )
+        all_fields: dict[str, Any] = decl["fields"]
+        create_only = set(decl.get("create_only", ()))
+        update_only = set(decl.get("update_only", ()))
+        required_create = list(decl.get("required_create", ()))
+        merge_fields = decl.get("merge", ())
+        merge_note = decl.get("merge_note") or ""
+        update_note = decl.get("update_note") or ""
+
+        for verb in ("create", "update"):
+            tool = SystemToolRegistry.get(f"{verb}_{singular}")
+            if tool is None:
+                continue
+            excluded = update_only if verb == "create" else create_only
+            applicable = {
+                field: schema
+                for field, schema in all_fields.items()
+                if field not in excluded
+            }
+            # ``description`` is a common top-level arg handled by the
+            # generic registration; the handlers also accept it in data, so
+            # keep it typed in data too (it already lives in all_fields).
+            data_prop = tool.parameters.setdefault("properties", {}).setdefault(
+                "data", {"type": "object"}
+            )
+            data_prop["type"] = "object"
+            data_prop["properties"] = dict(applicable)
+            data_prop["additionalProperties"] = False
+            data_prop["description"] = (
+                f"Field values for the {singular.replace('_', ' ')} — accepts ONLY the "
+                "named properties listed; unknown fields are rejected with a structured "
+                "error naming the accepted set."
+            )
+            if verb == "create" and required_create:
+                data_prop["required"] = required_create
+
+            required_txt = ""
+            if verb == "create" and required_create:
+                required_txt = (
+                    f" Required in data at create: {', '.join(required_create)}."
+                )
+            merge_txt = ""
+            if merge_note:
+                applicable_merges = [f for f in merge_fields if f in applicable]
+                if applicable_merges:
+                    merge_txt = f" Additive-merge list fields: {', '.join(applicable_merges)}."
+                merge_txt += f" {merge_note}"
+            extra_txt = update_note if (verb == "update" and update_note) else ""
+            tool.description = (
+                f"{tool.description} The data object accepts exactly these fields: "
+                f"{', '.join(applicable)}.{required_txt} Each property is typed and "
+                "described in the schema; enum properties list their allowed values; "
+                "id/name reference fields accept a UUID or the entity's exact name "
+                "(tenant-scoped; unknown value → 404, no partial write)."
+                f"{merge_txt}{extra_txt}"
+            )
 
 
-_enrich_skill_tool_binding_schemas()
+_apply_typed_management_schemas()
 
 
 # ═══════════════════════════════════════════════════════════════════════════

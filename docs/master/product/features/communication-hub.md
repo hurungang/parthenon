@@ -36,6 +36,9 @@ The Communication Hub provides centralized, reliable message routing between the
 - **Runtime Map Fixture**: On the Agent Runtime Monitor, the Communication Hub is rendered as a full-height fixture with its MCP servers attached and the tools they expose as chips. Every agent tool call is drawn as a route from the agent, through the hub, to the MCP server that served it, so operators can see at a glance what each agent is currently doing.
 
 
+## Client-Invocation Gateway
+In addition to the MCP protocol server, the Communication Hub exposes a **client-invocation gateway** for [third-party agent integration](third-party-agent-integration.md). It authenticates requests with **client** credentials — a separate, non-identity credential class of type **secret** (server-to-server) or **publishable** (browser-safe, origin-allowlisted) — and routes conversational turns and typed submissions to the bound agent type's input interface. A client cannot impersonate an agent identity, call tools, or reach the MCP hub; it reaches only the target agent type's input interface.
+
 ## Central Tool Router
 
 The Communication Hub acts as the **central router for all tool calls** made by agents during execution. Every tool call — whether targeting a built-in platform tool or an external MCP server tool — is forwarded by the Agent Runtime to the Communication Hub, which resolves the appropriate handler using the unified `server____tool` naming convention.
@@ -70,6 +73,9 @@ This design centralizes routing, ensures consistent authorization, and allows ne
 - On the Agent Runtime Monitor, the Communication Hub is shown as a full-height fixture with its MCP servers and tool chips, and each agent's tool calls are drawn as routes from the agent, through the hub, to the MCP server that served the call, with the most recent call highlighted
 - Internal Agent Runtime mTLS certificate authentication is unchanged
 - All API key authentication events (success and failure) are logged for security monitoring
+- Client-credential invocations reach only the bound agent type's input interface; attempts to call tools or impersonate an identity are rejected
+- Invalid, revoked, or origin-violating client credentials receive a clear error; per-client rate limits are enforced
+- All client invocations (success and failure) are logged for security monitoring, never including the credential value
 
 ## Out of Scope
 - Direct database access from the Communication Hub (all data access is proxied through Control Center)

@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate, useLocation } from 'react-router-dom'
 import {
+  Alert,
   Box,
   Button,
   Chip,
@@ -124,7 +125,10 @@ export function AgentManagementPage() {
       navigate(location.pathname, { replace: true, state: {} })
     } else if (state?.editAgentType) {
       // Open edit dialog for the agent type passed via state
-      handleOpenEdit(state.editAgentType)
+      // (system agent types are refused inside handleOpenEdit)
+      if (!state.editAgentType.is_system) {
+        handleOpenEdit(state.editAgentType)
+      }
       // Clear the state so it doesn't reopen on next navigation
       navigate(location.pathname, { replace: true, state: {} })
     }
@@ -138,6 +142,8 @@ export function AgentManagementPage() {
   }
 
   const handleOpenEdit = (at: AgentType) => {
+    // System agent types are backend-protected — refuse to open the editor.
+    if (at.is_system) return
     setEditType(at)
     setForm({
       name: at.name,
@@ -446,6 +452,15 @@ export function AgentManagementPage() {
           {editType ? t('agents.editType') : t('agents.createType')}
         </DialogTitle>
         <DialogContent dividers>
+          {/* System agent types are read-only in the editor (defense in
+              depth — the edit path is already guarded upstream). */}
+          {editType?.is_system && (
+            <Alert severity="info" sx={{ mb: 2 }}>
+              {t('agents.types.systemReadOnly', {
+                defaultValue: t('agents.types.systemProtected'),
+              })}
+            </Alert>
+          )}
           {dialogError ? (
             <QuotaBlockedAlert error={dialogError} fallbackMessage={t('app.error')} />
           ) : null}
@@ -455,7 +470,10 @@ export function AgentManagementPage() {
               <Typography mt={2}>{t('agents.generatingPlan', 'Generating implementation plan…')}</Typography>
             </Box>
           ) : (
-            <Box pt={1}>
+            <Box
+              pt={1}
+              sx={editType?.is_system ? { pointerEvents: 'none', opacity: 0.6 } : undefined}
+            >
               <AgentTypeForm values={form} onChange={setForm} />
             </Box>
           )}
@@ -464,13 +482,15 @@ export function AgentManagementPage() {
           <Button onClick={() => { setDialogOpen(false); setDialogError(null) }} disabled={saving}>
             {t('app.cancel')}
           </Button>
-          <Button
-            variant="contained"
-            onClick={handleSave}
-            disabled={!form.name.trim() || invalidAgentName || saving || (form.sop_bindings.length === 0 && form.skill_bindings.length === 0)}
-          >
-            {t('app.save')}
-          </Button>
+          {!editType?.is_system && (
+            <Button
+              variant="contained"
+              onClick={handleSave}
+              disabled={!form.name.trim() || invalidAgentName || saving || (form.sop_bindings.length === 0 && form.skill_bindings.length === 0)}
+            >
+              {t('app.save')}
+            </Button>
+          )}
         </DialogActions>
       </Dialog>
 

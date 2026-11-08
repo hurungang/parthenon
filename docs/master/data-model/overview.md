@@ -1150,6 +1150,62 @@ erDiagram
 
 ---
 
+## Third-Party Agent Integration
+
+Third-party systems invoke Parthenon **agent types** through **clients** — a client is an access grant to an agent type's *input interface* (conversation turn or typed submit), not an identity. This is separate from the existing **API key** (above), which authenticates *as* an agent identity (with a role) for MCP tool access; the two primitives are deliberately distinct. A client is bound to exactly one agent type and carries a credential of type `secret` (server-to-server) or `publishable` (browser-safe); the agent type runs with its own identity + role exactly as configured.
+
+```mermaid
+erDiagram
+    AgentType {
+        uuid id
+        string name
+        enum input_type "none | typed | conversation"
+        uuid identity_id "agent's own identity"
+        uuid role_id "agent's own role"
+    }
+    AgentClient {
+        uuid id
+        uuid tenant_id "owning tenant"
+        string name "unique per tenant"
+        string slug "immutable unique per tenant"
+        uuid agent_type_id "FK; exactly one agent type"
+        enum key_type "secret | publishable"
+        string key_hash "SHA-256; raw key never stored"
+        string key_prefix "phn_cl_sk_ | phn_cl_pk_"
+        enum status "active | inactive | revoked"
+        json white_label_theme "publishable: name, avatar, colors"
+        json allowed_origins "publishable: serving origins (secondary control)"
+        int rate_limit "max requests per window"
+        enum rate_limit_window "per_minute | per_hour | per_day"
+        datetime expires_at "NULL = never"
+        datetime last_used_at
+        uuid created_by
+        datetime created_at
+    }
+    AgentClientUsageLog {
+        uuid id
+        uuid client_id "FK"
+        enum action "conversation_turn | submit_request"
+        boolean success
+        string ip_address
+        datetime timestamp
+    }
+
+    AgentType ||--o{ AgentClient : "invoked through"
+    AgentClient ||--o{ AgentClientUsageLog : "audited by"
+```
+
+**Business rules:**
+- A `publishable` client is safe to embed in a browser because it only grants "invoke this one agent type's input interface" — it is not an identity and cannot be used to list/call tools or impersonate an agent.
+- A `secret` client is server-side; the consumer's backend controls input and may optionally pass an end-user identity (dual identity) which is validated and tenant-matched.
+- Rate limits are enforced per client; origin checks are a secondary anti-abuse/branding control.
+- Third parties never receive identity tokens, database credentials, or decrypted secrets.
+- Creating a `publishable` client for an agent type exposes that type's full behavior publicly — surfaced to the tenant via a soft warning (no hard block).
+
+**Source**: `backend/app/db/models/agent_client.py`
+
+---
+
 ## Communication, Conversations & Runtime Topology
 
 ```mermaid
@@ -1497,4 +1553,6 @@ erDiagram
     Tenant ||--o{ TenantLicense : "is entitled by"
     Tenant ||--o{ TenantQuotaUsage : "accumulates quota usage for"
     Tenant ||--o{ TenantSetting : "owns configuration for"
+    AgentType ||--o{ AgentClient : "invoked through"
+    AgentClient ||--o{ AgentClientUsageLog : "audited by"
 ```

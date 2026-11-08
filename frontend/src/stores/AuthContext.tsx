@@ -193,6 +193,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const setToken = useCallback((newToken: string) => {
     localStorage.setItem('access_token', newToken)
     setTokenState(newToken)
+    // Broadcast the renewed access token so long-lived features (e.g. open
+    // chat WebSockets) can push it to the backend before the old JWT cached
+    // server-side expires and management tool calls lose their user context.
+    window.dispatchEvent(
+      new CustomEvent('parthenon:access_token_refreshed', { detail: { token: newToken } }),
+    )
   }, [])
 
   // Discover active providers and super admin status on app load.

@@ -1,0 +1,735 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Parthenon — Third-Party Agent Integration (Final UX)</title>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --primary:#2563EB;--primary-dark:#1D4ED8;--primary-light:#DBEAFE;
+  --sidebar-bg:#FFFFFF;--sidebar-text:#424242;--sidebar-active-bg:rgba(0,0,0,0.06);
+  --sidebar-hover-bg:rgba(0,0,0,0.03);--sidebar-active-text:#2563EB;
+  --surface:#FFFFFF;--bg:#FAFAFA;--border:#E0E0E0;
+  --success:#4CAF50;--warning:#FF9800;--error:#F44336;--info:#2196F3;
+  --text-primary:#212121;--text-secondary:#757575;
+  --shadow:0 1px 2px 0 rgba(60,64,67,0.3),0 1px 3px 1px rgba(60,64,67,0.15);
+  --shadow-md:0 4px 6px 0 rgba(60,64,67,0.3),0 4px 8px 3px rgba(60,64,67,0.15);
+  --radius:8px;--radius-sm:4px;--radius-lg:12px;
+  --sidebar-w:240px;--topbar-h:64px;--transition:0.2s ease;
+}
+html,body{height:100%;font-family:'Inter','Roboto',system-ui,sans-serif;background:var(--bg);color:var(--text-primary);font-size:14px;line-height:1.5}
+button{cursor:pointer;font-family:inherit;font-size:14px}
+input,select,textarea{font-family:inherit;font-size:14px}
+.app-shell{display:flex;height:100vh;overflow:hidden}
+.sidebar{width:var(--sidebar-w);background:var(--sidebar-bg);color:var(--sidebar-text);display:flex;flex-direction:column;flex-shrink:0;overflow-y:auto;border-right:1px solid var(--border)}
+.sidebar-logo{padding:20px 20px 16px;border-bottom:1px solid var(--border)}
+.sidebar-logo h1{font-size:17px;font-weight:700;color:var(--text-primary)}
+.sidebar-logo small{font-size:11px;color:var(--text-secondary);letter-spacing:.5px;text-transform:uppercase}
+.nav-group-label{padding:14px 20px 4px;font-size:11px;font-weight:700;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.6px}
+.nav-item{display:flex;align-items:center;gap:8px;padding:9px 14px;cursor:pointer;transition:background var(--transition);border-radius:var(--radius);margin:2px 6px;color:var(--sidebar-text);font-size:13px;user-select:none}
+.nav-item:hover{background:var(--sidebar-hover-bg)}
+.nav-item.active{background:var(--sidebar-active-bg);color:var(--sidebar-active-text);font-weight:500}
+.nav-item .nav-icon{font-size:14px;width:18px;text-align:center;flex-shrink:0}
+.topbar{height:var(--topbar-h);background:var(--surface);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 24px;gap:16px;flex-shrink:0}
+.topbar-title{font-size:18px;font-weight:600;flex:1}
+.avatar{width:34px;height:34px;border-radius:50%;background:var(--primary);color:#fff;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:600}
+.main-wrapper{flex:1;display:flex;flex-direction:column;overflow:hidden;min-width:0}
+.main-content{flex:1;overflow-y:auto;padding:24px}
+.view{display:none}.view.active{display:block}
+.view-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;gap:16px}
+.view-header h2{font-size:21px;font-weight:600}
+.view-desc{font-size:13px;color:var(--text-secondary);margin-top:3px}
+.btn{display:inline-flex;align-items:center;gap:6px;padding:8px 16px;border-radius:var(--radius-sm);border:none;font-weight:500;transition:all var(--transition);white-space:nowrap}
+.btn-primary{background:var(--primary);color:#fff;box-shadow:var(--shadow)}.btn-primary:hover{background:var(--primary-dark)}
+.btn-primary:disabled{background:#B6C6E3;cursor:not-allowed;box-shadow:none}
+.btn-secondary{background:var(--surface);color:var(--text-primary);border:1px solid var(--border)}.btn-secondary:hover{background:var(--bg)}
+.btn-danger{background:#FEF2F2;color:#B91C1C;border:1px solid #FECACA}.btn-danger:hover{background:#FEE2E2}
+.btn-sm{padding:5px 12px;font-size:12px}
+.card{background:var(--surface);border-radius:var(--radius);border:1px solid var(--border);box-shadow:var(--shadow)}
+.card-header{padding:14px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:12px}
+.card-header h3{font-size:15px;font-weight:600}
+.card-body{padding:20px}
+.table-wrap{background:var(--surface);border-radius:var(--radius);border:1px solid var(--border);box-shadow:var(--shadow);overflow:hidden}
+table{width:100%;border-collapse:collapse}
+thead{background:#F8FAFC}
+thead th{padding:10px 16px;text-align:left;font-size:12px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid var(--border)}
+tbody tr{border-bottom:1px solid var(--border)}
+tbody tr:hover{background:#F8FAFC}
+tbody td{padding:12px 16px;vertical-align:middle}
+tbody tr:last-child{border-bottom:none}
+.chip{display:inline-block;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:500;background:var(--primary-light);color:var(--primary);margin-right:4px}
+.chip.key-secret{background:#EDE9FE;color:#6D28D9}
+.chip.key-publishable{background:#DBEAFE;color:#1D4ED8}
+.chip.status-active{background:#E6F4EA;color:#1E7E34}
+.chip.status-inactive{background:#F1F5F9;color:#64748B}
+.chip.mono{font-family:'SF Mono',Menlo,monospace;text-transform:none;letter-spacing:0}
+.actions-cell{display:flex;gap:4px;flex-wrap:wrap}
+.badge-dot{width:8px;height:8px;border-radius:50%;display:inline-block;margin-right:6px;background:var(--success)}
+.badge-dot.gray{background:#94A3B8}
+.mono{font-family:'SF Mono',Menlo,monospace;font-size:12px}
+.field{margin-bottom:14px}
+.field label{display:block;font-size:12px;font-weight:600;color:var(--text-secondary);margin-bottom:5px;text-transform:uppercase;letter-spacing:.4px}
+.field input,.field select,.field textarea{width:100%;padding:8px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:13.5px;background:#fff}
+.field input[readonly],.field input:disabled{background:#F8FAFC;color:var(--text-secondary)}
+.field textarea{resize:vertical;min-height:64px}
+.field .hint{font-size:11.5px;color:var(--text-secondary);margin-top:4px}
+.field-row{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:0 16px}
+.form-grid .full{grid-column:1/-1}
+/* Searchable dropdown */
+.combo{position:relative}
+.combo-list{position:absolute;top:100%;left:0;right:0;background:#fff;border:1px solid var(--border);border-radius:var(--radius-sm);box-shadow:var(--shadow-md);z-index:50;max-height:180px;overflow-y:auto;display:none}
+.combo-list.open{display:block}
+.combo-option{padding:8px 12px;font-size:13px;cursor:pointer;display:flex;justify-content:space-between;align-items:center}
+.combo-option:hover{background:var(--primary-light)}
+.combo-option.selected{background:var(--primary-light);font-weight:600}
+/* Dialog */
+.dialog-backdrop{position:fixed;inset:0;background:rgba(0,0,0,0.4);display:none;align-items:center;justify-content:center;z-index:1000}
+.dialog-backdrop.open{display:flex}
+.dialog{background:#fff;border-radius:var(--radius-lg);box-shadow:var(--shadow-md);width:640px;max-width:94vw;max-height:90vh;display:flex;flex-direction:column}
+.dialog-header{padding:16px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
+.dialog-header h3{font-size:16px;font-weight:600}
+.dialog-body{padding:20px;overflow-y:auto}
+.dialog-footer{padding:14px 20px;border-top:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;gap:10px}
+.dialog-footer .footer-actions{display:flex;gap:10px;margin-left:auto}
+.close-x{background:none;border:none;font-size:20px;color:var(--text-secondary);line-height:1}
+/* Toast */
+.toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#323232;color:#fff;padding:10px 18px;border-radius:var(--radius);box-shadow:var(--shadow-md);display:none;z-index:2000;font-size:13px}
+.toast.show{display:block}
+/* Warnings / notes */
+.warn-banner{background:#FFF8E1;border:1px solid #FFE082;border-radius:var(--radius);padding:12px 16px;font-size:13px;color:#6D4C00;margin:12px 0}
+.note{background:#EFF6FF;border:1px solid #BFDBFE;border-radius:var(--radius);padding:12px 16px;font-size:13px;color:#1E40AF;margin-top:16px}
+.inline-warn{display:none;background:#FFF8E1;border:1px solid #FFE082;border-radius:var(--radius-sm);padding:8px 12px;font-size:12px;color:#6D4C00;margin-top:8px}
+.inline-warn.show{display:block}
+/* Tabs */
+.tab-bar{display:flex;gap:4px;border-bottom:1px solid var(--border);margin-bottom:16px}
+.tab{background:none;border:none;padding:8px 16px;font-weight:500;color:var(--text-secondary);border-bottom:2px solid transparent}
+.tab.active{color:var(--primary);border-bottom-color:var(--primary)}
+/* End-user chat widget */
+.widget-stage{display:flex;gap:20px;align-items:flex-start;flex-wrap:wrap}
+.chat-widget-frame{flex:1;min-width:420px;border:1px solid var(--border);border-radius:var(--radius-lg);overflow:hidden;display:flex;flex-direction:column;height:540px;background:#fff}
+.chat-widget-header{background:#6D28D9;color:#fff;padding:14px 18px;display:flex;align-items:center;gap:12px}
+.chat-widget-header .cw-avatar{width:38px;height:38px;border-radius:50%;background:rgba(255,255,255,0.2);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:15px}
+.chat-widget-header .cw-name{font-weight:600;font-size:15px}
+.chat-widget-header .cw-sub{font-size:11.5px;opacity:0.85}
+.chat-body{flex:1;overflow-y:auto;padding:16px;background:#F6F3FB;display:flex;flex-direction:column;gap:10px}
+.msg{max-width:82%;padding:9px 13px;border-radius:14px;font-size:13.5px;line-height:1.45;word-wrap:break-word}
+.msg.bot{background:#fff;border:1px solid #E9E2F7;border-top-left-radius:4px;align-self:flex-start}
+.msg.user{background:#6D28D9;color:#fff;border-top-right-radius:4px;align-self:flex-end}
+.msg.error{background:#FDECEC;border:1px solid #F5C6C6;color:#B91C1C}
+.msg.bot table{border-collapse:collapse;margin:6px 0;font-size:12.5px}
+.msg.bot th,.msg.bot td{border:1px solid #E9E2F7;padding:5px 9px;text-align:left}
+.msg.bot th{background:#F6F3FB;font-weight:600}
+.msg.bot pre{background:#1E293B;color:#E2E8F0;border-radius:6px;padding:10px;font-family:'SF Mono',Menlo,monospace;font-size:11.5px;white-space:pre;overflow-x:auto;margin:6px 0}
+.typing{color:var(--text-secondary);font-size:12.5px;font-style:italic}
+.chat-input{display:flex;gap:8px;padding:12px;border-top:1px solid var(--border);background:#fff;align-items:center}
+.chat-input input{flex:1;padding:9px 12px;border:1px solid var(--border);border-radius:999px;font-size:13.5px}
+.chat-input input:disabled{background:#F1F5F9}
+.chat-input .send{background:#6D28D9;color:#fff;border:none;border-radius:999px;padding:8px 16px;font-weight:600}
+.chat-input .send:disabled{background:#C4B5FD;cursor:not-allowed}
+.session-bar{display:flex;justify-content:space-between;align-items:center;padding:8px 14px;background:#F6F3FB;border-top:1px solid var(--border);font-size:12px;color:var(--text-secondary)}
+.session-chip{display:inline-flex;align-items:center;gap:6px;font-weight:600}
+.session-chip .dot{width:8px;height:8px;border-radius:50%;background:#94A3B8}
+.session-chip.on .dot{background:#22C55E;box-shadow:0 0 0 3px rgba(34,197,94,.18)}
+.side-note{width:300px;flex-shrink:0}
+/* Server-side flow */
+.req-card{max-width:760px}
+pre.code{background:#1E293B;color:#E2E8F0;border-radius:var(--radius);padding:16px;font-family:'SF Mono',Menlo,monospace;font-size:12px;overflow-x:auto;white-space:pre;line-height:1.6}
+pre.json{background:#F8FAFC;border:1px solid var(--border);border-radius:var(--radius);padding:14px;font-family:'SF Mono',Menlo,monospace;font-size:12px;overflow-x:auto;white-space:pre;line-height:1.55}
+.result-ok{border:1px solid #B7E4C7;background:#F0F9F4;border-radius:var(--radius);padding:14px;margin-top:14px}
+.result-ok .rs-label{font-size:11px;font-weight:700;color:#1E7E34;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px}
+.copy-btn{background:none;border:1px solid var(--border);border-radius:var(--radius-sm);padding:4px 10px;font-size:12px;color:var(--text-secondary)}
+.copy-btn:hover{background:var(--bg)}
+/* Credential modal */
+.cred-box{background:#0F172A;color:#E2E8F0;border-radius:var(--radius);padding:14px 16px;font-family:'SF Mono',Menlo,monospace;font-size:13px;word-break:break-all;display:flex;justify-content:space-between;align-items:center;gap:12px}
+.cred-box .copy-btn{border-color:#334155;color:#94A3B8;flex-shrink:0}
+.cred-box .copy-btn:hover{background:#1E293B}
+</style>
+</head>
+<body>
+<div class="app-shell">
+  <aside class="sidebar">
+    <div class="sidebar-logo">
+      <h1>Parthenon</h1>
+      <small>Control Center</small>
+    </div>
+    <div class="nav-group-label">Integrations</div>
+    <div class="nav-item active" data-view="agent-clients" onclick="go(this,'agent-clients')"><span class="nav-icon">🤝</span>Agent Client</div>
+    <div class="nav-group-label">Agents</div>
+    <div class="nav-item" data-view="agent-types" onclick="go(this,'agent-types')"><span class="nav-icon">🤖</span>Agent Types</div>
+    <div class="nav-group-label">Flow Previews</div>
+    <div class="nav-item" data-view="widget" onclick="go(this,'widget')"><span class="nav-icon">💬</span>Chat Widget (End User)</div>
+    <div class="nav-item" data-view="server" onclick="go(this,'server')"><span class="nav-icon">🖥️</span>Server-Side Flow (Secret)</div>
+  </aside>
+
+  <div class="main-wrapper">
+    <div class="topbar">
+      <div class="topbar-title" id="topbarTitle">Agent Client</div>
+      <div class="avatar">OP</div>
+    </div>
+    <div class="main-content">
+
+      <!-- ── AGENT CLIENT (GLOBAL PAGE, INTEGRATIONS MENU) ── -->
+      <section class="view active" id="view-agent-clients">
+        <div class="view-header">
+          <div>
+            <h2>Agent Client</h2>
+            <div class="view-desc">Tenant-managed access grants bound to one agent type. A client is <strong>not</strong> an agent identity — it can only invoke the agent type's input interface.</div>
+          </div>
+          <button class="btn btn-primary" onclick="openCreate()">+ New Client</button>
+        </div>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Client</th><th>Agent Type</th><th>Credential</th><th>Allowed Origins</th><th>Rate Limit</th><th>Status</th><th></th>
+              </tr>
+            </thead>
+            <tbody id="clientTbody"></tbody>
+          </table>
+        </div>
+
+        <div class="note">🔐 <strong>Scoping:</strong> a client credential reaches only the target agent type's input interface — a conversation turn (conversational types) or a typed submit (typed types). It cannot list or call tools, cannot reach the MCP hub, and never authenticates as an agent identity. All invocations are audited (never the credential value itself).</div>
+      </section>
+
+      <!-- ── AGENT TYPES (ENTRY TO THE CLIENTS TAB IN THE DETAIL DIALOG) ── -->
+      <section class="view" id="view-agent-types">
+        <div class="view-header">
+          <div>
+            <h2>Agent Types</h2>
+            <div class="view-desc">Click an agent type to open its detail dialog — client management lives on the <strong>Clients tab</strong>.</div>
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Name</th><th>Input</th><th>Model</th><th>Clients</th><th></th></tr></thead>
+            <tbody>
+              <tr>
+                <td><strong><a href="#" style="color:var(--primary)" onclick="openAgentDetails('support-conversational');return false">support-conversational</a></strong></td>
+                <td><span class="chip">conversation</span></td>
+                <td><span class="chip mono">gpt-4o</span></td>
+                <td>1</td>
+                <td class="actions-cell"><button class="btn btn-secondary btn-sm" onclick="openAgentDetails('support-conversational')">Open</button></td>
+              </tr>
+              <tr>
+                <td><strong><a href="#" style="color:var(--primary)" onclick="openAgentDetails('inbox-triage');return false">inbox-triage</a></strong></td>
+                <td><span class="chip">typed · EmailBody</span></td>
+                <td><span class="chip mono">claude-3-5-sonnet</span></td>
+                <td>1</td>
+                <td class="actions-cell"><button class="btn btn-secondary btn-sm" onclick="openAgentDetails('inbox-triage')">Open</button></td>
+              </tr>
+              <tr>
+                <td><strong><a href="#" style="color:var(--primary)" onclick="openAgentDetails('knowledge-base');return false">knowledge-base</a></strong></td>
+                <td><span class="chip">conversation</span></td>
+                <td><span class="chip mono">gemini-1.5-pro</span></td>
+                <td>0</td>
+                <td class="actions-cell"><button class="btn btn-secondary btn-sm" onclick="openAgentDetails('knowledge-base')">Open</button></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- ── CHAT WIDGET (END USER, STATEFUL SESSION) ── -->
+      <section class="view" id="view-widget">
+        <div class="view-header">
+          <div>
+            <h2>Embedded Chat Widget — End-User View</h2>
+            <div class="view-desc">White-labeled as <strong>Acme Support Bot</strong> (publishable client). Conversations are <strong>stateful</strong>: start a session → exchange messages that share context → end the session. No Parthenon branding is visible.</div>
+          </div>
+        </div>
+        <div class="widget-stage">
+          <div class="chat-widget-frame">
+            <div class="chat-widget-header">
+              <div class="cw-avatar">A</div>
+              <div>
+                <div class="cw-name">Acme Support Bot</div>
+                <div class="cw-sub">Typically replies instantly</div>
+              </div>
+            </div>
+            <div class="chat-body" id="chatBody">
+              <div class="msg bot">Hi! I'm the Acme support assistant. Start a conversation to ask about orders, returns, or your account.</div>
+            </div>
+            <div class="chat-input">
+              <input id="chatInput" placeholder="Start a session to begin chatting…" disabled onkeydown="if(event.key==='Enter')sendChat()">
+              <button class="send" id="chatSend" onclick="sendChat()" disabled>Send</button>
+            </div>
+            <div class="session-bar">
+              <span class="session-chip" id="sessionChip"><span class="dot"></span><span id="sessionLabel">No session</span></span>
+              <span style="display:flex;gap:8px">
+                <button class="btn btn-secondary btn-sm" id="btnStart" onclick="startSession()">▶ Start session</button>
+                <button class="btn btn-danger btn-sm" id="btnEnd" onclick="endSession()" disabled>■ End session</button>
+              </span>
+            </div>
+          </div>
+          <div class="side-note">
+            <div class="card">
+              <div class="card-header"><h3>How state flows</h3></div>
+              <div class="card-body" style="font-size:13px;color:var(--text-secondary)">
+                <p style="margin-bottom:10px">1. <strong>Start session</strong> → <span class="mono">POST /integrate/conversations</span> returns a conversation id.</p>
+                <p style="margin-bottom:10px">2. Each message goes to <span class="mono">POST /integrate/conversations/{id}/messages</span> and shares the same conversation context — like the Control Center chat.</p>
+                <p style="margin-bottom:10px">3. <strong>End session</strong> → <span class="mono">POST /integrate/conversations/{id}/end</span>. There is no one-shot chat.</p>
+                <p style="margin-bottom:0">Replies render with format detection: markdown (incl. tables) and pretty-printed JSON.</p>
+              </div>
+            </div>
+            <div class="card" style="margin-top:16px">
+              <div class="card-header"><h3>Origin (automatic)</h3></div>
+              <div class="card-body" style="font-size:13px">
+                <span class="chip mono">https://acme.com</span>
+                <p style="font-size:12px;color:var(--text-secondary);margin-top:8px">Sent automatically by the browser — there is no user-editable origin field. Requests from origins outside the client's allowlist are rejected.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ── SERVER-SIDE FLOW (SECRET CLIENT) ── -->
+      <section class="view" id="view-server">
+        <div class="view-header">
+          <div>
+            <h2>Server-Side Invocation — Secret Client</h2>
+            <div class="view-desc">A third-party backend invokes a <strong>typed</strong> agent as "submit input → receive validated typed response". The secret credential never leaves their servers.</div>
+          </div>
+        </div>
+        <div class="card req-card">
+          <div class="card-header">
+            <h3>Python SDK — typed request/response</h3>
+            <span class="chip key-secret">secret · phn_cl_sk_…</span>
+          </div>
+          <div class="card-body">
+            <pre class="code">from parthenon import Client
+
+client = Client(secret_key="phn_cl_sk_…")      # server-side only
+result = client.invoke("inbox-triage", input={
+    "email_body": "I ordered a laptop two weeks ago but it arrived damaged. I want a refund."
+})
+print(result.status)      # "valid"
+print(result.output)      # typed AgentOutput</pre>
+            <div style="margin-top:14px;display:flex;gap:10px;align-items:center">
+              <button class="btn btn-primary" onclick="runServerCall()">▶ Run request</button>
+              <span class="hint" style="color:var(--text-secondary);font-size:12px">Simulated — responses are delivered as validated, typed results.</span>
+            </div>
+            <div id="serverResult"></div>
+            <div class="note">🔐 Optional dual identity: when the third party and the tenant share an identity provider, a <strong>secret</strong> client may pass its end user's identity — server-to-server only, validated and tenant-matched before use. Identity tokens are never issued to or stored by the third party's browser.</div>
+          </div>
+        </div>
+      </section>
+
+    </div>
+  </div>
+</div>
+
+<!-- ── CREATE CLIENT DIALOG ── -->
+<div class="dialog-backdrop" id="createDialog">
+  <div class="dialog">
+    <div class="dialog-header">
+      <h3>New Client</h3>
+      <button class="close-x" onclick="closeCreate()">✕</button>
+    </div>
+    <div class="dialog-body">
+      <div class="field">
+        <label>Client name</label>
+        <input id="cName" placeholder="e.g. Acme Support Bot" oninput="validateCreate()">
+        <div class="hint">Must be unique within the tenant — duplicates are rejected with a clear error.</div>
+      </div>
+      <div class="field">
+        <label>Agent type</label>
+        <div class="combo">
+          <input id="cAgent" placeholder="Search agent types…" autocomplete="off" oninput="filterAgentTypes()" onfocus="filterAgentTypes()">
+          <div class="combo-list" id="cAgentList"></div>
+        </div>
+        <div class="hint">The client grants access to this agent type's input interface only. Fixed after creation.</div>
+      </div>
+      <div class="field">
+        <label>Credential type</label>
+        <select id="cKeyType" onchange="onKeyTypeChange()">
+          <option value="secret">secret — server-to-server (stays on the integrator's backend)</option>
+          <option value="publishable">publishable — browser-safe (powers the white-label widget)</option>
+        </select>
+      </div>
+      <div class="warn-banner" id="pubWarn" style="display:none">⚠️ <strong>Publishable client:</strong> this credential is safe to embed in a browser, but it exposes this agent type's full behavior publicly. Publishable clients <strong>require at least one allowed origin</strong> — requests from any other origin are rejected. The tenant owns this decision; Parthenon does not hard-block it.</div>
+      <div class="field">
+        <label>Allowed origins (one per line)</label>
+        <textarea id="cOrigins" placeholder="https://acme.com&#10;https://*.acme.com" oninput="validateCreate()"></textarea>
+        <div class="hint">Wildcards supported (e.g. <span class="mono">https://*.acme.com</span>). Required for publishable clients.</div>
+        <div class="inline-warn" id="originWarn">A publishable client needs at least one allowed origin before it can be saved.</div>
+      </div>
+      <div class="form-grid">
+        <div class="field">
+          <label>Rate limit</label>
+          <input id="cRate" type="number" value="100" min="1">
+        </div>
+        <div class="field">
+          <label>Window</label>
+          <select id="cRateWindow">
+            <option selected>per minute</option>
+            <option>per hour</option>
+            <option>per day</option>
+          </select>
+        </div>
+        <div class="field full">
+          <label>Widget theme (optional)</label>
+          <div style="display:flex;gap:10px;align-items:center">
+            <input id="cThemeName" placeholder="Display name, e.g. Acme Support Bot" style="flex:1">
+            <input id="cThemeColor" type="color" value="#6D28D9" style="width:52px;height:38px;padding:4px">
+          </div>
+        </div>
+      </div>
+      <div class="note" style="margin-top:8px">ℹ️ There is no editable <strong>Origin</strong> field for incoming requests — the serving origin is detected automatically by the browser/deployment and checked against this allowlist.</div>
+    </div>
+    <div class="dialog-footer">
+      <button class="btn btn-secondary" onclick="closeCreate()">Cancel</button>
+      <div class="footer-actions">
+        <button class="btn btn-primary" id="btnSaveClient" onclick="saveCreate()">Save Client</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── EDIT CLIENT DIALOG (ORIGINS + RATE LIMIT ONLY) ── -->
+<div class="dialog-backdrop" id="editDialog">
+  <div class="dialog">
+    <div class="dialog-header">
+      <h3>Edit Client — <span id="eName"></span></h3>
+      <button class="close-x" onclick="closeEdit()">✕</button>
+    </div>
+    <div class="dialog-body">
+      <div class="form-grid">
+        <div class="field"><label>Agent type (fixed)</label><input id="eAgent" readonly></div>
+        <div class="field"><label>Credential type (fixed)</label><input id="eKeyType" readonly></div>
+      </div>
+      <div class="hint" style="margin:-6px 0 14px;color:var(--text-secondary);font-size:12px">Name, credential type and target agent type are immutable. Rotate the credential from the row actions if needed.</div>
+      <div class="field">
+        <label>Allowed origins (one per line)</label>
+        <textarea id="eOrigins" placeholder="https://acme.com&#10;https://*.acme.com"></textarea>
+        <div class="hint">Publishable clients must keep at least one origin.</div>
+        <div class="inline-warn" id="eOriginWarn">A publishable client needs at least one allowed origin.</div>
+      </div>
+      <div class="field-row">
+        <div class="field"><label>Rate limit</label><input id="eRate" type="number" min="1"></div>
+        <div class="field"><label>Window</label><select id="eRateWindow"><option>per minute</option><option>per hour</option><option>per day</option></select></div>
+      </div>
+    </div>
+    <div class="dialog-footer">
+      <button class="btn btn-secondary" onclick="closeEdit()">Cancel</button>
+      <div class="footer-actions"><button class="btn btn-primary" onclick="saveEdit()">Save Changes</button></div>
+    </div>
+  </div>
+</div>
+
+<!-- ── ONE-TIME CREDENTIAL DIALOG ── -->
+<div class="dialog-backdrop" id="credDialog">
+  <div class="dialog" style="width:560px">
+    <div class="dialog-header">
+      <h3>Client credential created</h3>
+      <button class="close-x" onclick="closeCred()">✕</button>
+    </div>
+    <div class="dialog-body">
+      <p style="margin-bottom:12px;font-size:13.5px"><strong id="credName"></strong> is ready. Copy the credential now — <strong>it is shown only once</strong> and only its hash is stored.</p>
+      <div class="cred-box"><span id="credValue"></span><button class="copy-btn" onclick="copyCred()">Copy</button></div>
+      <div class="warn-banner" id="credPubWarn" style="display:none">⚠️ This is a <strong>publishable</strong> credential — safe for the browser, but it publicly exposes the agent type's behavior. Make sure the allowed origins are correct.</div>
+    </div>
+    <div class="dialog-footer">
+      <div class="footer-actions"><button class="btn btn-primary" onclick="closeCred()">I've stored it</button></div>
+    </div>
+  </div>
+</div>
+
+<!-- ── AGENT TYPE DETAIL DIALOG (WITH CLIENTS TAB) ── -->
+<div class="dialog-backdrop" id="atdDialog">
+  <div class="dialog" style="width:760px">
+    <div class="dialog-header">
+      <h3 id="atdTitle">Agent Type: support-conversational</h3>
+      <button class="close-x" onclick="closeAtd()">✕</button>
+    </div>
+    <div style="padding:0 20px">
+      <div class="tab-bar" style="margin-bottom:0">
+        <button class="tab active" id="atdTabDetails" onclick="atdTab('details')">Details</button>
+        <button class="tab" id="atdTabClients" onclick="atdTab('clients')">Clients</button>
+      </div>
+    </div>
+    <div class="dialog-body">
+      <div id="atdPanelDetails">
+        <div class="field-row">
+          <div class="field"><label>Input</label><input id="atdInput" readonly></div>
+          <div class="field"><label>Model</label><input id="atdModel" readonly></div>
+        </div>
+        <div class="field"><label>Description</label><input id="atdDesc" readonly></div>
+        <div class="note" style="margin-top:4px">The invoked agent type always runs with its own identity and role — a client never changes that.</div>
+      </div>
+      <div id="atdPanelClients" style="display:none">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+          <span style="font-size:13px;color:var(--text-secondary)">Clients granted access to this agent type's input interface.</span>
+          <button class="btn btn-primary btn-sm" onclick="openCreateFor(document.getElementById('atdTitle').textContent.replace('Agent Type: ',''))">+ New Client</button>
+        </div>
+        <div class="table-wrap" style="box-shadow:none">
+          <table>
+            <thead><tr><th>Client</th><th>Credential</th><th>Origins</th><th>Rate</th><th>Status</th><th></th></tr></thead>
+            <tbody id="atdClientTbody"></tbody>
+          </table>
+        </div>
+        <div class="note" style="margin-top:14px">This is the same <strong>AgentClientsPanel</strong> used on the global <strong>Agent Client</strong> page under Integrations.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ═══════════ DATA (placeholder) ═══════════
+const AGENT_TYPES = [
+  {id:'support-conversational', input:'conversation', model:'gpt-4o', desc:'Conversational customer-support agent.'},
+  {id:'inbox-triage', input:'typed · EmailBody', model:'claude-3-5-sonnet', desc:'Classifies inbound email into typed categories.'},
+  {id:'knowledge-base', input:'conversation', model:'gemini-1.5-pro', desc:'Answers questions over the knowledge base.'}
+];
+let clients = [
+  {id:1, name:'Acme Support Bot', hint:'phn_cl_pk_acme', agent:'support-conversational', keyType:'publishable', origins:'https://acme.com', rate:'100 / min', status:'active'},
+  {id:2, name:'Nimbus Classifier', hint:'phn_cl_sk_nimbus', agent:'inbox-triage', keyType:'secret', origins:'https://nimbus.io', rate:'500 / min', status:'active'}
+];
+
+// ═══════════ NAV ═══════════
+const VIEW_TITLES = {'agent-clients':'Agent Client','agent-types':'Agent Types','widget':'Chat Widget (End User)','server':'Server-Side Flow'};
+function go(el, view){
+  document.querySelectorAll('.nav-item').forEach(x=>x.classList.remove('active'));
+  el.classList.add('active');
+  document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
+  document.getElementById('view-'+view).classList.add('active');
+  document.getElementById('topbarTitle').textContent = VIEW_TITLES[view]||view;
+}
+function showToast(msg){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2400);}
+
+// ═══════════ CLIENTS TABLE ═══════════
+function renderClients(){
+  const tb=document.getElementById('clientTbody');
+  tb.innerHTML='';
+  clients.forEach(c=>{
+    const tr=document.createElement('tr');
+    tr.innerHTML=
+      '<td><strong>'+c.name+'</strong><br><span class="mono" style="color:var(--text-secondary)">'+c.hint+'…</span></td>'+
+      '<td><span class="chip mono">'+c.agent+'</span></td>'+
+      '<td><span class="chip '+(c.keyType==='secret'?'key-secret':'key-publishable')+'">'+c.keyType+'</span></td>'+
+      '<td style="font-size:12.5px">'+c.origins.replace(/\n/g,'<br>')+'</td>'+
+      '<td>'+c.rate+'</td>'+
+      '<td><span class="chip status-'+c.status+'">'+(c.status==='active'?'<span class="badge-dot"></span>Active':'<span class="badge-dot gray"></span>Inactive')+'</span></td>'+
+      '<td class="actions-cell">'+
+        '<button class="btn btn-secondary btn-sm" onclick="openEdit('+c.id+')">Edit</button>'+
+        '<button class="btn btn-secondary btn-sm" onclick="toggleClient('+c.id+')">'+(c.status==='active'?'Deactivate':'Activate')+'</button>'+
+        '<button class="btn btn-danger btn-sm" onclick="removeClient('+c.id+')">Remove</button>'+
+      '</td>';
+    tb.appendChild(tr);
+  });
+  renderAtdClients();
+}
+function renderAtdClients(){
+  const tb=document.getElementById('atdClientTbody');
+  if(!tb) return;
+  const at=document.getElementById('atdTitle').textContent.replace('Agent Type: ','');
+  const mine=clients.filter(c=>c.agent===at);
+  tb.innerHTML='';
+  if(!mine.length){ tb.innerHTML='<tr><td colspan="6" style="color:var(--text-secondary)">No clients for this agent type yet.</td></tr>'; return; }
+  mine.forEach(c=>{
+    const tr=document.createElement('tr');
+    tr.innerHTML=
+      '<td><strong>'+c.name+'</strong></td>'+
+      '<td><span class="chip '+(c.keyType==='secret'?'key-secret':'key-publishable')+'">'+c.keyType+'</span></td>'+
+      '<td style="font-size:12.5px">'+c.origins.replace(/\n/g,'<br>')+'</td>'+
+      '<td>'+c.rate+'</td>'+
+      '<td><span class="chip status-'+c.status+'">'+c.status+'</span></td>'+
+      '<td class="actions-cell"><button class="btn btn-secondary btn-sm" onclick="openEdit('+c.id+')">Edit</button></td>';
+    tb.appendChild(tr);
+  });
+}
+function toggleClient(id){
+  const c=clients.find(x=>x.id===id);
+  c.status = c.status==='active' ? 'inactive' : 'active';
+  renderClients();
+  showToast(c.status==='active' ? '✓ "'+c.name+'" activated — credential works again' : '🔒 "'+c.name+'" deactivated — credential immediately unusable (reversible)');
+}
+function removeClient(id){
+  const c=clients.find(x=>x.id===id);
+  if(!confirm('Remove "'+c.name+'" permanently? The credential and its audit trail are deleted. This cannot be undone.')) return;
+  clients=clients.filter(x=>x.id!==id);
+  renderClients();
+  showToast('🗑️ "'+c.name+'" removed — credential and audit trail deleted');
+}
+
+// ═══════════ CREATE DIALOG ═══════════
+let createAgent='';
+function openCreateFor(agentType){
+  createAgent = agentType||'';
+  document.getElementById('cAgent').value = createAgent;
+  document.getElementById('cName').value='';
+  document.getElementById('cOrigins').value='';
+  document.getElementById('cRate').value=100;
+  document.getElementById('cKeyType').value='secret';
+  onKeyTypeChange();
+  document.getElementById('createDialog').classList.add('open');
+  validateCreate();
+}
+function openCreate(){ openCreateFor(''); }
+function closeCreate(){ document.getElementById('createDialog').classList.remove('open'); document.getElementById('cAgentList').classList.remove('open'); }
+
+function filterAgentTypes(){
+  const q=document.getElementById('cAgent').value.toLowerCase();
+  const list=document.getElementById('cAgentList');
+  list.innerHTML='';
+  AGENT_TYPES.filter(a=>a.id.toLowerCase().includes(q)).forEach(a=>{
+    const d=document.createElement('div');
+    d.className='combo-option'+(a.id===createAgent?' selected':'');
+    d.innerHTML='<span>'+a.id+'</span><span class="chip">'+(a.input==='conversation'?'conversational':'typed')+'</span>';
+    d.onclick=()=>{ createAgent=a.id; document.getElementById('cAgent').value=a.id; list.classList.remove('open'); validateCreate(); };
+    list.appendChild(d);
+  });
+  list.classList.add('open');
+}
+document.addEventListener('click',e=>{ if(!e.target.closest('.combo')) document.getElementById('cAgentList').classList.remove('open'); });
+
+function onKeyTypeChange(){
+  const pub=document.getElementById('cKeyType').value==='publishable';
+  document.getElementById('pubWarn').style.display=pub?'block':'none';
+  validateCreate();
+}
+function validateCreate(){
+  const pub=document.getElementById('cKeyType').value==='publishable';
+  const origins=document.getElementById('cOrigins').value.trim();
+  const ok = createAgent && document.getElementById('cName').value.trim() && (!pub || origins.length>0);
+  document.getElementById('btnSaveClient').disabled=!ok;
+  document.getElementById('originWarn').classList.toggle('show', pub && origins.length===0);
+}
+function saveCreate(){
+  const name=document.getElementById('cName').value.trim();
+  const pub=document.getElementById('cKeyType').value==='publishable';
+  const key='phn_cl_'+(pub?'pk_':'sk_')+name.toLowerCase().replace(/[^a-z0-9]+/g,'').slice(0,8);
+  clients.push({id:Date.now(), name:name, hint:key, agent:createAgent, keyType:pub?'publishable':'secret',
+    origins:document.getElementById('cOrigins').value.trim(), rate:document.getElementById('cRate').value+' / '+document.getElementById('cRateWindow').value.replace('per ',''), status:'active'});
+  renderClients();
+  closeCreate();
+  document.getElementById('credName').textContent=name;
+  document.getElementById('credValue').textContent=key+'_'+Math.random().toString(36).slice(2,14);
+  document.getElementById('credPubWarn').style.display=pub?'block':'none';
+  document.getElementById('credDialog').classList.add('open');
+  showToast('✓ Client "'+name+'" created');
+}
+function copyCred(){
+  const v=document.getElementById('credValue').textContent;
+  if(navigator.clipboard) navigator.clipboard.writeText(v).catch(()=>{});
+  showToast('📋 Credential copied to clipboard');
+}
+function closeCred(){ document.getElementById('credDialog').classList.remove('open'); }
+
+// ═══════════ EDIT DIALOG ═══════════
+let editId=null;
+function openEdit(id){
+  const c=clients.find(x=>x.id===id); if(!c) return;
+  editId=id;
+  document.getElementById('eName').textContent=c.name;
+  document.getElementById('eAgent').value=c.agent;
+  document.getElementById('eKeyType').value=c.keyType;
+  document.getElementById('eOrigins').value=c.origins;
+  document.getElementById('eRate').value=parseInt(c.rate);
+  document.getElementById('eRateWindow').value='per '+c.rate.split(' / ')[1];
+  document.getElementById('editDialog').classList.add('open');
+}
+function closeEdit(){ document.getElementById('editDialog').classList.remove('open'); }
+function saveEdit(){
+  const c=clients.find(x=>x.id===editId);
+  const origins=document.getElementById('eOrigins').value.trim();
+  if(c.keyType==='publishable' && !origins){
+    document.getElementById('eOriginWarn').classList.add('show'); return;
+  }
+  document.getElementById('eOriginWarn').classList.remove('show');
+  c.origins=origins;
+  c.rate=document.getElementById('eRate').value+' / '+document.getElementById('eRateWindow').value.replace('per ','');
+  renderClients(); closeEdit();
+  showToast('✓ "'+c.name+'" updated — origins and rate limit only');
+}
+
+// ═══════════ AGENT TYPE DETAIL DIALOG ═══════════
+function openAgentDetails(id){
+  const at=AGENT_TYPES.find(a=>a.id===id);
+  document.getElementById('atdTitle').textContent='Agent Type: '+id;
+  document.getElementById('atdInput').value=at.input;
+  document.getElementById('atdModel').value=at.model;
+  document.getElementById('atdDesc').value=at.desc;
+  atdTab('details');
+  renderAtdClients();
+  document.getElementById('atdDialog').classList.add('open');
+}
+function closeAtd(){ document.getElementById('atdDialog').classList.remove('open'); }
+function atdTab(t){
+  document.getElementById('atdTabDetails').classList.toggle('active',t==='details');
+  document.getElementById('atdTabClients').classList.toggle('active',t==='clients');
+  document.getElementById('atdPanelDetails').style.display=t==='details'?'block':'none';
+  document.getElementById('atdPanelClients').style.display=t==='clients'?'block':'none';
+}
+
+// ═══════════ STATEFUL CHAT WIDGET ═══════════
+let sessionOn=false, msgIdx=0;
+const REPLIES=[
+  'Thanks for reaching out! I can help with order issues, returns, and account questions.',
+  'I found your account. Here is a summary of your recent orders:\n<table><tr><th>Order</th><th>Item</th><th>Status</th></tr><tr><td>#1234</td><td>Laptop</td><td>Delivered Oct 28</td></tr><tr><td>#1239</td><td>Mouse</td><td>In transit</td></tr></table>Which order do you need help with?',
+  'I\u2019ve initiated a return for order <strong>#1234</strong>. Your return details:\n<pre>{\n  "return_id": "ret_8841",\n  "refund_amount": 1299.00,\n  "currency": "USD",\n  "label_delivery": "email within 5 minutes"\n}</pre>',
+  'Anything else I can help you with?'
+];
+function startSession(){
+  sessionOn=true; msgIdx=0;
+  document.getElementById('sessionChip').classList.add('on');
+  document.getElementById('sessionLabel').textContent='Session conv_8f3a21 — context shared across messages';
+  document.getElementById('btnStart').disabled=true;
+  document.getElementById('btnEnd').disabled=false;
+  document.getElementById('chatInput').disabled=false;
+  document.getElementById('chatSend').disabled=false;
+  document.getElementById('chatInput').placeholder='Type a message…';
+  addBot('Session started. You can send multiple messages — I remember the full conversation context.');
+  showToast('▶ Conversation session started');
+}
+function endSession(){
+  sessionOn=false;
+  document.getElementById('sessionChip').classList.remove('on');
+  document.getElementById('sessionLabel').textContent='No session';
+  document.getElementById('btnStart').disabled=false;
+  document.getElementById('btnEnd').disabled=true;
+  document.getElementById('chatInput').disabled=true;
+  document.getElementById('chatSend').disabled=true;
+  document.getElementById('chatInput').value='';
+  document.getElementById('chatInput').placeholder='Start a session to begin chatting…';
+  addBot('Session ended. Context cleared — start a new session anytime.');
+  showToast('■ Session ended');
+}
+function addBot(html){
+  const body=document.getElementById('chatBody');
+  const m=document.createElement('div'); m.className='msg bot'; m.innerHTML=html;
+  body.appendChild(m); body.scrollTop=body.scrollHeight;
+}
+function sendChat(){
+  const inp=document.getElementById('chatInput');
+  const body=document.getElementById('chatBody');
+  const text=inp.value.trim();
+  if(!text||!sessionOn) return;
+  const um=document.createElement('div'); um.className='msg user'; um.textContent=text; body.appendChild(um);
+  inp.value='';
+  const typing=document.createElement('div'); typing.className='typing'; typing.textContent='Acme Support Bot is typing…'; body.appendChild(typing);
+  body.scrollTop=body.scrollHeight;
+  setTimeout(()=>{
+    typing.remove();
+    addBot(REPLIES[Math.min(msgIdx,REPLIES.length-1)]);
+    if(msgIdx<REPLIES.length-1) msgIdx++;
+  },900);
+}
+
+// ═══════════ SERVER-SIDE FLOW ═══════════
+function runServerCall(){
+  const out=document.getElementById('serverResult');
+  out.innerHTML='<div class="typing" style="margin-top:14px">Agent executing…</div>';
+  setTimeout(()=>{
+    out.innerHTML='<div class="result-ok"><div class="rs-label">Valid · typed response (AgentOutput)</div><pre class="json" style="background:transparent;border:none;padding:0">{\n  "validation_status": "valid",\n  "output_type": "TriageResult",\n  "data": {\n    "category": "refund_request",\n    "confidence": 0.94,\n    "priority": "high",\n    "sentiment": "negative",\n    "suggested_action": "issue_refund"\n  },\n  "session_id": "sess_5c2f9e"\n}</pre></div>';
+  },1100);
+}
+
+renderClients();
+</script>
+</body>
+</html>

@@ -80,9 +80,12 @@ Agent Outputs introduces schema-validated, typed agent results as first-class pl
 - `query_result` returns a descriptive error when called with an invalid data type name.
 - Untyped agent types and conversational agents continue to function without regression.
 
+### Third-Party Delivery
+- When a typed agent type is invoked through a third-party [client](third-party-agent-integration.md), the validated typed response is delivered to the third-party consumer with its validation status and, where applicable, a raw-output fallback — the same validated result model used internally.
+- Invalid or schema-inconsistent submissions from third parties are rejected with a clear description of the expected input shape.
+
 ## Out of Scope
-- Typed outputs for conversational agents — only non-conversational agents are in scope.
-- Real-time streaming of typed results — results are available after execution completes.
+- Typed outputs for conversational agents — only non-conversational agents are in scope.- Real-time streaming of typed results — results are available after execution completes.
 - Data type versioning or automatic schema migration — existing results retain their original schema snapshot.
 - Export integrations to external systems (data warehouse, cloud storage) — CSV export from the UI is the only export mechanism.
 - Automatic re-validation of past results when a data type schema is edited — past results are not retroactively validated.

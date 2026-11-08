@@ -93,6 +93,10 @@ Update this table whenever new components are added or new metrics are instrumen
 | **Notification Service** | `notification_retry_total` (labels: `channel_type`) | Cumulative retries per channel; elevated rate indicates unstable downstream channel provider |
 | **Notification Service** | `notification_channel_health` (gauge, labels: `channel_id`, `channel_type`) | 1 = channel last delivery successful; 0 = channel last delivery failed; use for per-channel health dashboard |
 | **Notification Service** | `notification_partial_failure_total` | Notifications where at least one (but not all) channels failed; non-zero rate indicates multi-channel reliability issues |
+| **Integration Gateway** | `integration.request_total` (labels: `client_id`, `endpoint`, `outcome` = `success`/`rate_limited`/`invalid_credential`/`revoked_credential`/`origin_denied`/`error`) | Per-client `/integrate/*` request volume and edge-rejection outcomes; primary abuse signal |
+| **Integration Gateway** | `integration.response_ms` (p50, p99, labels: `client_id`, `endpoint`) | Gateway latency per client and endpoint; rising p99 indicates CH or downstream agent pressure |
+| **Integration Gateway** | Publishable-client exposure count (gauge) | Number of agent types exposed through `publishable` clients (publicly reachable); use to audit the public surface |
+| **Integration Gateway** | Client-invoked agent executions (rate) | Client-invoked turns reuse existing agent-runtime health/guardrail metrics (timeouts, guardrail breaches); visible alongside first-party traffic |
 | **Control Center** | `parthenon_cc_api_request_total` (labels: `endpoint`, `status`) | Total API requests to Control Center REST endpoints |
 | **Control Center** | `parthenon_cc_cert_issue_total` (labels: `service`) | Certificates issued to Agent Runtime and Communication Hub; tracks bootstrap and renewal events |
 | **Control Center** | `parthenon_cc_cert_renewal_failures_total` (labels: `service`) | Failed certificate renewal requests; any sustained non-zero rate is critical |
@@ -252,6 +256,15 @@ Conversational management surface plus the OAuth MCP plane it shares. Panels:
 - **WebSocket Health** — `chat_ws_active_connections` gauge and `chat_ws_disconnect_total` by `code`.
 - **Catalog Anomalies** — `assistant_catalog_anomalies_total` by `kind`, with a table panel listing the offending tool names.
 
+### Third-Party Integration Gateway
+Public `/integrate/*` surface health and abuse view. Panels:
+
+- **Request Volume by Outcome** — `integration.request_total` split by `outcome`; edge rejections (`origin_denied`, `rate_limited`, `invalid_credential`, `revoked_credential`) stacked separately from `success`/`error`.
+- **Per-Client Rate-Limit Pressure** — `rate_limited` outcomes by `client_id`; a single client tripping its limit repeatedly is the triage target.
+- **Credential Rejections** — `invalid_credential` + `revoked_credential` rate; sustained non-zero rates indicate stale consumer credentials or probing.
+- **Latency p99 by Endpoint** — `integration.response_ms` p99 per `/integrate/*` endpoint.
+- **Public Exposure Posture** — publishable-client exposure count over time; alert on unexpected growth.
+
 ### Service Segregation Boundary Enforcement
 Dedicated dashboard panel group for internal caller boundary controls. Panels:
 
@@ -357,6 +370,15 @@ Signals marked *proposed* have no OTel counter yet — create the alert against 
 | `RuntimeTopologyPollingFailure` | `rate(runtime_topology_polling_requests_total{status=~"5.."}) > 0` for 2 min | Warning | Verify topology endpoint health; check operator permission |
 | `RuntimeTerminateCascadeIncomplete` | `rate(runtime_termination_requests_total{outcome="cascade_incomplete"}) > 0` for 2 min | Critical | Follow [runbooks/agent-execution-guardrails.md](runbooks/agent-execution-guardrails.md) operator termination triage |
 | `RecursionValidationFailureSurge` | `rate(recursion_validation_total{result="fail"}) > baseline` for 5 min | Warning | Follow recursion triage in [runbooks/agent-execution-guardrails.md](runbooks/agent-execution-guardrails.md) section 1 |
+
+### Integration Gateway Alerts
+
+| Alert Name | Condition | Severity | Action |
+|------------|-----------|----------|--------|
+| `IntegrationRateLimitedSpike` | `rate(integration.request_total{outcome="rate_limited"})` sustained above baseline for 10 min | Warning | Identify the tripping client; raise its rate limit or split load across clients (see [runbooks/third-party-agent-integration.md](runbooks/third-party-agent-integration.md)) |
+| `IntegrationCredentialRejections` | `rate(integration.request_total{outcome=~"invalid_credential|revoked_credential"}) > 0` for 10 min | Warning | Stale/rotated consumer credential or probing attempt; verify consumer holds the current credential |
+| `IntegrationErrorRateHigh` | `error` outcome > 5% per client for 5 min | Warning | Inspect CH/AR logs for the affected client and agent type; correlate with guardrail/timeout metrics |
+| `IntegrationPublicExposureGrowth` | publishable-client exposure count increases unexpectedly | Warning | Audit newly created publishable clients; confirm intentional public exposure |
 
 ### Notification Service Alerts
 

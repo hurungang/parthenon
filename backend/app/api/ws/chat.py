@@ -798,6 +798,62 @@ async def websocket_chat(websocket: WebSocket, session_id: str) -> None:
                 )
                 continue
 
+            # ── Handle live JWT refresh ────────────────────────────────────
+            # OIDC access tokens expire while a conversation (or its pending
+            # intervention) is still open; the frontend silently renews its
+            # token but the renewed JWT never reached the WS-layer cache used
+            # for CC management tool identity resolution. Pushing the fresh
+            # token here keeps the cached JWT valid for the session lifetime.
+            if msg_type == "token_refresh":
+                token = payload.get("token") if isinstance(payload, dict) else None
+                if not isinstance(token, str) or not token.strip():
+                    await _send_to_live_socket(session_id, websocket, {
+                        "type": "token_refresh_failed",
+                        "message": "Missing token",
+                    })
+                    continue
+                token = token.strip()
+                valid = False
+                try:
+                    await get_oidc_client().validate_token(token)
+                    valid = True
+                except OIDCError:
+                    pass
+                except Exception:
+                    logger.warning(
+                        "token_refresh: unexpected OIDC error for session %s",
+                        session_id[:8], exc_info=True,
+                    )
+                if not valid:
+                    # Fallback: platform-issued account token (same tiers as
+                    # the connection handshake in `authenticate` above).
+                    try:
+                        from app.services.tenancy.platform_account_auth_service import (
+                            validate_platform_account_token,
+                        )
+
+                        if validate_platform_account_token(token):
+                            valid = True
+                    except Exception:
+                        logger.warning(
+                            "token_refresh: platform token validation failed for session %s",
+                            session_id[:8], exc_info=True,
+                        )
+                if not valid:
+                    # Do NOT overwrite the cached token on failure.
+                    await _send_to_live_socket(session_id, websocket, {
+                        "type": "token_refresh_failed",
+                    })
+                    continue
+                cache_user_jwt(session_id, token)
+                logger.debug(
+                    "Refreshed cached user JWT for session %s", session_id[:8],
+                )
+                await _send_to_live_socket(session_id, websocket, {
+                    "type": "token_refreshed",
+                })
+                continue
+
             # ── Block chat messages when intervention is pending ───────────
             if ActiveSessionTracker.has_pending_intervention(session_id):
                 await _send_to_live_socket(session_id, websocket, {

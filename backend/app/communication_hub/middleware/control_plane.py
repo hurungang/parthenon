@@ -97,6 +97,14 @@ def _extract_client_cert(request: Request) -> str | None:
     return getattr(request.state, "client_certificate", None)
 
 
+def _get_client_cert_pair(request: Request) -> tuple[str, str] | None:
+    """Return this service's ``(cert_path, key_path)`` pair for mTLS egress."""
+    cert_manager = getattr(request.app.state, "certificate_manager", None)
+    if cert_manager and cert_manager.cert_path and cert_manager.key_path:
+        return (str(cert_manager.cert_path), str(cert_manager.key_path))
+    return None
+
+
 class ControlPlaneMiddleware(BaseHTTPMiddleware):
     """Middleware that enforces Control Center service-cert on ``/internal/*`` paths.
 
@@ -235,6 +243,7 @@ class ControlPlaneMiddleware(BaseHTTPMiddleware):
             revoked = await _revocation_service.check_remote(
                 serial_number=result.serial_number,
                 control_center_url=control_center_url,
+                client_cert=_get_client_cert_pair(request),
             )
             if revoked:
                 logger.warning(

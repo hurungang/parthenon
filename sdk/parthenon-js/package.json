@@ -1,0 +1,8 @@
+{
+  "name": "parthenon-client",
+  "version": "0.1.0",
+  "description": "JavaScript SDK for Parthenon third-party agent integration (clients).",
+  "main": "index.js",
+  "type": "module",
+  "license": "MIT"
+}

@@ -117,6 +117,8 @@ erDiagram
 
 ## Sandboxed Script & Mock Recording Security Attributes
 
+> **Client credentials cross-reference:** third-party **agent clients** (`AgentClient` / `AgentClientUsageLog`, `backend/app/db/models/agent_client.py`, documented in the agents module) are a **separate credential class** from `AgentApiKey` — clients grant input-interface-only access to one agent type and are not identities; API keys authenticate *as* an agent identity + role for MCP tool access. See the agents module for the client entity model (not duplicated here).
+
 `ScriptVersion` carries sandbox-validation attributes
 (`sandbox_validation_status` pending/passed/failed + `sandbox_validation_reason`)
 and per-version resource caps; the validator's secret-shape guard keeps

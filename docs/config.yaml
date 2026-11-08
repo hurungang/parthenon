@@ -29,6 +29,7 @@ source:
     - frontend/src/__tests__/
     - e2e/tests/
     - mcp-demo-app/tests/
+    - sdk/parthenon-python/test/
 
 # Project tooling — scripts available for service management
 tooling:
@@ -68,6 +69,7 @@ tech_stack:
   database: PostgreSQL 16 — SQLAlchemy declarative models in backend/app/db/models/, Alembic migrations in backend/alembic/
   auth: OIDC/OAuth2 — supports Keycloak and Azure EntraID; JWT validation via python-jose; internal RBAC roles (user, agent, both); dual-realm topology (user realm + agent realm); certificate-based authentication for agent runtime (mTLS)
   infra: Docker Compose (dev/self-hosted) + Kubernetes/Helm (production) + nginx reverse proxy + OTEL Collector
+  integration_sdks: TypeScript SDK + embeddable widget (sdk/parthenon-js) + Python SDK (sdk/parthenon-python) + standalone FastAPI demo app (agent-client-demo-app, demo_app.main:app, port 7002, vendored marked+DOMPurify) for third-party agent clients
 
 # Key project conventions — agents follow these when making decisions
 conventions:
@@ -145,3 +147,4 @@ domain:
   - "**MCP session re-auth state**: `McpSession.requires_reauth` + `last_refresh_error` flag a session whose OAuth refresh failed UNRECOVERABLY (provider reports the refresh token gone/revoked, e.g. `invalid_grant` / 'No such refresh token found'). Detection lives in `backend/app/services/mcp/oauth_refresh.py`; transient failures (network/5xx/rate limit) never set the flag. Completing in-place re-auth updates the SAME session row and clears both fields (`backend/app/services/mcp_oauth_service.py`). The MCP Session Manager shows a 'Needs re-authentication' error token status with the stored reason as a tooltip and a red re-auth action; other sessions are unaffected."
   - "**Script execution outcome semantics**: `ScriptExecutionOutcome` = `success | validation_failure | fell_back | partial_failure`. `partial_failure` is a RECORDED outcome reserved for a semantic tool error hidden inside a successful transport envelope — the enum value shipped, but automatic detection and automatic fallback/repair/re-optimization reactions are DEFERRED by product decision (no code writes it today; defensive handling of unexpected tool-result shapes inside scripts is the accepted mitigation). Do not assume partial-failure reactions exist."
   - "**Optimization failure visibility**: when optimize-and-verify ends in `needs_feedback`, the failure reason MUST be persisted in `OptimizedImplementationPlan.error` (the authoring mission mandates passing `error` to `generate_optimized_plan`); the Optimized Plan tab renders it. When no active plan exists the tab shows an explicit 'nothing to retire' state rather than a silent no-op."
+  - "**Third-Party Agent Clients (CRITICAL)**: a client (`AgentClient`, `backend/app/db/models/agent_client.py`) is an access grant bound to ONE agent type — input-interface-only (conversation turn or typed submit); it is NOT an identity, cannot list/call tools, and never reaches the MCP hub. Two credential classes: `secret` (`phn_cl_sk_`, server-side) and `publishable` (`phn_cl_pk_`, browser-safe — publishable clients REQUIRE ≥1 allowed origin; requests from non-allowlisted origins or with no Origin header are rejected at the CH gateway, and per-client rate limits are enforced; origins support wildcards like `https://*.acme.com`). Conversational clients use stateful sessions (`POST /integrate/conversations` → messages → end; the CH gateway mirrors the CC chat flow: prepare-turn → AR conversation turn → append-turn); typed clients use `/integrate/submit`. Conversational invocations surface under Sessions (`ConversationSession`, channel='integration'); typed submits create AgentJobs (Execution Logs). `/integrate/chat` is RETIRED. Execution for conversation turns is sessionless by design (no AgentJob, no execution logging). Management UI: Clients tab on the agent type detail dialog + global Agent Client page under Integrations. SDKs: `sdk/parthenon-js` (widget + client), `sdk/parthenon-python`; runnable demo: `agent-client-demo-app` (port 7002)."

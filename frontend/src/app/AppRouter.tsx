@@ -40,6 +40,7 @@ import { DecisionToolsPage } from '../pages/agents/DecisionToolsPage'
 import { DataTypesPage } from '../pages/data-types/DataTypesPage'
 import { AgentOutputsPage } from '../pages/agent-outputs/AgentOutputsPage'
 import { ApiKeyListPage } from '../pages/api-keys/ApiKeyListPage'
+import { AgentClientsPage } from '../pages/agent-types/AgentClientsPage'
 import { AccessDeniedPage } from '../pages/AccessDeniedPage'
 import { TenantSettingsPage } from '../pages/tenant/TenantSettingsPage'
 import { OnboardingPage } from '../pages/tenant/OnboardingPage'
@@ -113,6 +114,7 @@ export function AppRouter() {
           <Route path="/chat/:agentTypeId?" element={<ChatPage />} />
           <Route path="/agents/:agentTypeId/chat/:sessionId" element={<ChatPage />} />
           <Route path="/api-keys" element={<ApiKeyListPage />} />
+          <Route path="/clients" element={<AgentClientsPage />} />
           <Route path="/permissions/access-requests" element={<AccessRequestsPage />} />
           <Route path="/user-permissions/*" element={<PermissionsPage />} />
 

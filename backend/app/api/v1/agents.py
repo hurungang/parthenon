@@ -2604,6 +2604,8 @@ def _runtime_topology_read(projection: Any) -> RuntimeTopologyRead:
                 schedule_id=node.schedule_id,
                 schedule_cron=node.schedule_cron,
                 schedule_description=node.schedule_description,
+                trigger_client_id=node.trigger_client_id,
+                trigger_client_name=node.trigger_client_name,
                 tool_calls=[
                     ToolCallRouteRead(
                         tool_name=call.tool_name,

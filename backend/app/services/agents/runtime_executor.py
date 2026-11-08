@@ -66,6 +66,24 @@ except ImportError:
     logger.warning("LangChain not installed — runtime executor will use stub execution mode")
 
 
+_THINKING_MODE_MODEL_KEYWORDS = ("reasoner", "thinking", "r1", "v4", "-flash")
+
+
+def _is_thinking_mode_model(provider_type: str, model_id: str) -> bool:
+    """Return True when the model runs in 'thinking/reasoning' mode.
+
+    Thinking-mode models (e.g. DeepSeek reasoner/thinking variants) do NOT
+    support forced ``tool_choice``, which LangChain's ToolStrategy /
+    ProviderStrategy structured output relies on internally.
+    """
+    mid = (model_id or "").lower()
+    if "thinking" in mid:
+        return True
+    if (provider_type or "").lower() == "deepseek":
+        return any(kw in mid for kw in _THINKING_MODE_MODEL_KEYWORDS)
+    return False
+
+
 def _sanitize_tool_name_for_openai(tool_name: str) -> str:
     """Sanitize MCP tool name for OpenAI API (replace / with _).
     
@@ -2188,25 +2206,26 @@ class AgentRuntimeExecutor:
         # LangChain auto-promotes to ProviderStrategy when the model capability
         # profile reports native structured-output support.
         #
-        # DeepSeek reasoning models (deepseek-reasoner / R1) activate "thinking
-        # mode" which does NOT support forced tool_choice.  ToolStrategy
-        # internally forces tool_choice on a hidden response tool, so we must
-        # skip it for these models and fall back to prompt-based output instead.
+        # Thinking-mode models (DeepSeek reasoner / R1 / v4-flash variants, or
+        # any model with "thinking" in its id) activate "thinking mode" which
+        # does NOT support forced tool_choice.  ToolStrategy internally forces
+        # tool_choice on a hidden response tool, so we must skip it for these
+        # models and fall back to prompt-based output instead.
         _prov_type = model_config_dict.get("provider_type", "")
-        _is_ds_reasoning = _prov_type == "deepseek" and "reasoner" in model_id.lower()
-        if output_json_schema and not _is_ds_reasoning:
+        _is_thinking_model = _is_thinking_mode_model(_prov_type, model_id)
+        if output_json_schema and not _is_thinking_model:
             from langchain.agents.structured_output import ToolStrategy
 
             response_format: Any = ToolStrategy(schema=output_json_schema)
         else:
             response_format: Any = None
-            if output_json_schema and _is_ds_reasoning:
+            if output_json_schema and _is_thinking_model:
                 schema_prompt: str | None = context.get("output_schema_prompt") if isinstance(context, dict) else None
                 if schema_prompt:
                     base = system_instruction or ""
                     system_instruction = f"{base}\n\n{schema_prompt}".strip()
                     logger.info(
-                        "Session %s: DeepSeek reasoning model detected — "
+                        "Session %s: thinking-mode model detected — "
                         "injected output schema into system prompt (ToolStrategy skipped)",
                         session_id,
                     )
@@ -2288,10 +2307,49 @@ class AgentRuntimeExecutor:
         from langgraph.errors import GraphInterrupt
 
         try:
-            _result = await _agent.ainvoke(
-                {"messages": messages},
-                config=_config,
-            )
+            try:
+                _result = await _agent.ainvoke(
+                    {"messages": messages},
+                    config=_config,
+                )
+            except Exception as _invoke_exc:
+                # Runtime fallback: some thinking-mode models reject forced
+                # tool_choice (raised by structured-output ToolStrategy) with a
+                # 400 even when static detection missed them. Retry ONCE
+                # without structured output (schema injected into prompt).
+                _exc_str = str(_invoke_exc)
+                _status_code = getattr(_invoke_exc, "status_code", None)
+                _is_tool_choice_rejection = (
+                    (_status_code == 400 or type(_invoke_exc).__name__ == "BadRequestError")
+                    and ("tool_choice" in _exc_str or "thinking mode" in _exc_str.lower())
+                )
+                if not _is_tool_choice_rejection:
+                    raise
+
+                logger.warning(
+                    "Session %s: model rejected forced tool_choice — retrying without structured output: %s",
+                    session_id, _exc_str,
+                )
+                _retry_schema_prompt = (
+                    context.get("output_schema_prompt")
+                    if isinstance(context, dict) else None
+                )
+                _retry_instruction = system_instruction
+                if output_json_schema and _retry_schema_prompt:
+                    _retry_instruction = (
+                        f"{system_instruction or ''}\n\n{_retry_schema_prompt}".strip()
+                    )
+                _retry_agent = create_agent(
+                    model=_llm,
+                    tools=lc_tools,
+                    system_prompt=_retry_instruction or None,
+                    response_format=None,
+                    checkpointer=_checkpointer,
+                )
+                _result = await _retry_agent.ainvoke(
+                    {"messages": messages},
+                    config=_config,
+                )
         except GraphInterrupt as _gi:
             # Fallback: older LangGraph versions that raise instead of returning
             _pending_interrupts: list[Any] = getattr(_gi, "interrupts", [])
@@ -2933,8 +2991,15 @@ class AgentRuntimeExecutor:
         # 4. Status events accumulator
         status_events: list[dict[str, str]] = []
 
+        # Wall-clock of the most recent status event — the invoke watchdog
+        # treats recent activity (tool calls streaming by) as progress and
+        # extends the wait instead of cancelling a healthy turn (a long
+        # management turn legitimately exceeds the per-wait LLM bound).
+        _last_activity = {"at": time.monotonic()}
+
         async def emit_status_event(event: dict[str, str]) -> None:
             status_events.append(event)
+            _last_activity["at"] = time.monotonic()
             if status_event_callback is not None:
                 await status_event_callback(event)
 
@@ -3064,6 +3129,12 @@ class AgentRuntimeExecutor:
                     ),
                 )
             )
+            # Idle tolerance for the watchdog: if no status event has fired
+            # within this window (and no intervention is pending), the turn
+            # is considered hung and cancelled.
+            _activity_window = float(
+                max(30, int(getattr(_get_settings(), "conversation_activity_window_seconds", 90)))
+            )
             _invoke_task: asyncio.Task = asyncio.ensure_future(
                 _agent.ainvoke(
                     {"messages": input_messages},
@@ -3073,6 +3144,25 @@ class AgentRuntimeExecutor:
             _intervention_wait_started = time.monotonic()
             from app.agent_runtime import conversation_resume as _conv_resume
 
+            # Watchdog loop: each wait is bounded by the per-invoke LLM
+            # timeout, but a healthy turn is extended when either (a) a
+            # human_intervene is pending, or (b) status events (tool calls)
+            # have streamed by SINCE THIS WAIT BEGAN and none went idle for
+            # longer than the activity window — the turn is visibly making
+            # progress. A silently hung LLM call emits nothing, so it is
+            # still cancelled after the first bound (hang protection kept).
+            def _watchdog_should_extend() -> bool:
+                _pending_now = _conv_resume.is_pending(conv_session_id)
+                _elapsed_pause = time.monotonic() - _intervention_wait_started
+                if _pending_now and _elapsed_pause < _intervention_window:
+                    return True
+                _idle_for = time.monotonic() - _last_activity["at"]
+                return (
+                    _last_activity["at"] > _wait_activity_baseline
+                    and _idle_for < _activity_window
+                )
+
+            _wait_activity_baseline = _last_activity["at"]
             while True:
                 try:
                     _result = await asyncio.wait_for(
@@ -3081,13 +3171,13 @@ class AgentRuntimeExecutor:
                     )
                     break
                 except asyncio.TimeoutError:
-                    _pending_now = _conv_resume.is_pending(conv_session_id)
-                    _elapsed_pause = time.monotonic() - _intervention_wait_started
-                    if _pending_now and _elapsed_pause < _intervention_window:
+                    if _watchdog_should_extend():
                         logger.info(
-                            "Conversation turn %s still paused on "
-                            "human_intervene (%.0fs) — extending wait",
-                            conv_session_id, _elapsed_pause,
+                            "Conversation turn %s still active (pending=%s, "
+                            "idle=%.0fs) — extending wait",
+                            conv_session_id,
+                            _conv_resume.is_pending(conv_session_id),
+                            time.monotonic() - _last_activity["at"],
                         )
                         continue
                     _invoke_task.cancel()
@@ -3160,13 +3250,46 @@ class AgentRuntimeExecutor:
                     "operator response (approval=%s)",
                     conv_session_id, response_value.get("approval_value"),
                 )
-                _result = await asyncio.wait_for(
+                _resume_task: asyncio.Task = asyncio.ensure_future(
                     _agent.ainvoke(
                         Command(resume=response_value),
                         config=_config,
-                    ),
-                    timeout=_turn_timeout,
+                    )
                 )
+                # Surface processing state immediately after the operator
+                # responds — otherwise the chat shows no activity indicator
+                # until the next tool call fires.
+                await emit_status_event({"status": "thinking"})
+                # Same activity-aware watchdog as the initial invoke: the
+                # post-resume remainder (management tool + final answer) may
+                # legitimately exceed the per-wait LLM bound; only a turn
+                # that has gone idle since the resume began (or re-paused)
+                # is cancelled.
+                _resume_activity_baseline = _last_activity["at"]
+                while True:
+                    try:
+                        _result = await asyncio.wait_for(
+                            asyncio.shield(_resume_task),
+                            timeout=_turn_timeout,
+                        )
+                        break
+                    except asyncio.TimeoutError:
+                        _still_pending = (
+                            conversation_resume.is_pending(conv_session_id)
+                        )
+                        _idle_for = time.monotonic() - _last_activity["at"]
+                        if _still_pending or (
+                            _last_activity["at"] > _resume_activity_baseline
+                            and _idle_for < _activity_window
+                        ):
+                            logger.info(
+                                "Conversation turn %s still active after "
+                                "resume (pending=%s, idle=%.0fs) — extending wait",
+                                conv_session_id, _still_pending, _idle_for,
+                            )
+                            continue
+                        _resume_task.cancel()
+                        raise
             except asyncio.TimeoutError:
                 await emit_status_event({"status": "timeout_or_failed"})
                 return (
@@ -3246,13 +3369,46 @@ class AgentRuntimeExecutor:
                     "operator response (approval=%s)",
                     conv_session_id, response_value.get("approval_value"),
                 )
-                _result = await asyncio.wait_for(
+                _resume_task: asyncio.Task = asyncio.ensure_future(
                     _agent.ainvoke(
                         Command(resume=response_value),
                         config=_config,
-                    ),
-                    timeout=_turn_timeout,
+                    )
                 )
+                # Surface processing state immediately after the operator
+                # responds — otherwise the chat shows no activity indicator
+                # until the next tool call fires.
+                await emit_status_event({"status": "thinking"})
+                # Same activity-aware watchdog as the initial invoke: the
+                # post-resume remainder (management tool + final answer) may
+                # legitimately exceed the per-wait LLM bound; only a turn
+                # that has gone idle since the resume began (or re-paused)
+                # is cancelled.
+                _resume_activity_baseline = _last_activity["at"]
+                while True:
+                    try:
+                        _result = await asyncio.wait_for(
+                            asyncio.shield(_resume_task),
+                            timeout=_turn_timeout,
+                        )
+                        break
+                    except asyncio.TimeoutError:
+                        _still_pending = (
+                            conversation_resume.is_pending(conv_session_id)
+                        )
+                        _idle_for = time.monotonic() - _last_activity["at"]
+                        if _still_pending or (
+                            _last_activity["at"] > _resume_activity_baseline
+                            and _idle_for < _activity_window
+                        ):
+                            logger.info(
+                                "Conversation turn %s still active after "
+                                "resume (pending=%s, idle=%.0fs) — extending wait",
+                                conv_session_id, _still_pending, _idle_for,
+                            )
+                            continue
+                        _resume_task.cancel()
+                        raise
             except asyncio.TimeoutError:
                 await emit_status_event({"status": "timeout_or_failed"})
                 return (
@@ -3667,9 +3823,8 @@ class AgentRuntimeExecutor:
                 "mistral", "groq", "together", "fireworks",
                 "perplexity", "deepseek", "anthropic",
             })
-            _is_ds_reasoning_cc = (
-                _pk == "deepseek"
-                and "reasoner" in (getattr(agent_type, "model_id", "") or "").lower()
+            _is_ds_reasoning_cc = _is_thinking_mode_model(
+                _pk, getattr(agent_type, "model_id", "") or ""
             )
             _cc_rf: Any = (
                 agent_type.output_schema

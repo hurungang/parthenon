@@ -48,6 +48,7 @@
   },
   "nav": {
     "apiKeys": "API Keys",
+    "agentClients": "Agent Client",
     "dashboard": "Dashboard",
     "agentOutputs": "Agent Outputs",
     "mcpHub": "MCP Hub",
@@ -169,6 +170,18 @@
       "serverFilter": "Filter by server",
       "allServers": "All Servers"
     },
+    "dialog": {
+      "tabs": {
+        "details": "Details",
+        "tools": "Tools"
+      },
+      "viewServerTitle": "Server Details",
+      "loadTools": "Load Tools",
+      "loadingTools": "Loading tools...",
+      "saveFirstHint": "Save the server first — tools can only be loaded once the server has an ID.",
+      "noTools": "No tools loaded yet. Use \"Load Tools\" to sync this server's tools.",
+      "loadFailed": "Failed to load tools"
+    },
     "system": {
       "builtIn": "Built-in",
       "description": "System entry represents Parthenon's built-in platform tools",
@@ -186,6 +199,9 @@
       "warnings": "Sync completed with warnings"
     },
     "manageSessions": "Manage Sessions",
+    "servers": {
+      "openServerDetails": "Open server details"
+    },
     "sessions": {
       "title": "Sessions",
       "create": "Add Session",
@@ -553,6 +569,7 @@
       "startChat": "Start Chat",
       "systemBadge": "System",
       "systemProtected": "System agent types cannot be modified or deleted",
+      "systemReadOnly": "System agent — read only",
       "noPlan": "No plan generated yet. Save the agent type to generate a plan.",
       "noDescription": "No description",
       "systemPrompt": "System Prompt",
@@ -780,6 +797,7 @@
       "runtimeMonitorTriggerDetailEmail": "Email",
       "runtimeMonitorTriggerDetailUserType": "Type",
       "runtimeCommunicationHub": "Communication Hub",
+      "runtimeAgentRuntimeRegion": "Agent Runtime",
       "runtimeMonitorSystemTools": "System Tools",
       "runtimeMonitorResetFilters": "Reset filters",
       "runtimeMonitorFilterButton": "Map filters",
@@ -789,7 +807,10 @@
       "runtimeMonitorWindowUnitHours": "Hours",
       "runtimeMonitorTriggerPersonKind": "Person",
       "runtimeMonitorTriggerScheduleKind": "Schedule",
+      "runtimeMonitorTriggerClientKind": "Client",
       "runtimeMonitorTriggerDetailCreator": "Created by",
+      "runtimeMonitorTriggerDetailClientKeyType": "Key type",
+      "runtimeMonitorTriggerDetailClientAgentType": "Agent type",
       "runtimeMonitorTriggerDetailExecutions": "Triggered executions ({{count}})",
       "modelUsageTitle": "Model Usage Guardrails",
       "modelUsageSubtitle": "Current usage posture by model and configured period limits.",
@@ -1345,7 +1366,17 @@
         "previewTitle": "Approval Preview",
         "cancelled": "Intervention cancelled — conversation resumed",
         "responded": "Response sent",
-        "placeholderText": "Type your response..."
+        "placeholderText": "Type your response...",
+        "orProvideOwnAnswer": "Or provide your own answer",
+        "resolvedLabel": "Intervention resolved:",
+        "resolvedTitle": "Intervention resolved — {{agentType}} continued",
+        "resolvedBadge": "Actioned",
+        "yourAnswer": "Answer provided",
+        "responseSubmittedFallback": "Response submitted",
+        "viewRequest": "View request",
+        "viewRequestTitle": "Intervention request — {{agentType}} (actioned)",
+        "requestLabel": "Original request",
+        "optionsLabel": "Options"
       },
       "viewAllSessions": "View All Sessions",
       "viewAllSessionsTitle": "All sessions for this agent",

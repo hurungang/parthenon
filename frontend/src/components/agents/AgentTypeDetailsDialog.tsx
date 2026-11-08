@@ -44,6 +44,7 @@ import { AgentExecutionsDialog } from './AgentExecutionsDialog'
 import { AgentExecutionDetailsDialog } from './AgentExecutionDetailsDialog'
 import { ConversationSessionsTab } from './ConversationSessionsTab'
 import { AgentOptimizedPlanTab } from './AgentOptimizedPlanTab'
+import { AgentClientsPanel } from './AgentClientsPanel'
 import { ScriptViewDialog, type ScriptViewData } from './ScriptViewDialog'
 import { ConversationDialog } from './ConversationDialog'
 import { SopEditor } from './SopEditor'
@@ -334,6 +335,9 @@ export function AgentTypeDetailsDialog({
   }
 
   const handleEdit = () => {
+    // Defense in depth: system agent types are backend-protected — never
+    // navigate to the edit form for them.
+    if (agentType?.is_system) return
     if (agentType) {
       // Navigate to agents page with state to open edit dialog
       navigate('/agents', { 
@@ -420,11 +424,22 @@ export function AgentTypeDetailsDialog({
             {agentType ? agentType.name : t('agents.types.dialogTitle')}
           </Typography>
           <Box display="flex" alignItems="center" gap={1}>
-            {agentType && (
+            {agentType && !agentType.is_system && (
               <Tooltip title={t('app.edit')}>
                 <IconButton size="small" onClick={handleEdit} aria-label={t('app.edit')}>
                   <EditIcon />
                 </IconButton>
+              </Tooltip>
+            )}
+            {agentType?.is_system && (
+              <Tooltip title={t('agents.types.systemProtected')}>
+                {/* Disabled wrapper keeps the tooltip reachable while making
+                    the edit action clearly unavailable for system agents. */}
+                <span>
+                  <IconButton size="small" disabled aria-label={t('agents.types.systemProtected')} data-testid="edit-agent-type-disabled">
+                    <EditIcon />
+                  </IconButton>
+                </span>
               </Tooltip>
             )}
             <Tooltip title={t('app.close')}>
@@ -484,6 +499,12 @@ export function AgentTypeDetailsDialog({
                     value={4}
                     id="agent-details-tab-4"
                     aria-controls="agent-details-tabpanel-4"
+                  />
+                  <Tab
+                    label={t('agents.types.clientsTab', 'Clients')}
+                    value={5}
+                    id="agent-details-tab-5"
+                    aria-controls="agent-details-tabpanel-5"
                   />
                 </Tabs>
               </Box>
@@ -889,6 +910,13 @@ export function AgentTypeDetailsDialog({
                         })
                       }
                     />
+                  </TabPanel>
+                )}
+
+                {/* ── Tab 5: Clients (third-party integration access grants) ── */}
+                {agentTypeId && (
+                  <TabPanel value={activeTab} index={5}>
+                    <AgentClientsPanel agentTypeId={agentTypeId} />
                   </TabPanel>
                 )}
               </Box>

@@ -155,10 +155,15 @@ export function AgentDetailBubble({
   // The human shown on the "Triggered by" row: the resolved creator/user
   // label when known; for schedule-triggered nodes the schedule name is
   // NEVER substituted (Phase 13) — it degrades to the unknown label like
-  // any other node whose trigger human is unknown.
+  // any other node whose trigger human is unknown.  Client-triggered nodes
+  // fall back to the client name.
   const triggeredByDisplay =
     node.trigger_user_label ??
-    (node.trigger_source === 'schedule' ? null : node.trigger_source_label)
+    (node.trigger_source === 'schedule'
+      ? null
+      : node.trigger_source === 'client'
+        ? (node.trigger_client_name ?? node.trigger_source_label)
+        : node.trigger_source_label)
 
   // Agent-kind: lazily fetch the backing job for its recorded guardrail
   // usage (``output_data.guardrail_usage``).  Failures degrade to "no

@@ -110,8 +110,8 @@ def test_hello_user_tool_empty_identity_denies():
 # ── tool_registry ────────────────────────────────────────────────────────────
 
 
-def test_tool_registry_has_exactly_three_tools():
-    assert len(tool_registry) == 3
+def test_tool_registry_has_all_ten_tools():
+    assert len(tool_registry) == 10
 
 
 def test_tool_registry_contains_hello_world():
@@ -153,13 +153,13 @@ def test_tool_registry_hello_user_invocable():
 # ── TOOL_MANIFEST ────────────────────────────────────────────────────────────
 
 
-def test_tool_manifest_has_exactly_three_entries():
-    assert len(TOOL_MANIFEST) == 3
+def test_tool_manifest_has_all_ten_entries():
+    assert len(TOOL_MANIFEST) == 10
 
 
 def test_tool_manifest_tool_names():
     names = {e["name"] for e in TOOL_MANIFEST}
-    assert names == {"helloWorld", "helloAgent", "helloUser"}
+    assert {"helloWorld", "helloAgent", "helloUser"} <= names
 
 
 def test_tool_manifest_hello_world_description():
@@ -185,7 +185,8 @@ def test_tool_manifest_each_has_input_schema():
         assert "required" in schema
 
 
-def test_tool_manifest_all_input_schemas_have_no_required_inputs():
-    """All three tools take no arguments."""
+def test_tool_manifest_greeting_input_schemas_have_no_required_inputs():
+    """The greeting tools take no arguments."""
     for entry in TOOL_MANIFEST:
-        assert entry["inputSchema"]["required"] == []
+        if entry["name"] in {"helloWorld", "helloAgent", "helloUser"}:
+            assert entry["inputSchema"]["required"] == []

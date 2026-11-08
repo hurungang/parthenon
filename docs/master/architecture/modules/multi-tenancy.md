@@ -128,6 +128,7 @@ The public registration endpoint group (the only unauthenticated group, active o
 | Internal calls | Signed `X-Internal-Tenant-*` headers mandatory, fail-closed 401; CH/AR verify-and-forward only; CC is the sole signing origin; all CH/AR→CC egress via `internal_httpx_client` |
 | Shared-slot legacy | Retired: NULL-tenant rows adopted into root; `tenant_id` NOT NULL on data plane; exact tenant matching only |
 | MCP API keys | Issued per tenant; validation binds the session to that tenant |
+| Third-party clients | Clients and their credentials (`secret` / `publishable`) are tenant-scoped under strict isolation: created, validated, and resolved within the owning tenant, never reaching another tenant's agent types or resources |
 | A2A messaging | Broker never routes across tenants; pairs must share the tenant context |
 | Quota | Single decision point in CC; scheduler consults at dispatch; usage never refunded |
 | Observability | Tenant attribution on all traces, logs, and audit events; cross-tenant attempts are security events |

@@ -93,6 +93,29 @@ class InterveneRequestStore:
                 agent_session_id,
                 intervention_type.value,
             )
+
+            # Persist the intervention QUESTION as a chat turn so the Q&A is
+            # part of the conversation history (the response turn is created
+            # in submit_response). Content carries the reason markdown plus
+            # the choices for choice-type requests, so a resumed session can
+            # re-render the full request view-only.
+            if conversation_session_id is not None:
+                question_content = reason
+                if intervention_type == InterventionType.choice and choices:
+                    question_content = (
+                        f"{reason}\n\n"
+                        + "\n".join(f"- {choice}" for choice in choices)
+                    )
+                await ConversationStore().add_turn(
+                    session_id=conversation_session_id,
+                    role=TurnRole.system,
+                    content=question_content,
+                    db=db,
+                    turn_type=TurnType.intervene_request,
+                    intervene_request_id=request.id,
+                )
+                span.set_attribute("intervene.question_turn_created", True)
+
             return request
 
     async def get_request(

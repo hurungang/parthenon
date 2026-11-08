@@ -20,6 +20,7 @@ from app.db.models.agents import (
     AgentJobStatus,
     AgentType,
 )
+from app.db.models.agent_client import AgentClient
 from app.db.models.agent_run_relationship import AgentRunRelationship
 from app.db.models.conversations import (
     ConversationSession,
@@ -138,9 +139,11 @@ class TopologyNode:
     #   "user"             — directly user-triggered
     #   "delegated"        — delegated child (inherits parent's trigger)
     #   "schedule"         — schedule-triggered (label is the schedule name)
+    #   "client"           — third-party client invocation (label is the client name)
     #   "unknown"          — no determinable trigger source
     trigger_source: str = "unknown"
-    # Human-readable trigger source label (user display name or schedule name).
+    # Human-readable trigger source label (user display name, schedule name,
+    # or client name).
     trigger_source_label: str | None = None
     # Resolved USER behind the trigger — the chat user for direct/delegated
     # runs, the schedule CREATOR for schedule-triggered runs.  Lets the UI
@@ -153,6 +156,9 @@ class TopologyNode:
     schedule_id: uuid.UUID | None = None
     schedule_cron: str | None = None
     schedule_description: str | None = None
+    # The client entity's own details (client-triggered nodes only).
+    trigger_client_id: uuid.UUID | None = None
+    trigger_client_name: str | None = None
     # Tool-call history for this node (latest first), each resolved to an
     # MCP server slug via ``parse_tool_name``.
     tool_calls: list["ToolCallRoute"] = field(default_factory=list)
@@ -692,6 +698,28 @@ class RuntimeTopologyController:
             if conv.triggered_by_user_id is not None:
                 session_to_user[conv.id] = conv.triggered_by_user_id
 
+        # Client invocation provenance: sessions triggered by a third-party
+        # client credential (integration gateway).  A client is NOT an
+        # identity — it renders as its own trigger type in the monitor.
+        session_to_client: dict[uuid.UUID, uuid.UUID] = {}
+        for job in active_jobs:
+            if getattr(job, "triggered_by_client_id", None) is not None:
+                session_to_client[job.id] = job.triggered_by_client_id
+        for conv in active_convs:
+            if getattr(conv, "triggered_by_client_id", None) is not None:
+                session_to_client[conv.id] = conv.triggered_by_client_id
+
+        # Resolve client display names for all client-triggered sessions.
+        client_names: dict[uuid.UUID, str] = {}
+        if session_to_client:
+            client_result = await db.execute(
+                select(AgentClient.id, AgentClient.name).where(
+                    AgentClient.id.in_(set(session_to_client.values()))
+                )
+            )
+            for client_id, name in client_result.fetchall():
+                client_names[client_id] = name or ""
+
         # Resolve identity display names for all trigger users.
         identity_names: dict[uuid.UUID, str] = {}
         if session_to_user:
@@ -766,6 +794,17 @@ class RuntimeTopologyController:
                 node.trigger_user_label = identity_names.get(
                     session_to_user.get(node.session_id)
                 )
+            elif node.session_id in session_to_client:
+                # Client-invoked (third-party integration gateway): the
+                # client is NOT a person — label and details are the client
+                # entity itself; no user label is resolved.
+                client_id = session_to_client[node.session_id]
+                node.trigger_source = "client"
+                node.trigger_client_id = client_id
+                node.trigger_client_name = client_names.get(client_id)
+                node.trigger_source_label = node.trigger_client_name
+                node.trigger_user_id = None
+                node.trigger_user_label = None
             elif node.kind == "conversation":
                 # Conversations report their own chat user — a backing agent
                 # job does NOT make the conversation "delegated".

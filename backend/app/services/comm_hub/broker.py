@@ -53,6 +53,15 @@ def _session_channel(session_id: str) -> str:
     return f"parthenon:session:{session_id}"
 
 
+def _session_failure_key(session_id: str) -> str:
+    """Redis key holding a sticky terminal-failure record for a session."""
+    return f"parthenon:session:{session_id}:failure"
+
+
+# TTL for the sticky session-failure record (waiters poll it to fail fast).
+SESSION_FAILURE_TTL_SECONDS = 3600
+
+
 class MessageBroker:
     """
     Redis pub/sub broker with per-session typed message channels.
@@ -99,6 +108,52 @@ class MessageBroker:
         finally:
             await pubsub.unsubscribe(channel)
             await pubsub.aclose()
+
+    async def publish_session_failure(self, session_id: str, error: str) -> None:
+        """Mark a session's A2A wait as FAILED (terminal, best-effort).
+
+        Does two things so waiters never miss it:
+        1. Publishes an ``agent_result`` message with ``status=failed`` on the
+           session's pub/sub channel (delivers to already-subscribed waiters).
+        2. Persists a sticky failure record in Redis with a TTL (catches
+           waiters that subscribe AFTER the failure happened — pub/sub is
+           fire-and-forget).
+        """
+        payload = json.dumps({"status": "failed", "error": error})
+        try:
+            await self.publish(
+                BrokerMessage(
+                    session_id=session_id,
+                    sender_role="communication_hub",
+                    content=payload,
+                    metadata={"message_type": "agent_result"},
+                )
+            )
+        except Exception as exc:
+            logger.warning("Failed to publish session failure for %s: %s", session_id, exc)
+        try:
+            await self._redis.set(
+                _session_failure_key(session_id),
+                payload,
+                ex=SESSION_FAILURE_TTL_SECONDS,
+            )
+        except Exception as exc:
+            logger.warning("Failed to persist session failure for %s: %s", session_id, exc)
+
+    async def get_session_failure(self, session_id: str) -> dict[str, Any] | None:
+        """Return the sticky failure record for a session, if any."""
+        try:
+            raw = await self._redis.get(_session_failure_key(session_id))
+        except Exception as exc:
+            logger.warning("Failed to read session failure for %s: %s", session_id, exc)
+            return None
+        if not raw:
+            return None
+        try:
+            data = json.loads(raw)
+        except json.JSONDecodeError:
+            return None
+        return data if isinstance(data, dict) else None
 
     async def close(self) -> None:
         """Close the Redis connection."""

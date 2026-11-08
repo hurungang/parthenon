@@ -804,11 +804,24 @@ describe('PanelTopologyCanvas', () => {
     renderCanvas({ ...FULL_DRAFT, sopBindings: [] })
 
     await waitFor(() => {
-      expect(mockTopologyNodes.some((n) => (n as { id: string }).id === 'sop_empty')).toBe(true)
+      expect(mockTopologyNodes.some((n) => (n as { id: string }).id === 'skill_skill-1')).toBe(true)
     })
+    // No SOP nodes at all — the empty SOP placeholder is omitted when the
+    // draft still equips skills (mirrors the Skills section behaviour).
+    expect(mockTopologyNodes.some((n) => (n as { id: string }).id.startsWith('sop_'))).toBe(false)
     // No SOP detail requests at all — the query is disabled without bound SOPs.
     expect(mockApiGet.mock.calls.some((call) => String(call[0]).startsWith('/sops/sop'))).toBe(false)
     expect(mockTopologyEdges.some((e) => (e as { source: string }).source?.startsWith('sop_'))).toBe(false)
+  })
+
+  it('keeps a single empty placeholder only when the draft has no capabilities at all', async () => {
+    mockApiGet.mockClear()
+    mockApiGet.mockResolvedValue({ data: [] })
+    renderCanvas({ ...FULL_DRAFT, sopBindings: [], skillBindings: [] })
+
+    await waitFor(() => {
+      expect(mockTopologyNodes.some((n) => (n as { id: string }).id === 'sop_empty')).toBe(true)
+    })
   })
 
   it('hides the Skills section from the composed graph when the draft equips no skills', async () => {

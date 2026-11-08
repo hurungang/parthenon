@@ -1069,6 +1069,7 @@ async def list_all_tools(
     _: dict = Depends(require_permission(RT_INTEGRATION_MCP_HUB, "read")),
     limit: int = Query(200, ge=1, le=200),
     offset: int = Query(0, ge=0),
+    server_id: uuid.UUID | None = Query(None, description="Filter tools by their parent MCP server"),
 ) -> list[McpToolRead]:
     """List every tool the caller may browse, deterministically paged.
 
@@ -1107,6 +1108,11 @@ async def list_all_tools(
             tool_read.name = build_tool_name(tool_read.server_slug, bare_name)
         db_tool_reads.append(tool_read)
     all_tools = _system_tool_reads() + await _decision_tool_reads(db, tenant_id) + db_tool_reads
+    # NOTE: when the handler is invoked directly (unit tests), ``server_id`` is
+    # the raw ``Query`` default object rather than ``None`` — resolve it.
+    filter_server_id = server_id if isinstance(server_id, uuid.UUID) else None
+    if filter_server_id is not None:
+        all_tools = [tool for tool in all_tools if tool.server_id == filter_server_id]
     if not await _cc_visible(request, db):
         all_tools = [tool for tool in all_tools if tool.server_slug != "cc"]
     # Deduplicate by tool ID — system tools are both returned as virtual objects

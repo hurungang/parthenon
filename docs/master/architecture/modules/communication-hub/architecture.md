@@ -244,6 +244,26 @@ sequenceDiagram
 
 The Communication Hub supports structured WebSocket messages for intervention and chat flows. Intervention messages include request delivery, response submission, cancellation, and status updates between server and client. Chat messages from clients are rejected when the session has a pending intervention, ensuring orderly resolution of HITL requests.
 
+## Integration Gateway (Third-Party Clients)
+
+The hub exposes a public integration surface for third-party consumers of an agent type's *input interface* — conversational chat and typed request/response — plus white-label widget and theme serving and JS/Python SDK distribution. Requests authenticate with a **client credential** (not an identity): the hub validates it against Control Center over mTLS, resolving it to `(client → agent type + config)`. A client credential yields **no agent identity token**; the target agent type runs with its own identity + role as configured. Edge enforcement applies each client's allowed-origins check and rate limit. A `secret` client (server-to-server) may additionally carry an optional end-user token held CH-side; the `publishable` (browser) path carries no user identity.
+
+```mermaid
+flowchart LR
+    SDK["Third-Party SDK / Widget"]
+    GW["Integration Gateway<br/>chat + request/response"]
+    ENF["Origin Check + Rate Limit"]
+    AUTH["Client Credential Auth<br/>secret / publishable"]
+    CC["Control Center<br/>resolve client → agent type + config"]
+    AR["Agent Runtime<br/>agent type runs as itself"]
+
+    SDK -->|"client credential"| GW
+    GW --> ENF --> AUTH
+    AUTH -->|"mTLS"| CC
+    AUTH -->|"resolved"| GW
+    GW -->|"delegate input"| AR
+```
+
 ## Sandboxed Script Egress
 
 Sandboxed scripts in Agent Runtime reach the Hub exclusively through the

@@ -302,10 +302,11 @@ function refLabel(ref: ResolvedRef, id: string, loadingLabel: string): string {
  * skills (from its loaded detail) render as indented tree children beneath
  * it — each SOP wrapped in its own group box — connected by SOP-accent-
  * coloured tree elbow composition edges, and their tools route like any
- * other skill's. Empty slots render as dashed placeholders — except
- * the Skills section, which is omitted entirely when no skill is directly
- * equipped — and the conversational output lock is preserved. Purely
- * client-side composition.
+ * other skill's. Empty slots render as dashed placeholders — except the
+ * Skills and SOPs sections, which are omitted entirely when nothing is
+ * bound to them (a single empty placeholder remains only when the draft
+ * has no capabilities at all) — and the conversational output lock is
+ * preserved. Purely client-side composition.
  *
  * Pending states (FIX-20261102-100704): `pending` flags say which reference
  * lists/details are still in flight. Any BOUND entity whose name is not cached
@@ -434,7 +435,12 @@ export function buildPanelTopology(
   const grantTargets: string[] = []
 
   const sops = [...draft.sopBindings].sort((a, b) => a.order - b.order)
-  if (sops.length === 0) {
+  const skills = [...draft.skillBindings].sort((a, b) => a.order - b.order)
+  // No bound SOPs → the SOPs section is omitted entirely (no empty
+  // placeholder node, no group frame) — mirroring the Skills section below.
+  // Only when the draft has NO capabilities at all does a single empty
+  // placeholder keep the Capabilities zone from collapsing to nothing.
+  if (sops.length === 0 && skills.length === 0) {
     nodes.push({
       id: 'sop_empty',
       type: 'sop',
@@ -491,13 +497,12 @@ export function buildPanelTopology(
     }
   }
 
-  const skills = [...draft.skillBindings].sort((a, b) => a.order - b.order)
   // No directly equipped skills → the Skills section group is OMITTED
   // entirely: no empty placeholder node, no group frame, and no orphan
   // "equipped with"/"grants" edges pointing at one. Composed skills still
-  // render beneath their SOPs in the SOPs section, which keeps its own
-  // behaviour (including its empty placeholder — so the Capabilities zone
-  // collapses gracefully to it when the draft has no capabilities at all).
+  // render beneath their SOPs in the SOPs section, which is likewise
+  // omitted when no SOP is bound (see above — a single empty placeholder
+  // remains only when the draft has no capabilities at all).
   /** Skill node ids rendered in the capabilities zone (direct + composed). */
   const routedSkillNodeIds = new Set<string>()
   for (const binding of skills) {

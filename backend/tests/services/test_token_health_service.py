@@ -7,6 +7,7 @@ audit row persistence.
 """
 import uuid
 from datetime import datetime, timedelta, timezone
+from unittest.mock import AsyncMock, patch
 
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -400,3 +401,141 @@ class TestPreflight:
             agent_type.id, session_id=uuid.uuid4()
         )
         assert result.verdict == "proceed"
+
+
+class TestPreflightAutoRefresh:
+    """Delegation reliability: expired identity tokens are auto-refreshed
+    inline during preflight; only a genuinely unrecoverable token blocks."""
+
+    async def _seed_agent_type(self, db_session, identity):
+        role = AgentRole(id=uuid.uuid4(), name=f"role-{uuid.uuid4().hex[:6]}")
+        db_session.add(role)
+        await db_session.flush()
+        agent_type = AgentType(
+            id=uuid.uuid4(),
+            name=f"agent-{uuid.uuid4().hex[:6]}",
+            identity_id=identity.id,
+            role_id=role.id,
+        )
+        db_session.add(agent_type)
+        await db_session.flush()
+        return agent_type, role
+
+    async def test_expired_identity_refresh_success_proceeds(self, db_session):
+        """Expired token + successful refresh → PROCEED, state re-persisted."""
+        identity = await _seed_identity(
+            db_session,
+            token_expires_at=NOW - timedelta(hours=1),
+            token_status=AgentTokenStatus.refresh_failed,
+        )
+        agent_type, _ = await self._seed_agent_type(db_session, identity)
+
+        async def _fake_refresh(identity_id, db):
+            row = await db.get(AgentIdentity, identity_id)
+            row.token_expires_at = NOW + timedelta(days=30)
+            row.token_status = AgentTokenStatus.active
+            from app.services.token_health import persist_identity_health_state
+
+            persist_identity_health_state(
+                row, refresh_outcome=TokenRefreshOutcome.success
+            )
+            await db.flush()
+
+        with patch(
+            "app.services.token_refresh.refresh_oauth_token",
+            new=_fake_refresh,
+        ):
+            result = await TokenHealthService(db_session).run_preflight(agent_type.id)
+
+        assert result.verdict == "proceed"
+        assert "auto-refreshed" in result.targets[0].message
+        assert identity.token_health_state == TokenHealthState.healthy
+        from sqlalchemy import select
+
+        from app.db.models.token_health import TokenHealthCheck
+
+        rows = (await db_session.execute(select(TokenHealthCheck))).scalars().all()
+        assert len(rows) == 1
+        assert rows[0].check_outcome == TokenCheckOutcome.passed
+
+    async def test_expired_identity_refresh_failure_blocks_with_reason(self, db_session):
+        """Expired token + failing refresh → BLOCKED with the actionable reason."""
+        from app.services.token_refresh import TokenRefreshError
+
+        identity = await _seed_identity(
+            db_session, token_expires_at=NOW - timedelta(hours=1)
+        )
+        agent_type, _ = await self._seed_agent_type(db_session, identity)
+
+        with patch(
+            "app.services.token_refresh.refresh_oauth_token",
+            new=AsyncMock(
+                side_effect=TokenRefreshError("invalid_grant: refresh token expired")
+            ),
+        ):
+            result = await TokenHealthService(db_session).run_preflight(agent_type.id)
+
+        assert result.verdict == "blocked"
+        assert "auto-refresh failed" in result.blocked[0]
+        assert "invalid_grant" in result.blocked[0]
+        assert identity.name in result.blocked[0]
+        from sqlalchemy import select
+
+        from app.db.models.token_health import TokenHealthCheck
+
+        rows = (await db_session.execute(select(TokenHealthCheck))).scalars().all()
+        assert all(r.check_outcome == TokenCheckOutcome.blocked for r in rows)
+
+    async def test_expiring_identity_refresh_failure_still_warns_only(self, db_session):
+        """A still-valid (expiring) token must NOT be blocked by a refresh failure."""
+        from app.services.token_refresh import TokenRefreshError
+
+        identity = await _seed_identity(
+            db_session, token_expires_at=NOW + timedelta(days=3)
+        )
+        agent_type, _ = await self._seed_agent_type(db_session, identity)
+
+        with patch(
+            "app.services.token_refresh.refresh_oauth_token",
+            new=AsyncMock(side_effect=TokenRefreshError("provider down")),
+        ):
+            result = await TokenHealthService(db_session).run_preflight(agent_type.id)
+
+        assert result.verdict == "proceed_with_warnings"
+        assert "auto-refresh attempt failed" in result.warnings[0]
+
+    async def test_expired_mcp_session_not_refreshed_still_blocked(self, db_session):
+        """MCP session targets are unchanged — no refresh attempt, still BLOCKED."""
+        identity = await _seed_identity(db_session, token_expires_at=NOW + timedelta(days=30))
+        agent_type, role = await self._seed_agent_type(db_session, identity)
+        session = await _seed_session(db_session, oauth_expires_at=NOW - timedelta(hours=2))
+        db_session.add(
+            AgentRoleMcpSession(role_id=role.id, mcp_session_id=session.id, server_id=session.server_id)
+        )
+        await db_session.flush()
+
+        refresh_mock = AsyncMock()
+        with patch(
+            "app.services.token_refresh.refresh_oauth_token", new=refresh_mock
+        ):
+            result = await TokenHealthService(db_session).run_preflight(agent_type.id)
+
+        refresh_mock.assert_not_awaited()
+        assert result.verdict == "blocked"
+        assert "auto-refresh failed" not in result.blocked[0]
+
+    async def test_unexpected_refresh_error_never_crashes_preflight(self, db_session):
+        """Any unexpected error during refresh degrades to BLOCKED with reason."""
+        identity = await _seed_identity(
+            db_session, token_expires_at=NOW - timedelta(hours=1)
+        )
+        agent_type, _ = await self._seed_agent_type(db_session, identity)
+
+        with patch(
+            "app.services.token_refresh.refresh_oauth_token",
+            new=AsyncMock(side_effect=RuntimeError("boom")),
+        ):
+            result = await TokenHealthService(db_session).run_preflight(agent_type.id)
+
+        assert result.verdict == "blocked"
+        assert "boom" in result.blocked[0]

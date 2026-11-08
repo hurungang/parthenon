@@ -58,6 +58,10 @@ Decision tools are per-tenant by definition — a tenant's decision tools are vi
 - **Questions are auto-derived** from the tool's output data type — no manual question authoring.
 - **State is auto-mapped** from the input data type by default; advanced mapping remains optional for special cases.
 
+### Third-Party Clients
+
+Third-party [clients](third-party-agent-integration.md) and their credentials are tenant-owned like every other business entity: a client is created by, visible to, and revocable only within its owning tenant, and its invocations resolve strictly within that tenant — a client can never reach another tenant's agent types, data, or resources.
+
 ## One-Time Legacy Adoption Migration
 
 Existing tenant-less (NULL-tenant) shared rows — data types, seeded skills, scheduled jobs, shared recipient groups, and any other tenant-less business rows — were adopted into the root tenant by a single, idempotent migration. After adoption, all lookups match the exact session tenant only; the NULL-tenant "shared slot" no longer exists as a concept. Re-running the migration is safe and makes no further changes.

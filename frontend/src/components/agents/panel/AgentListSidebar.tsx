@@ -24,6 +24,15 @@ interface AgentListSidebarProps {
   onCreate: () => void
 }
 
+// Hard cap for per-item descriptions: substring in JS so long text can never
+// stretch the sidebar items or the layout.
+const SIDEBAR_DESCRIPTION_MAX_LENGTH = 60
+
+function truncateSidebarDescription(value: string): string {
+  if (value.length <= SIDEBAR_DESCRIPTION_MAX_LENGTH) return value
+  return `${value.slice(0, SIDEBAR_DESCRIPTION_MAX_LENGTH).trimEnd()}…`
+}
+
 /**
  * Agent list sidebar of the Agent Management Panel: client-side search over the
  * fetched agent types, selection highlight, and loading / empty / permission
@@ -58,6 +67,19 @@ export function AgentListSidebar({
         gap: 1,
         height: '100%',
         minHeight: 0,
+        // Contain every child to the card width: flex children default to
+        // min-width:auto, so the noWrap list rows' min-content (full
+        // un-truncated text width) would otherwise size the rows wider than
+        // the column and stretch the search field / create button with it.
+        width: '100%',
+        minWidth: 0,
+        maxWidth: '100%',
+        overflow: 'hidden',
+        '& > *': {
+          minWidth: 0,
+          maxWidth: '100%',
+          overflow: 'hidden',
+        },
       }}
     >
       <Box display="flex" alignItems="center" justifyContent="space-between">
@@ -105,11 +127,11 @@ export function AgentListSidebar({
                 key={agent.id}
                 selected={agent.id === selectedId}
                 onClick={() => onSelect(agent.id)}
-                sx={{ borderRadius: 1, mb: 0.5 }}
+                sx={{ borderRadius: 1, mb: 0.5, minWidth: 0, overflow: 'hidden' }}
               >
                 <ListItemText
                   primary={agent.name}
-                  secondary={agent.description ?? undefined}
+                  secondary={agent.description ? truncateSidebarDescription(agent.description) : undefined}
                   primaryTypographyProps={{ noWrap: true }}
                   secondaryTypographyProps={{ noWrap: true }}
                 />

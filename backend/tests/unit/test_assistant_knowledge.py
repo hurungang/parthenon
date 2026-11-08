@@ -39,6 +39,10 @@ def _all_rule_text() -> str:
         ("name already exists", "409"),
         # MCP hub
         ("mcp server slug", "unique per tenant"),
+        # Role MCP session mappings (task 4.5)
+        ("why don't the MCP tools work for my agent", "mcp session"),
+        ("which session should the role use on supabase", "passthrough"),
+        ("mcp_session_mappings", "additive"),
     ],
 )
 def test_relevant_rule_returned(query: str, expected_fragment: str) -> None:
@@ -86,9 +90,68 @@ def test_corpus_covers_required_topics() -> None:
         "resource-completeness",
         "prerequisite-ordering",
         "reuse-first",
+        # Task 2.7 / 4.4 — SOP steps parity.
+        "sop-composition",
+        "sop-steps-replace-semantics",
     }
     assert required <= ids
     assert get_entry_count() >= len(required)
+
+
+def test_sop_steps_knowledge_covers_authoring_contract() -> None:
+    """Task 4.4: the SOP steps knowledge teaches id-or-name references, the
+    replace semantics, and the ordered-step preview shape."""
+    from app.services.agents.assistant_knowledge import _KNOWLEDGE_ENTRIES
+
+    by_id = {e["id"]: e for e in _KNOWLEDGE_ENTRIES}
+    text = by_id["sop-steps-replace-semantics"]["rule_text"]
+    assert "skill_invocation" in text and "agent_delegation" in text
+    assert "skill_id" in text and "target_agent_type_id" in text
+    assert "REPLACE" in text.upper()
+    assert "omitted" in text.lower() and "delet" in text.lower()
+    assert "1. skill_invocation:" in text
+    preview = by_id["confirmation-preview-format"]["rule_text"]
+    assert "skill_invocation" in preview  # steps shown in the canonical table
+    composition = by_id["sop-composition"]["rule_text"]
+    assert "skill_id" in composition and "target_agent_type_id" in composition
+
+
+def test_seeder_instruction_teaches_sop_steps() -> None:
+    """Task 4.4: the always-on assistant instruction covers the steps replace
+    semantics and the ordered-step preview rows."""
+    from app.services.agents.assistant_seeder import (
+        ASSISTANT_SYSTEM_INSTRUCTION,
+        MANAGEMENT_SKILL_INSTRUCTIONS,
+    )
+
+    combined = f"{ASSISTANT_SYSTEM_INSTRUCTION}\n{MANAGEMENT_SKILL_INSTRUCTIONS}"
+    assert "REPLACES" in combined
+    assert "skill_invocation" in combined and "agent_delegation" in combined
+    assert "1. skill_invocation:" in combined
+    assert "omitted steps are deleted" in combined
+
+
+def test_role_session_knowledge_never_pass_passthrough_as_session_name() -> None:
+    """FIX (role→MCP-session mapping): the knowledge and seeder explicitly teach
+    that 'passthrough' is an auth TYPE, never a session name."""
+    from app.services.agents.assistant_knowledge import _KNOWLEDGE_ENTRIES
+    from app.services.agents.assistant_seeder import (
+        ASSISTANT_SYSTEM_INSTRUCTION,
+        MANAGEMENT_SKILL_INSTRUCTIONS,
+    )
+
+    by_id = {e["id"]: e for e in _KNOWLEDGE_ENTRIES}
+    text = by_id["role-mcp-session-mappings"]["rule_text"]
+    lowered = text.lower()
+    assert "never pass" in lowered and "session: 'passthrough'" in lowered
+    assert "auth type" in lowered
+    # Explicit mappings are for external credential sessions; passthrough-auth
+    # servers need no explicit mapping.
+    assert "'supabase', session: 'harry'" in text
+    assert "no explicit mapping" in lowered
+
+    combined = f"{ASSISTANT_SYSTEM_INSTRUCTION}\n{MANAGEMENT_SKILL_INSTRUCTIONS}"
+    assert "NEVER" in combined and "session: 'passthrough'" in combined
 
 
 def test_corpus_entries_are_principles_or_facts() -> None:

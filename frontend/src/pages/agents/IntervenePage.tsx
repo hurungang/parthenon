@@ -126,7 +126,7 @@ function RequestsTable({ requests, onRespond, empty }: RequestsTableProps) {
                     </TableCell>
                   <TableCell>
                     <Typography variant="body2" fontFamily="monospace" fontSize={12} color="text.secondary">
-                      {req.agent_session_id.slice(0, 8)}
+                      {req.agent_session_id?.slice(0, 8) ?? '—'}
                     </Typography>
                   </TableCell>
                   <TableCell>
@@ -487,7 +487,7 @@ export function IntervenePage() {
                             </TableCell>
                             <TableCell>
                               <Typography variant="body2" fontFamily="monospace" fontSize={12} color="text.secondary">
-                                {req.agent_session_id.slice(0, 8)}
+                                {req.agent_session_id?.slice(0, 8) ?? '—'}
                               </Typography>
                             </TableCell>
                             <TableCell>
@@ -510,16 +510,18 @@ export function IntervenePage() {
                               </Typography>
                             </TableCell>
                             <TableCell align="right">
-                              <Button
-                                size="small"
-                                variant="outlined"
-                                onClick={() => {
-                                  setExecutionSessionId(req.agent_session_id)
-                                  setExecutionDialogOpen(true)
-                                }}
-                              >
-                                {t('intervene.viewLogs', 'View Logs')}
-                              </Button>
+                              {req.agent_session_id && (
+                                <Button
+                                  size="small"
+                                  variant="outlined"
+                                  onClick={() => {
+                                    setExecutionSessionId(req.agent_session_id)
+                                    setExecutionDialogOpen(true)
+                                  }}
+                                >
+                                  {t('intervene.viewLogs', 'View Logs')}
+                                </Button>
+                              )}
                             </TableCell>
                           </TableRow>
                         )

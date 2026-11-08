@@ -107,6 +107,20 @@ Variables for API key-based external agent access to the Communication Hub via M
 
 ---
 
+## Third-Party Agent Integration Gateway (Communication Hub)
+
+Per-client origins, rate limits, and white-label theming are database-backed (set via the client-management UI); the variables below are edge defaults and the public URL/branding overrides. The gateway is disabled by default — set `INTEGRATION_GATEWAY_ENABLED=true` to expose the public `/integrate/*` routes.
+
+| Variable | Service | Description | Secret | Default |
+|----------|---------|-------------|--------|---------|
+| `INTEGRATION_GATEWAY_ENABLED` | CH | Enables the `/integrate/*` public gateway (chat, submit, widget, SDK) | | `false` |
+| `INTEGRATION_PUBLIC_BASE_URL` | CH | Public base URL used in embed snippets, origin checks, and SDK references | | _(none — required when enabled)_ |
+| `INTEGRATION_CORS_ORIGINS` | CH | Deployment-level origin allowlist (defense in depth, on top of per-client origins) | | _(empty = reject all)_ |
+| `INTEGRATION_RATE_LIMIT_REDIS_HOST` / `_PORT` / `_PASSWORD` / `_DB` | CH | Redis connection for per-client rate-limit counters | `_PASSWORD` ✓ | per-component Redis defaults |
+| `INTEGRATION_SDK_CDN_BASE` | CH | Base URL advertised for SDK distribution (CDN/npm/pip) | | `INTEGRATION_PUBLIC_BASE_URL` |
+
+---
+
 ## Agent Execution Guardrails
 
 Guardrail rollout introduces service-specific variables for policy enforcement, forwarding, and persistence. Keep policy ownership in Control Center, runtime enforcement in Agent Runtime, and metadata forwarding in Communication Hub.

@@ -25,6 +25,7 @@ import ForumIcon from '@mui/icons-material/Forum'
 import ExtensionIcon from '@mui/icons-material/Extension'
 import PersonIcon from '@mui/icons-material/Person'
 import ScheduleIcon from '@mui/icons-material/Schedule'
+import ApiIcon from '@mui/icons-material/Api'
 import HubIcon from '@mui/icons-material/Hub'
 import DnsIcon from '@mui/icons-material/Dns'
 import BuildIcon from '@mui/icons-material/Build'
@@ -85,8 +86,6 @@ const INTER_REGION_GAP = 90
 // every bottom-channel route meets it horizontally — a fixed fixture even
 // when the map is filtered empty.
 const HUB_W = 46
-/** Right-edge inset the hub keeps from the stage border when pinned. */
-const HUB_EDGE_INSET = 24
 // MCP server column (right of the hub) + tool chips column (right of MCPs).
 const MCP_W = 130
 const MCP_H = 48
@@ -190,11 +189,12 @@ interface ViewportTransform {
   panY: number
 }
 
-/** A trigger entity in the leftmost map column: a person or a schedule. */
+/** A trigger entity in the leftmost map column: a person, a schedule, or a
+ *  third-party client (external integration system). */
 interface TriggerEntity {
   key: string
-  kind: 'person' | 'schedule'
-  /** Person display name, or the schedule name. */
+  kind: 'person' | 'schedule' | 'client'
+  /** Person display name, schedule name, or client name. */
   name: string
   /** For schedules: the user who created the schedule (if known). */
   creator: string | null
@@ -204,6 +204,8 @@ interface TriggerEntity {
   scheduleId: string | null
   cron: string | null
   description: string | null
+  /** Client: id — for fetching the client's own details. */
+  clientId: string | null
 }
 
 function clamp(value: number, min: number, max: number): number {
@@ -586,6 +588,24 @@ export function AgentRuntimeMapCanvas({
             scheduleId: node.schedule_id ?? null,
             cron: node.schedule_cron ?? null,
             description: node.schedule_description ?? null,
+            clientId: null,
+          })
+        }
+      } else if (node.trigger_source === 'client') {
+        const name = node.trigger_client_name ?? node.trigger_source_label
+        if (!name) continue
+        const key = `client:${name}`
+        if (!byKey.has(key)) {
+          byKey.set(key, {
+            key,
+            kind: 'client',
+            name,
+            creator: null,
+            userId: null,
+            scheduleId: null,
+            cron: null,
+            description: null,
+            clientId: node.trigger_client_id ?? null,
           })
         }
       } else if (node.trigger_source === 'user' || node.trigger_source === 'delegated') {
@@ -602,6 +622,7 @@ export function AgentRuntimeMapCanvas({
             scheduleId: node.schedule_id ?? null,
             cron: node.schedule_cron ?? null,
             description: node.schedule_description ?? null,
+            clientId: null,
           })
         }
       }
@@ -666,6 +687,9 @@ export function AgentRuntimeMapCanvas({
       let key: string | null = null
       if (root.trigger_source === 'schedule' && root.trigger_source_label) {
         key = `schedule:${root.trigger_source_label}`
+      } else if (root.trigger_source === 'client') {
+        const name = root.trigger_client_name ?? root.trigger_source_label
+        if (name) key = `client:${name}`
       } else if (root.trigger_source === 'user' || root.trigger_source === 'delegated') {
         const name = root.trigger_user_label ?? root.trigger_source_label
         if (name) key = `person:${name}`
@@ -839,10 +863,11 @@ export function AgentRuntimeMapCanvas({
     const worldW = Math.max(layout.worldW, viewportSize.width)
     const worldH = Math.max(layout.worldH, viewportSize.height)
 
-    // Communication Hub: full-height (spans the whole world) and pinned
-    // near the right edge of the stage, never left of the containers.
+    // Communication Hub: full-height (spans the whole world) and placed a
+    // fixed gap right of the agent containers — hugging the content keeps the
+    // world compact so the auto-fit doesn't have to zoom out (tiny fonts).
     const hub: Rect = {
-      x: Math.max(containersRight + INTER_REGION_GAP, viewportSize.width - HUB_W - HUB_EDGE_INSET),
+      x: containersRight + INTER_REGION_GAP,
       y: 0,
       w: HUB_W,
       h: worldH,
@@ -1248,6 +1273,19 @@ export function AgentRuntimeMapCanvas({
     onSelectSession(null)
   }, [onSelectSession])
 
+  // Agent Runtime region: bounding box of every team container (all agents
+  // always run inside the runtime), inflated with padding + a caption strip.
+  const runtimeRegion = useMemo(() => {
+    const cs = layout.containers
+    if (cs.length === 0) return null
+    const minX = Math.min(...cs.map((c) => c.x))
+    const minY = Math.min(...cs.map((c) => c.y))
+    const maxR = Math.max(...cs.map((c) => c.x + c.bw))
+    const maxB = Math.max(...cs.map((c) => c.y + c.bh))
+    const pad = 10
+    return { x: minX - pad, y: minY - pad - 18, w: maxR - minX + pad * 2, h: maxB - minY + pad * 2 + 18 }
+  }, [layout.containers])
+
   if (topology === undefined) {
     return (
       <Box display="flex" justifyContent="center" alignItems="center" height={520}>
@@ -1262,6 +1300,10 @@ export function AgentRuntimeMapCanvas({
   // an overlay — matching the filter-driven empty state's presentation.
   const zoomPct = Math.round(transform.zoom * 100)
   const filteredEmpty = visibleNodes.length === 0
+  // The Communication Hub (and its MCP/tool columns) is only meaningful when
+  // there are agents on the map — with no running/visible agents it would sit
+  // mispositioned at the bare stage's right edge, so hide it entirely.
+  const showHub = visibleNodes.length > 0
 
   return (
     <Box
@@ -1303,6 +1345,52 @@ export function AgentRuntimeMapCanvas({
           // seam at the world bounds or uncovered region beyond the content.
         }}
       >
+        {/* Agent Runtime region — a light enclosing container around every
+            team container: all agents always run inside the runtime. */}
+        {runtimeRegion && (
+          <Box
+            data-testid="agent-runtime-region"
+            sx={{
+              position: 'absolute',
+              left: runtimeRegion.x,
+              top: runtimeRegion.y,
+              width: runtimeRegion.w,
+              height: runtimeRegion.h,
+              zIndex: 0,
+              border: '1px solid #B0BEC5',
+              borderRadius: '16px',
+              backgroundColor: '#F8FAFC',
+              boxShadow: 1,
+            }}
+          >
+            <Box
+              display="flex"
+              alignItems="center"
+              gap={0.75}
+              sx={{ position: 'absolute', top: 7, left: 12, zIndex: 1 }}
+            >
+              <Box
+                sx={{
+                  width: 20,
+                  height: 20,
+                  borderRadius: '6px',
+                  bgcolor: '#E0F2F1',
+                  color: '#00695C',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  flexShrink: 0,
+                }}
+              >
+                <MemoryIcon sx={{ fontSize: 13 }} />
+              </Box>
+              <Typography variant="caption" fontWeight={700} color="#00695C" sx={{ letterSpacing: 0.2 }}>
+                {t('agents.sessions.runtimeAgentRuntimeRegion')}
+              </Typography>
+            </Box>
+          </Box>
+        )}
+
         {/* Team containers: one delegation tree per container, one row each */}
         {layout.containers.map((container) => (
           <Box
@@ -1514,15 +1602,31 @@ export function AgentRuntimeMapCanvas({
                   width: 22,
                   height: 22,
                   borderRadius: '50%',
-                  bgcolor: card.kind === 'schedule' ? '#FFF3E0' : '#E3F2FD',
-                  color: card.kind === 'schedule' ? '#EF6C00' : '#1565C0',
+                  bgcolor:
+                    card.kind === 'schedule'
+                      ? '#FFF3E0'
+                      : card.kind === 'client'
+                        ? '#F3E5F5'
+                        : '#E3F2FD',
+                  color:
+                    card.kind === 'schedule'
+                      ? '#EF6C00'
+                      : card.kind === 'client'
+                        ? '#7B1FA2'
+                        : '#1565C0',
                   display: 'inline-flex',
                   alignItems: 'center',
                   justifyContent: 'center',
                   flexShrink: 0,
                 }}
               >
-                {card.kind === 'schedule' ? <ScheduleIcon sx={{ fontSize: 14 }} /> : <PersonIcon sx={{ fontSize: 14 }} />}
+                {card.kind === 'schedule' ? (
+                  <ScheduleIcon sx={{ fontSize: 14 }} />
+                ) : card.kind === 'client' ? (
+                  <ApiIcon sx={{ fontSize: 14 }} />
+                ) : (
+                  <PersonIcon sx={{ fontSize: 14 }} />
+                )}
               </Box>
               <Box sx={{ minWidth: 0, display: 'flex', flexDirection: 'column', gap: 0 }}>
                 <Typography
@@ -1847,7 +1951,8 @@ export function AgentRuntimeMapCanvas({
         )}
 
         {/* Communication Hub — full-height firewall fixture pinned to the
-            stage's right edge (spans the whole world, even when filtered empty) */}
+            stage's right edge. Hidden entirely when no agents are visible. */}
+        {showHub && (
         <Box
           data-testid="communication-hub-node"
           sx={{
@@ -1857,10 +1962,11 @@ export function AgentRuntimeMapCanvas({
             width: hub.w,
             height: hub.h,
             zIndex: 3,
-            border: '1px solid #90A4AE',
+            border: '1.5px solid #5C6BC0',
             borderRadius: '12px',
-            backgroundColor: '#FFFFFF',
-            boxShadow: 1,
+            // Highlighted backdrop so the hub reads as a first-class fixture.
+            backgroundColor: '#E8EAF6',
+            boxShadow: '0 0 10px rgba(92, 107, 192, 0.35)',
             display: 'flex',
             flexDirection: 'column',
             alignItems: 'center',
@@ -1873,8 +1979,8 @@ export function AgentRuntimeMapCanvas({
               width: 22,
               height: 22,
               borderRadius: '6px',
-              bgcolor: '#ECEFF3',
-              color: '#37474F',
+              bgcolor: '#C5CAE9',
+              color: '#283593',
               display: 'inline-flex',
               alignItems: 'center',
               justifyContent: 'center',
@@ -1886,7 +1992,7 @@ export function AgentRuntimeMapCanvas({
           <Typography
             variant="caption"
             fontWeight={700}
-            color="#37474F"
+            color="#283593"
             sx={{
               writingMode: 'vertical-rl',
               transform: 'rotate(180deg)',
@@ -1897,10 +2003,11 @@ export function AgentRuntimeMapCanvas({
             {t('agents.sessions.runtimeCommunicationHub')}
           </Typography>
         </Box>
+        )}
 
         {/* MCP server nodes — evenly distributed along the hub's height.
             Hovering or clicking an MCP focuses the whole topology around it. */}
-        {mcpNodes.map((mcp) => {
+        {showHub && mcpNodes.map((mcp) => {
           const focusKey = `mcp:${mcp.key}`
           const highlighted =
             activeKeys.has(focusKey) ||

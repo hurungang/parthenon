@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
@@ -44,6 +44,10 @@ import { MaximizableContent } from '../MaximizableContent'
 import { AgentExecutionDetailsDialog } from './AgentExecutionDetailsDialog'
 import { InlineInterventionDialog } from '../conversations/InlineInterventionDialog'
 import { InterventionPendingIndicator } from '../conversations/InterventionPendingIndicator'
+import {
+  ResolvedInterventionBubble,
+  type ResolvedInterventionData,
+} from '../conversations/ResolvedInterventionBubble'
 import { useConversationIntervention } from '../../hooks/useConversationIntervention'
 import {
   useChatSession,
@@ -54,7 +58,7 @@ import {
 import { useEndConversationSession, useConversationSessionsPage } from '../../hooks/useConversationSessions'
 import { markAssistantSessionEnded } from '../../utils/assistantSessionState'
 import { buildDelegationHistoryFromTurns, buildHistoryMessagesFromTurns } from '../../utils/delegationHistory'
-import type { AgentJob, AgentJobStatus, ConversationSessionDetail, ExecutionLogEntry } from '../../types'
+import type { AgentJob, AgentJobStatus, ConversationSessionDetail, ExecutionLogEntry, InterveneRequestMessage } from '../../types'
 
 /**
  * FIX-20261101-120618 Work Item 1: in-chat "View All Sessions" list upgraded
@@ -290,6 +294,79 @@ function pickRecordValue(payload: Record<string, unknown>, snakeKey: string, cam
 }
 
 /**
+ * PERF: the chat input owns its text state locally so every keystroke
+ * re-renders ONLY this bar — not the whole ConversationDialog with its
+ * full message timeline (which made typing visibly laggy on long chats).
+ * The parent receives the final text via `onSend`; the input is cleared
+ * only when the parent reports the message was actually sent/queued.
+ */
+const ChatInputBar = memo(function ChatInputBar({
+  disabled,
+  placeholder,
+  onSend,
+  sendLabel,
+  clearToken = 0,
+}: {
+  disabled: boolean
+  placeholder: string
+  sendLabel: string
+  onSend: (text: string) => Promise<boolean>
+  /** Increment to programmatically clear the input (session switch, close,
+   * or flush of the pending first message). */
+  clearToken?: number
+}) {
+  const [text, setText] = useState('')
+  const lastClearTokenRef = useRef(clearToken)
+  useEffect(() => {
+    if (clearToken !== lastClearTokenRef.current) {
+      lastClearTokenRef.current = clearToken
+      setText('')
+    }
+  }, [clearToken])
+  const canSend = !disabled && text.trim().length > 0
+
+  const handleSend = async () => {
+    const trimmed = text.trim()
+    if (!trimmed || disabled) return
+    const sent = await onSend(trimmed)
+    if (sent) {
+      setText('')
+    }
+  }
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault()
+      void handleSend()
+    }
+  }
+
+  return (
+    <Box display="flex" gap={1}>
+      <TextField
+        fullWidth
+        multiline
+        maxRows={4}
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+        onKeyDown={handleKeyDown}
+        placeholder={placeholder}
+        disabled={disabled}
+        size="small"
+      />
+      <Button
+        variant="contained"
+        onClick={() => void handleSend()}
+        disabled={!canSend}
+        startIcon={<SendIcon />}
+      >
+        {sendLabel}
+      </Button>
+    </Box>
+  )
+})
+
+/**
  * FIX-20261031-071721 (defect 1): merge persisted history turns into the
  * rendered message list without duplicating what is already visible (e.g. the
  * optimistic user message, or a reply that did arrive before a reconnect).
@@ -467,7 +544,21 @@ export function ConversationDialog({
   const [convSessionId, setConvSessionId] = useState<string | null>(null)
   const [wsSessionId, setWsSessionId] = useState<string | null>(null)
   const [resumedMessages, setResumedMessages] = useState<ChatMessage[]>([])
-  const [inputText, setInputText] = useState('')
+  // Interventions resolved during THIS live session — rendered as
+  // confirmation bubbles with a view-only reopen of the original request.
+  const [liveResolvedInterventions, setLiveResolvedInterventions] = useState<
+    ResolvedInterventionData[]
+  >([])
+  // Snapshot of the in-flight response so the confirmation bubble can be
+  // emitted when the intervention request is cleared (intervene_status
+  // "responded"). Cancel/dismiss clears the ref so no bubble is emitted.
+  const respondedSnapshotRef = useRef<{
+    request: InterveneRequestMessage
+    answer: string
+  } | null>(null)
+  // Incremented to clear the ChatInputBar's local text (session close /
+  // switch / pending-first-message flush).
+  const [inputClearToken, setInputClearToken] = useState(0)
   const [isResuming, setIsResuming] = useState(false)
   const [error, setError] = useState<unknown>(null)
   const [endError, setEndError] = useState<unknown>(null)
@@ -600,6 +691,7 @@ export function ConversationDialog({
     cancelIntervention,
     clearMessages,
     recoveryEpoch,
+    turnInFlight,
   } =
     useChatSession(wsSessionId, convSessionId)
   const effectiveGuardrailUsage = liveGuardrailUsage ?? resumedGuardrailUsage
@@ -629,11 +721,33 @@ export function ConversationDialog({
     isSubmitting: interventionIsSubmitting,
     respondToIntervention,
     cancelIntervention: cancelInterventionRequest,
+    currentIntervention: fetchedPendingIntervention,
+    pendingInterventions: fetchedPendingList,
   } = useConversationIntervention(
     convSessionId,
     sendInterventionResponse,
     cancelIntervention,
   )
+
+  // Refresh recovery: a pending intervention fetched via REST when the WS
+  // has not re-surfaced it (page refreshed mid-request). Mapped into the
+  // same message shape the WS path uses so ONE render path serves both.
+  const activeIntervention: InterveneRequestMessage | null = useMemo(() => {
+    if (interventionRequest) return interventionRequest
+    if (fetchedPendingIntervention) {
+      return {
+        type: 'intervene_request',
+        request_id: fetchedPendingIntervention.id,
+        intervention_type: fetchedPendingIntervention.intervention_type,
+        reason: fetchedPendingIntervention.reason,
+        choices: fetchedPendingIntervention.choices,
+        agent_type: fetchedPendingIntervention.agent_name ?? undefined,
+        delegation_depth: fetchedPendingIntervention.delegation_depth ?? 0,
+        conversation_session_id: fetchedPendingIntervention.conversation_session_id ?? '',
+      }
+    }
+    return null
+  }, [interventionRequest, fetchedPendingIntervention])
 
   // FIX-20261101-111439 (defect 2): a conversational turn is in flight —
   // session-switching and end actions are blocked while this is true.
@@ -641,12 +755,30 @@ export function ConversationDialog({
     isResuming ||
     !!pendingQuestion ||
     !!interventionRequest ||
+    !!fetchedPendingIntervention ||
     (chatStatus?.kind === 'thinking' ||
       chatStatus?.kind === 'delegating' ||
       chatStatus?.kind === 'waiting' ||
       chatStatus?.kind === 'using_tool' ||
       chatStatus?.kind === 'waiting_for_human' ||
-      chatStatus?.kind === 'delegation_resumed')
+      chatStatus?.kind === 'delegation_resumed' ||
+      turnInFlight)
+
+  // FIX: invariant — from the moment the user sends a message until the
+  // turn's final agent reply (or a terminal status), an activity indicator
+  // MUST always render. When the turn is in flight but the current
+  // chatStatus kind would render nothing (null, or a kind with no
+  // indicator), fall back to the thinking-equivalent bubble. Kinds that
+  // already render their own indicator (delegation line, waiting_for_human,
+  // terminal alert) keep precedence over the fallback.
+  const showThinking =
+    chatStatus?.kind === 'thinking' ||
+    chatStatus?.kind === 'delegation_resumed' ||
+    (turnInFlight &&
+      (!chatStatus ||
+        !['thinking', 'delegation_resumed', 'using_tool', 'waiting', 'delegating', 'waiting_for_human', 'timeout_or_failed'].includes(
+          chatStatus.kind,
+        )))
 
   const formatTokenCountK = (value: number | null): string => {
     if (value == null) return t('agents.sessions.logViewer.summary.notAvailable')
@@ -654,6 +786,121 @@ export function ConversationDialog({
     const rounded = Math.round(tokenCountK * 10) / 10
     return `${Number.isInteger(rounded) ? rounded.toFixed(0) : rounded.toFixed(1)}k tokens`
   }
+
+  // Emit the resolved-intervention confirmation bubble once the intervention
+  // request is cleared after a respond action (the WS `intervene_status:
+  // responded` / REST fallback both clear the active request). A pending
+  // snapshot ref distinguishes a real response from a cancel/dismiss.
+  useEffect(() => {
+    if (activeIntervention) {
+      return
+    }
+    const snapshot = respondedSnapshotRef.current
+    if (!snapshot) {
+      return
+    }
+    respondedSnapshotRef.current = null
+    setLiveResolvedInterventions((prev) => [
+      ...prev,
+      {
+        id: `resolved-${snapshot.request.request_id}-${Date.now()}`,
+        interventionType: snapshot.request.intervention_type,
+        reason: snapshot.request.reason,
+        choices: snapshot.request.choices ?? null,
+        agentType: snapshot.request.agent_type ?? null,
+        answer: snapshot.answer,
+        resolvedAt: new Date().toISOString(),
+      },
+    ])
+  }, [activeIntervention])
+
+  // Persisted history: pair intervene_request/intervene_response turns (by
+  // intervene_request_id) into resolved-intervention bubbles so a resumed
+  // session shows the Q&A record instead of bare system text. Response turns
+  // without a matching question turn (legacy data) render as plain messages.
+  const historyResolvedInterventions = useMemo<ResolvedInterventionData[]>(() => {
+    const pairs = new Map<
+      string,
+      { question: ChatMessage | null; answer: ChatMessage | null }
+    >()
+    const seenQuestionIds = new Set<string>()
+    for (const msg of resumedMessages) {
+      if (msg.turnType === 'intervene_request') {
+        const key = msg.interveneRequestId ?? msg.id
+        const existing = pairs.get(key) ?? { question: null, answer: null }
+        existing.question = msg
+        pairs.set(key, existing)
+        seenQuestionIds.add(msg.id)
+      } else if (msg.turnType === 'intervene_response') {
+        const key = msg.interveneRequestId ?? ''
+        const existing = pairs.get(key)
+        if (existing) {
+          existing.answer = msg
+          seenQuestionIds.add(msg.id)
+        }
+      }
+    }
+    const resolved: ResolvedInterventionData[] = []
+    for (const [key, pair] of pairs) {
+      // A question turn WITHOUT a persisted response turn is a still-pending
+      // (or failed) request — it must NOT render as "resolved". The pending
+      // card is re-surfaced separately via the REST pending fetch.
+      if (!pair.question || !pair.answer) continue
+      seenQuestionIds.add(pair.answer?.id ?? '')
+      resolved.push({
+        id: `history-resolved-${key}`,
+        interventionType: 'approval',
+        reason: pair.question.content,
+        choices: null,
+        agentType: null,
+        answer: pair.answer.content,
+        resolvedAt: pair.answer.timestamp,
+      })
+    }
+    // Light dedupe: drop history-derived bubbles already shown live (the
+    // mid-turn recovery merge can pull persisted turns into resumedMessages
+    // while the live bubble is still on screen).
+    return resolved.filter(
+      (entry) =>
+        !liveResolvedInterventions.some(
+          (live) => live.reason === entry.reason && live.answer === entry.answer,
+        ),
+    )
+  }, [resumedMessages, liveResolvedInterventions])
+
+  // Message ids rendered as resolved bubbles — excluded from plain message
+  // entries in the timeline. Question turns without an answer stay visible
+  // as plain history UNLESS the request is still pending (then the pending
+  // card represents it).
+  const resolvedInterventionMessageIds = useMemo(() => {
+    const ids = new Set<string>()
+    const pendingIds = new Set(
+      (fetchedPendingList ?? []).map((r) => r.id),
+    )
+    for (const msg of resumedMessages) {
+      if (msg.turnType === 'intervene_request') {
+        const paired = resumedMessages.some(
+          (m) =>
+            m.turnType === 'intervene_response' &&
+            m.interveneRequestId &&
+            m.interveneRequestId === msg.interveneRequestId,
+        )
+        if (paired || (msg.interveneRequestId && pendingIds.has(msg.interveneRequestId))) {
+          ids.add(msg.id)
+        }
+      } else if (
+        msg.turnType === 'intervene_response' &&
+        msg.interveneRequestId &&
+        resumedMessages.some(
+          (m) =>
+            m.turnType === 'intervene_request' && m.interveneRequestId === msg.interveneRequestId,
+        )
+      ) {
+        ids.add(msg.id)
+      }
+    }
+    return ids
+  }, [resumedMessages, fetchedPendingList])
 
   const formatPair = (current: number | null, limit: number | null, formatter?: (value: number) => string): string => {
     if (current == null) return t('agents.sessions.logViewer.summary.notAvailable')
@@ -710,18 +957,29 @@ export function ConversationDialog({
   const timelineEntries: Array<
     | { kind: 'message'; id: string; timestamp: string; message: ChatMessage }
     | { kind: 'delegation_cycle'; id: string; timestamp: string; cycle: DelegationCycle }
+    | { kind: 'intervention_resolved'; id: string; timestamp: string; data: ResolvedInterventionData }
   > = [
-    ...messages.map((message) => ({
-      kind: 'message' as const,
-      id: `message-${message.id}`,
-      timestamp: message.timestamp,
-      message,
-    })),
+    ...messages
+      // Intervene Q&A turns render as resolved-intervention bubbles instead
+      // of plain system text.
+      .filter((message) => !resolvedInterventionMessageIds.has(message.id))
+      .map((message) => ({
+        kind: 'message' as const,
+        id: `message-${message.id}`,
+        timestamp: message.timestamp,
+        message,
+      })),
     ...effectiveDelegationCycles.map((cycle) => ({
       kind: 'delegation_cycle' as const,
       id: `delegation-cycle-${cycle.id}`,
       timestamp: cycle.startedAt,
       cycle,
+    })),
+    ...[...historyResolvedInterventions, ...liveResolvedInterventions].map((data) => ({
+      kind: 'intervention_resolved' as const,
+      id: `intervention-resolved-${data.id}`,
+      timestamp: data.resolvedAt,
+      data,
     })),
   ].sort((a, b) => toEpochMs(a.timestamp) - toEpochMs(b.timestamp))
   const standaloneDelegationStatusLine =
@@ -731,7 +989,9 @@ export function ConversationDialog({
         ? t('conversations.sessions.statusUsingTool', { toolName: chatStatus.toolName })
         : chatStatus?.kind === 'delegating' && chatStatus.agentType
           ? t('conversations.sessions.statusDelegatingToAgent', { agentType: chatStatus.agentType })
-          : null
+          : chatStatus?.kind === 'delegation_resumed'
+            ? t('conversations.sessions.statusThinking')
+            : null
   const shouldShowStandaloneDelegationStatus =
     effectiveDelegationCycles.length === 0 &&
     Boolean(standaloneDelegationStatusLine) &&
@@ -804,7 +1064,7 @@ export function ConversationDialog({
       setConvSessionId(null)
       setWsSessionId(null)
       setResumedMessages([])
-      setInputText('')
+      setInputClearToken((n) => n + 1)
       setError(null)
       setEndError(null)
       setEndConfirmOpen(false)
@@ -824,7 +1084,7 @@ export function ConversationDialog({
 
     const wasQueuedOrSent = sendMessage(pendingInitialMessage)
     if (wasQueuedOrSent) {
-      setInputText('')
+      setInputClearToken((n) => n + 1)
       setPendingInitialMessage(null)
     }
   }, [connected, convSessionId, isResuming, pendingInitialMessage, sendMessage])
@@ -895,7 +1155,7 @@ export function ConversationDialog({
     setResumedMessages([])
     setResumedGuardrailUsage(null)
     setPendingInitialMessage(null)
-    setInputText('')
+    setInputClearToken((n) => n + 1)
     setError(null)
     clearMessages()
     hydrateDelegationFromHistory({ cycles: [] })
@@ -918,39 +1178,65 @@ export function ConversationDialog({
     void handleResumeSession(targetSessionId)
   }
 
-  const handleSend = async () => {
-    if (!inputText.trim()) return
-    const messageToSend = inputText.trim()
-    if (isResuming) return
+  const handleSend = async (rawText: string): Promise<boolean> => {
+    const messageToSend = rawText.trim()
+    if (!messageToSend) return false
+    if (isResuming) return false
 
     // If no session exists yet, create it before sending first message
     if (!convSessionId) {
       const startedSessionId = await handleStartSession()
       if (!startedSessionId) {
-        return
+        return false
       }
 
       setPendingInitialMessage(messageToSend)
-      return
+      // The text stays in the input as the pending first message
+      return false
     }
 
     // sendMessage queues when socket is not OPEN yet, then flushes on onopen.
-    const wasQueuedOrSent = sendMessage(messageToSend)
-    if (wasQueuedOrSent) {
-      setInputText('')
-    }
+    return sendMessage(messageToSend)
   }
 
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault()
-      void handleSend()
-    }
-  }
+  // Stable onSend identity for ChatInputBar — the memoized input bar must
+  // not re-render (or lose its local text) when the parent re-renders.
+  const handleSendRef = useRef(handleSend)
+  handleSendRef.current = handleSend
+  const handleSendStable = useCallback((text: string) => handleSendRef.current(text), [])
+
+  // Auto-scroll the message timeline to the newest content. Only scrolls
+  // when the operator is already near the bottom (never yanks the view back
+  // while they are reading scrollback). Double-rAF ensures layout from the
+  // newly rendered entries (markdown tables, tall bubbles) has settled, so
+  // the latest message is fully visible instead of half-cut.
+  const timelineScrollRef = useRef<HTMLDivElement | null>(null)
+  const autoScrollDeps = [
+    messages,
+    effectiveDelegationCycles,
+    chatStatus,
+    liveResolvedInterventions,
+    activeIntervention,
+  ]
+  const autoScrollDepsRef = useRef(autoScrollDeps)
+  autoScrollDepsRef.current = autoScrollDeps
+  useEffect(() => {
+    const el = timelineScrollRef.current
+    if (!el) return
+    const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight
+    // Stick-to-bottom: always follow when within ~160px of the end.
+    if (distanceFromBottom > 160) return
+    const raf = requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        el.scrollTop = el.scrollHeight
+      })
+    })
+    return () => cancelAnimationFrame(raf)
+  }, [autoScrollDepsRef])
 
   const displayTitle = sessionTitle ?? agentTypeName
   const connectionLabel =
-    interventionRequest
+    activeIntervention
       ? t('conversations.sessions.intervention.waitingForInput')
       : convSessionId && !connected
         ? pendingInitialMessage || isResuming
@@ -991,7 +1277,7 @@ export function ConversationDialog({
             {connectionLabel && (
               <Chip
                 label={connectionLabel}
-                color={interventionRequest ? 'warning' : connected ? 'success' : pendingInitialMessage || isResuming ? 'info' : 'error'}
+                color={activeIntervention ? 'warning' : connected ? 'success' : pendingInitialMessage || isResuming ? 'info' : 'error'}
                 size="small"
               />
             )}
@@ -1041,6 +1327,7 @@ export function ConversationDialog({
               {/* Messages list */}
               <Box sx={{ m: 2, mb: 1.5, position: 'relative', flex: 1, minHeight: 0 }}>
                 <Paper
+                  ref={timelineScrollRef}
                   variant="outlined"
                   sx={{ height: '100%', overflow: 'auto', p: 2, bgcolor: 'grey.50' }}
                 >
@@ -1097,6 +1384,10 @@ export function ConversationDialog({
                         )
                       }
 
+                      if (entry.kind === 'intervention_resolved') {
+                        return <ResolvedInterventionBubble key={entry.id} data={entry.data} />
+                      }
+
                       const cycle = entry.cycle
                       const isActiveCycle = cycle.id === effectiveActiveDelegationCycleId
                       const introAgentType = resolveCycleAgentType(cycle, isActiveCycle)
@@ -1110,7 +1401,9 @@ export function ConversationDialog({
                             ? t('conversations.sessions.statusUsingTool', { toolName: chatStatus.toolName })
                             : chatStatus?.kind === 'delegating' && chatStatus.agentType
                               ? t('conversations.sessions.statusDelegatingToAgent', { agentType: chatStatus.agentType })
-                              : null
+                              : chatStatus?.kind === 'delegation_resumed'
+                                ? t('conversations.sessions.statusThinking')
+                                : null
                       const showLiveStatus = Boolean(
                         isActiveCycle &&
                           statusLine &&
@@ -1183,7 +1476,7 @@ export function ConversationDialog({
                     </Alert>
                   )}
 
-                  {chatStatus?.kind === 'thinking' && (
+                  {showThinking && (
                     <Box display="flex" flexDirection="row" alignItems="flex-start" gap={1} mb={2} data-testid={testId('chat-status-indicator')}>
                       <Avatar sx={{ width: 32, height: 32, bgcolor: 'secondary.main' }}>
                         <SmartToyIcon />
@@ -1226,42 +1519,61 @@ export function ConversationDialog({
                   )}
 
                   {/* Intervention Waiting Indicator */}
-                  {chatStatus?.kind === 'waiting_for_human' && !interventionRequest && (
+                  {chatStatus?.kind === 'waiting_for_human' && !activeIntervention && (
                     <Box mb={2} data-testid={testId('intervention-pending-indicator')}>
                       <InterventionPendingIndicator />
                     </Box>
                   )}
 
-                  {/* Inline Intervention Dialog */}
-                  {interventionRequest && (
+                  {/* Inline Intervention Dialog — live WS request, or the
+                      REST-fetched pending request after a page refresh */}
+                  {activeIntervention && (
                     <Box mb={2} data-testid={testId('intervention-dialog')}>
                       <InlineInterventionDialog
-                        request={interventionRequest}
+                        request={activeIntervention}
                         isSubmitting={interventionIsSubmitting}
                         dialogError={interventionDialogError}
-                        onApprove={() =>
-                          respondToIntervention(interventionRequest.request_id, {
+                        onApprove={() => {
+                          respondedSnapshotRef.current = {
+                            request: activeIntervention,
+                            answer: t('conversations.sessions.intervention.approve'),
+                          }
+                          void respondToIntervention(activeIntervention.request_id, {
                             approval_value: true,
                           })
-                        }
-                        onDeny={() =>
-                          respondToIntervention(interventionRequest.request_id, {
+                        }}
+                        onDeny={() => {
+                          respondedSnapshotRef.current = {
+                            request: activeIntervention,
+                            answer: t('conversations.sessions.intervention.deny'),
+                          }
+                          void respondToIntervention(activeIntervention.request_id, {
                             approval_value: false,
                           })
-                        }
-                        onSelectChoice={(choice) =>
-                          respondToIntervention(interventionRequest.request_id, {
+                        }}
+                        onSelectChoice={(choice) => {
+                          respondedSnapshotRef.current = {
+                            request: activeIntervention,
+                            answer: choice,
+                          }
+                          void respondToIntervention(activeIntervention.request_id, {
                             selected_choice: choice,
                           })
-                        }
-                        onSubmitText={(text) =>
-                          respondToIntervention(interventionRequest.request_id, {
+                        }}
+                        onSubmitText={(text) => {
+                          respondedSnapshotRef.current = {
+                            request: activeIntervention,
+                            answer: text,
+                          }
+                          void respondToIntervention(activeIntervention.request_id, {
                             text_value: text,
                           })
-                        }
-                        onDismiss={() =>
-                          cancelInterventionRequest(interventionRequest.request_id)
-                        }
+                        }}
+                        onDismiss={() => {
+                          // Cancel/dismiss — never emit a resolved bubble.
+                          respondedSnapshotRef.current = null
+                          void cancelInterventionRequest(activeIntervention.request_id)
+                        }}
                       />
                     </Box>
                   )}
@@ -1298,40 +1610,27 @@ export function ConversationDialog({
                 )}
               </Box>
 
-              {/* Input box */}
+              {/* Input box — PERF: self-contained bar, keystrokes re-render
+                  only the bar, never the message timeline. */}
               <Box p={2} pt={0.5}>
-                <Box display="flex" gap={1}>
-                  <TextField
-                    fullWidth
-                    multiline
-                    maxRows={4}
-                    value={inputText}
-                    onChange={(e) => setInputText(e.target.value)}
-                    onKeyDown={handleKeyDown}
-                    placeholder={
-                      assistantModelUnconfigured
-                        ? t('assistant.modelNotConfiguredInputDisabled')
-                        : interventionRequest
-                          ? t('conversations.sessions.intervention.inputBlocked')
-                          : t('conversations.sessions.chatPlaceholder')
-                    }
-                    disabled={
-                      assistantModelUnconfigured ||
-                      (convSessionId
-                        ? !!interventionRequest || !connected || !!pendingQuestion || !!pendingInitialMessage
-                        : false)
-                    }
-                    size="small"
-                  />
-                  <Button
-                    variant="contained"
-                    onClick={() => void handleSend()}
-                    disabled={assistantModelUnconfigured || !inputText.trim() || (convSessionId ? !!interventionRequest || !connected || !!pendingQuestion || !!pendingInitialMessage : false)}
-                    startIcon={<SendIcon />}
-                  >
-                    {t('conversations.sessions.send')}
-                  </Button>
-                </Box>
+                <ChatInputBar
+                  disabled={
+                    assistantModelUnconfigured ||
+                    (convSessionId
+                      ? !!activeIntervention || !connected || !!pendingQuestion || !!pendingInitialMessage
+                      : false)
+                  }
+                  placeholder={
+                    assistantModelUnconfigured
+                      ? t('assistant.modelNotConfiguredInputDisabled')
+                      : activeIntervention
+                        ? t('conversations.sessions.intervention.inputBlocked')
+                        : t('conversations.sessions.chatPlaceholder')
+                  }
+                  sendLabel={t('conversations.sessions.send')}
+                  onSend={handleSendStable}
+                  clearToken={inputClearToken}
+                />
               </Box>
 
               {guardrailRows.length > 0 && (

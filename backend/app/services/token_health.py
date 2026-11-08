@@ -256,6 +256,45 @@ class TokenHealthService:
 
     # ── Execution preflight ─────────────────────────────────────────────────
 
+    async def _try_refresh_identity(
+        self, target: "PreflightTarget"
+    ) -> tuple["PreflightTarget", str | None]:
+        """Attempt an inline OAuth refresh for an expired/expiring identity.
+
+        Returns the (possibly re-classified) target and ``None`` on success,
+        or a short failure reason on error — never raises. On success the
+        denormalized ``token_health_state`` is already re-persisted by the
+        refresh service (``persist_identity_health_state`` via
+        ``store_refreshed_token``), and the audit rows written by this
+        preflight run share the same session/commit.
+        """
+        from app.services.token_refresh import refresh_oauth_token
+
+        try:
+            await refresh_oauth_token(target.id, self._db)
+        except Exception as exc:  # noqa: BLE001 — degrade to BLOCKED, never crash preflight
+            reason = str(exc).strip()[:160] or exc.__class__.__name__
+            logger.warning(
+                "Preflight auto-refresh failed for agent_identity '%s' (%s): %s",
+                target.name,
+                target.id,
+                reason,
+            )
+            return target, reason
+        # Refresh succeeded — recompute the state from the updated row.
+        identity = await self._db.get(AgentIdentity, target.id)
+        if identity is None:
+            return target, None
+        new_state = compute_identity_state(identity)
+        logger.info(
+            "Preflight auto-refreshed agent_identity '%s' (%s): %s -> %s",
+            target.name,
+            target.id,
+            target.state.value,
+            new_state.value,
+        )
+        return target._replace(state=new_state), None
+
     async def resolve_execution_targets(
         self,
         agent_type_id: uuid.UUID,
@@ -382,13 +421,35 @@ class TokenHealthService:
         blocked: list[PreflightTargetReport] = []
 
         for target in targets:
+            # Auto-refresh (delegation reliability): an expired/expiring
+            # agent identity token is refreshed inline before blocking, so
+            # executions are not stalled by a stale access token. MCP
+            # sessions are left alone — session refresh is a separate
+            # OAuth re-auth flow. Any refresh error degrades to the
+            # pre-existing BLOCKED behaviour with the REAL reason surfaced.
+            refresh_error: str | None = None
+            refresh_attempted = False
+            if (
+                target.kind == TokenHealthTargetKind.agent_identity
+                and target.state in (TokenHealthState.expired, TokenHealthState.expiring)
+            ):
+                refresh_attempted = True
+                target, refresh_error = await self._try_refresh_identity(target)
+
             if target.state == TokenHealthState.expired:
                 outcome = TokenCheckOutcome.blocked
-                message = (
-                    f"{target.kind.value} '{target.name}' token has expired — "
-                    "refresh it (identity) or re-authenticate (MCP session) "
-                    "before executing this agent"
-                )
+                if refresh_error is not None:
+                    message = (
+                        f"{target.kind.value} '{target.name}' token auto-refresh failed "
+                        f"({refresh_error}) — refresh token likely expired/revoked; "
+                        f"re-authenticate identity '{target.name}' before executing this agent"
+                    )
+                else:
+                    message = (
+                        f"{target.kind.value} '{target.name}' token has expired — "
+                        "refresh it (identity) or re-authenticate (MCP session) "
+                        "before executing this agent"
+                    )
                 blocked.append(
                     PreflightTargetReport(
                         target_kind=target.kind,
@@ -405,6 +466,12 @@ class TokenHealthService:
                     f"{int(TOKEN_EXPIRING_WINDOW.total_seconds() // 86400)} days — "
                     "refresh soon to avoid execution blocks"
                 )
+                if refresh_error is not None:
+                    # Token is still valid — a failed refresh attempt must
+                    # NOT block execution; surface it as a warning instead.
+                    message += (
+                        f" (auto-refresh attempt failed: {refresh_error})"
+                    )
                 warnings.append(
                     PreflightTargetReport(
                         target_kind=target.kind,
@@ -416,7 +483,15 @@ class TokenHealthService:
                 )
             else:
                 outcome = TokenCheckOutcome.passed
-                message = f"{target.kind.value} '{target.name}' token is {target.state.value}"
+                if refresh_attempted and refresh_error is None and target.kind == TokenHealthTargetKind.agent_identity:
+                    # Reached healthy after a successful inline auto-refresh
+                    # (the target only entered this branch expired/expiring).
+                    message = (
+                        f"{target.kind.value} '{target.name}' token was expired/expiring "
+                        "and was auto-refreshed before execution"
+                    )
+                else:
+                    message = f"{target.kind.value} '{target.name}' token is {target.state.value}"
             reports.append(
                 PreflightTargetReport(
                     target_kind=target.kind,

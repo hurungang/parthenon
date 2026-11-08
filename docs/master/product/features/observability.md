@@ -29,6 +29,10 @@ Observability provides real-time insight into the health, performance, and activ
 - **Live Map Presentation**: The monitor is a full-page, auto-fitting, interactive map (team-row layout by delegation depth) that stays current through live server push updates with automatic fallback to polling, shows a trigger-entity column with per-entity coloured lines, whole-chain focus on hover/click, tool-call routes through the Communication Hub and its MCP servers, and a filter popover with a recent-completed window and legend recovery
 - **Usage Posture**: Current state of a model's usage against its configured guardrail limits — `within limit`, `approaching limit`, or `breached`
 
+### Third-Party Client Invocations
+- **Per-client usage and rate-limit signals**: client invocations are instrumented with per-client usage metrics and rate-limit events, distinct from internal agent and MCP traffic
+- **Full client audit logging**: every client invocation — success and failure — is recorded with the client, the agent type, the operation, and the outcome (never the credential value)
+
 ## Acceptance Criteria
 - All components emit OTEL metrics, traces, and logs
 - OTEL Collector aggregates and forwards observability data
@@ -40,6 +44,8 @@ Observability provides real-time insight into the health, performance, and activ
 - **Disabled-model and disabled-vendor block events are surfaced in execution logs and operational dashboards**
 - **Human intervene lifecycle events (created, responded, expired, cancelled) are emitted as OTEL spans and visible in the admin dashboard**
 - **Metrics for pending intervention count, average response time, and intervention resolution rate are exposed via the observability pipeline**
+- **Per-client usage and rate-limit events are exposed via the observability pipeline, distinct from internal agent and MCP traffic**
+- **Every third-party client invocation (success and failure) is written to the audit log with client, agent type, operation, and outcome — never the credential value**
 
 ## Out of Scope
 - Custom dashboard or visualization UI beyond what the OTEL Collector exports natively

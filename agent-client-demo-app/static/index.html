@@ -1,0 +1,548 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Parthenon — Agent Client Demo</title>
+<script src="/static/vendor/marked.min.js"></script>
+<script src="/static/vendor/purify.min.js"></script>
+<style>
+  *{box-sizing:border-box}
+  body{margin:0;font-family:'Inter',system-ui,sans-serif;background:#F7F7FA;color:#212121}
+  header{background:#6D28D9;color:#fff;padding:16px 24px}
+  header h1{margin:0;font-size:18px}
+  header small{opacity:.85;font-size:12px}
+  .wrap{max-width:820px;margin:24px auto;padding:0 16px}
+  .tabs{display:flex;gap:4px;margin-bottom:16px}
+  .tab{background:#fff;border:1px solid #E4E4EC;border-bottom:none;border-radius:10px 10px 0 0;padding:10px 18px;font-weight:600;color:#666;cursor:pointer}
+  .tab.active{color:#6D28D9;border-color:#6D28D9;background:#fff}
+  .card{background:#fff;border:1px solid #E4E4EC;border-radius:12px;padding:16px;margin-bottom:16px;box-shadow:0 1px 3px rgba(0,0,0,.05)}
+  .row{display:flex;gap:12px;flex-wrap:wrap}
+  .field{flex:1 1 220px;display:flex;flex-direction:column;gap:6px;margin-bottom:8px}
+  label{font-size:12px;font-weight:600;color:#666;text-transform:uppercase;letter-spacing:.4px}
+  input,textarea{font-family:inherit;font-size:14px;padding:9px 12px;border:1px solid #D5D5E0;border-radius:8px;outline:none}
+  input:focus,textarea:focus{border-color:#6D28D9}
+  button{font-family:inherit;font-size:14px;font-weight:600;border:none;border-radius:8px;padding:9px 16px;cursor:pointer;background:#6D28D9;color:#fff}
+  button:disabled{opacity:.5;cursor:not-allowed}
+  button.secondary{background:#fff;color:#6D28D9;border:1px solid #D5D5E0}
+  .status{font-size:13px;color:#666;margin-top:4px}
+  .status.ok{color:#1E7E34}
+  .status.err{color:#B91C1C}
+  .log{border:1px solid #E4E4EC;border-radius:10px;min-height:200px;max-height:420px;overflow:auto;padding:12px;background:#FAFAFC;display:flex;flex-direction:column;gap:8px}
+  .msg{max-width:80%;padding:9px 13px;border-radius:12px;font-size:14px;line-height:1.45;white-space:pre-wrap}
+  .msg.user{background:#6D28D9;color:#fff;align-self:flex-end;border-bottom-right-radius:3px}
+  .msg.bot{background:#fff;border:1px solid #E4E4EC;align-self:flex-start;border-bottom-left-radius:3px}
+  .msg.sys{background:#FFF7E6;border:1px solid #FFE0A3;color:#7A5B00;align-self:center;font-size:12px}
+  .msg.err{background:#FDECEC;border:1px solid #F5C6C6;color:#B91C1C}
+  /* Rich (markdown/HTML/JSON) rendering inside bot bubbles */
+  .msg.bot h1,.msg.bot h2{font-size:16px;margin:10px 0 6px;padding-bottom:4px;border-bottom:1px solid #eee}
+  .msg.bot h3{font-size:14.5px;margin:9px 0 4px}
+  .msg.bot h4,.msg.bot h5,.msg.bot h6{font-size:13.5px;margin:7px 0 4px}
+  .msg.bot p{margin:6px 0}
+  .msg.bot ul,.msg.bot ol{margin:6px 0;padding-left:20px}
+  .msg.bot li{margin:2px 0}
+  .msg.bot code{background:#F1F5F9;color:#C2410C;padding:1px 5px;border-radius:4px;font-family:'SF Mono',Menlo,monospace;font-size:12.5px}
+  .msg.bot pre{background:#1E293B;color:#E2E8F0;padding:10px;border-radius:8px;overflow-x:auto;margin:8px 0}
+  .msg.bot pre code{background:transparent;color:inherit;padding:0}
+  .msg.bot blockquote{border-left:3px solid #6D28D9;padding-left:10px;color:#666;margin:8px 0}
+  .msg.bot a{color:#6D28D9}
+  .msg.bot hr{border:none;border-top:1px solid #eee;margin:10px 0}
+  .msg.bot table{border-collapse:collapse;margin:8px 0;font-size:13px}
+  .msg.bot th,.msg.bot td{border:1px solid #E4E4EC;padding:4px 8px;text-align:left}
+  .msg.bot th{background:#F8FAFC;font-weight:700}
+  .chat-input{display:flex;gap:8px;margin-top:10px}
+  .chat-input input{flex:1}
+  pre{background:#1E293B;color:#E2E8F0;border-radius:8px;padding:12px;font-size:12px;overflow:auto;white-space:pre-wrap}
+  .hidden{display:none}
+  .badge{display:inline-block;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:600;background:#EDE9FE;color:#6D28D9}
+  .hint{font-size:12px;color:#888;margin-top:4px}
+</style>
+</head>
+<body>
+<header>
+  <h1>Parthenon — Agent Client Demo</h1>
+  <small>Two integration modes: server-side secret proxy, or a real browser widget with a publishable key.</small>
+</header>
+
+<div class="wrap">
+  <div class="tabs">
+    <button class="tab active" data-tab="server">Server-side (secret)</button>
+    <button class="tab" data-tab="browser">Browser widget (publishable)</button>
+  </div>
+
+  <!-- ═══════════ SERVER-SIDE (SECRET) ═══════════ -->
+  <section id="tab-server">
+    <div class="card">
+      <div class="row">
+        <div class="field">
+          <label>Communication Hub base URL</label>
+          <input id="s-baseUrl" value="http://localhost:8002" />
+        </div>
+        <div class="field">
+          <label>Client secret</label>
+          <input id="s-secret" type="password" placeholder="phn_cl_sk_…" />
+        </div>
+      </div>
+      <div class="hint" style="margin-bottom:8px">
+        Server-to-server: the demo backend calls the gateway with your secret. Origin is irrelevant
+        here — the secret is the authentication.
+      </div>
+      <button id="s-connectBtn">Connect</button>
+      <div id="s-status" class="status"></div>
+    </div>
+
+    <div id="s-sessionCard" class="card hidden"><div id="s-sessionInfo" class="status"></div></div>
+
+    <div id="s-chatCard" class="card hidden">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+        <label style="margin:0">Conversation</label>
+        <div>
+          <button id="s-startBtn">Start session</button>
+          <button id="s-endBtn" class="secondary hidden">End session</button>
+        </div>
+      </div>
+      <div id="s-chatLog" class="log"></div>
+      <div id="s-chatInputRow" class="chat-input hidden">
+        <input id="s-chatInput" placeholder="Type a message…" />
+        <button id="s-sendBtn">Send</button>
+      </div>
+    </div>
+
+    <div id="s-formCard" class="card hidden">
+      <div id="s-formFields"></div>
+      <div style="margin-top:10px"><button id="s-submitBtn">Submit</button></div>
+      <div id="s-formOutput" style="margin-top:12px"></div>
+    </div>
+  </section>
+
+  <!-- ═══════════ BROWSER WIDGET (PUBLISHABLE) ═══════════ -->
+  <section id="tab-browser" class="hidden">
+    <div class="card">
+      <div class="row">
+        <div class="field">
+          <label>Communication Hub base URL</label>
+          <input id="b-baseUrl" value="http://localhost:8002" />
+        </div>
+        <div class="field">
+          <label>Publishable key</label>
+          <input id="b-secret" type="password" placeholder="phn_cl_pk_…" />
+        </div>
+      </div>
+      <div class="hint" style="margin-bottom:8px">
+        The browser calls the gateway <strong>directly</strong> with your publishable key — the browser sets
+        <code>Origin</code> automatically (unspoofable). Add this page's origin
+        (<code id="b-origin">http://localhost:7002</code>) to the client's allowed origins.
+      </div>
+      <button id="b-connectBtn">Connect</button>
+      <div id="b-status" class="status"></div>
+    </div>
+
+    <div id="b-sessionCard" class="card hidden"><div id="b-sessionInfo" class="status"></div></div>
+
+    <div id="b-chatCard" class="card hidden">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+        <label style="margin:0">Conversation</label>
+        <div>
+          <button id="b-startBtn">Start session</button>
+          <button id="b-endBtn" class="secondary hidden">End session</button>
+        </div>
+      </div>
+      <div id="b-chatLog" class="log"></div>
+      <div id="b-chatInputRow" class="chat-input hidden">
+        <input id="b-chatInput" placeholder="Type a message…" />
+        <button id="b-sendBtn">Send</button>
+      </div>
+    </div>
+
+    <div id="b-formCard" class="card hidden">
+      <div id="b-formFields"></div>
+      <div style="margin-top:10px"><button id="b-submitBtn">Submit</button></div>
+      <div id="b-formOutput" style="margin-top:12px"></div>
+    </div>
+  </section>
+</div>
+
+<script>
+// ── Tabs ────────────────────────────────────────────────────────────────────
+document.querySelectorAll('.tab').forEach((t) => {
+  t.addEventListener('click', () => {
+    document.querySelectorAll('.tab').forEach((x) => x.classList.remove('active'));
+    t.classList.add('active');
+    document.getElementById('tab-server').classList.toggle('hidden', t.dataset.tab !== 'server');
+    document.getElementById('tab-browser').classList.toggle('hidden', t.dataset.tab !== 'browser');
+  });
+});
+
+function el(id) { return document.getElementById(id); }
+function setStatus(prefix, text, cls) {
+  const e = el(prefix + '-status');
+  e.textContent = text;
+  e.className = 'status' + (cls ? ' ' + cls : '');
+}
+
+// ── Format detection + rich rendering (mirrors the Control Center) ──────────
+// HTML → sanitized HTML; JSON → pretty <pre>; otherwise → GitHub-flavored-ish markdown.
+function containsHtmlTags(content) {
+  return /<[a-zA-Z][^>]*>|<\/[a-zA-Z][^>]*>/m.test(content);
+}
+function escapeHtml(s) {
+  return String(s)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+function sanitizeHtml(html) {
+  try {
+    const doc = new DOMParser().parseFromString(html, 'text/html');
+    doc.querySelectorAll('script,style,iframe,object,embed,link,meta').forEach((n) => n.remove());
+    doc.querySelectorAll('*').forEach((node) => {
+      for (const attr of Array.from(node.attributes)) {
+        const name = attr.name.toLowerCase();
+        const val = String(attr.value || '').toLowerCase();
+        if (name.startsWith('on')) node.removeAttribute(attr.name);
+        if ((name === 'href' || name === 'src') && val.startsWith('javascript:')) node.removeAttribute(attr.name);
+      }
+    });
+    return doc.body.innerHTML;
+  } catch (e) { return escapeHtml(html); }
+}
+function looksLikeJson(text) {
+  const t = text.trim();
+  if (!(t.startsWith('{') || t.startsWith('['))) return null;
+  try { return JSON.stringify(JSON.parse(t), null, 2); } catch (e) { return null; }
+}
+function renderMarkdown(text) {
+  let s = escapeHtml(text);
+  // fenced code blocks
+  s = s.replace(/```[^\n]*\n?([\s\S]*?)```/g, (_, code) => '<pre><code>' + code.replace(/\n$/, '') + '</code></pre>');
+  // inline code
+  s = s.replace(/`([^`\n]+)`/g, '<code>$1</code>');
+  // headings
+  s = s.replace(/^######\s+(.*)$/gm, '<h6>$1</h6>')
+       .replace(/^#####\s+(.*)$/gm, '<h5>$1</h5>')
+       .replace(/^####\s+(.*)$/gm, '<h4>$1</h4>')
+       .replace(/^###\s+(.*)$/gm, '<h3>$1</h3>')
+       .replace(/^##\s+(.*)$/gm, '<h2>$1</h2>')
+       .replace(/^#\s+(.*)$/gm, '<h1>$1</h1>');
+  // bold / italic
+  s = s.replace(/\*\*([^*\n]+)\*\*/g, '<strong>$1</strong>').replace(/__([^_\n]+)__/g, '<strong>$1</strong>');
+  s = s.replace(/\*([^*\n]+)\*/g, '<em>$1</em>').replace(/_([^_\n]+)_/g, '<em>$1</em>');
+  // links
+  s = s.replace(/\[([^\]]+)\]\((https?:[^)\s]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
+  // blockquotes + horizontal rules
+  s = s.replace(/^&gt;\s?(.*)$/gm, '<blockquote>$1</blockquote>');
+  s = s.replace(/^---+$/gm, '<hr>');
+  // lists (group consecutive items)
+  s = s.replace(/^(?:[-*])\s+(.*)$/gm, '<li>$1</li>');
+  s = s.replace(/(?:^|\n)((?:<li>[\s\S]*?<\/li>\n?)+)/g, (_, items) => '\n<ul>' + items.trim() + '</ul>\n');
+  // paragraphs
+  return s.split(/\n{2,}/).map((block) => {
+    const t = block.trim();
+    if (!t) return '';
+    if (/^<(h[1-6]|pre|ul|ol|blockquote|hr|table)/.test(t)) return t;
+    return '<p>' + t.replace(/\n/g, '<br>') + '</p>';
+  }).join('');
+}
+function renderRich(text) {
+  const raw = String(text == null ? '' : text);
+  const t = raw.trim();
+  if (t.startsWith('{') || t.startsWith('[')) {
+    try { return '<pre>' + escapeHtml(JSON.stringify(JSON.parse(t), null, 2)) + '</pre>'; } catch (e) {}
+  }
+  // Proper GFM markdown (tables, strikethrough, task lists) via marked, sanitized via DOMPurify.
+  if (typeof window.marked !== 'undefined' && typeof window.DOMPurify !== 'undefined') {
+    return window.DOMPurify.sanitize(window.marked.parse(raw));
+  }
+  // Fallback if the vendor libs failed to load.
+  if (containsHtmlTags(raw)) return sanitizeHtml(raw);
+  return renderMarkdown(raw);
+}
+
+function appendMsg(logId, role, text) {
+  const log = el(logId);
+  const d = document.createElement('div');
+  d.className = 'msg ' + role;
+  if (role === 'bot') d.innerHTML = renderRich(text);
+  else d.textContent = text;
+  log.appendChild(d);
+  log.scrollTop = log.scrollHeight;
+}
+
+// ═══════════ SERVER-SIDE (SECRET) — calls the demo proxy ═══════════
+const server = { baseUrl: '', secret: '', config: null, conversationId: null };
+function serverHeaders() {
+  return { 'X-CH-Base-Url': server.baseUrl, 'X-Client-Secret': server.secret };
+}
+async function serverApi(method, path, body) {
+  const opts = { method, headers: serverHeaders() };
+  if (body !== undefined) { opts.headers['Content-Type'] = 'application/json'; opts.body = JSON.stringify(body); }
+  const res = await fetch(path, opts);
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.detail || (res.status + ' ' + res.statusText));
+  return data;
+}
+
+async function serverConnect() {
+  server.baseUrl = el('s-baseUrl').value.trim();
+  server.secret = el('s-secret').value.trim();
+  if (!server.secret) { setStatus('s', 'Enter a client secret.', 'err'); return; }
+  setStatus('s', 'Connecting…');
+  try {
+    const cfg = await serverApi('GET', '/api/config');
+    server.config = cfg;
+    setStatus('s', 'Connected ✓', 'ok');
+    el('s-sessionCard').classList.remove('hidden');
+    el('s-sessionInfo').innerHTML = '';
+    const b = document.createElement('span'); b.className = 'badge'; b.textContent = cfg.agent_type_name || cfg.agent_type_id;
+    el('s-sessionInfo').appendChild(b);
+    el('s-sessionInfo').appendChild(document.createTextNode(
+      '  input: ' + (cfg.agent_type_input_type || 'unknown') + '  ·  credential: ' + cfg.key_type + '  ·  tenant: ' + (cfg.tenant_slug || '—')));
+    const isChat = cfg.agent_type_input_type === 'conversation';
+    el('s-chatCard').classList.toggle('hidden', !isChat);
+    el('s-formCard').classList.toggle('hidden', isChat);
+    if (!isChat) setupTypedForm('s', cfg.agent_type_input_schema);
+  } catch (e) { setStatus('s', 'Connection failed: ' + e.message, 'err'); }
+}
+async function serverStart() {
+  el('s-startBtn').disabled = true;
+  try {
+    const r = await serverApi('POST', '/api/conversations');
+    server.conversationId = r.conversation_id;
+    el('s-chatLog').innerHTML = '';
+    appendMsg('s-chatLog', 'sys', 'Session started. Say hello.');
+    el('s-chatInputRow').classList.remove('hidden');
+    el('s-endBtn').classList.remove('hidden');
+    el('s-startBtn').classList.add('hidden');
+  } catch (e) { appendMsg('s-chatLog', 'err', 'Could not start session: ' + e.message); el('s-startBtn').disabled = false; }
+}
+async function serverEnd() {
+  if (!server.conversationId) return;
+  try { await serverApi('POST', '/api/conversations/' + encodeURIComponent(server.conversationId) + '/end'); appendMsg('s-chatLog', 'sys', 'Session ended.'); }
+  catch (e) { appendMsg('s-chatLog', 'err', 'End failed: ' + e.message); }
+  finally {
+    server.conversationId = null;
+    el('s-chatInputRow').classList.add('hidden'); el('s-endBtn').classList.add('hidden');
+    el('s-startBtn').classList.remove('hidden'); el('s-startBtn').disabled = false;
+  }
+}
+async function serverSend() {
+  if (!server.conversationId) { appendMsg('s-chatLog', 'sys', 'Start a session first.'); return; }
+  const inp = el('s-chatInput'); const text = inp.value.trim(); if (!text) return;
+  appendMsg('s-chatLog', 'user', text); inp.value = ''; el('s-sendBtn').disabled = true;
+  try {
+    const r = await serverApi('POST', '/api/conversations/' + encodeURIComponent(server.conversationId) + '/messages', { message: text });
+    appendMsg('s-chatLog', 'bot', r.reply || '(no reply)');
+  } catch (e) { appendMsg('s-chatLog', 'err', 'Error: ' + e.message); }
+  finally { el('s-sendBtn').disabled = false; }
+}
+async function serverSubmit() {
+  const out = el('s-formOutput'); out.textContent = 'Submitting…'; el('s-submitBtn').disabled = true;
+  try {
+    const input = collectTypedInput('s');
+    const r = await serverApi('POST', '/api/submit', { input });
+    out.textContent = 'session ' + r.session_id + ' — ' + r.status + '\nwaiting for result…';
+    const s = await poll(() => serverApi('GET', '/api/session/' + encodeURIComponent(r.session_id)));
+    showResult(out, s);
+  } catch (e) { out.textContent = 'Error: ' + e.message; }
+  finally { el('s-submitBtn').disabled = false; }
+}
+
+// ═══════════ BROWSER WIDGET (PUBLISHABLE) — calls the gateway directly ═══════════
+const browser = { chBase: '', key: '', config: null, conversationId: null };
+function browserHeaders() { return { Authorization: 'Bearer ' + browser.key }; }
+async function browserApi(method, path, body) {
+  const opts = { method, headers: browserHeaders() };
+  if (body !== undefined) { opts.headers['Content-Type'] = 'application/json'; opts.body = JSON.stringify(body); }
+  // NOTE: no Origin header is set here — the browser sets it automatically.
+  const res = await fetch(browser.chBase + path, opts);
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.detail || (res.status + ' ' + res.statusText));
+  return data;
+}
+
+async function browserConnect() {
+  browser.chBase = el('b-baseUrl').value.trim().replace(/\/$/, '');
+  browser.key = el('b-secret').value.trim();
+  if (!browser.key) { setStatus('b', 'Enter a publishable key.', 'err'); return; }
+  el('b-origin').textContent = window.location.origin;
+  setStatus('b', 'Connecting…');
+  try {
+    const cfg = await browserApi('GET', '/integrate/config');
+    browser.config = cfg;
+    setStatus('b', 'Connected ✓', 'ok');
+    el('b-sessionCard').classList.remove('hidden');
+    el('b-sessionInfo').innerHTML = '';
+    const b = document.createElement('span'); b.className = 'badge'; b.textContent = cfg.agent_type_name || cfg.agent_type_id;
+    el('b-sessionInfo').appendChild(b);
+    el('b-sessionInfo').appendChild(document.createTextNode(
+      '  input: ' + (cfg.agent_type_input_type || 'unknown') + '  ·  credential: ' + cfg.key_type + '  ·  tenant: ' + (cfg.tenant_slug || '—')));
+    const isChat = cfg.agent_type_input_type === 'conversation';
+    el('b-chatCard').classList.toggle('hidden', !isChat);
+    el('b-formCard').classList.toggle('hidden', isChat);
+    if (!isChat) setupTypedForm('b', cfg.agent_type_input_schema);
+  } catch (e) { setStatus('b', 'Connection failed: ' + e.message, 'err'); }
+}
+async function browserStart() {
+  el('b-startBtn').disabled = true;
+  try {
+    const r = await browserApi('POST', '/integrate/conversations');
+    browser.conversationId = r.conversation_id;
+    el('b-chatLog').innerHTML = '';
+    appendMsg('b-chatLog', 'sys', 'Session started. Say hello.');
+    el('b-chatInputRow').classList.remove('hidden');
+    el('b-endBtn').classList.remove('hidden');
+    el('b-startBtn').classList.add('hidden');
+  } catch (e) { appendMsg('b-chatLog', 'err', 'Could not start session: ' + e.message); el('b-startBtn').disabled = false; }
+}
+async function browserEnd() {
+  if (!browser.conversationId) return;
+  try { await browserApi('POST', '/integrate/conversations/' + encodeURIComponent(browser.conversationId) + '/end'); appendMsg('b-chatLog', 'sys', 'Session ended.'); }
+  catch (e) { appendMsg('b-chatLog', 'err', 'End failed: ' + e.message); }
+  finally {
+    browser.conversationId = null;
+    el('b-chatInputRow').classList.add('hidden'); el('b-endBtn').classList.add('hidden');
+    el('b-startBtn').classList.remove('hidden'); el('b-startBtn').disabled = false;
+  }
+}
+async function browserSend() {
+  if (!browser.conversationId) { appendMsg('b-chatLog', 'sys', 'Start a session first.'); return; }
+  const inp = el('b-chatInput'); const text = inp.value.trim(); if (!text) return;
+  appendMsg('b-chatLog', 'user', text); inp.value = ''; el('b-sendBtn').disabled = true;
+  try {
+    const r = await browserApi('POST', '/integrate/conversations/' + encodeURIComponent(browser.conversationId) + '/messages', { message: text });
+    appendMsg('b-chatLog', 'bot', r.reply || '(no reply)');
+  } catch (e) { appendMsg('b-chatLog', 'err', 'Error: ' + e.message); }
+  finally { el('b-sendBtn').disabled = false; }
+}
+async function browserSubmit() {
+  const out = el('b-formOutput'); out.textContent = 'Submitting…'; el('b-submitBtn').disabled = true;
+  try {
+    const input = collectTypedInput('b');
+    const r = await browserApi('POST', '/integrate/submit', { input });
+    out.textContent = 'session ' + r.session_id + ' — ' + r.status + '\nwaiting for result…';
+    const s = await poll(() => browserApi('GET', '/integrate/session/' + encodeURIComponent(r.session_id)));
+    showResult(out, s);
+  } catch (e) { out.textContent = 'Error: ' + e.message; }
+  finally { el('b-submitBtn').disabled = false; }
+}
+
+// ── Schema-driven form for typed (non-conversational) agents ────────────────
+function setupTypedForm(prefix, schema) {
+  const container = el(prefix + '-formFields');
+  container.innerHTML = '';
+  const props = schema && schema.properties;
+  if (!props || !Object.keys(props).length) {
+    // No schema → generic JSON fallback.
+    container.innerHTML =
+      '<div class="field"><label>Request input (JSON)</label>' +
+      '<textarea data-json="1" rows="6" placeholder=\'{"key": "value"}\'></textarea></div>';
+    return;
+  }
+  const required = new Set(schema.required || []);
+  Object.entries(props).forEach(([name, p]) => {
+    const field = document.createElement('div');
+    field.className = 'field';
+    const label = document.createElement('label');
+    label.textContent = (p.title || name) + (required.has(name) ? ' *' : '');
+    field.appendChild(label);
+    let inp;
+    if (Array.isArray(p.enum) && p.enum.length) {
+      inp = document.createElement('select');
+      p.enum.forEach((v) => {
+        const o = document.createElement('option');
+        o.value = v; o.textContent = v;
+        if (p.default === v) o.selected = true;
+        inp.appendChild(o);
+      });
+      inp.dataset.type = 'enum';
+    } else if (p.type === 'boolean') {
+      inp = document.createElement('select');
+      ['', 'true', 'false'].forEach((v) => {
+        const o = document.createElement('option');
+        o.value = v; o.textContent = v === '' ? '(choose)' : v;
+        inp.appendChild(o);
+      });
+      inp.dataset.type = 'boolean';
+    } else if (p.type === 'number' || p.type === 'integer') {
+      inp = document.createElement('input');
+      inp.type = 'number';
+      if (p.type === 'integer') inp.step = '1';
+      inp.dataset.type = p.type;
+    } else if (p.type === 'array' || p.type === 'object') {
+      inp = document.createElement('textarea');
+      inp.rows = 3;
+      inp.placeholder = p.type === 'array' ? '["item1", "item2"]' : '{"key": "value"}';
+      inp.dataset.type = p.type;
+    } else {
+      inp = document.createElement('input');
+      inp.type = 'text';
+      if (p.default !== undefined) inp.value = p.default;
+      inp.dataset.type = 'string';
+    }
+    inp.dataset.name = name;
+    field.appendChild(inp);
+    if (p.description) {
+      const hint = document.createElement('div');
+      hint.className = 'hint';
+      hint.textContent = p.description;
+      field.appendChild(hint);
+    }
+    container.appendChild(field);
+  });
+}
+
+function collectTypedInput(prefix) {
+  const container = el(prefix + '-formFields');
+  const jsonArea = container.querySelector('textarea[data-json]');
+  if (jsonArea) {
+    const raw = jsonArea.value.trim();
+    return raw ? JSON.parse(raw) : {};
+  }
+  const obj = {};
+  let ok = true;
+  container.querySelectorAll('[data-name]').forEach((inp) => {
+    let v = inp.value;
+    const t = inp.dataset.type;
+    if (t === 'number' || t === 'integer') v = v === '' ? null : Number(v);
+    else if (t === 'boolean') v = v === '' ? null : v === 'true';
+    else if (t === 'array' || t === 'object') {
+      try { v = v.trim() ? JSON.parse(v) : (t === 'array' ? [] : {}); }
+      catch (e) { ok = false; }
+    }
+    obj[inp.dataset.name] = v;
+  });
+  if (!ok) throw new Error('Invalid JSON in one of the fields');
+  return obj;
+}
+
+// ── Shared helpers ──────────────────────────────────────────────────────────
+async function poll(fn) {
+  for (let i = 0; i < 90; i++) {
+    const s = await fn();
+    if (s.status === 'completed' || s.status === 'failed' || s.status === 'terminated') return s;
+    await new Promise((r) => setTimeout(r, 1000));
+  }
+  return { status: 'timeout' };
+}
+function showResult(out, s) {
+  if (s.status === 'completed') {
+    out.innerHTML = '<label>Result</label><pre></pre>';
+    out.querySelector('pre').textContent = typeof s.output_data === 'string' ? s.output_data : JSON.stringify(s.output_data, null, 2);
+  } else if (s.status === 'failed') { out.textContent = 'Failed: ' + (s.error_message || 'unknown error'); }
+  else { out.textContent = 'Session ' + s.status; }
+}
+
+el('s-connectBtn').addEventListener('click', serverConnect);
+el('s-startBtn').addEventListener('click', serverStart);
+el('s-endBtn').addEventListener('click', serverEnd);
+el('s-sendBtn').addEventListener('click', serverSend);
+el('s-chatInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') serverSend(); });
+el('s-submitBtn').addEventListener('click', serverSubmit);
+
+el('b-connectBtn').addEventListener('click', browserConnect);
+el('b-startBtn').addEventListener('click', browserStart);
+el('b-endBtn').addEventListener('click', browserEnd);
+el('b-sendBtn').addEventListener('click', browserSend);
+el('b-chatInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') browserSend(); });
+el('b-submitBtn').addEventListener('click', browserSubmit);
+</script>
+</body>
+</html>

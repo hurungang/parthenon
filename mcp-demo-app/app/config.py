@@ -23,6 +23,9 @@ class AppSettings(BaseSettings):
     HUB_BASE_URL: str
     HUB_API_TOKEN: str
 
+    # Tenant header for tenant-resolved deployments (X-Tenant)
+    HUB_TENANT: str = "root"
+
     # This app
     APP_BASE_URL: str
     APP_PORT: int = 7001

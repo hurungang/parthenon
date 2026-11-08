@@ -20,6 +20,10 @@ _INTERNAL_DATA_PLANE_EXEMPT_PREFIXES: tuple[str, ...] = (
     "/api/v1/internal/certificates",
     "/api/v1/internal/bootstrap",
     "/api/v1/internal/auth",
+    # Third-party client credential validation: resolves the client → tenant
+    # (and mints the signed tenant headers). It cannot require tenant headers
+    # because it is the endpoint that discovers the tenant from the credential.
+    "/api/v1/internal/clients/validate",
     # Control-plane OAuth session establishment: CH presents only the
     # OIDC-validated sub + tenant slug (never signed headers — CH is
     # forward-only).  The endpoint derives and signs the tenant context

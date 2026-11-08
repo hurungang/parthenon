@@ -30,7 +30,7 @@ import EditIcon from '@mui/icons-material/Edit'
 import DeleteIcon from '@mui/icons-material/Delete'
 import StorageIcon from '@mui/icons-material/Storage'
 import { usePagination } from '../../hooks/usePagination'
-import { useMcpServers, useSyncServer } from '../../hooks/useMcpServers'
+import { useMcpServers, useSyncServer, useServerTools } from '../../hooks/useMcpServers'
 import PermissionDeniedAlert from '../../components/permissions/PermissionDeniedAlert'
 import { McpSessionManager } from './McpSessionManager'
 import { McpToolBrowser } from './McpToolBrowser'
@@ -41,6 +41,97 @@ import type { McpServer } from '../../types'
 
 const SLUG_PATTERN = /^[a-z0-9-]+$/
 const SYSTEM_SERVER_ID = '00000000-0000-0000-0000-000000000001'
+
+type ServerDialogTab = 'details' | 'tools'
+
+/**
+ * Tools tab inside the add/update server dialog. For a saved server it
+ * lists that server's tools (GET /mcp/servers/{id}/tools) and offers a
+ * "Load Tools" action that runs the same sync endpoint as the row-level
+ * sync button, then refreshes the list. Errors surface through the
+ * dialog's dialogError + PermissionDeniedAlert pattern via onError.
+ */
+function ServerToolsPanel({
+  serverId,
+  onError,
+}: {
+  serverId: string | null
+  onError: (err: unknown) => void
+}) {
+  const { t } = useTranslation()
+  const queryClient = useQueryClient()
+  const { data: tools, isLoading, refetch } = useServerTools(serverId ?? '')
+  const [syncing, setSyncing] = useState(false)
+
+  const handleLoadTools = async () => {
+    if (!serverId) return
+    setSyncing(true)
+    onError(null)
+    try {
+      await apiClient.post(`/mcp/servers/${serverId}/sync`)
+      await queryClient.invalidateQueries({ queryKey: ['mcp', 'servers', serverId, 'tools'] })
+      await refetch()
+    } catch (err) {
+      onError(err)
+    } finally {
+      setSyncing(false)
+    }
+  }
+
+  return (
+    <Box display="flex" flexDirection="column" gap={2} mt={1}>
+      <Box display="flex" justifyContent="flex-end">
+        <Button
+          variant="outlined"
+          startIcon={<SyncIcon data-testid="LoadToolsSyncIcon" />}
+          onClick={handleLoadTools}
+          disabled={!serverId || syncing}
+        >
+          {t('mcp.dialog.loadTools')}
+        </Button>
+      </Box>
+
+      {!serverId && <Alert severity="info">{t('mcp.dialog.saveFirstHint')}</Alert>}
+
+      {serverId && isLoading && <CircularProgress size={24} />}
+
+      {serverId && !isLoading && (tools ?? []).length === 0 && (
+        <Typography color="text.secondary">{t('mcp.dialog.noTools')}</Typography>
+      )}
+
+      {serverId && (tools ?? []).length > 0 && (
+        <TableContainer component={Paper} variant="outlined">
+          <Table size="small">
+            <TableHead>
+              <TableRow>
+                <TableCell>{t('app.name')}</TableCell>
+                <TableCell>{t('app.description')}</TableCell>
+                <TableCell>{t('app.status')}</TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {(tools ?? []).map((tool) => (
+                <TableRow key={tool.id}>
+                  <TableCell sx={{ whiteSpace: 'nowrap' }}><code>{tool.name}</code></TableCell>
+                  <TableCell>
+                    <Typography variant="caption" sx={{ wordBreak: 'break-word' }}>{tool.description ?? '—'}</Typography>
+                  </TableCell>
+                  <TableCell>
+                    <Chip
+                      label={tool.is_active ? t('app.active') : t('app.inactive')}
+                      color={tool.is_active ? 'success' : 'default'}
+                      size="small"
+                    />
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </TableContainer>
+      )}
+    </Box>
+  )
+}
 
 /**
  * MCP Hub management page — Servers tab and Tool Repository tab.
@@ -58,6 +149,10 @@ export function McpHubPage() {
   const [form, setForm] = useState({ slug: '', base_url: '', description: '' })
   const [sessionServerId, setSessionServerId] = useState<string | null>(null)
   const [syncWarnings, setSyncWarnings] = useState<string | null>(null)
+  const [dialogTab, setDialogTab] = useState<ServerDialogTab>('details')
+  // True when the dialog was opened read-only (e.g. from a tool row click in
+  // the Tool Repository tab) — the Save action is hidden in this mode.
+  const [dialogViewOnly, setDialogViewOnly] = useState(false)
   // FIX-20261101-014511: surfaces 403s from row-level actions (e.g. mutating
   // the protected Control Center entity without integration::control_center:
   // manage) via the standard PermissionDeniedAlert — never a silent failure.
@@ -68,6 +163,8 @@ export function McpHubPage() {
     setEditServer(null)
     setForm({ slug: '', base_url: '', description: '' })
     setDialogError(null)
+    setDialogTab('details')
+    setDialogViewOnly(false)
     setDialogOpen(true)
   }
 
@@ -75,7 +172,27 @@ export function McpHubPage() {
     setEditServer(server)
     setForm({ slug: server.slug, base_url: server.base_url, description: server.description ?? '' })
     setDialogError(null)
+    setDialogTab('details')
+    setDialogViewOnly(false)
     setDialogOpen(true)
+  }
+
+  // Opened when a server row in the servers table is clicked —
+  // view-only mode, Details tab selected by default.
+  const handleOpenView = (server: McpServer) => {
+    setEditServer(server)
+    setForm({ slug: server.slug, base_url: server.base_url, description: server.description ?? '' })
+    setDialogError(null)
+    setDialogTab('details')
+    setDialogViewOnly(true)
+    setDialogOpen(true)
+  }
+
+  const closeDialog = () => {
+    setDialogOpen(false)
+    setDialogError(null)
+    setDialogTab('details')
+    setDialogViewOnly(false)
   }
 
   const handleSave = async () => {
@@ -172,7 +289,21 @@ export function McpHubPage() {
                     const aboutTitle = server.slug === 'decision' ? t('mcp.decision.aboutTitle') : t('mcp.system.aboutTitle')
                     const aboutBody = server.slug === 'decision' ? t('mcp.decision.aboutBody') : t('mcp.system.aboutBody')
                     return (
-                    <TableRow key={server.id}>
+                    <TableRow
+                      key={server.id}
+                      hover
+                      tabIndex={0}
+                      role="button"
+                      aria-label={`${server.slug} — ${t('mcp.servers.openServerDetails')}`}
+                      onClick={() => handleOpenView(server)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault()
+                          handleOpenView(server)
+                        }
+                      }}
+                      sx={{ cursor: 'pointer' }}
+                    >
                       <TableCell>
                         <Box display="flex" alignItems="center" gap={1}>
                           <code>{server.slug}</code>
@@ -220,7 +351,7 @@ export function McpHubPage() {
                           ? new Date(server.last_synced_at).toLocaleString()
                           : '—'}
                       </TableCell>
-                      <TableCell>
+                      <TableCell onClick={(e) => e.stopPropagation()}>
                         {/* Session management button — hidden for system-managed entities (cc has NO sessions) */}
                         {!isSystem && !systemManaged && (
                           <Tooltip title={t('mcp.manageSessions')}>
@@ -333,40 +464,66 @@ export function McpHubPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Create/Edit Server Dialog */}
-      <Dialog open={dialogOpen} onClose={() => { setDialogOpen(false); setDialogError(null) }} maxWidth="sm" fullWidth>
-        <DialogTitle>{editServer ? t('mcp.editServer') : t('mcp.registerServer')}</DialogTitle>
+      {/* Create/Edit/View Server Dialog — responsive width (wider when the
+          screen allows, capped at the md breakpoint) for readable tool lists */}
+      <Dialog open={dialogOpen} onClose={closeDialog} maxWidth="md" fullWidth>
+        <DialogTitle>
+          {dialogViewOnly
+            ? t('mcp.dialog.viewServerTitle')
+            : editServer ? t('mcp.editServer') : t('mcp.registerServer')}
+        </DialogTitle>
         <DialogContent>
           {dialogError ? <PermissionDeniedAlert error={dialogError} fallbackMessage={t('app.error')} /> : null}
-          <Box display="flex" flexDirection="column" gap={2} mt={1}>
-            <TextField
-              label={t('mcp.slug')}
-              value={form.slug}
-              onChange={(e) => setForm((f) => ({ ...f, slug: e.target.value }))}
-              fullWidth
-              disabled={!!editServer}
-              error={invalidSlug}
-              helperText={invalidSlug ? 'Lowercase letters, numbers, hyphens only' : undefined}
-            />
-            <TextField
-              label={t('mcp.baseUrl')}
-              value={form.base_url}
-              onChange={(e) => setForm((f) => ({ ...f, base_url: e.target.value }))}
-              fullWidth
-            />
-            <TextField
-              label={t('app.description')}
-              value={form.description}
-              onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
-              fullWidth
-              multiline
-              rows={2}
-            />
-          </Box>
+          <Tabs
+            value={dialogTab}
+            onChange={(_e, v: ServerDialogTab) => setDialogTab(v)}
+            sx={{ mb: 1 }}
+          >
+            <Tab value="details" label={t('mcp.dialog.tabs.details')} />
+            <Tab value="tools" label={t('mcp.dialog.tabs.tools')} />
+          </Tabs>
+
+          {dialogTab === 'tools' ? (
+            <ServerToolsPanel serverId={editServer?.id ?? null} onError={setDialogError} />
+          ) : (
+            <Box display="flex" flexDirection="column" gap={2} mt={1}>
+              <TextField
+                label={t('mcp.slug')}
+                value={form.slug}
+                onChange={(e) => setForm((f) => ({ ...f, slug: e.target.value }))}
+                fullWidth
+                disabled={!!editServer}
+                error={invalidSlug}
+                helperText={invalidSlug ? 'Lowercase letters, numbers, hyphens only' : undefined}
+              />
+              <TextField
+                label={t('mcp.baseUrl')}
+                value={form.base_url}
+                onChange={(e) => setForm((f) => ({ ...f, base_url: e.target.value }))}
+                fullWidth
+              />
+              <TextField
+                label={t('app.description')}
+                value={form.description}
+                onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
+                fullWidth
+                multiline
+                rows={2}
+              />
+            </Box>
+          )}
         </DialogContent>
         <Box display="flex" justifyContent="flex-end" gap={1} p={2} pt={0}>
-          <Button onClick={() => setDialogOpen(false)}>{t('app.cancel')}</Button>
-          <Button variant="contained" onClick={handleSave} disabled={invalidSlug}>{t('app.save')}</Button>
+          <Button onClick={closeDialog}>{t('app.cancel')}</Button>
+          {!dialogViewOnly && (
+            <Button
+              variant="contained"
+              onClick={handleSave}
+              disabled={invalidSlug}
+            >
+              {t('app.save')}
+            </Button>
+          )}
         </Box>
       </Dialog>
     </Box>

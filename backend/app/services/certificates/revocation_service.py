@@ -222,6 +222,7 @@ class RevocationService:
         self,
         serial_number: str,
         control_center_url: str,
+        client_cert: tuple[str, str] | None = None,
     ) -> bool:
         """Check if a serial number is revoked by querying Control Center.
 
@@ -229,6 +230,13 @@ class RevocationService:
         access.  Calls the lightweight
         ``GET /api/v1/internal/certificates/revoked/{serial}`` endpoint on
         Control Center (network-isolated in production).
+
+        The HTTP client is built via :func:`app.core.internal_http.\
+internal_httpx_client` — the only approved internal egress mechanism —
+        with ``verify=get_ssl_context()`` so TLS to Control Center succeeds
+        in production.  Callers should pass their own service certificate
+        pair via *client_cert* (``(cert_path, key_path)``) so the call is
+        mTLS-authenticated.
 
         **Fail-closed by default**: if Control Center is unreachable the method
         returns ``True`` so the caller treats the certificate as revoked.
@@ -240,19 +248,28 @@ class RevocationService:
             serial_number: Certificate serial number to check.
             control_center_url: Base URL of the Control Center API
                 (e.g. ``http://control-center:8000``).
+            client_cert: Optional ``(cert_path, key_path)`` pair for mTLS
+                client authentication to Control Center.
 
         Returns:
             ``True`` if the certificate is revoked, or if revocation status
             cannot be validated under fail-closed policy.
         """
-        import httpx
+        from app.core.internal_http import internal_httpx_client
+        from app.core.ssl_context import get_ssl_context
 
         url = (
             f"{control_center_url.rstrip('/')}"
             f"/api/v1/internal/certificates/revoked/{serial_number}"
         )
+        client_kwargs: dict[str, object] = {
+            "timeout": 5.0,
+            "verify": get_ssl_context(),
+        }
+        if client_cert:
+            client_kwargs["cert"] = client_cert
         try:
-            async with httpx.AsyncClient(timeout=5.0) as client:
+            async with internal_httpx_client(**client_kwargs) as client:
                 response = await client.get(url)
             if response.status_code == 200:
                 data = response.json()
@@ -272,13 +289,13 @@ class RevocationService:
         except Exception as exc:
             if _allow_insecure_internal_fallback():
                 logger.warning(
-                    "Revocation check failed for serial=%s; insecure development fallback treats as not revoked: %s",
+                    "Revocation check failed for serial=%s; insecure development fallback treats as not revoked: %r",
                     serial_number,
                     exc,
                 )
                 return False
             logger.error(
-                "Revocation check failed for serial=%s; fail-closed treats certificate as revoked: %s",
+                "Revocation check failed for serial=%s; fail-closed treats certificate as revoked: %r",
                 serial_number,
                 exc,
             )

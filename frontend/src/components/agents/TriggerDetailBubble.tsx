@@ -10,6 +10,7 @@ import {
 import CloseIcon from '@mui/icons-material/Close'
 import PersonIcon from '@mui/icons-material/Person'
 import ScheduleIcon from '@mui/icons-material/Schedule'
+import ApiIcon from '@mui/icons-material/Api'
 import { useQuery } from '@tanstack/react-query'
 import cronstrue from 'cronstrue'
 import { useTranslation } from 'react-i18next'
@@ -27,8 +28,8 @@ export interface TriggerExecution {
 interface TriggerDetailBubbleProps {
   /** Key of the focused trigger entity (e.g. `person:Alice`). */
   entityKey: string
-  kind: 'person' | 'schedule'
-  /** Person display name, or the schedule name. */
+  kind: 'person' | 'schedule' | 'client'
+  /** Person display name, schedule name, or client name. */
   name: string
   /** For schedules: the creator's display name (null when unknown). */
   creator: string | null
@@ -40,6 +41,8 @@ interface TriggerDetailBubbleProps {
   cron?: string | null
   /** Schedule description from the topology payload. */
   description?: string | null
+  /** Client: id — fetches the client's own details. */
+  clientId?: string | null
   /** Executions (sessions) the entity triggered, newest first. */
   executions: TriggerExecution[]
   /** Screen-space position (already viewport-clamped by the canvas). */
@@ -70,6 +73,7 @@ export function TriggerDetailBubble({
   scheduleId,
   cron,
   description,
+  clientId,
   executions,
   position,
   onSelectExecution,
@@ -79,7 +83,9 @@ export function TriggerDetailBubble({
   const kindLabelKey =
     kind === 'schedule'
       ? 'agents.sessions.runtimeMonitorTriggerScheduleKind'
-      : 'agents.sessions.runtimeMonitorTriggerPersonKind'
+      : kind === 'client'
+        ? 'agents.sessions.runtimeMonitorTriggerClientKind'
+        : 'agents.sessions.runtimeMonitorTriggerPersonKind'
 
   // ── The trigger's own details, fetched on open (silent on failure) ──────
   const scheduleQuery = useQuery({
@@ -112,11 +118,33 @@ export function TriggerDetailBubble({
     },
   })
 
+  const clientQuery = useQuery({
+    queryKey: ['trigger-detail', 'client', clientId],
+    enabled: kind === 'client' && clientId != null,
+    staleTime: 30_000,
+    retry: false,
+    queryFn: async () => {
+      const { data } = await apiClient.get(`/clients`)
+      const client = (data as Array<Record<string, unknown>>).find(
+        (c) => c.id === clientId,
+      )
+      return (client ?? null) as {
+        name?: string | null
+        key_type?: string | null
+        status?: string | null
+        agent_type_name?: string | null
+      } | null
+    },
+  })
+
   const scheduleCron = scheduleQuery.data?.cron_expression ?? cron ?? null
   const scheduleDescription = scheduleQuery.data?.description ?? description ?? null
   const scheduleStatus = scheduleQuery.data?.status ?? null
   const personEmail = identityQuery.data?.email ?? null
   const personType = identityQuery.data?.identity_type ?? null
+  const clientKeyType = clientQuery.data?.key_type ?? null
+  const clientStatus = clientQuery.data?.status ?? null
+  const clientAgentType = clientQuery.data?.agent_type_name ?? null
   const detailRows: Array<{ key: string; label: string; value: string; testid: string }> = []
   if (kind === 'schedule') {
     if (scheduleCron) {
@@ -149,6 +177,31 @@ export function TriggerDetailBubble({
         testid: 'trigger-detail-status',
       })
     }
+  } else if (kind === 'client') {
+    if (clientKeyType) {
+      detailRows.push({
+        key: 'client-key-type',
+        label: t('agents.sessions.runtimeMonitorTriggerDetailClientKeyType'),
+        value: clientKeyType,
+        testid: 'trigger-detail-client-key-type',
+      })
+    }
+    if (clientStatus) {
+      detailRows.push({
+        key: 'client-status',
+        label: t('agents.sessions.runtimeMonitorTriggerDetailStatus'),
+        value: clientStatus,
+        testid: 'trigger-detail-client-status',
+      })
+    }
+    if (clientAgentType) {
+      detailRows.push({
+        key: 'client-agent-type',
+        label: t('agents.sessions.runtimeMonitorTriggerDetailClientAgentType'),
+        value: clientAgentType,
+        testid: 'trigger-detail-client-agent-type',
+      })
+    }
   } else {
     if (personEmail) {
       detailRows.push({
@@ -169,7 +222,8 @@ export function TriggerDetailBubble({
   }
   const detailRowsLoading =
     (kind === 'schedule' && scheduleId != null && scheduleQuery.isLoading) ||
-    (kind === 'person' && userId != null && identityQuery.isLoading)
+    (kind === 'person' && userId != null && identityQuery.isLoading) ||
+    (kind === 'client' && clientId != null && clientQuery.isLoading)
 
   return (
     <Paper
@@ -195,15 +249,23 @@ export function TriggerDetailBubble({
               width: 22,
               height: 22,
               borderRadius: '50%',
-              bgcolor: kind === 'schedule' ? '#FFF3E0' : '#E3F2FD',
-              color: kind === 'schedule' ? '#EF6C00' : '#1565C0',
+              bgcolor:
+                kind === 'schedule' ? '#FFF3E0' : kind === 'client' ? '#F3E5F5' : '#E3F2FD',
+              color:
+                kind === 'schedule' ? '#EF6C00' : kind === 'client' ? '#7B1FA2' : '#1565C0',
               display: 'inline-flex',
               alignItems: 'center',
               justifyContent: 'center',
               flexShrink: 0,
             }}
           >
-            {kind === 'schedule' ? <ScheduleIcon sx={{ fontSize: 14 }} /> : <PersonIcon sx={{ fontSize: 14 }} />}
+            {kind === 'schedule' ? (
+              <ScheduleIcon sx={{ fontSize: 14 }} />
+            ) : kind === 'client' ? (
+              <ApiIcon sx={{ fontSize: 14 }} />
+            ) : (
+              <PersonIcon sx={{ fontSize: 14 }} />
+            )}
           </Box>
           <Typography variant="subtitle1" fontWeight={700} sx={{ wordBreak: 'break-word' }}>
             {name}

@@ -278,6 +278,8 @@ If all six checks pass, the deployment is complete.
 
 > **Permission Engine latency baseline:** Before switching the Permission Engine from audit mode to enforce mode, record the median and P95 backend response times for authenticated endpoints. The auth middleware adds two async database calls per request (user cache upsert and group claim mapping). If median response time increases by more than 20% after enabling enforce mode, scale `control-center` replicas before proceeding. See [operational-runbooks.md](operational-runbooks.md) §4 for full monitoring guidance.
 
+> **Optional: Third-party integration gateway.** The public `/integrate/*` gateway is disabled by default (`INTEGRATION_GATEWAY_ENABLED=false`). To enable it: set `INTEGRATION_GATEWAY_ENABLED=true` and `INTEGRATION_PUBLIC_BASE_URL` on the Communication Hub (see [environment-variables.md](environment-variables.md) §Third-Party Agent Integration Gateway), configure the nginx public `/integrate/*` routes (see [configuration-files.md](configuration-files.md) §nginx Reverse Proxy — Public Integration Gateway Routes), restart backend services so certificates re-bootstrap, then create a client for an agent type in the Clients UI and verify both invocation paths (stateful conversation and typed submit) end-to-end from an allowed origin.
+
 ---
 
 ## Step 13 — Enable Multi-Tenancy (SaaS mode, optional)

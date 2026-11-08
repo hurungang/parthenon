@@ -101,15 +101,18 @@ export function useToolPermissions(toolId: string) {
   })
 }
 
-export function useAllTools(limit?: number, offset?: number) {
+export function useAllTools(limit?: number, offset?: number, serverId?: string) {
   const paged = limit !== undefined || offset !== undefined
   return useQuery<McpTool[]>({
-    queryKey: ['mcp', 'tools', paged ? { limit, offset } : 'all'],
+    // serverId participates in the key so changing the filter refetches
+    // from the API (server-side filter + pagination).
+    queryKey: ['mcp', 'tools', paged ? { limit, offset, serverId: serverId ?? null } : 'all'],
     queryFn: async () => {
-      if (!paged) return fetchAllPages<McpTool>('/mcp/tools', MCP_TOOLS_PAGE_SIZE)
-      const params: Record<string, number> = {}
+      const params: Record<string, string | number> = {}
       if (limit !== undefined) params.limit = limit
       if (offset !== undefined) params.offset = offset
+      if (paged && serverId) params.server_id = serverId
+      if (!paged && !serverId) return fetchAllPages<McpTool>('/mcp/tools', MCP_TOOLS_PAGE_SIZE)
       const { data } = await apiClient.get<McpTool[]>('/mcp/tools', { params })
       return data
     },

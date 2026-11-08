@@ -16,6 +16,8 @@
 > **control-center-chatbot (2026-11-02): merged 5 change scenarios + 5 curated frontend scenarios** (10 new grep patterns; rows 226–235). The 5 change patterns were verified against `e2e/tests/control-center-chatbot.spec.ts`, `control-center-chatbot.real-backend.spec.ts` and `control-center-chatbot-mcp.spec.ts`. The 5 additional patterns are Vitest suites covering shipped assistant UX that has no Playwright spec yet (entry click-through, View All Sessions ended toggle, New-Session semantics, expandable approval preview, model-unconfigured guidance). Re-verified **all 201 existing patterns** against the declared `source.tests` layers (188 E2E, 7 frontend, 5 mcp-demo-app): **1 stale pattern removed** — `Setup Wizard — full user journey > bundled Keycloak happy path completes and shows success`, whose spec (`e2e/tests/setup-wizard.spec.ts`) no longer exists in the repo (the wizard was replaced by the `setup/` CLI flow; only a stale `e2e/playwright_out.txt` run log still mentions it). The two Scenario Index rows that pointed at that deleted spec (former #15 and #179) were dropped as well.
 >
 > **sandboxed-scripting-follow-ups (2026-11-03): merged 2 demo scenarios** from the change's `demo-cases.md` (rows 236–237). One new grep pattern was added — the MCP session re-auth status, verified against `e2e/tests/mcp-hub.spec.ts` (suite `MCP Session re-auth state`). The second scenario's pattern (`Agent Type Scripts tab — agent-owned script governance > operator retires a version from the Scripts tab`) already exists here from `software-3.0-agent-framework`, so it was reused rather than duplicated. Re-verified **all 210 existing patterns** against the declared `source.tests` layers (193 E2E, 12 frontend, 5 mcp-demo-app): **all matched — no stale patterns removed**. Caveat: the change's "nothing to retire" empty state is component-level only (`frontend/src/__tests__/AgentOptimizedPlanTab.test.tsx`) — there is no E2E spec for it — and the deferred semantic-error / `partial_failure` behaviour is deliberately not demoed because no test backs it.
+>
+> **third-party-agent-integration (2026-11-04): merged 3 demo scenarios** from the change's `demo-cases.md` (rows 238–240). All 3 grep patterns verified against `e2e/tests/agent-clients.spec.ts` test titles (suite `Agent Clients - Mocked Management`). Re-verified all existing patterns — **no stale patterns removed**. The change also contributes a real-backend spec (`e2e/tests/agent-clients.real-backend.spec.ts`) not exposed as a demo journey.
 
 ## Grep Patterns
 <!-- Matches Playwright test titles and Vitest describe > it names (same format) -->
@@ -231,6 +233,9 @@
 - InlineInterventionDialog expand (FIX-20261101-223511) > expanded dialog shows the full-width preview table
 - ConversationDialog assistant model guidance > shows the guidance banner, Configure-model action, and disables input when unconfigured
 - MCP Session re-auth state > shows a "Needs re-authentication" status for a session flagged requires_reauth
+- Agent Clients - Mocked Management > lists clients with agent type and credential type
+- Agent Clients - Mocked Management > shows the publishable soft warning in the create dialog
+- Agent Clients - Mocked Management > creates a client and shows the credential once
 
 ## Scenario Index
 | # | Feature | What it Shows | Change | Spec File |
@@ -480,3 +485,6 @@
 | 235 | Model-unconfigured guidance | With no assistant model selected the chat shows a Configure-model banner and disables input; a configured model removes the banner | control-center-chatbot | frontend/src/__tests__/AssistantModelConfigGuidance.test.tsx |
 | 236 | MCP session re-auth state | A session whose OAuth refresh failed unrecoverably shows a "Needs re-authentication" status with the stored reason instead of silently deactivating | sandboxed-scripting-follow-ups | e2e/tests/mcp-hub.spec.ts |
 | 237 | Script retire (Optimized Plan lifecycle) | Operator retires a script version from the Scripts tab — the retire flow that now has a clear "nothing to retire" empty state | sandboxed-scripting-follow-ups | e2e/tests/agent-type-scripts-tab.spec.ts |
+| 238 | Agent Clients — Client List | A tenant's clients listed with their bound agent type and credential type (secret vs publishable) | third-party-agent-integration | e2e/tests/agent-clients.spec.ts |
+| 239 | Agent Clients — Publishable Soft Warning | Creating a publishable client surfaces the "exposes this agent type publicly" warning in the create dialog | third-party-agent-integration | e2e/tests/agent-clients.spec.ts |
+| 240 | Agent Clients — Create + Credential Once | Creating a client and displaying the clear-text credential exactly once | third-party-agent-integration | e2e/tests/agent-clients.spec.ts |

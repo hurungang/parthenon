@@ -60,7 +60,16 @@ def create_app() -> FastAPI:
         redoc_url="/redoc" if settings.environment != "production" else None,
     )
 
-    # CORS — mirrors Control Center settings; Web UI must be allowed for WebSocket handshake
+    # CORS — mirrors Control Center settings; Web UI must be allowed for WebSocket handshake.
+    # Browser-widget origins (publishable keys) are additionally allowed via
+    # INTEGRATION_CORS_ORIGINS (comma-separated) so a third-party page can call
+    # the /integrate/* gateway directly. Per-request origin allowlisting is still
+    # enforced by the client credential itself.
+    _integration_cors = [
+        o.strip()
+        for o in os.environ.get("INTEGRATION_CORS_ORIGINS", "").split(",")
+        if o.strip()
+    ]
     if settings.environment == "development":
         app.add_middleware(
             CORSMiddleware,
@@ -68,6 +77,8 @@ def create_app() -> FastAPI:
                 "http://localhost:5173",
                 "http://localhost:4173",
                 "http://localhost:3000",
+                "http://localhost:7002",  # agent-client demo (browser-widget tab)
+                *_integration_cors,
             ],
             allow_credentials=True,
             allow_methods=["*"],
@@ -76,7 +87,7 @@ def create_app() -> FastAPI:
     else:
         app.add_middleware(
             CORSMiddleware,
-            allow_origins=[],
+            allow_origins=_integration_cors,
             allow_credentials=True,
             allow_methods=["*"],
             allow_headers=["*"],
@@ -147,6 +158,18 @@ def _register_routers(app: FastAPI) -> None:
 
     # MCP protocol server — opt-in via CH_MCP_PROTOCOL_SERVER_ENABLED
     register_mcp_protocol_server(app, enabled=settings.ch_mcp_protocol_server_enabled)
+
+    # Third-party agent integration gateway — opt-in via INTEGRATION_GATEWAY_ENABLED
+    integration_enabled = os.environ.get("INTEGRATION_GATEWAY_ENABLED", "").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+    if integration_enabled:
+        from app.communication_hub.api.integration_gateway import integration_router
+
+        app.include_router(integration_router)
 
 
 app = create_app()

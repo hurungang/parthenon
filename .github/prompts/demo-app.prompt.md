@@ -75,6 +75,12 @@ require(path.resolve('e2e/node_modules/@playwright/test/cli.js'));
 
 ## Available Scenarios
 
+### Live-Platform Demo — airline-booking-demo
+
+The `airline-booking-demo` change is a **live-platform** demo (MCP demo app booking scenario through Parthenon agents) — it has no Playwright specs. Curated scenarios: `docs/changes/airline-booking-demo/demo-cases.md`; run the walkthrough script from `docs/master/reference/airline-booking-demo-walkthrough.md` (requires a running stack: infra + backend services + MCP demo app). Scenarios: flight search → confirm-before-write booking → payment link → ticket status → scripted zero-LLM check-in + seat selection → cancel + re-book → permission-denied path.
+
+### Playwright Scenarios
+
 | Feature | Test | What You'll See |
 |---------|------|-----------------|
 | **API Key Management** (api-key-mcp-hub) | | |
@@ -144,6 +150,8 @@ require(path.resolve('e2e/node_modules/@playwright/test/cli.js'));
 | OAuth-gated MCP surface | See demo-cases.md | ⚠️ Live backend: user JWT session + permission-filtered management `tools/list` |
 | External MCP client parity | See demo-cases.md | ⚠️ Live backend: user's OAuth creds via an external MCP client — same filtered catalog + authorized calls |
 | No-delete / permission boundary | See demo-cases.md | Unauthenticated `/mcp` → 401; delete-shaped and out-of-scope calls declined in-band |
+| **CC Assistant tool coverage** (cc-assistant-management-tool-coverage) | | |
+| Full agent-type update via assistant | `Control Center Assistant — agent-type update journey (mocked WS/API) > preview is presented, approval is sent, and the list reflects the update` | Chat preview (old → new incl. role/I/O config) → approve → Agent Types list reflects the update. Demo cases: `docs/changes/cc-assistant-management-tool-coverage/demo-cases.md` |
 | **Agent Type Scripts tab** (agent-type-scripts-tab — change `software-3.0-agent-framework`) | | |
 | Scripts tab list | `Agent Type Scripts tab — agent-owned script governance > Scripts tab lists the agent type script with description, lifecycle and health` | Agent Type dialog Scripts tab: script with description, lifecycle chip (Compiled), health chip (Degraded) |
 | Version lineage & evidence | `Agent Type Scripts tab — agent-owned script governance > version lineage with repaired_from and verification evidence are visible` | Versions with derived / repair-of lineage badges; Promoted verdict; fallback reason |

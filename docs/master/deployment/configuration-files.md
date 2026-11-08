@@ -108,3 +108,28 @@ The consolidated setup tool writes `config/identity.yaml` when running `setup id
 A missing `config/identity.yaml` is treated as an empty configuration and does not cause an error. Teams that manage all OIDC configuration through environment variables (typical for external providers) can omit the file entirely.
 
 > **Note on identity provider registration:** The `config/identity.yaml` file covers connection-level settings. Identity provider registration and discovery (OIDC Provider Registry) is managed in the database via the `IdentityProviderConfig` table and the System Config UI. The `config/identity.yaml` file is a separate concern — it provides the initial connection configuration that the Control Center uses during startup validation.
+
+---
+
+## nginx Reverse Proxy — Public Integration Gateway Routes
+
+**Purpose**: Expose the Communication Hub third-party integration gateway (`/integrate/*`) publicly while keeping `/api/v1/*` and `/internal/*` behind existing authentication.
+
+**Status**: Optional — only required when `INTEGRATION_GATEWAY_ENABLED=true` on the Communication Hub (see [environment-variables.md](environment-variables.md) §Third-Party Agent Integration Gateway).
+
+### Public routes
+
+| Route | Upstream | Notes |
+|-------|----------|-------|
+| `POST /integrate/conversations`, `/integrate/conversations/{id}/messages`, `/integrate/conversations/{id}/end` | `communication-hub:8002` | Stateful conversational invocation; client credential authenticated |
+| `POST /integrate/submit`, `GET /integrate/session/{id}` | `communication-hub:8002` | Typed async request/response for non-conversational types |
+| `GET /integrate/config` | `communication-hub:8002` | White-label widget/theme config (client-ref scoped) |
+| `GET /integrate/sdk/*` | `communication-hub:8002` | JS/Python SDK distribution (public) |
+
+### Origin handling
+
+- **Deployment-level allowlist**: `INTEGRATION_CORS_ORIGINS` on Communication Hub — defense in depth applied to every `/integrate/*` request (empty = reject all).
+- **Per-client allowlist**: each client's `allowed_origins` (database-backed, set via the client-management UI) is enforced by the CH client-auth middleware; the request `Origin` header must match exactly.
+- nginx must forward the `Origin` header unchanged to Communication Hub — do not rewrite or strip it on the `/integrate/*` location blocks.
+
+All other `/integrate/*` paths should not be routed; keep `/api/v1/*` and `/internal/*` behind existing authentication as today.

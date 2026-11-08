@@ -175,8 +175,16 @@ describe('ConversationDialog — resumed session live delivery (FIX-20261031-071
     fireEvent.change(screen.getByRole('textbox'), { target: { value: 'ping' } })
     fireEvent.click(screen.getByText('conversations.sessions.send'))
 
-    // User message appears instantly (optimistic UI)
-    expect(screen.getByText('ping')).toBeDefined()
+    // User message appears instantly (optimistic UI). Query must wait for
+    // the async send to settle and match only the bubble (the input textarea
+    // may transiently still contain the text while it clears).
+    await waitFor(() => {
+      expect(
+        screen
+          .getAllByText('ping')
+          .some((el) => el.tagName === 'P'),
+      ).toBe(true)
+    })
     await waitFor(() => {
       expect(socket.sent.some((d) => d.includes('ping'))).toBe(true)
     })
@@ -294,7 +302,13 @@ describe('ConversationDialog — resumed session live delivery (FIX-20261031-071
     // Send in the resumed session; the turn is in flight (thinking)
     fireEvent.change(screen.getByRole('textbox'), { target: { value: 'ping' } })
     fireEvent.click(screen.getByText('conversations.sessions.send'))
-    expect(screen.getByText('ping')).toBeDefined()
+    await waitFor(() => {
+      expect(
+        screen
+          .getAllByText('ping')
+          .some((el) => el.tagName === 'P'),
+      ).toBe(true)
+    })
 
     // Connection drops mid-turn; the reply never arrives on this socket
     act(() => socket.simulateClose())

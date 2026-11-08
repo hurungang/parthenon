@@ -59,6 +59,25 @@ async def _wait_for_receiver_result(
         _terminal_at: float | None = None
 
         while True:
+            # Fail fast: a pre-execution failure (e.g. token preflight
+            # BLOCKED) is recorded before the execution ever started, so the
+            # waiter may not have been subscribed when the pub/sub failure
+            # message was published. The sticky Redis record covers that race.
+            _get_failure = getattr(active_broker, "get_session_failure", None)
+            failure = (
+                await _get_failure(str(receiver_session_id)) if _get_failure else None
+            )
+            if failure:
+                logger.info(
+                    "A2A session %s: pre-execution failure surfaced: %s",
+                    receiver_session_id,
+                    failure.get("error"),
+                )
+                return {
+                    "status": "failed",
+                    "error": failure.get("error") or "Receiver session failed",
+                }
+
             prev_is_waiting = is_waiting
             is_waiting = False
             if data_client is not None:

@@ -188,7 +188,7 @@ export function InlineInterventionDialog({
 
         {/* Approval type */}
         {interventionType === 'approval' && (
-          <Box display="flex" gap={1.5}>
+          <Box display="flex" gap={1.5} mt={1}>
             <Button
               variant="contained"
               color="success"
@@ -283,6 +283,37 @@ export function InlineInterventionDialog({
             </Box>
           </Box>
         )}
+
+        {/* Free-text answer option — ALWAYS available regardless of the
+            intervention type: the backend accepts text_value for any type. */}
+        {interventionType !== 'text' && (
+          <Box mt={2} pt={1.5} borderTop={1} borderColor="divider">
+            <Typography variant="caption" color="text.secondary" display="block" mb={0.5}>
+              {t('conversations.sessions.intervention.orProvideOwnAnswer')}
+            </Typography>
+            <TextField
+              fullWidth
+              multiline
+              minRows={2}
+              maxRows={4}
+              placeholder={t('conversations.sessions.intervention.placeholderText')}
+              value={textValue}
+              onChange={(e) => setTextValue(e.target.value)}
+              disabled={isSubmitting}
+              size="small"
+            />
+            <Box display="flex" justifyContent="flex-end" mt={1}>
+              <Button
+                variant="outlined"
+                onClick={() => void handleSubmitText()}
+                disabled={!textValue.trim() || isSubmitting}
+                size="small"
+              >
+                {t('conversations.sessions.intervention.submitResponse')}
+              </Button>
+            </Box>
+          </Box>
+        )}
       </Box>
 
       {/* Dismiss row */}
@@ -340,6 +371,36 @@ export function InlineInterventionDialog({
             </Box>
           )}
           <ContentRenderer content={request.reason} />
+          {/* Free-text answer option is available in the expanded dialog too
+              (same onSubmitText handler as the inline card). */}
+          {interventionType !== 'text' && (
+            <Box mt={2} pt={1.5} borderTop={1} borderColor="divider">
+              <Typography variant="caption" color="text.secondary" display="block" mb={0.5}>
+                {t('conversations.sessions.intervention.orProvideOwnAnswer')}
+              </Typography>
+              <TextField
+                fullWidth
+                multiline
+                minRows={2}
+                maxRows={4}
+                placeholder={t('conversations.sessions.intervention.placeholderText')}
+                value={textValue}
+                onChange={(e) => setTextValue(e.target.value)}
+                disabled={isSubmitting}
+                size="small"
+              />
+              <Box display="flex" justifyContent="flex-end" mt={1}>
+                <Button
+                  variant="outlined"
+                  onClick={() => void handleSubmitText()}
+                  disabled={!textValue.trim() || isSubmitting}
+                  size="small"
+                >
+                  {t('conversations.sessions.intervention.submitResponse')}
+                </Button>
+              </Box>
+            </Box>
+          )}
         </DialogContent>
         <DialogActions>
           <Button

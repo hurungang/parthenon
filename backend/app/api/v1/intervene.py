@@ -37,9 +37,11 @@ async def _resume_agent_session(
     session_id: uuid.UUID,
     response_value: dict,
     tenant_context: "TenantContext | None" = None,
-) -> None:
+) -> str | None:
     """Notify Agent Runtime that this session can resume after intervention.
 
+    Returns the Agent Runtime resume status (``"resumed"`` or
+    ``"not_awaiting"``), or ``None`` when the resume call itself failed.
     Failures are logged but do NOT propagate — the response has already been
     committed and the operator sees success regardless of the resume call.
     """
@@ -48,13 +50,22 @@ async def _resume_agent_session(
             AgentRuntimeClient,
         )
         client = AgentRuntimeClient()
-        await client.resume_session(
+        result = await client.resume_session(
             session_id, response_value, tenant_context=tenant_context
         )
-        logger.info(
-            "Session %s resumed on Agent Runtime after human intervention",
-            session_id,
-        )
+        status = str((result or {}).get("status") or "resumed")
+        if status == "not_awaiting":
+            logger.warning(
+                "Agent Runtime reports session %s is not awaiting resume "
+                "(likely a service restart orphaned the suspended turn)",
+                session_id,
+            )
+        else:
+            logger.info(
+                "Session %s resumed on Agent Runtime after human intervention",
+                session_id,
+            )
+        return status
     except Exception as exc:
         logger.warning(
             "Agent Runtime resume call failed for session %s: %s "
@@ -62,6 +73,7 @@ async def _resume_agent_session(
             session_id,
             exc,
         )
+        return None
 
 
 @InterveneRouter.get("/requests", response_model=list[InterveneRequestRead])

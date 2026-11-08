@@ -11,6 +11,7 @@
 - **Backend (pytest)**: API endpoints, service logic, data model operations. Location: `backend/tests/`
 - **Frontend (vitest)**: React component rendering, state, and user interaction. Location: `frontend/src/__tests__/`
 - **E2E (Playwright)**: User journeys, cross-module flows, UI+backend integration. Location: `e2e/tests/`
+- **SDK**: Client SDK suites validating request construction against gateway routes/payloads. Location: `sdk/parthenon-python/test/` (pytest), `sdk/parthenon-js/` (syntax/structure checks). Added by `third-party-agent-integration`.
 
 ## E2E Mocking Conventions (Mock-First)
 
@@ -153,6 +154,7 @@ Changes involving certificate issuance, validation, or revocation require:
 - Frontend: `frontend/src/__tests__/`
 - E2E: `e2e/tests/`
 - MCP Demo App (standalone): `mcp-demo-app/tests/` — unit and integration tests for the demo MCP server; uses its own pytest configuration with mocked Keycloak identities
+- SDK suites: `sdk/parthenon-python/test/` (pytest) and `sdk/parthenon-js/` — keep client SDKs in sync with the gateway contract (added by `third-party-agent-integration`)
 
 ## Agent Data Types & Typed Outputs Testing
 

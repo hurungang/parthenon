@@ -69,6 +69,13 @@ class ConversationSession(Base):
         ForeignKey("identities.id", ondelete="SET NULL"),
         nullable=True,
     )
+    # Third-party client invocation provenance (integration gateway).
+    # Null for user-created conversations.
+    triggered_by_client_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("agent_clients.id", ondelete="SET NULL"),
+        nullable=True,
+    )
     agent_job_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("agent_jobs.id", ondelete="SET NULL"),

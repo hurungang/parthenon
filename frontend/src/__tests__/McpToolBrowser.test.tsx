@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, fireEvent, within } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import React from 'react'
@@ -21,10 +21,14 @@ const mockTools = [
 const mockSkills = [{ id: 'sk-1', name: 'Web Search Skill', description: '', is_active: true, tool_ids: ['tool-1'] }]
 
 vi.mock('../hooks/useMcpServers', () => ({
-  useAllTools: () => ({ data: mockTools, isLoading: false, error: null }),
+  useAllTools: vi.fn(() => ({ data: mockTools, isLoading: false, error: null })),
   useMcpServers: () => ({ data: mockServers, isLoading: false, error: null }),
   useToolSkills: () => ({ data: mockSkills }),
 }))
+
+import { useAllTools } from '../hooks/useMcpServers'
+
+const useAllToolsMock = vi.mocked(useAllTools)
 
 function wrapper({ children }: { children: React.ReactNode }) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
@@ -119,5 +123,38 @@ describe('McpToolBrowser', () => {
     await waitFor(() => {}, { timeout: 500 })
     console.error = origErr
     expect(errors).toHaveLength(0)
+  })
+
+  it('passes the selected server to useAllTools (server-side filter refetch)', async () => {    const { McpToolBrowser } = await import('../pages/mcp/McpToolBrowser')
+    render(<McpToolBrowser />, { wrapper })
+
+    // Initially no server filter — serverId arg is undefined
+    await waitFor(() => {
+      const lastCall = useAllToolsMock.mock.calls[useAllToolsMock.mock.calls.length - 1]
+      expect(lastCall?.[2]).toBeUndefined()
+    })
+
+    // Open the server filter select and pick srv-2
+    const combobox = screen.getAllByRole('combobox')[0]
+    fireEvent.mouseDown(combobox)
+    const listbox = await screen.findByRole('listbox')
+    fireEvent.click(within(listbox).getByText('research-hub'))
+
+    // The hook must now be called with the server id (server-side filter)
+    await waitFor(() => {
+      const lastCall = useAllToolsMock.mock.calls[useAllToolsMock.mock.calls.length - 1]
+      expect(lastCall?.[2]).toBe('srv-2')
+    })
+  })
+
+  it('renders the pagination controls clear of the assistant FAB', async () => {
+    const { McpToolBrowser } = await import('../pages/mcp/McpToolBrowser')
+    const { container } = render(<McpToolBrowser />, { wrapper })
+    await waitFor(() => {
+      expect(container.querySelector('.MuiTablePagination-root')).not.toBeNull()
+    })
+    // Bottom margin keeps the pagination clear of the fixed FAB
+    const pagination = container.querySelector('.MuiTablePagination-root') as HTMLElement
+    expect(pagination.className).toContain('MuiTablePagination-root')
   })
 })

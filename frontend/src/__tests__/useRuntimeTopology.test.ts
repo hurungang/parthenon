@@ -57,6 +57,16 @@ describe('isNodeVisibleByDefault', () => {
     expect(isNodeVisibleByDefault(node({ status: 'sleep', needs_intervention: true }))).toBe(true)
   })
 
+  it('returns true for a sleeping client-triggered node (integration provenance)', () => {
+    // Client invocations must surface in the monitor even when idle —
+    // the client trigger entity is derived from visible roots.
+    expect(
+      isNodeVisibleByDefault(
+        node({ status: 'sleep', needs_intervention: false, trigger_source: 'client' }),
+      ),
+    ).toBe(true)
+  })
+
   it('returns false for a sleeping node not awaiting intervention', () => {
     expect(isNodeVisibleByDefault(node({ status: 'sleep', needs_intervention: false }))).toBe(false)
   })

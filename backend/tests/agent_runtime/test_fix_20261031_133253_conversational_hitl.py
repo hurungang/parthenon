@@ -229,3 +229,135 @@ async def test_human_intervene_tool_conversational_timeout_marks_not_executed() 
     payload = json.loads(result)
     assert payload["status"] == "timeout"
     assert "NOT executed" in payload["error"]
+
+
+# ── Phase 4.3 — no-write on rejection / timeout for management operations ───
+#
+# The confirm-before-write contract: the ONLY path that writes is a CH-routed
+# ``invoke_management_tool`` dispatch (which lands in the CC handler and does
+# the write there, after parity authorization).  The dispatch happens only
+# when the assistant's agent loop executes a tool call — so on rejection or
+# timeout the human_intervene tool must return a NOT-approved result and the
+# loop must perform ZERO tool dispatches (comm_hub_client.call_tool never
+# awaited) → Control Center is never reached → zero writes for any field set
+# (including the newly supported role/identity assignments, enums, and list
+# additive merges).
+
+
+@pytest.mark.asyncio
+async def test_rejected_confirmation_performs_no_management_dispatch() -> None:
+    """Operator rejects the preview (approval_value=False) → the tool reports
+    a non-approved status and no management tool dispatch (no write) occurs."""
+    import json
+    from unittest.mock import AsyncMock
+
+    from app.agent_runtime import conversation_resume
+    from app.services.agents.langchain_system_tools import LangChainHumanInterveneTool
+
+    conv_id = uuid.uuid4()
+    comm_hub_client = AsyncMock()
+    comm_hub_client.call_human_intervene = AsyncMock(
+        return_value={"request_id": "req-3", "status": "pending"}
+    )
+    tool = LangChainHumanInterveneTool(
+        comm_hub_client=comm_hub_client,
+        session_id=str(uuid.uuid4()),
+        agent_type_id=str(uuid.uuid4()),
+        conv_session_id=str(conv_id),
+    )
+
+    async def _reject():
+        await asyncio.sleep(0.01)
+        assert conversation_resume.resolve(conv_id, {"approval_value": False})
+
+    task = asyncio.create_task(_reject())
+    result = await tool._arun(
+        intervention_type="approval", reason="update_agent_type", choices=None, prompt="| Field | Value |"
+    )
+    await task
+    payload = json.loads(result)
+    assert payload["status"] == "resolved", "rejection must NOT surface as approved"
+    assert payload["approval_value"] is False
+    # Zero dispatches: the only CommHub interaction was the intervention
+    # registration itself — no invoke_management_tool / write reached CC.
+    comm_hub_client.call_tool.assert_not_awaited()
+    for attr in ("call_management_tool", "invoke_management_tool"):
+        if hasattr(comm_hub_client, attr):
+            getattr(comm_hub_client, attr).assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_timed_out_confirmation_performs_no_management_dispatch() -> None:
+    """Intervention timeout → status='timeout', explicit not-executed error,
+    and zero management dispatches (no write reaches Control Center)."""
+    import json
+    from unittest.mock import AsyncMock, patch
+
+    from app.services.agents.langchain_system_tools import LangChainHumanInterveneTool
+
+    conv_id = uuid.uuid4()
+    comm_hub_client = AsyncMock()
+    comm_hub_client.call_human_intervene = AsyncMock(
+        return_value={"request_id": "req-4", "status": "pending"}
+    )
+    tool = LangChainHumanInterveneTool(
+        comm_hub_client=comm_hub_client,
+        session_id=str(uuid.uuid4()),
+        agent_type_id=str(uuid.uuid4()),
+        conv_session_id=str(conv_id),
+    )
+
+    async def _timeout(conv_id_, timeout_seconds):
+        return None
+
+    with patch(
+        "app.agent_runtime.conversation_resume.wait_for_resume", side_effect=_timeout
+    ):
+        result = await tool._arun(
+            intervention_type="approval", reason="create_data_type", choices=None, prompt="| Field | Value |"
+        )
+    payload = json.loads(result)
+    assert payload["status"] == "timeout"
+    assert "NOT executed" in payload["error"]
+    comm_hub_client.call_tool.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_approved_confirmation_is_the_only_dispatch_gate() -> None:
+    """Approval (approval_value=True) → status='approved': the ONLY branch in
+    which the assistant loop proceeds to dispatch invoke_management_tool (the
+    write happens inside the CC handler after that dispatch)."""
+    import json
+    from unittest.mock import AsyncMock
+
+    from app.agent_runtime import conversation_resume
+    from app.services.agents.langchain_system_tools import LangChainHumanInterveneTool
+
+    conv_id = uuid.uuid4()
+    comm_hub_client = AsyncMock()
+    comm_hub_client.call_human_intervene = AsyncMock(
+        return_value={"request_id": "req-5", "status": "pending"}
+    )
+    tool = LangChainHumanInterveneTool(
+        comm_hub_client=comm_hub_client,
+        session_id=str(uuid.uuid4()),
+        agent_type_id=str(uuid.uuid4()),
+        conv_session_id=str(conv_id),
+    )
+
+    async def _approve():
+        await asyncio.sleep(0.01)
+        assert conversation_resume.resolve(conv_id, {"approval_value": True})
+
+    task = asyncio.create_task(_approve())
+    result = await tool._arun(
+        intervention_type="approval", reason="update_agent_type", choices=None, prompt="| Field | Value |"
+    )
+    await task
+    payload = json.loads(result)
+    assert payload["status"] == "approved"
+    # Even here the intervention tool itself dispatches nothing — the write
+    # only happens when the model's NEXT tool call (the approved
+    # invoke_management_tool) is dispatched by the loop, inside the CC
+    # handler after parity authorization.
+    comm_hub_client.call_tool.assert_not_awaited()

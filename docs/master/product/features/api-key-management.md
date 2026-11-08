@@ -78,3 +78,7 @@ API Key Management enables Platform Administrators to create, view, and revoke A
 ## Multi-Tenancy Note
 
 When multi-tenancy is enabled (see [Multi-Tenancy](multi-tenancy.md)), API keys are additionally bound to one tenant and are valid only for that tenant's resources — a tenant's key cannot access another tenant. With multi-tenancy disabled (the default), behavior is unchanged — the deployment operates as the root tenant's workspace.
+
+## Relationship to Third-Party Clients
+
+API keys are **unchanged** by third-party agent integration — they remain identity credentials: each is bound to an agent identity and role and authenticates a full MCP protocol session. Third-party [clients](third-party-agent-integration.md) are a **separate, non-identity credential class**: a client grants access to one agent type's input interface only, carries no agent identity, and cannot authenticate to the MCP protocol server. The two credential classes are managed independently (see [API Key Security](../../architecture/security/api-key-security.md) for the credential-class comparison).

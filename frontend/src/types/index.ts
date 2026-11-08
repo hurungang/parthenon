@@ -318,14 +318,18 @@ export interface RuntimeTopologyNode {
   // Whether this node has a pending human-intervention request.
   needs_intervention?: boolean
   // Trigger provenance: who/what triggered this node.
-  trigger_source?: 'user' | 'schedule' | 'delegated' | 'unknown'
-  // Human-readable trigger source label (user display name or schedule name).
+  trigger_source?: 'user' | 'schedule' | 'delegated' | 'client' | 'unknown'
+  // Human-readable trigger source label (user display name, schedule name,
+  // or client name).
   trigger_source_label?: string | null
   trigger_user_label?: string | null
   trigger_user_id?: string | null
   schedule_id?: string | null
   schedule_cron?: string | null
   schedule_description?: string | null
+  // The client entity's own details (client-triggered nodes only).
+  trigger_client_id?: string | null
+  trigger_client_name?: string | null
   // Tool-call history (latest first), each resolved to an MCP server slug.
   tool_calls?: ToolCallRoute[]
 }
@@ -1217,7 +1221,7 @@ export type InterventionType = 'approval' | 'choice' | 'text'
 
 export interface InterveneRequest {
   id: string
-  agent_session_id: string
+  agent_session_id: string | null
   agent_type_id: string
   conversation_session_id?: string | null
   intervention_type: InterventionType
