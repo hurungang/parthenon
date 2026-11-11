@@ -111,6 +111,12 @@ class ConversationSession(Base):
     intervene_requests: Mapped[list["InterveneRequest"]] = relationship(
         "InterveneRequest", back_populates="conversation_session"
     )
+    activity: Mapped["ConversationActivity | None"] = relationship(
+        "ConversationActivity",
+        back_populates="conversation_session",
+        uselist=False,
+        cascade="all, delete-orphan",
+    )
 
     def __repr__(self) -> str:
         return f"<ConversationSession id={self.id} status={self.status}>"

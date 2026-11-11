@@ -970,6 +970,13 @@ class AgentRuntimeExecutor:
         data_client: Any | None = None,
     ) -> None:
         """Persist a structured execution event via Control Center data API and emit to logger."""
+        # Conversational turns never ship execution-log entries: the CC
+        # execution_log_entries table has an FK to AgentJob sessions only and
+        # conversation sessions don't need execution-log persistence.
+        if getattr(self, "_suppress_execution_log_shipping", False):
+            logger.info("[%s] %s: %s", session_id, event_type, message, extra={"data": data})
+            return
+
         logger.info("[%s] %s: %s", session_id, event_type, message, extra={"data": data})
 
         target_data_client = data_client or self._data_client
@@ -1533,7 +1540,12 @@ class AgentRuntimeExecutor:
                 return
 
             try:
-                context = await data_client.get_agent_context(job_data["agent_type_id"])
+                # Pass the session id so Control Center can gate the
+                # workflow-optimization inherent skill on user-confirmed
+                # optimize-and-verify runs (the ``__command`` marker).
+                context = await data_client.get_agent_context(
+                    job_data["agent_type_id"], session_id=session_id
+                )
                 guardrail_state = self._build_guardrail_state(context, job_data)
                 await self._precheck_delegation_graph(
                     session_id=session_id,
@@ -2708,46 +2720,21 @@ class AgentRuntimeExecutor:
 
         Returns the final text response from the agent.
         """
-        from app.db.models.agents import AgentTypeSopBinding, AgentTypeSkillBinding
         from app.services.agents.model_binding import ModelBindingLayer
-        from sqlalchemy import select as _sel
 
         # Resolve model config via ModelBindingLayer seam (enables patching in tests)
         binding = ModelBindingLayer()
         model_config = await binding.resolve_model_config(agent_type.model_id, db)
 
-        # Query AgentType bindings for permission scoping
-        bind_sop_rows = await db.execute(
-            _sel(AgentTypeSopBinding.sop_id).where(
-                AgentTypeSopBinding.agent_type_id == agent_type.id
-            )
-        )
-        bound_sop_ids: set[uuid.UUID] = {row[0] for row in bind_sop_rows.fetchall()}
-
-        bind_skill_rows = await db.execute(
-            _sel(AgentTypeSkillBinding.skill_id).where(
-                AgentTypeSkillBinding.agent_type_id == agent_type.id
-            )
-        )
-        bound_skill_ids: set[uuid.UUID] = {row[0] for row in bind_skill_rows.fetchall()}
-
-        has_bindings = bool(bound_sop_ids or bound_skill_ids)
-
-        # Resolve allowed tools for the agent's role, scoped by AgentType bindings
+        # Resolve allowed tools for the agent: VISIBILITY from the agent type's
+        # own bindings, PERMISSION gated by the role grants (intersection).
         allowed_tools: set[str] = set()
         if agent_type.role_id:
-            pm_sop_overrides = bound_sop_ids if (has_bindings and bound_sop_ids) else None
-            pm_skill_overrides = bound_skill_ids if (has_bindings and bound_skill_ids) else None
-
-            allowed_tools = await self._permission_manager.calculate_allowed_tools(
-                agent_type.role_id, db,
-                override_sop_ids=pm_sop_overrides,
-                override_skill_ids=pm_skill_overrides,
+            allowed_tools = await self._permission_manager.calculate_agent_allowed_tools(
+                agent_type.id, db
             )
-            delegated_agent_types = await self._permission_manager.calculate_allowed_agent_types(
-                agent_type.role_id,
-                db,
-                override_sop_ids=pm_sop_overrides if has_bindings else None,
+            delegated_agent_types = await self._permission_manager.calculate_agent_allowed_agent_types(
+                agent_type.id, db
             )
             allowed_tools.update(
                 {build_tool_name("agent", slug) for slug in delegated_agent_types}
@@ -2967,6 +2954,38 @@ class AgentRuntimeExecutor:
           - Input: full conversation message history (not a single user prompt)
           - Output: last assistant message text (not structured output_data)
         """
+        # Conversational turns do NOT ship execution-log entries to CC
+        # (execution_log_entries FK targets AgentJob sessions only). The
+        # suppression flag is the single choke point in the executor's
+        # logging wrapper; restored in finally so task runs are unaffected.
+        _prev_suppress = getattr(self, "_suppress_execution_log_shipping", False)
+        self._suppress_execution_log_shipping = True
+        try:
+            return await self._execute_conversation_turn_from_context_inner(
+                agent_type_id=agent_type_id,
+                agent_context=agent_context,
+                model_config=model_config,
+                messages=messages,
+                conv_session_id=conv_session_id,
+                cert_path=cert_path,
+                key_path=key_path,
+                status_event_callback=status_event_callback,
+            )
+        finally:
+            self._suppress_execution_log_shipping = _prev_suppress
+
+    async def _execute_conversation_turn_from_context_inner(
+        self,
+        agent_type_id: uuid.UUID,
+        agent_context: dict[str, Any],
+        model_config: dict[str, Any],
+        messages: list[dict[str, Any]],
+        conv_session_id: uuid.UUID,
+        cert_path: str | None = None,
+        key_path: str | None = None,
+        status_event_callback: Callable[[dict[str, str]], Awaitable[None]] | None = None,
+    ) -> tuple[str, dict[str, Any], list[dict[str, str]]]:
+        """Inner body of execute_conversation_turn_from_context (suppression active)."""
         # 1. Extract tool context
         allowed_tools = self._permission_manager.get_allowed_tools_from_context(
             agent_context.get("allowed_tools", [])
@@ -3226,7 +3245,13 @@ class AgentRuntimeExecutor:
                     ),
                 )
             )
-            await emit_status_event({"status": "waiting_for_human"})
+            # Persistent-activity enrichment: carry an intervention marker so
+            # CC can stamp the persisted record as paused-for-human. CC
+            # resolves the concrete pending_intervene_request_id server-side;
+            # AR deliberately does not know the request id (no DB access).
+            await emit_status_event(
+                {"status": "waiting_for_human", "pending_intervention": "true"}
+            )
             logger.info(
                 "Conversation turn %s paused on human_intervene — waiting up "
                 "to %.0fs for operator response",
@@ -3345,7 +3370,11 @@ class AgentRuntimeExecutor:
                     ),
                 )
             )
-            await emit_status_event({"status": "waiting_for_human"})
+            # Persistent-activity enrichment (same marker as the
+            # interrupt-path pause above).
+            await emit_status_event(
+                {"status": "waiting_for_human", "pending_intervention": "true"}
+            )
             logger.info(
                 "Conversation turn %s paused on human_intervene (return-based "
                 "interrupt) — waiting up to %.0fs for operator response",
@@ -3509,44 +3538,19 @@ class AgentRuntimeExecutor:
             },
         )
 
-        # Resolve permissions — scoped by AgentType bindings
+        # Resolve permissions — VISIBILITY from the agent type's own bindings,
+        # PERMISSION gated by the role grants (intersection).
         allowed_tools: set[str] = set()
         if agent_type.role_id:
             with tracer.start_as_current_span(
                 "runtime_executor.resolve_permissions",
                 attributes={"role_id": str(agent_type.role_id)},
             ):
-                # Load AgentType bindings
-                from sqlalchemy import select as _sel2
-                from app.db.models.agents import AgentTypeSopBinding, AgentTypeSkillBinding  # noqa: F811
-
-                _sop_rows = await db.execute(
-                    _sel2(AgentTypeSopBinding.sop_id).where(
-                        AgentTypeSopBinding.agent_type_id == agent_type.id
-                    )
+                allowed_tools = await self._permission_manager.calculate_agent_allowed_tools(
+                    agent_type.id, db
                 )
-                _bound_sop_set: set[uuid.UUID] = {row[0] for row in _sop_rows.fetchall()}
-
-                _skill_rows = await db.execute(
-                    _sel2(AgentTypeSkillBinding.skill_id).where(
-                        AgentTypeSkillBinding.agent_type_id == agent_type.id
-                    )
-                )
-                _bound_skill_set: set[uuid.UUID] = {row[0] for row in _skill_rows.fetchall()}
-
-                _has_bindings = bool(_bound_sop_set or _bound_skill_set)
-                _sop_overrides = _bound_sop_set if (_has_bindings and _bound_sop_set) else None
-                _skill_overrides = _bound_skill_set if (_has_bindings and _bound_skill_set) else None
-
-                allowed_tools = await self._permission_manager.calculate_allowed_tools(
-                    agent_type.role_id, db,
-                    override_sop_ids=_sop_overrides,
-                    override_skill_ids=_skill_overrides,
-                )
-                delegated_agent_types = await self._permission_manager.calculate_allowed_agent_types(
-                    agent_type.role_id,
-                    db,
-                    override_sop_ids=_sop_overrides if _has_bindings else None,
+                delegated_agent_types = await self._permission_manager.calculate_agent_allowed_agent_types(
+                    agent_type.id, db
                 )
                 allowed_tools.update(
                     {build_tool_name("agent", slug) for slug in delegated_agent_types}

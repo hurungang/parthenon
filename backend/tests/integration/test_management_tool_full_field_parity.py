@@ -1415,3 +1415,50 @@ async def test_role_mapping_auth_type_without_matching_session_is_structured_404
     assert "auth TYPE" in message
     assert "harry (oauth2)" in message
     assert detail["error"] == "reference_not_found"
+
+
+# ── Role permission vs agent-type visibility (corrected semantics) ──────────
+
+
+async def _create_delegation_sop(client: AsyncClient, prefix: str) -> dict:
+    """SOP with a single agent_delegation step (a router-style SOP)."""
+    agent = await _invoke(client, "create_agent_type", {"name": f"{prefix}-agent", "data": {}})
+    sop = await _invoke(
+        client,
+        "create_sop",
+        {
+            "name": f"{prefix}-sop",
+            "data": {
+                "description": "router",
+                "steps": [
+                    {"order": 1, "step_type": "agent_delegation", "target_agent_type_id": agent["record"]["id"]},
+                ],
+            },
+        },
+    )
+    return {"agent": agent["record"], "sop": sop["record"]}
+
+
+@pytest.mark.asyncio
+async def test_role_delegation_sop_with_direct_grants_no_warning(authed_client, allow_all):
+    """Corrected model: role = permission only, agent type = visibility. A role
+    combining a delegation-step SOP with direct skill grants is legitimate
+    (the role grants permission; the agent TYPE decides what is visible) —
+    NO warning is emitted on create or update."""
+    prereq = await _create_delegation_sop(authed_client, "delegok")
+    skill = await _invoke(authed_client, "create_skill", {"name": "delegok-skill", "data": {}})
+
+    role = await _invoke(authed_client, "create_agent_role", {
+        "name": f"delegok-role-{uuid.uuid4().hex[:8]}",
+        "data": {"sop_ids": [prereq["sop"]["id"]], "skill_ids": [skill["record"]["id"]]},
+    })
+    warnings = role.get("warnings") or []
+    assert not any("SOP delegation steps AND direct skill grants" in w for w in warnings), warnings
+
+    # Update path also stays warning-free when grants are added.
+    updated = await _invoke(authed_client, "update_agent_role", {
+        "id": role["record"]["id"],
+        "data": {"skill_ids": [skill["record"]["id"]]},
+    })
+    warnings2 = updated.get("warnings") or []
+    assert not any("SOP delegation steps AND direct skill grants" in w for w in warnings2), warnings2

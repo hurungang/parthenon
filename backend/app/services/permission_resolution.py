@@ -113,7 +113,11 @@ async def resolve_permissions(
             agent_type_name=agent_type.name,
         )
 
-    allowed_tools = await get_allowed_tools(agent_type.role_id, db)
+    # Agent-type-scoped resolution: VISIBILITY comes from the agent type's own
+    # SOP/skill bindings (a subset), PERMISSION is gated by the role grants.
+    allowed_tools = await _permission_manager.calculate_agent_allowed_tools(
+        agent_type.id, db
+    )
     if not check_tool_permission(tool_name, allowed_tools):
         logger.warning(
             "Permission denied: tool '%s' not allowed for agent_type='%s' role=%s",

@@ -133,6 +133,22 @@ class ControlCenterDataClient:
             except Exception as exc:
                 raise ControlCenterDataError(f"CC POST {url} failed: {exc}") from exc
 
+    async def _put(self, path: str, body: dict[str, Any]) -> dict[str, Any]:
+        """PUT with automatic tenant-header forwarding (via the client hook)."""
+        url = self._url(path)
+        async with self._make_client() as client:
+            try:
+                resp = await client.put(url, json=body, timeout=_DEFAULT_TIMEOUT)
+                resp.raise_for_status()
+                return resp.json()
+            except httpx.HTTPStatusError as exc:
+                raise ControlCenterDataError(
+                    f"CC PUT {url} returned {exc.response.status_code}: "
+                    f"{exc.response.text[:200]}"
+                ) from exc
+            except Exception as exc:
+                raise ControlCenterDataError(f"CC PUT {url} failed: {exc}") from exc
+
     # ── Session data ──────────────────────────────────────────────────────────
 
     async def get_session(self, session_id: uuid.UUID) -> dict[str, Any] | None:
@@ -264,6 +280,60 @@ class ControlCenterDataClient:
             f"/internal/data/conversations/{conv_session_id}/append-turn",
             body,
         )
+
+    # ── Conversation activity (persistent agent activity state) ──────────────
+
+    async def upsert_conversation_activity(
+        self,
+        conv_session_id: uuid.UUID,
+        state: str,
+        *,
+        current_turn_id: uuid.UUID | None = None,
+        tool_name: str | None = None,
+        target_agent_type_id: uuid.UUID | None = None,
+        pending_intervene_request_id: uuid.UUID | None = None,
+        detail: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """Upsert the persisted conversation activity row via Control Center.
+
+        Calls ``PUT /internal/data/conversations/{conv_session_id}/activity``.
+        ``state`` must be a valid ``ActivityState`` value (validated CC-side).
+        """
+        body: dict[str, Any] = {"state": state}
+        if current_turn_id is not None:
+            body["current_turn_id"] = str(current_turn_id)
+        if tool_name is not None:
+            body["tool_name"] = tool_name
+        if target_agent_type_id is not None:
+            body["target_agent_type_id"] = str(target_agent_type_id)
+        if pending_intervene_request_id is not None:
+            body["pending_intervene_request_id"] = str(pending_intervene_request_id)
+        if detail is not None:
+            body["detail"] = detail
+
+        return await self._put(
+            f"/internal/data/conversations/{conv_session_id}/activity",
+            body,
+        )
+
+    async def get_conversation_activity(
+        self, conv_session_id: uuid.UUID
+    ) -> dict[str, Any] | None:
+        """Return the persisted current activity, or None when idle/not found.
+
+        Calls ``GET /internal/data/conversations/{conv_session_id}/activity``.
+        Returns dict with: conversation_session_id, state, current_turn_id,
+        tool_name, target_agent_type_id, pending_intervene_request_id,
+        detail, is_terminal, started_at, last_updated_at, finished_at.
+        """
+        try:
+            return await self._get(
+                f"/internal/data/conversations/{conv_session_id}/activity"
+            )
+        except ControlCenterDataError as exc:
+            if "404" in str(exc):
+                return None
+            raise
 
     # ── A2A orchestration ────────────────────────────────────────────────────
 

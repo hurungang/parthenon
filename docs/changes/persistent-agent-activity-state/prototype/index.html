@@ -1,0 +1,814 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Parthenon — Persistent Agent Activity State</title>
+<style>
+/* ═══════════════════════════════════════════════════════════════════════
+   Parthenon Design Tokens (reused from docs/master/ux and prior prototypes)
+   ═══════════════════════════════════════════════════════════════════════ */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --primary:#2563EB;--primary-dark:#1D4ED8;--primary-light:#DBEAFE;
+  --sidebar-bg:#FFFFFF;--sidebar-text:#424242;--sidebar-active-bg:rgba(0,0,0,0.06);
+  --sidebar-hover-bg:rgba(0,0,0,0.03);--sidebar-active-text:#2563EB;
+  --surface:#FFFFFF;--bg:#FAFAFA;--border:#E0E0E0;
+  --success:#4CAF50;--warning:#FF9800;--error:#F44336;--info:#2196F3;
+  --text-primary:#212121;--text-secondary:#757575;
+  --shadow:0 1px 2px 0 rgba(60,64,67,0.3),0 1px 3px 1px rgba(60,64,67,0.15);
+  --shadow-md:0 4px 6px 0 rgba(60,64,67,0.3),0 4px 8px 3px rgba(60,64,67,0.15);
+  --radius:8px;--radius-sm:4px;--radius-lg:12px;
+  --transition:0.2s ease;
+}
+html,body{height:100%;font-family:'Inter','Roboto','Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(--text-primary);font-size:14px;line-height:1.5}
+button{cursor:pointer;font-family:inherit;font-size:14px}
+input,select,textarea{font-family:inherit;font-size:14px}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   App shell
+   ═══════════════════════════════════════════════════════════════════════ */
+.app-shell{display:flex;height:100vh;overflow:hidden}
+
+/* ── Top bar ── */
+.topbar{height:64px;background:var(--surface);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 24px;gap:14px;flex-shrink:0;z-index:50}
+.topbar-title{font-size:16px;font-weight:600;flex:1;display:flex;align-items:center;gap:10px}
+.topbar-title .tb-icon{font-size:20px}
+.topbar-title small{font-size:12px;color:var(--text-secondary);font-weight:400;margin-left:2px}
+
+/* Live status chip (mirrors ConversationDialog titlebar chip) */
+.status-chip{display:inline-flex;align-items:center;gap:7px;padding:5px 12px;border-radius:20px;font-size:12px;font-weight:600;white-space:nowrap;transition:all var(--transition)}
+.status-chip .sc-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.status-chip.idle{background:#F1F5F9;color:#64748B}.status-chip.idle .sc-dot{background:#94A3B8}
+.status-chip.thinking{background:#DBEAFE;color:#1D4ED8}.status-chip.thinking .sc-dot{background:var(--primary);animation:livepulse 1s infinite}
+.status-chip.tool{background:#E0E7FF;color:#3730A3}.status-chip.tool .sc-dot{background:#4F46E5;animation:livepulse 1s infinite}
+.status-chip.delegating{background:#EDE9FE;color:#6D28D9}.status-chip.delegating .sc-dot{background:#7C3AED;animation:livepulse 1s infinite}
+.status-chip.waiting{background:#FFF7ED;color:#92400E}.status-chip.waiting .sc-dot{background:var(--warning)}
+.status-chip.finished{background:#DCFCE7;color:#15803D}.status-chip.finished .sc-dot{background:#16A34A}
+.status-chip.failed{background:#FEE2E2;color:#B91C1C}.status-chip.failed .sc-dot{background:var(--error)}
+.status-chip.timeout{background:#FEE2E2;color:#B91C1C}.status-chip.timeout .sc-dot{background:var(--error)}
+@keyframes livepulse{0%{box-shadow:0 0 0 0 rgba(37,99,235,.5)}70%{box-shadow:0 0 0 6px rgba(37,99,235,0)}100%{box-shadow:0 0 0 0 rgba(37,99,235,0)}}
+
+.topbar-actions{display:flex;align-items:center;gap:8px}
+.avatar{width:36px;height:36px;border-radius:50%;background:var(--primary);color:#fff;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:600;flex-shrink:0}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   Layout: chat (left) + control panel (right)
+   ═══════════════════════════════════════════════════════════════════════ */
+.main{flex:1;display:flex;min-height:0}
+
+/* ── Chat column ── */
+.chat-col{flex:1;min-width:0;display:flex;flex-direction:column;background:var(--surface)}
+.chat-head{padding:12px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;flex-shrink:0;flex-wrap:wrap}
+.chat-head h2{font-size:15px;font-weight:600;display:flex;align-items:center;gap:8px}
+.chat-head .ch-sub{font-size:12px;color:var(--text-secondary)}
+
+.chat-messages{flex:1;overflow-y:auto;padding:20px 24px 16px;display:flex;flex-direction:column;gap:10px;background:#F8FAFC;border-bottom:1px solid var(--border)}
+.chat-messages::-webkit-scrollbar{width:5px}.chat-messages::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+
+/* Messages */
+.msg{display:flex;gap:8px;max-width:82%;flex:0 0 auto}
+.msg-user{align-self:flex-end;flex-direction:row-reverse}
+.msg-agent{align-self:flex-start}
+.msg-avatar{width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:15px;background:#E0E7FF;color:#4338CA}
+.msg-user .msg-avatar{background:var(--primary);color:#fff;font-size:12px;font-weight:700}
+.msg-bubble{padding:10px 14px;border-radius:12px;font-size:13.5px;line-height:1.55;word-break:break-word;background:#fff;border:1px solid var(--border)}
+.msg-user .msg-bubble{background:var(--primary-light);border-color:#BFDBFE}
+.msg-bubble code{font-family:'Courier New',monospace;font-size:12px;background:#F1F5F9;border:1px solid var(--border);padding:1px 5px;border-radius:4px}
+.msg-time{font-size:10.5px;color:var(--text-secondary);margin-top:2px}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   Activity bubble — the single, persisted processing indicator
+   ═══════════════════════════════════════════════════════════════════════ */
+.activity-slot{display:flex;flex-direction:column;gap:10px;flex:0 0 auto;align-self:flex-start;width:100%;max-width:82%}
+.activity-bubble{display:flex;align-items:center;gap:12px;padding:12px 16px;border-radius:var(--radius);border:1px solid var(--border);background:var(--surface);box-shadow:var(--shadow);transition:background var(--transition),border-color var(--transition);max-width:100%}
+.activity-bubble[data-state="thinking"]{border-color:#BFDBFE;background:#EFF6FF}
+.activity-bubble[data-state="tool"]{border-color:#C7D2FE;background:#EEF2FF}
+.activity-bubble[data-state="delegating"]{border-color:#DDD6FE;background:#F5F3FF}
+.activity-bubble[data-state="waiting"]{border-color:#FDE68A;background:#FFFBEB}
+.activity-bubble[data-state="finished"]{border-color:#BBF7D0;background:#F0FDF4}
+.activity-bubble[data-state="failed"],
+.activity-bubble[data-state="timeout"]{border-color:#FECACA;background:#FEF2F2}
+
+.ab-icon{width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:16px}
+.activity-bubble[data-state="thinking"] .ab-icon{background:#DBEAFE;color:#1D4ED8}
+.activity-bubble[data-state="tool"] .ab-icon{background:#E0E7FF;color:#3730A3}
+.activity-bubble[data-state="delegating"] .ab-icon{background:#EDE9FE;color:#6D28D9}
+.activity-bubble[data-state="waiting"] .ab-icon{background:#FEF3C7;color:#B45309}
+.activity-bubble[data-state="finished"] .ab-icon{background:#DCFCE7;color:#15803D}
+.activity-bubble[data-state="failed"] .ab-icon,
+.activity-bubble[data-state="timeout"] .ab-icon{background:#FEE2E2;color:#B91C1C}
+
+/* spinner (active states only) */
+.ab-spinner{width:16px;height:16px;border:2.5px solid currentColor;border-top-color:transparent;border-radius:50%;animation:abspin 0.8s linear infinite}
+@keyframes abspin{to{transform:rotate(360deg)}}
+
+/* paused / finished glyphs */
+.ab-pause{width:16px;height:16px;display:flex;align-items:center;justify-content:center;gap:3px}
+.ab-pause span{width:3.5px;height:14px;background:currentColor;border-radius:1px}
+.ab-check{font-size:16px;line-height:1;font-weight:700}
+
+.ab-text{flex:1;min-width:0}
+.ab-label{font-size:13.5px;font-weight:600;line-height:1.35;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.ab-label .dots{display:inline-flex;gap:3px;vertical-align:middle}
+.ab-label .dots span{width:5px;height:5px;border-radius:50%;background:currentColor;opacity:.3;animation:abdots 1.2s infinite}
+.ab-label .dots span:nth-child(2){animation-delay:.15s}.ab-label .dots span:nth-child(3){animation-delay:.3s}
+@keyframes abdots{0%,60%,100%{opacity:.25}30%{opacity:.9}}
+.ab-detail{font-size:12px;color:var(--text-secondary);margin-top:2px;line-height:1.4}
+.ab-detail .mono{font-family:'Courier New',monospace;font-size:11.5px;background:rgba(0,0,0,0.05);border:1px solid rgba(0,0,0,0.08);padding:0 6px;border-radius:4px}
+.activity-bubble[data-state="waiting"] .ab-label{color:#92400E}
+.activity-bubble[data-state="waiting"] .ab-detail{color:#A16207}
+.activity-bubble[data-state="finished"] .ab-label{color:#15803D}
+
+/* subtle "persisted" tag on the bubble */
+.ab-persist{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text-secondary);border:1px solid var(--border);border-radius:999px;padding:1px 7px;flex-shrink:0;background:rgba(255,255,255,.6)}
+.activity-bubble[data-state="waiting"] .ab-persist{color:#B45309;border-color:#FDE68A}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   Intervention card (confirm-before-write approval) — inline, gap-free
+   ═══════════════════════════════════════════════════════════════════════ */
+.iv-card{border:2px solid var(--warning);border-radius:var(--radius-lg);background:#fff;box-shadow:var(--shadow);overflow:hidden;max-width:560px;animation:slideIn .22s ease}
+@keyframes slideIn{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:translateY(0)}}
+.iv-head{background:#FFF7ED;border-bottom:1px solid #FFE0B2;padding:12px 14px;display:flex;gap:10px;align-items:flex-start}
+.iv-head .iv-icon{color:#B45309;font-size:18px}
+.iv-head .iv-title{font-size:13.5px;font-weight:700;color:#92400E}
+.iv-head .iv-sub{font-size:11.5px;color:var(--text-secondary);margin-top:2px}
+.iv-body{padding:14px;font-size:12.5px;overflow-x:auto}
+.iv-body .iv-preview{font-size:12.5px;line-height:1.55}
+.iv-body .iv-preview strong{display:block;margin-bottom:8px;font-size:13px}
+.iv-body table{border-collapse:collapse;width:100%;font-size:12.5px}
+.iv-body table th,.iv-body table td{border:1px solid var(--border);padding:6px 10px;text-align:left;vertical-align:top}
+.iv-body table th{background:#F8FAFC;font-size:11px;text-transform:uppercase;letter-spacing:.3px;color:var(--text-secondary);width:34%}
+.iv-actions{display:flex;gap:10px;padding:0 14px 12px}
+.iv-actions .btn{flex:1;justify-content:center}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   Input row
+   ═══════════════════════════════════════════════════════════════════════ */
+.chat-input-row{display:flex;gap:8px;align-items:flex-end;flex-shrink:0;padding:12px 20px}
+.chat-input{flex:1;border:1px solid var(--border);border-radius:18px;padding:9px 14px;outline:none;font-size:13.5px;resize:none;max-height:110px;line-height:1.45;background:#fff}
+.chat-input:focus{border-color:var(--primary)}
+.chat-input:disabled{background:#F1F5F9;cursor:not-allowed;color:#94A3B8}
+.send-btn{background:var(--primary);color:#fff;border:none;border-radius:18px;padding:9px 18px;font-weight:600;display:inline-flex;align-items:center;gap:6px;transition:background var(--transition)}
+.send-btn:hover{background:var(--primary-dark)}
+.send-btn:disabled{background:#CBD5E1;cursor:not-allowed}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   Control panel (right)
+   ═══════════════════════════════════════════════════════════════════════ */
+.control-panel{width:340px;flex-shrink:0;background:var(--bg);border-left:1px solid var(--border);overflow-y:auto;display:flex;flex-direction:column}
+.control-panel::-webkit-scrollbar{width:5px}.control-panel::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+.cp-head{padding:16px 18px;border-bottom:1px solid var(--border);background:var(--surface)}
+.cp-head h3{font-size:14px;font-weight:600;display:flex;align-items:center;gap:8px}
+.cp-head p{font-size:12px;color:var(--text-secondary);margin-top:4px;line-height:1.45}
+
+.cp-section{padding:14px 18px;border-bottom:1px solid var(--border)}
+.cp-section h4{font-size:11px;font-weight:700;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px;display:flex;align-items:center;gap:6px}
+
+.btn{display:inline-flex;align-items:center;gap:6px;padding:8px 14px;border-radius:var(--radius-sm);border:none;font-weight:500;transition:all var(--transition);white-space:nowrap;letter-spacing:.2px}
+.btn-primary{background:var(--primary);color:#fff;box-shadow:var(--shadow)}.btn-primary:hover{background:var(--primary-dark);box-shadow:var(--shadow-md)}
+.btn-secondary{background:var(--surface);color:var(--text-primary);border:1px solid var(--border)}.btn-secondary:hover{background:var(--bg)}
+.btn-sm{padding:6px 12px;font-size:12px}
+
+.state-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.state-btn{display:flex;flex-direction:column;align-items:flex-start;gap:3px;padding:10px 12px;border:1px solid var(--border);border-radius:var(--radius);background:var(--surface);transition:all var(--transition);text-align:left;font-size:12.5px;font-weight:600;color:var(--text-primary)}
+.state-btn:hover{border-color:var(--primary);box-shadow:var(--shadow)}
+.state-btn .sb-icon{font-size:16px}
+.state-btn .sb-sub{font-size:10.5px;color:var(--text-secondary);font-weight:400;line-height:1.3}
+.state-btn[data-active="true"]{border-color:var(--primary);box-shadow:0 0 0 3px var(--primary-light);color:var(--primary-dark)}
+
+.cp-actions{display:flex;flex-direction:column;gap:8px}
+.cp-actions .btn{justify-content:center}
+
+/* Persisted store readout */
+.store-readout{background:#0F172A;color:#E2E8F0;border-radius:var(--radius);padding:12px;font-family:'Courier New',monospace;font-size:11px;line-height:1.6;overflow-x:auto}
+.store-readout .k{color:#7DD3FC}
+.store-readout .v{color:#A5F3FC}
+.store-readout .s{color:#86EFAC}
+.store-readout .w{color:#FCD34D}
+.store-readout .e{color:#FCA5A5}
+
+/* Legend */
+.legend{display:flex;flex-direction:column;gap:7px}
+.legend-row{display:flex;align-items:center;gap:9px;font-size:12px;color:var(--text-primary)}
+.legend-row .lg-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0}
+.legend-row .lg-mono{font-family:'Courier New',monospace;font-size:11px;color:var(--text-secondary)}
+
+/* Restored banner */
+.restored-banner{align-self:stretch;display:flex;gap:10px;align-items:flex-start;padding:11px 14px;border-radius:var(--radius);background:#EFF6FF;border:1px solid #BFDBFE;color:#1E40AF;font-size:12.5px;line-height:1.5;flex:0 0 auto}
+.restored-banner b{display:block}
+
+/* Toast */
+.toast-wrap{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);z-index:3000;display:flex;flex-direction:column;gap:8px;align-items:center}
+.toast{padding:11px 20px;border-radius:8px;color:#fff;font-size:13px;font-weight:500;box-shadow:var(--shadow-md);animation:toastIn .3s ease}
+.toast.success{background:#2E7D32}.toast.info{background:#1565C0}.toast.error{background:#C62828}.toast.warn{background:#B45309}
+@keyframes toastIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+
+.cp-footer{padding:14px 18px;margin-top:auto;font-size:10.5px;color:var(--text-secondary);text-align:center;border-top:1px solid var(--border);background:var(--surface)}
+</style>
+</head>
+<body>
+<div class="app-shell">
+
+  <!-- ═══════════════════ TOP BAR ═══════════════════ -->
+  <header class="topbar">
+    <div class="topbar-title">
+      <span class="tb-icon">🤖</span> Control Center Assistant
+      <small>· Persistent Agent Activity State</small>
+    </div>
+    <div class="status-chip idle" id="statusChip">
+      <span class="sc-dot"></span><span id="statusChipText">Idle</span>
+    </div>
+    <div class="topbar-actions">
+      <div class="avatar" title="Alex Harper — Platform Admin">AH</div>
+    </div>
+  </header>
+
+  <div class="main">
+
+    <!-- ═══════════════════ CHAT COLUMN ═══════════════════ -->
+    <section class="chat-col">
+      <div class="chat-head">
+        <h2>💬 Conversation</h2>
+        <span class="ch-sub">session <code style="font-family:monospace;font-size:11px">sess-8f3a2c</code> · the assistant reports its exact activity, live</span>
+      </div>
+
+      <div class="chat-messages" id="chatMessages">
+        <!-- messages are injected here; the activity slot sits at the bottom -->
+      </div>
+
+      <div class="chat-input-row">
+        <textarea class="chat-input" id="chatInput" rows="1" placeholder="Type a message…" onkeydown="onChatKey(event)" disabled></textarea>
+        <button class="send-btn" id="sendBtn" onclick="sendMessage()" disabled>Send</button>
+      </div>
+    </section>
+
+    <!-- ═══════════════════ CONTROL PANEL ═══════════════════ -->
+    <aside class="control-panel">
+      <div class="cp-head">
+        <h3>🎛 Simulation Control Panel</h3>
+        <p>Drive the assistant's persisted activity state and watch the processing bubble reflect it — with no blank gaps, no stuck spinners, and exact restore on reload.</p>
+      </div>
+
+      <div class="cp-section">
+        <h4>▶ Run full scenario</h4>
+        <div class="cp-actions">
+          <button class="btn btn-primary" onclick="runFullScenario()">▶ Play thinking → tool → delegate → wait → finish</button>
+          <button class="btn btn-secondary" onclick="resetChat()">↺ Reset conversation</button>
+        </div>
+      </div>
+
+      <div class="cp-section">
+        <h4>◉ Set activity state</h4>
+        <div class="state-grid" id="stateGrid">
+          <button class="state-btn" data-state="thinking" onclick="setState('thinking')">
+            <span class="sb-icon">💭</span> Thinking
+            <span class="sb-sub">reasoning in progress</span>
+          </button>
+          <button class="state-btn" data-state="tool" onclick="setState('tool')">
+            <span class="sb-icon">🔧</span> Calling tool
+            <span class="sb-sub">cc____create_skill</span>
+          </button>
+          <button class="state-btn" data-state="delegating" onclick="setState('delegating')">
+            <span class="sb-icon">🤝</span> Delegating
+            <span class="sb-sub">to sub-agent</span>
+          </button>
+          <button class="state-btn" data-state="waiting" onclick="setState('waiting')">
+            <span class="sb-icon">⏸</span> Waiting for input
+            <span class="sb-sub">human intervention</span>
+          </button>
+          <button class="state-btn" data-state="finished" onclick="setState('finished')">
+            <span class="sb-icon">✓</span> Finished
+            <span class="sb-sub">turn completed</span>
+          </button>
+          <button class="state-btn" data-state="timeout" onclick="setState('timeout')">
+            <span class="sb-icon">⏱</span> Timed out
+            <span class="sb-sub">terminal failure</span>
+          </button>
+        </div>
+      </div>
+
+      <div class="cp-section">
+        <h4>↻ Resume / reconnect</h4>
+        <div class="cp-actions">
+          <button class="btn btn-secondary" onclick="simulateCloseReopen()">🗂 Simulate close &amp; reopen mid-turn</button>
+          <button class="btn btn-secondary" onclick="reloadPage()">🔄 Reload page (true persistence)</button>
+        </div>
+        <p style="font-size:11px;color:var(--text-secondary);margin-top:8px;line-height:1.45">
+          The activity record is persisted to <code style="font-family:monospace">localStorage</code> (simulating the Control Center's authoritative store). Reopening restores the latest status instantly.
+        </p>
+      </div>
+
+      <div class="cp-section">
+        <h4>🗄 Persisted activity record</h4>
+        <div class="store-readout" id="storeReadout">—</div>
+      </div>
+
+      <div class="cp-section">
+        <h4>🎨 State legend</h4>
+        <div class="legend">
+          <div class="legend-row"><span class="lg-dot" style="background:#2563EB"></span> <code class="lg-mono">thinking</code> — blue spinner, animated dots</div>
+          <div class="legend-row"><span class="lg-dot" style="background:#4F46E5"></span> <code class="lg-mono">tool</code> — shows tool name</div>
+          <div class="legend-row"><span class="lg-dot" style="background:#7C3AED"></span> <code class="lg-mono">delegating</code> — shows sub-agent name</div>
+          <div class="legend-row"><span class="lg-dot" style="background:#FF9800"></span> <code class="lg-mono">waiting</code> — amber, no spinner, intervention dialog inline (no blank gap)</div>
+          <div class="legend-row"><span class="lg-dot" style="background:#16A34A"></span> <code class="lg-mono">finished</code> — green check, spinner stopped</div>
+          <div class="legend-row"><span class="lg-dot" style="background:#F44336"></span> <code class="lg-mono">timeout / failed</code> — terminal</div>
+        </div>
+      </div>
+
+      <div class="cp-footer">
+        Parthenon · Persistent Agent Activity State<br>Interactive prototype — not for production
+      </div>
+    </aside>
+  </div>
+</div>
+
+<div class="toast-wrap" id="toastWrap"></div>
+
+<script>
+/* ═══════════════════════════════════════════════════════════════════════
+   Persistent Agent Activity State — prototype
+   A single authoritative activity record drives the processing bubble.
+   ═══════════════════════════════════════════════════════════════════════ */
+
+var STORE_KEY = 'parthenon_activity_state_demo';
+
+var STATES = {
+  idle:       { label:'Idle',                    icon:null,      chip:'Idle' },
+  thinking:   { label:'Thinking…',               icon:'spinner', chip:'Thinking' },
+  tool:       { label:'Calling tool',            icon:'spinner', chip:'Calling a tool' },
+  delegating: { label:'Delegating',              icon:'spinner', chip:'Delegating' },
+  waiting:    { label:'Waiting for your input',  icon:'pause',   chip:'Waiting for input' },
+  finished:   { label:'Finished',                icon:'check',   chip:'Finished' },
+  failed:     { label:'Failed',                  icon:'cross',   chip:'Failed' },
+  timeout:    { label:'Timed out',               icon:'cross',   chip:'Timed out' }
+};
+
+var current = {
+  state: 'idle',
+  tool: '',        // tool name (tool state)
+  agent: '',       // sub-agent name (delegating state)
+  detail: '',      // free-form secondary line
+  reason: '',      // timeout/failed reason
+  updatedAt: null
+};
+
+var scenarioTimer = null;
+
+/* ── safe storage (localStorage may be unavailable on some file:// setups) ── */
+var memoryStore = {};
+function storeGet(){ try { var v = localStorage.getItem(STORE_KEY); return v ? JSON.parse(v) : null; } catch(e){ return memoryStore[STORE_KEY] || null; } }
+function storeSet(obj){ try { localStorage.setItem(STORE_KEY, JSON.stringify(obj)); } catch(e){ memoryStore[STORE_KEY] = obj; } }
+function storeClear(){ try { localStorage.removeItem(STORE_KEY); } catch(e){ delete memoryStore[STORE_KEY]; } }
+
+/* ── helpers ── */
+function $(id){ return document.getElementById(id); }
+function el(tag, cls, html){ var e = document.createElement(tag); if(cls) e.className = cls; if(html != null) e.innerHTML = html; return e; }
+function nowTime(){ return new Date().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit', second:'2-digit'}); }
+function toast(msg, type){ var w = $('toastWrap'); var t = el('div','toast '+(type||'info'), msg); w.appendChild(t); setTimeout(function(){ t.remove(); }, 3000); }
+function scrollChat(){ var m = $('chatMessages'); setTimeout(function(){ m.scrollTop = m.scrollHeight; }, 30); }
+
+/* ═══════════════════════════════════════════════════════════════════════
+   Core: set activity state — drives bubble + chip + input + intervention
+   ═══════════════════════════════════════════════════════════════════════ */
+function setActivity(state, opts){
+  opts = opts || {};
+  current.state = state;
+  current.tool = opts.tool || '';
+  current.agent = opts.agent || '';
+  current.detail = opts.detail || '';
+  current.reason = opts.reason || '';
+  current.updatedAt = Date.now();
+
+  persist();            // single authoritative record, always written
+  renderBubble();       // morph the ONE bubble in place (no blank gap)
+  renderStatusChip();
+  renderIntervention(); // intervention dialog appears in the same frame when waiting
+  renderInput();
+  renderStore();
+  updateStateButtons();
+  scrollChat();
+}
+
+function persist(){
+  storeSet({
+    state: current.state,
+    tool: current.tool,
+    agent: current.agent,
+    detail: current.detail,
+    reason: current.reason,
+    updatedAt: current.updatedAt
+  });
+}
+
+/* ── the activity slot holds the bubble; it exists whenever not idle ── */
+function activitySlot(){
+  var m = $('chatMessages');
+  var slot = $('activitySlot');
+  if(!slot){
+    slot = el('div','activity-slot'); slot.id = 'activitySlot';
+    m.appendChild(slot);
+  }
+  return slot;
+}
+
+function renderBubble(){
+  var m = $('chatMessages');
+  var slot = $('activitySlot');
+
+  if(current.state === 'idle'){
+    if(slot) slot.remove();
+    return;
+  }
+
+  if(!slot) slot = activitySlot();
+
+  var st = STATES[current.state];
+  var bubble = slot.querySelector('.activity-bubble');
+
+  // label with animated dots for the "working" states
+  var dots = (current.state === 'thinking' || current.state === 'tool' || current.state === 'delegating')
+    ? ' <span class="dots"><span></span><span></span><span></span></span>' : '';
+
+  var iconHtml = '';
+  if(st.icon === 'spinner') iconHtml = '<span class="ab-spinner"></span>';
+  else if(st.icon === 'pause') iconHtml = '<span class="ab-pause"><span></span><span></span></span>';
+  else if(st.icon === 'check') iconHtml = '<span class="ab-check">✓</span>';
+  else if(st.icon === 'cross') iconHtml = '<span class="ab-check">✕</span>';
+
+  var label = st.label;
+  var detail = '';
+
+  if(current.state === 'tool'){
+    detail = 'Invoking <span class="mono">' + (current.tool || 'cc____create_skill') + '</span>' + (current.detail ? ' · ' + current.detail : '');
+  } else if(current.state === 'delegating'){
+    detail = 'Handing off to <span class="mono">' + (current.agent || 'Triage Skill Builder') + '</span>' + (current.detail ? ' · ' + current.detail : '');
+  } else if(current.state === 'waiting'){
+    detail = current.detail || 'Your approval is required before anything is written.';
+  } else if(current.state === 'finished'){
+    detail = current.detail || 'Turn completed — reply delivered.';
+  } else if(current.state === 'timeout' || current.state === 'failed'){
+    detail = current.reason || 'The turn ended without completing.';
+  } else {
+    detail = current.detail || 'Working on your request…';
+  }
+
+  if(!bubble){
+    bubble = el('div','activity-bubble');
+    slot.appendChild(bubble);
+  }
+
+  bubble.setAttribute('data-state', current.state);
+  bubble.innerHTML =
+    '<div class="ab-icon">' + iconHtml + '</div>' +
+    '<div class="ab-text">' +
+      '<div class="ab-label">' + label + dots + '</div>' +
+      '<div class="ab-detail">' + detail + '</div>' +
+    '</div>' +
+    '<span class="ab-persist" title="Activity record is persisted and authoritative">persisted</span>';
+}
+
+function renderStatusChip(){
+  var chip = $('statusChip');
+  var text = $('statusChipText');
+  var st = STATES[current.state];
+  chip.className = 'status-chip ' + current.state;
+  text.textContent = st.chip;
+}
+
+function renderInput(){
+  var input = $('chatInput');
+  var send = $('sendBtn');
+  var busy = (current.state === 'thinking' || current.state === 'tool' || current.state === 'delegating');
+  var waiting = current.state === 'waiting';
+
+  if(busy || waiting){
+    input.disabled = true; send.disabled = true;
+    input.placeholder = waiting
+      ? 'Waiting for your intervention response…'
+      : 'The assistant is working — input is paused…';
+  } else {
+    input.disabled = false; send.disabled = false;
+    input.placeholder = 'Type a message…';
+  }
+}
+
+function renderIntervention(){
+  var slot = $('activitySlot');
+  var existing = $('interventionCard');
+
+  if(current.state === 'waiting'){
+    if(!existing){
+      var card = buildInterventionCard();
+      slot.appendChild(card);
+      scrollChat();
+    }
+  } else {
+    if(existing) existing.remove();
+  }
+}
+
+/* ── confirm-before-write approval card ── */
+function buildInterventionCard(){
+  var card = el('div','iv-card');
+  card.id = 'interventionCard';
+  card.innerHTML =
+    '<div class="iv-head">' +
+      '<div class="iv-icon">⚠</div>' +
+      '<div>' +
+        '<div class="iv-title">Approval required before writing</div>' +
+        '<div class="iv-sub">The assistant paused and is waiting for your confirmation.</div>' +
+      '</div>' +
+    '</div>' +
+    '<div class="iv-body">' +
+      '<div class="iv-preview">' +
+        '<strong>**Create Skill: triage-inbox**</strong>' +
+        '<table>' +
+          '<tr><th>Field</th><th>Value</th></tr>' +
+          '<tr><td>Name</td><td>triage-inbox</td></tr>' +
+          '<tr><td>Description</td><td>Reviews and triages incoming support emails</td></tr>' +
+          '<tr><td>Bound tools</td><td><span style="font-family:monospace;font-size:11px">system____query_result</span>, <span style="font-family:monospace;font-size:11px">cc____create_skill</span></td></tr>' +
+          '<tr><td>Assign to roles</td><td>support-agent</td></tr>' +
+        '</table>' +
+      '</div>' +
+    '</div>' +
+    '<div class="iv-actions">' +
+      '<button class="btn btn-secondary" onclick="resolveIntervention(false)">✕ Deny</button>' +
+      '<button class="btn btn-primary" style="background:#16A34A" onclick="resolveIntervention(true)">✓ Approve</button>' +
+    '</div>';
+  return card;
+}
+
+/* ── resolve / reject the intervention ── */
+function resolveIntervention(approved){
+  // record the response as a message, then advance the bubble immediately
+  addSystemResponse(approved ? '✓ Approved — proceeding' : '✕ Denied — nothing was written');
+
+  if(approved){
+    setActivity('thinking', { detail:'Applying your approval…' });
+    toast('Approved — resuming work','success');
+    setTimeout(function(){
+      setActivity('tool', { tool:'cc____create_skill', detail:'writing record' });
+    }, 1100);
+    setTimeout(function(){
+      setActivity('finished', { detail:'Turn completed.' });
+      deliverAssistantReply('Created the skill <code>triage-inbox</code> and bound it to <code>support-agent</code>. ✅');
+    }, 2400);
+  } else {
+    setActivity('finished', { detail:'Turn completed — request rejected.' });
+    deliverAssistantReply('Understood — nothing was written. Let me know if you would like to change anything.');
+  }
+}
+
+function addSystemResponse(text){
+  var m = $('chatMessages');
+  var d = el('div','msg msg-user');
+  d.innerHTML = '<div class="msg-avatar">AH</div><div class="msg-bubble" style="background:#EDE9FE;border-color:#DDD6FE;color:#4C1D95">' + text + '</div>';
+  m.appendChild(d);
+  scrollChat();
+}
+
+/* ── final reply (replaces the bubble; turn is over) ── */
+function deliverAssistantReply(html){
+  var m = $('chatMessages');
+  var d = el('div','msg msg-agent');
+  d.innerHTML = '<div class="msg-avatar">🤖</div><div class="msg-bubble">' + html + '</div><div class="msg-time">' + nowTime() + '</div>';
+  m.appendChild(d);
+  // bubble was already in 'finished' state; remove the slot once the reply lands
+  setTimeout(function(){
+    var slot = $('activitySlot');
+    if(slot && current.state === 'finished') slot.remove();
+    setActivity('idle');
+  }, 400);
+  scrollChat();
+}
+
+/* ── control-panel state buttons highlight ── */
+function updateStateButtons(){
+  var btns = document.querySelectorAll('.state-btn');
+  btns.forEach(function(b){
+    var active = (b.getAttribute('data-state') === current.state);
+    b.setAttribute('data-active', active ? 'true' : 'false');
+  });
+}
+
+/* ── persisted store readout ── */
+function renderStore(){
+  var r = $('storeReadout');
+  if(current.state === 'idle'){
+    r.innerHTML = '<span class="e">// no active activity record (idle)</span>';
+    return;
+  }
+  var stamp = current.updatedAt ? new Date(current.updatedAt).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit',second:'2-digit'}) : '—';
+  var lines = [];
+  lines.push('{');
+  lines.push('  <span class="k">state</span>: <span class="s">"' + current.state + '"</span>');
+  if(current.tool)    lines.push('  <span class="k">tool</span>: <span class="v">"' + current.tool + '"</span>');
+  if(current.agent)   lines.push('  <span class="k">agent</span>: <span class="v">"' + current.agent + '"</span>');
+  if(current.detail)  lines.push('  <span class="k">detail</span>: <span class="v">"' + current.detail + '"</span>');
+  if(current.reason)  lines.push('  <span class="k">reason</span>: <span class="w">"' + current.reason + '"</span>');
+  lines.push('  <span class="k">updatedAt</span>: <span class="v">' + stamp + '</span>');
+  lines.push('}');
+  r.innerHTML = lines.join('\n');
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   Public triggers
+   ═══════════════════════════════════════════════════════════════════════ */
+function setState(state){
+  cancelScenario();
+  var opts = {};
+  switch(state){
+    case 'thinking':
+      opts.detail = 'Reasoning about your request…';
+      break;
+    case 'tool':
+      opts.tool = 'cc____create_skill';
+      opts.detail = 'schema lookup';
+      break;
+    case 'delegating':
+      opts.agent = 'Triage Skill Builder';
+      opts.detail = 'sub-agent is drafting the skill';
+      break;
+    case 'waiting':
+      opts.detail = 'Your approval is required before anything is written.';
+      break;
+    case 'finished':
+      opts.detail = 'Turn completed — reply delivered.';
+      break;
+    case 'timeout':
+      opts.reason = 'Whole-turn watchdog expired — no eternal spinner.';
+      break;
+  }
+  ensureSeedMessage();
+  setActivity(state, opts);
+  if(state === 'waiting'){
+    toast('Transitioned to "waiting" — no blank gap','warn');
+  }
+}
+
+/* ── seed the conversation if empty ── */
+function ensureSeedMessage(){
+  var m = $('chatMessages');
+  if(m.querySelector('.msg')) return;
+  addSeedConversation();
+}
+
+function addSeedConversation(){
+  var m = $('chatMessages');
+  var u = el('div','msg msg-user');
+  u.innerHTML = '<div class="msg-avatar">AH</div><div class="msg-bubble">Create a skill called <code>triage-inbox</code> that reviews and triages incoming support emails.</div><div class="msg-time">' + nowTime() + '</div>';
+  m.appendChild(u);
+  scrollChat();
+}
+
+/* ── full scenario (auto-play through the states) ── */
+function runFullScenario(){
+  cancelScenario();
+  resetMessages();
+  addSeedConversation();
+  toast('Running full scenario…','info');
+
+  var step = 0;
+  var steps = [
+    function(){ setActivity('thinking', { detail:'Reasoning about your request…' }); },
+    function(){ setActivity('tool', { tool:'cc____list_management_tools', detail:'discovering management tools' }); },
+    function(){ setActivity('tool', { tool:'cc____create_skill', detail:'schema lookup' }); },
+    function(){ setActivity('delegating', { agent:'Triage Skill Builder', detail:'drafting the skill definition' }); },
+    function(){ setActivity('waiting', { detail:'Your approval is required before anything is written.' }); }
+  ];
+  var delays = [900, 1300, 1400, 1400, 1200];
+
+  function next(){
+    if(step >= steps.length) return;
+    steps[step]();
+    step++;
+    scenarioTimer = setTimeout(next, delays[step-1]);
+  }
+  next();
+}
+
+function cancelScenario(){ if(scenarioTimer){ clearTimeout(scenarioTimer); scenarioTimer = null; } }
+
+/* ═══════════════════════════════════════════════════════════════════════
+   Resume / reconnect flows
+   ═══════════════════════════════════════════════════════════════════════ */
+function simulateCloseReopen(){
+  cancelScenario();
+  if(current.state === 'idle' || current.state === 'finished'){
+    // nothing in flight — still demonstrate the restore path with a working state
+    setActivity('tool', { tool:'cc____create_skill', detail:'in flight at the moment of "close"' });
+    toast('Captured an in-flight state, then "closed" the chat','info');
+  }
+  // persist (already persisted) and snapshot what we're restoring
+  var snapshot = JSON.parse(JSON.stringify(current));
+
+  // "close": clear the visible chat
+  resetMessages();
+
+  // "reopen": restore the latest persisted status immediately — no empty window
+  var m = $('chatMessages');
+  var banner = el('div','restored-banner');
+  banner.id = 'restoredBanner';
+  banner.innerHTML =
+    '<span>🔄</span><span><b>Conversation restored</b>' +
+    'Latest persisted activity status loaded instantly — you are seeing exactly what the assistant was doing before you left.</span>';
+  m.appendChild(banner);
+
+  setActivity(snapshot.state, {
+    tool: snapshot.tool,
+    agent: snapshot.agent,
+    detail: snapshot.detail,
+    reason: snapshot.reason
+  });
+
+  scrollChat();
+  toast('Restored latest status: ' + STATES[current.state].chip, 'success');
+}
+
+function reloadPage(){
+  cancelScenario();
+  if(current.state === 'idle' || current.state === 'finished'){
+    setActivity('delegating', { agent:'Triage Skill Builder', detail:'mid-turn — persisting before reload' });
+  }
+  persist();
+  toast('Persisted — reloading to prove restore…','info');
+  setTimeout(function(){ location.reload(); }, 500);
+}
+
+/* ── restore on load ── */
+function restoreOnLoad(){
+  var saved = storeGet();
+  if(saved && saved.state && saved.state !== 'idle' && saved.state !== 'finished'){
+    current.state = saved.state;
+    current.tool = saved.tool || '';
+    current.agent = saved.agent || '';
+    current.detail = saved.detail || '';
+    current.reason = saved.reason || '';
+    current.updatedAt = saved.updatedAt || Date.now();
+
+    // Show a seed message + restored banner + restored bubble
+    resetMessages();
+    addSeedConversation();
+    var m = $('chatMessages');
+    var banner = el('div','restored-banner');
+    banner.innerHTML =
+      '<span>🔄</span><span><b>Resumed after reload</b>' +
+      'The assistant\'s persisted activity state was recovered immediately — no empty window, no stale spinner.</span>';
+    m.appendChild(banner);
+
+    setActivity(current.state, {
+      tool: current.tool, agent: current.agent, detail: current.detail, reason: current.reason
+    });
+    toast('Restored status on load: ' + STATES[current.state].chip, 'success');
+  } else {
+    resetMessages();
+    // start idle with a friendly empty state
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   Chat message helpers
+   ═══════════════════════════════════════════════════════════════════════ */
+function resetMessages(){
+  cancelScenario();
+  setActivity('idle');
+  var m = $('chatMessages');
+  m.innerHTML = '';
+}
+
+function resetChat(){
+  cancelScenario();
+  storeClear();
+  resetMessages();
+  toast('Conversation reset','info');
+}
+
+function onChatKey(e){
+  if(e.key === 'Enter' && !e.shiftKey){ e.preventDefault(); sendMessage(); }
+}
+function sendMessage(){
+  var input = $('chatInput');
+  var v = input.value.trim();
+  if(!v) return;
+  var m = $('chatMessages');
+  var d = el('div','msg msg-user');
+  d.innerHTML = '<div class="msg-avatar">AH</div><div class="msg-bubble">' + escapeHtml(v) + '</div><div class="msg-time">' + nowTime() + '</div>';
+  m.appendChild(d);
+  input.value = '';
+  scrollChat();
+  // kick off a short work cycle in response
+  setActivity('thinking', { detail:'Working on your message…' });
+  setTimeout(function(){ setActivity('tool', { tool:'cc____list_management_tools', detail:'querying' }); }, 1100);
+  setTimeout(function(){ setActivity('finished', { detail:'Turn completed.' }); deliverAssistantReply('Here is what I found. ✅'); }, 2300);
+}
+
+function escapeHtml(s){ return s.replace(/[&<>"']/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
+
+/* ═══════════════════════════════════════════════════════════════════════
+   Boot
+   ═══════════════════════════════════════════════════════════════════════ */
+restoreOnLoad();
+</script>
+</body>
+</html>

@@ -3,11 +3,15 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import apiClient from '../api/apiClient'
 import { ConversationDialog } from '../components/agents/ConversationDialog'
-import type { ChatMessage } from '../hooks/useChatSession'
+import type { ChatMessage, ChatStatus, DelegationCycle } from '../hooks/useChatSession'
 
 // ── Mocks ─────────────────────────────────────────────────────────────────────
 
 let mockMessages: ChatMessage[] = []
+let mockChatStatus: ChatStatus | null = null
+let mockDelegationCycles: DelegationCycle[] = []
+let mockActiveDelegationCycleId: string | null = null
+let mockTurnInFlight = false
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
@@ -27,9 +31,9 @@ vi.mock('../hooks/useChatSession', () => ({
     pendingQuestion: null,
     sessionTitle: null,
     guardrailUsage: null,
-    chatStatus: null,
-    delegationCycles: [],
-    activeDelegationCycleId: null,
+    chatStatus: mockChatStatus,
+    delegationCycles: mockDelegationCycles,
+    activeDelegationCycleId: mockActiveDelegationCycleId,
     delegationSnippets: [],
     delegationSnippetsCollapsed: true,
     delegationCompleted: false,
@@ -45,6 +49,8 @@ vi.mock('../hooks/useChatSession', () => ({
     interventionQueueLength: 0,
     sendInterventionResponse: vi.fn(),
     cancelIntervention: vi.fn(),
+    recoveryEpoch: 0,
+    turnInFlight: mockTurnInFlight,
   })),
 }))
 
@@ -95,6 +101,10 @@ function renderDialog(props: Partial<Parameters<typeof ConversationDialog>[0]> =
 
 beforeEach(() => {
   mockMessages = []
+  mockChatStatus = null
+  mockDelegationCycles = []
+  mockActiveDelegationCycleId = null
+  mockTurnInFlight = false
   endSessionSpy.mockClear()
   vi.mocked(apiClient.post).mockReset()
   vi.mocked(apiClient.post).mockResolvedValue({ data: {} } as never)
@@ -241,5 +251,69 @@ describe('ConversationDialog — close vs end session semantics', () => {
       expect(screen.getByText('What is the status?')).toBeDefined()
     })
     expect(screen.getByText('All systems operational.')).toBeDefined()
+  })
+})
+
+describe('ConversationDialog — in-flight activity indicator invariant', () => {
+  // FIX-20261109-BUG: reproduction for the blank chat window. On a resumed
+  // assistant session, `hydrateDelegationFromHistory` synthesizes delegation
+  // cycles from persisted `using_tool` tool_calls. When a new turn is in
+  // flight (`turnInFlight === true`) with `chatStatus.kind === 'using_tool'`
+  // and NO toolName, the standalone delegation status line is suppressed
+  // (cycles exist) and the in-cycle live status line is suppressed (statusLine
+  // is null without a toolName) — leaving the window completely blank until
+  // the next event arrives. The thinking bubble must render instead.
+  it('shows the thinking bubble during an in-flight turn when no delegation status indicator renders', async () => {
+    mockMessages = [
+      {
+        id: 'm1',
+        role: 'user',
+        content: 'Do the thing',
+        timestamp: '2026-01-01T00:00:00Z',
+      },
+    ]
+    // Hydrated cycle from history (non-empty → suppresses the standalone line)
+    mockDelegationCycles = [
+      {
+        id: 'cycle-1',
+        startedAt: '2026-01-01T00:00:05Z',
+        snippets: [
+          {
+            id: 's1',
+            kind: 'using_tool',
+            agentType: null,
+            toolName: 'read_file',
+            logTitle: null,
+            timestamp: '2026-01-01T00:00:05Z',
+          },
+        ],
+        snippetsCollapsed: true,
+        completed: false,
+        executionLogAvailable: false,
+        executionSessionId: null,
+      },
+    ]
+    mockActiveDelegationCycleId = 'cycle-1'
+    // LLM-inference phase: last event was using_tool with no tool name
+    mockChatStatus = {
+      kind: 'using_tool',
+      agentType: null,
+      toolName: null,
+      receiverSessionId: null,
+      timestamp: '2026-01-01T00:00:10Z',
+    }
+    mockTurnInFlight = true
+
+    renderDialog({ sessionId: 'session-1' })
+
+    await waitFor(() => {
+      expect(screen.getByText('Do the thing')).toBeDefined()
+    })
+
+    // Some activity indicator must be visible: the thinking bubble renders
+    // under the shared chat-status-indicator testid with the statusThinking text.
+    const indicators = screen.getAllByTestId('conversation-dialog-chat-status-indicator')
+    expect(indicators.length).toBeGreaterThan(0)
+    expect(screen.getByText('conversations.sessions.statusThinking')).toBeDefined()
   })
 })

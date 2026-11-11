@@ -434,6 +434,38 @@ async def human_intervene_tool(
             f" (conversation: {conversation_session_id})" if conversation_session_id else "",
         )
 
+        # Persist the "waiting for human" activity state for conversation-scoped
+        # interventions. This makes the conversational chat's processing bubble
+        # reconstructable from the authoritative persisted record (reload /
+        # reconnect / failover) instead of relying solely on the transient
+        # intervene_request WebSocket event emitted by the Agent Runtime.
+        if conversation_session_id:
+            try:
+                from app.db.models.conversation_activity import ActivityState
+                from app.services.conversations.activity_store import ConversationActivityStore
+
+                await ConversationActivityStore().upsert(
+                    conversation_session_id,
+                    db,
+                    state=ActivityState.waiting_for_human,
+                    pending_intervene_request_id=request_id,
+                    detail={"pending_intervention": True},
+                )
+                await db.commit()
+                logger.info(
+                    "Persisted waiting_for_human activity for conversation %s "
+                    "(request %s)",
+                    conversation_session_id,
+                    request_id_str,
+                )
+            except Exception as exc:
+                logger.warning(
+                    "Failed to persist waiting_for_human activity for conversation %s: %s",
+                    conversation_session_id,
+                    exc,
+                )
+                await db.rollback()
+
         if requester_session_id is not None:
             try:
                 from datetime import datetime

@@ -377,6 +377,7 @@ def _build_output_schema_prompt(dt: Any) -> str | None:
 async def get_agent_context(
     agent_type_id: uuid.UUID,
     db: DbSession,
+    session_id: uuid.UUID | None = None,
 ) -> AgentContextResponse:
     """Return the full execution context for an agent type.
 
@@ -526,17 +527,11 @@ async def get_agent_context(
             from app.services.agents.permission_manager import AgentPermissionManager as _PM  # noqa: N811
 
             _pm = _PM()
-            pm_sop_overrides = bound_sop_set if bound_sop_set else None
-            pm_skill_overrides = bound_skill_set if bound_skill_set else None
-
-            allowed_tools = await _pm.calculate_allowed_tools(
-                role_id, db,
-                override_sop_ids=pm_sop_overrides,
-                override_skill_ids=pm_skill_overrides,
-            )
-            allowed_agent_types_set = await _pm.calculate_allowed_agent_types(
-                role_id, db,
-                override_sop_ids=pm_sop_overrides,
+            # Agent-type-scoped resolution: visibility from the agent type's
+            # own bindings, permission gated by the role grants.
+            allowed_tools = await _pm.calculate_agent_allowed_tools(agent_type.id, db)
+            allowed_agent_types_set = await _pm.calculate_agent_allowed_agent_types(
+                agent_type.id, db
             )
             allowed_agent_types = allowed_agent_types_set
 
@@ -788,13 +783,36 @@ async def get_agent_context(
     # rows are created, and no confirmation/HITL applies (these are system
     # tools, not management wrapper calls).
     from app.services.agents.builtin_skills import (
-        get_inherent_canonical_tool_names,
-        get_inherent_skill_summaries,
+        get_inherent_canonical_tool_names_for,
+        get_inherent_skill_summaries_for,
     )
 
-    allowed_tools.update(get_inherent_canonical_tool_names())
+    # ── Optimization gating (user-confirmed runs only) ────────────────────
+    # The workflow-optimization inherent skill (instruction summary + its
+    # AUTHORING tools) loads ONLY when the execution is a user-confirmed
+    # optimize run — the launch dialog opt-in converts the run into the
+    # "optimize-and-verify" command via the ``__command`` marker stored on
+    # the session's input_data.  Every other run (default runs,
+    # conversational/chat sessions — which have no dialog at all) executes
+    # WITHOUT the workflow-optimization skill.  ``execute_script`` and the
+    # self-context tools remain always available (inherent iteration-saver,
+    # by design).
+    optimization_requested = False
+    if session_id is not None:
+        from app.db.models.agents import AgentJob
+        from app.services.agents.command_prompts import OPTIMIZE_AND_VERIFY_SLUG
+
+        job = await db.get(AgentJob, session_id)
+        job_command = (job.input_data or {}).get("__command") if job else None
+        optimization_requested = job_command == OPTIMIZE_AND_VERIFY_SLUG
+
+    allowed_tools.update(
+        get_inherent_canonical_tool_names_for(optimization_requested)
+    )
     existing_summary_names = {s.name for s in skills_summary}
-    for inherent_id, inherent_name in get_inherent_skill_summaries():
+    for inherent_id, inherent_name in get_inherent_skill_summaries_for(
+        optimization_requested
+    ):
         if inherent_name not in existing_summary_names:
             skills_summary.append(
                 SkillSummary(id=inherent_id, name=inherent_name)

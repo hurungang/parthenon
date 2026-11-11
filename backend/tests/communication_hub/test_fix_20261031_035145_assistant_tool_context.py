@@ -203,14 +203,17 @@ async def test_t1_assistant_context_includes_management_tool_definitions(
         return f"{prefix}____{meta}".replace("____", "__")
 
     expected_defs = {canonical_def(m) for m in meta_names}
-    # FIX-20261101-120618: the built-in inherent skills (self-context +
-    # workflow-optimization) are injected into EVERY agent context — meta
-    # tools + inherent set (no management execution schemas still holds).
-    from app.services.agents.builtin_skills import get_inherent_tool_names
+    # FIX-20261101-120618: the built-in inherent skills are injected into
+    # EVERY agent context.  Optimization gating: the default (conversational
+    # / non-opt-in) run gets the GATED set — self-context tools +
+    # execute_script, without the workflow-optimization authoring tools.
+    from app.services.agents.builtin_skills import (
+        get_inherent_tool_names_for,
+    )
 
     expected_defs |= {
         f"system____{bare}".replace("____", "__")
-        for bare in get_inherent_tool_names()
+        for bare in get_inherent_tool_names_for(optimization_enabled=False)
     }
     assert set(def_names) == expected_defs, (
         f"tool_definitions must contain exactly the meta tools {sorted(expected_defs)}; "

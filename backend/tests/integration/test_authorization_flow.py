@@ -281,7 +281,7 @@ async def test_token_expiration_during_permission_resolution_triggers_refresh(
         "expires_in": 3600,
     }
 
-    with patch("app.services.permission_resolution.get_allowed_tools") as mock_tools, \
+    with patch("app.services.agents.permission_manager.AgentPermissionManager.calculate_agent_allowed_tools") as mock_tools, \
          patch("app.services.token_refresh.httpx.AsyncClient") as mock_client_cls:
 
         mock_tools.return_value = {"mcp_hub.search", "save_result"}

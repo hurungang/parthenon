@@ -37,6 +37,10 @@ from app.db.models.conversations import (  # noqa: F401
     ConversationTurn,
     ToolCallRecord,
 )
+from app.db.models.conversation_activity import (  # noqa: F401
+    ActivityState,
+    ConversationActivity,
+)
 from app.db.models.results import (  # noqa: F401
     DecisionExecutionResult,
     DecisionExecutionStatus,

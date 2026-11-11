@@ -21,6 +21,7 @@ booking's PNR, or the literal ``SEED_HOLD`` for the deterministic seed holds).
 """
 from __future__ import annotations
 
+import hashlib
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -125,6 +126,27 @@ _SEAT_COLS = ("A", "B", "C", "D", "E", "F")
 # every flight, on every restart, so seat-availability demos are predictable.
 _SEED_HELD_SEATS = ("1A", "2C")
 
+# ── Dynamic flight generation (for any requested route/date) ─────────────────
+#
+# searchFlights must always return a usable, bookable result set for ANY
+# origin/destination/date. When seed flights don't cover the query, flights
+# are generated deterministically from a hash of the normalised request, so
+# repeated searches are stable and never duplicate.
+
+GENERATED_MIN_RESULTS = 3
+GENERATED_MAX_RESULTS = 5
+GENERATED_SEATS_TOTAL = 24
+GENERATED_FARE_MIN = 150
+GENERATED_FARE_MAX = 320
+
+# Staggered departure hours across the day (varied per-flight via the hash)
+_GENERATED_DEPARTURE_HOURS = (6, 9, 13, 17, 21)
+
+
+def digest_key(origin: str, destination: str, date: str) -> bytes:
+    """Stable hash of the normalised search request (drives all generation)."""
+    return hashlib.sha256(f"{origin}|{destination}|{date}".encode("utf-8")).digest()
+
 
 def _build_seed_seat_map() -> dict[str, dict[str, str | None]]:
     seat_map: dict[str, dict[str, str | None]] = {}
@@ -195,18 +217,93 @@ class BookingStore:
     # ── Read operations ──────────────────────────────────────────────────
 
     def search_flights(self, origin: str, destination: str, date: str) -> list[dict[str, Any]]:
-        """Return seed flights matching origin/destination/date (read-only)."""
+        """Return flights matching origin/destination/date.
+
+        Seed flights matching the query are returned first. If fewer than
+        ``_GENERATED_MIN_RESULTS`` flights match, additional flights are
+        **deterministically generated** for the exact requested route/date and
+        registered in the store (with a fresh, all-available seat map) so the
+        result is always bookable end-to-end. The same query always yields the
+        same generated flights (ids derive from a stable hash of the normalised
+        origin/destination/date), so repeated searches never duplicate.
+        """
+        origin_key = origin.strip().lower()
+        destination_key = destination.strip().lower()
+        if origin_key == destination_key:
+            raise BookingError("Origin and destination must be different cities")
+
+        results = self._match_flights(origin_key, destination_key, date)
+        if len(results) < GENERATED_MIN_RESULTS:
+            self._generate_flights(origin, destination, date, digest_key(origin_key, destination_key, date))
+            results = self._match_flights(origin_key, destination_key, date)
+        return results
+
+    def _match_flights(self, origin_key: str, destination_key: str, date: str) -> list[dict[str, Any]]:
+        """All registered flights matching the normalised route and exact date."""
         results: list[dict[str, Any]] = []
         for flight in self.flights.values():
             if (
-                flight.origin.lower() == origin.strip().lower()
-                and flight.destination.lower() == destination.strip().lower()
+                flight.origin.lower() == origin_key
+                and flight.destination.lower() == destination_key
                 and flight.departure_date == date
             ):
                 entry = flight.to_dict()
                 entry["seats_available"] = self._seats_available(flight.flight_id)
                 results.append(entry)
         return results
+
+    def _generate_flights(
+        self, origin: str, destination: str, date: str, digest: bytes
+    ) -> list[Flight]:
+        """Deterministically create and register 0+ flights for this route.
+
+        The number of generated flights brings the route total into the
+        3–5 range; ids, times, durations, and fares all derive from the
+        request hash, so the same query always produces identical flights.
+        """
+        selector = int.from_bytes(digest[:4], "big")
+        current = sum(
+            1
+            for flight in self.flights.values()
+            if flight.origin.lower() == origin.strip().lower()
+            and flight.destination.lower() == destination.strip().lower()
+            and flight.departure_date == date
+        )
+        target = GENERATED_MIN_RESULTS + selector % (GENERATED_MAX_RESULTS - GENERATED_MIN_RESULTS + 1)
+        count = max(0, target - current)
+
+        generated: list[Flight] = []
+        for index in range(count):
+            flight_digest = hashlib.sha256(digest + bytes([index])).digest()
+            pick = int.from_bytes(flight_digest[:4], "big")
+            flight_id = f"FL-{flight_digest[4:8].hex().upper()[:4]}"
+            # Deterministic ids may already be registered from a previous
+            # identical search — skip instead of duplicating.
+            if flight_id in self.flights:
+                continue
+            # Staggered departure hours across the day, rotated per flight/route
+            hour = _GENERATED_DEPARTURE_HOURS[(pick + index) % len(_GENERATED_DEPARTURE_HOURS)]
+            minute = pick % 60
+            duration_minutes = 75 + (pick // 60) % 8 * 15  # 75–180 min
+            arrival_minutes = (hour * 60 + minute + duration_minutes) % (24 * 60)
+            fare = GENERATED_FARE_MIN + pick % (GENERATED_FARE_MAX - GENERATED_FARE_MIN + 1)
+            flight = Flight(
+                flight_id=flight_id,
+                origin=origin,
+                destination=destination,
+                departure_date=date,
+                departure_time=f"{hour:02d}:{minute:02d}",
+                arrival_time=f"{arrival_minutes // 60:02d}:{arrival_minutes % 60:02d}",
+                fare=fare,
+                seats_total=GENERATED_SEATS_TOTAL,
+            )
+            self.flights[flight_id] = flight
+            # Fresh seat map: every seat free (no seed holds on generated flights)
+            self.seat_map[flight_id] = {
+                f"{row}{col}": None for row in _SEAT_ROWS for col in _SEAT_COLS
+            }
+            generated.append(flight)
+        return generated
 
     def get_flight(self, flight_id: str) -> dict[str, Any]:
         flight = self._require_flight(flight_id)

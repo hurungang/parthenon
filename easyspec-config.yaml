@@ -1,7 +1,9 @@
-# Change Lifecycle Configuration
-# Provides project-specific context for the /change:* workflow tools.
-# All agents read this file first before starting any task.
-# Run /change:init to update this file when the project evolves.
+# easyspec:managed v1
+# Easyspec configuration — resolved by every es- agent, prompt, and skill.
+# Docs folder: all easyspec content lives under ./docs/ (master/, changes/).
+# Migrated from legacy docs/config.yaml.
+
+docs_folder: docs
 
 project:
   name: Parthenon

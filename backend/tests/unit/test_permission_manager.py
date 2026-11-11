@@ -373,3 +373,170 @@ async def test_calculate_allowed_agent_types_uses_cache():
     db.execute = AsyncMock(side_effect=Exception("should not call DB again"))
     second = await pm.calculate_allowed_agent_types(role_id, db)
     assert second == {"planner-agent"}
+
+
+# ── Agent-type-scoped resolution (visibility ∩ role permission) ───────────────
+
+
+def _make_agent_type(agent_type_id, role_id):
+    agent_type = MagicMock()
+    agent_type.id = agent_type_id
+    agent_type.role_id = role_id
+    agent_type.name = "airline-service-chatbot"
+    return agent_type
+
+
+def _tool_rows_result(tool):
+    """Mock execute result for the tool_stmt query (scalars().all())."""
+    result = MagicMock()
+    result.fetchall.return_value = []
+    result.scalars.return_value.all.return_value = [tool]
+    return result
+
+
+@pytest.mark.asyncio
+async def test_agent_visibility_chatbot_delegation_sop_only():
+    """Chatbot case: agent type with only a delegation-step SOP sees NO tools
+    (only inherent system tools are added by the hub layer), allowed agent
+    types = the SOP delegation targets, and the role's extra skill tools are
+    NOT visible even though the role grants them."""
+    from app.services.agents.permission_manager import AgentPermissionManager
+
+    pm = AgentPermissionManager()
+    pm._cache = {}
+    pm._agent_visibility_cache = {}
+    pm._agent_visibility_agent_types_cache = {}
+    pm._agent_type_cache = {}
+
+    role_id = uuid.uuid4()
+    agent_type_id = uuid.uuid4()
+    sop_id = uuid.uuid4()
+    db = _mock_db()
+    db.get = AsyncMock(return_value=_make_agent_type(agent_type_id, role_id))
+    db.execute = AsyncMock(side_effect=[
+        _make_execute_empty(),                              # skill bindings → none
+        _make_execute_rows((sop_id,)),                      # sop bindings → 1 SOP
+        _make_execute_empty(),                              # skill_invocation steps → none
+        # calculate_agent_allowed_agent_types:
+        _make_execute_rows((sop_id,)),                      # sop bindings
+        _make_execute_rows(("t1",), ("t2",), ("t3",)),      # delegation targets
+        _make_execute_rows(("planner",), ("booker",), ("checkin",)),  # names
+    ])
+
+    # Role permission cache pre-seeded: role grants extra skills' tools that
+    # the agent type is NOT associated with.
+    pm._cache[str(role_id)] = frozenset({
+        "mcp-demo____searchFlights", "mcp-demo____checkIn", "mcp-demo____createBooking",
+    })
+    pm._agent_type_cache[str(role_id)] = frozenset({"planner", "booker", "checkin"})
+
+    tools = await pm.calculate_agent_allowed_tools(agent_type_id, db)
+    assert tools == set()  # visibility is empty → intersection empty
+
+    allowed = await pm.calculate_agent_allowed_agent_types(agent_type_id, db)
+    assert allowed == {"planner", "booker", "checkin"}
+
+
+@pytest.mark.asyncio
+async def test_agent_visibility_direct_skill_binding_intersected_with_role():
+    """Agent type with a direct skill binding: its tools are visible ONLY IF
+    the role grants them; a bound-but-not-role-granted tool is excluded."""
+    from app.services.agents.permission_manager import AgentPermissionManager
+
+    pm = AgentPermissionManager()
+    pm._cache = {}
+    pm._agent_visibility_cache = {}
+    pm._agent_visibility_agent_types_cache = {}
+
+    role_id = uuid.uuid4()
+    agent_type_id = uuid.uuid4()
+    skill_id = uuid.uuid4()
+    tool_id = uuid.uuid4()
+    tool = _make_tool("searchFlights", "mcp-demo")
+    tool.id = tool_id  # match the SkillToolBinding row so no virtual-decision fallback fires
+
+    db = _mock_db()
+    db.get = AsyncMock(return_value=_make_agent_type(agent_type_id, role_id))
+    db.execute = AsyncMock(side_effect=[
+        _make_execute_rows((skill_id,)),     # skill bindings → 1
+        _make_execute_empty(),               # sop bindings → none
+        _make_execute_empty(),               # SkillToolBinding name query
+        _make_execute_rows((tool_id,)),      # SkillToolBinding tool_id query
+        _tool_rows_result(tool),             # McpTool rows with server
+    ])
+    # Role grants a DIFFERENT tool — the bound skill's tool is NOT role-granted.
+    pm._cache[str(role_id)] = frozenset({"other-server____otherTool"})
+
+    tools = await pm.calculate_agent_allowed_tools(agent_type_id, db)
+    assert tools == set()  # bound skill NOT role-granted → excluded
+
+    # Now the role ALSO grants the bound tool → visible.
+    pm._agent_visibility_cache.clear()
+    pm._cache[str(role_id)] = frozenset({"mcp-demo____searchFlights"})
+    db.execute = AsyncMock(side_effect=[
+        _make_execute_rows((skill_id,)),
+        _make_execute_empty(),
+        _make_execute_empty(),
+        _make_execute_rows((tool_id,)),
+        _tool_rows_result(tool),
+    ])
+    tools2 = await pm.calculate_agent_allowed_tools(agent_type_id, db)
+    assert tools2 == {"mcp-demo____searchFlights"}
+
+
+@pytest.mark.asyncio
+async def test_agent_visibility_empty_without_bindings_no_role_inheritance():
+    """Strict model: an agent type with NO bindings sees NOTHING from the role
+    (no silent role inheritance)."""
+    from app.services.agents.permission_manager import AgentPermissionManager
+
+    pm = AgentPermissionManager()
+    pm._cache = {}
+    pm._agent_visibility_cache = {}
+
+    role_id = uuid.uuid4()
+    agent_type_id = uuid.uuid4()
+    db = _mock_db()
+    db.get = AsyncMock(return_value=_make_agent_type(agent_type_id, role_id))
+    db.execute = AsyncMock(side_effect=[
+        _make_execute_empty(),  # skill bindings
+        _make_execute_empty(),  # sop bindings
+    ])
+    pm._cache[str(role_id)] = frozenset({"mcp-demo____searchFlights"})
+
+    assert await pm.calculate_agent_allowed_tools(agent_type_id, db) == set()
+
+
+def test_invalidate_role_clears_agent_visibility_caches():
+    """invalidate(role) also evicts agent-type visibility caches (role gates
+    permission for all agent types)."""
+    from app.services.agents.permission_manager import AgentPermissionManager
+
+    pm = AgentPermissionManager()
+    role_id = uuid.uuid4()
+    agent_type_id = uuid.uuid4()
+    pm._cache[str(role_id)] = frozenset({"t"})
+    pm._agent_visibility_cache[str(agent_type_id)] = frozenset({"t"})
+    pm._agent_visibility_agent_types_cache[str(agent_type_id)] = frozenset({"a"})
+
+    pm.invalidate(role_id)
+
+    assert str(role_id) not in pm._cache
+    assert pm._agent_visibility_cache == {}
+    assert pm._agent_visibility_agent_types_cache == {}
+
+
+def test_invalidate_agent_type_clears_only_that_agent_type():
+    from app.services.agents.permission_manager import AgentPermissionManager
+
+    pm = AgentPermissionManager()
+    at1, at2 = uuid.uuid4(), uuid.uuid4()
+    pm._agent_visibility_cache[str(at1)] = frozenset({"t"})
+    pm._agent_visibility_cache[str(at2)] = frozenset({"t"})
+    pm._agent_visibility_agent_types_cache[str(at1)] = frozenset({"a"})
+
+    pm.invalidate_agent_type(at1)
+
+    assert str(at1) not in pm._agent_visibility_cache
+    assert str(at1) not in pm._agent_visibility_agent_types_cache
+    assert str(at2) in pm._agent_visibility_cache

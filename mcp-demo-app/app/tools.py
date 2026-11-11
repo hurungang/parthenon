@@ -58,14 +58,22 @@ def hello_user_tool(user_identity: dict[str, Any]) -> dict[str, Any]:
 
 
 def search_flights_tool(agent_identity: dict[str, Any], arguments: dict[str, Any]) -> dict[str, Any]:
-    """Search seed flights by origin, destination, and date (read-only)."""
+    """Search flights by origin, destination, and date (read-only).
+
+    Always returns a usable result set: when no seed flight matches the route,
+    flights are deterministically generated for the exact query and are fully
+    bookable via the downstream booking tools.
+    """
     origin = _require_str(arguments, "origin")
     destination = _require_str(arguments, "destination")
     date = _require_str(arguments, "date")
     missing = [k for k, v in (("origin", origin), ("destination", destination), ("date", date)) if v is None]
     if missing:
         return _error_result(f"Missing required argument(s): {', '.join(missing)}")
-    flights = booking_store.search_flights(origin, destination, date)
+    try:
+        flights = booking_store.search_flights(origin, destination, date)
+    except BookingError as exc:
+        return _error_result(str(exc))
     return {
         "search": {"origin": origin, "destination": destination, "date": date},
         "results": flights,
@@ -223,8 +231,14 @@ TOOL_MANIFEST: list[dict[str, Any]] = [
     {
         "name": "searchFlights",
         "description": (
-            "Search fictional airline flights by origin, destination, and date. "
-            "Returns flight number, times, fare, and seats available. Read-only."
+            "Search fictional airline flights by origin, destination, and "
+            "date. ALWAYS returns flights for any route/date: when the fixed "
+            "seed route doesn't match, 3-5 flights are dynamically generated "
+            "for the requested route (deterministic — the same query returns "
+            "the same flights). All results are fully bookable end-to-end via "
+            "bookTicket → generatePaymentLink → checkInPassenger → selectSeat "
+            "→ cancelBooking. Returns flight number, times, fare, and seats "
+            "available. Read-only."
         ),
         "inputSchema": {
             "type": "object",

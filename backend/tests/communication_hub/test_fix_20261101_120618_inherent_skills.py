@@ -170,27 +170,103 @@ async def test_roled_agent_context_includes_inherent_tools(isolated_db) -> None:
     # 1. The role-resolved MCP tool still resolves.
     assert "hello____ping" in context.allowed_tools
 
-    # 2. Every inherent tool is in allowed_tools under canonical system____ names.
+    # 2. Inherent tools (gated default: no workflow-optimization AUTHORING
+    #    tools — FIX: optimization opt-in gating) are in allowed_tools under
+    #    canonical system____ names.
+    from app.services.agents.builtin_skills import (
+        WORKFLOW_OPTIMIZATION_AUTHORING_TOOLS,
+        get_inherent_tool_names_for,
+    )
+
+    for bare in get_inherent_tool_names_for(optimization_enabled=False):
+        assert f"system____{bare}" in context.allowed_tools, bare
+    for bare in WORKFLOW_OPTIMIZATION_AUTHORING_TOOLS:
+        assert f"system____{bare}" not in context.allowed_tools, bare
+    # execute_script (iteration-saver) stays always available.
+    assert "system____execute_script" in context.allowed_tools
+
+    # 3. Only the self-context skill is surfaced in the skills summary.
+    skill_names = {s.name for s in context.skills}
+    assert "self-context" in skill_names
+    assert "workflow-optimization" not in skill_names
+
+    # 4. Tool definitions carry registry schemas under sanitised canonical
+    #    names (gated set only).
+    def_names = {
+        d["function"]["name"] for d in context.tool_definitions
+        if d.get("type") == "function"
+    }
+    assert {
+        _sanitized(f"system____{bare}")
+        for bare in get_inherent_tool_names_for(optimization_enabled=False)
+    } <= def_names
+    for bare in WORKFLOW_OPTIMIZATION_AUTHORING_TOOLS:
+        assert _sanitized(f"system____{bare}") not in def_names
+
+
+async def _create_optimize_session(
+    db: AsyncSession, tenant_id: uuid.UUID, agent_type_id: uuid.UUID
+) -> uuid.UUID:
+    """Create an AgentJob whose input_data carries the optimize-and-verify
+    ``__command`` marker (simulating the launch-dialog opt-in)."""
+    from app.db.models.agents import AgentJob
+    from app.services.agents.command_prompts import OPTIMIZE_AND_VERIFY_SLUG
+
+    job = AgentJob(
+        id=uuid.uuid4(),
+        tenant_id=tenant_id,
+        agent_type_id=agent_type_id,
+        input_data={"__command": OPTIMIZE_AND_VERIFY_SLUG},
+    )
+    db.add(job)
+    await db.commit()
+    return job.id
+
+
+@pytest.mark.asyncio
+async def test_optimize_and_verify_run_gets_full_inherent_set(isolated_db) -> None:
+    """A user-confirmed optimization run (``__command`` marker) gets BOTH
+    inherent skill summaries and the FULL inherent tool set."""
+    from app.api.v1.internal.agent_data import get_agent_context
+
+    tenant = await _create_tenant(isolated_db, "inherent-optimize-run")
+    agent_type = AgentType(
+        id=uuid.uuid4(),
+        tenant_id=tenant.id,
+        name="optimize-agent",
+        description="o",
+        input_type=AgentInputType.conversation,
+        output_type=AgentOutputType.auto,
+        is_active=True,
+        guardrail_token_enforcement_mode=GuardrailTokenEnforcementMode.observe,
+        guardrail_token_fallback_mode=GuardrailTokenFallbackMode.observe_and_log,
+        guardrail_conversational_token_visibility_mode=GuardrailConversationalTokenVisibilityMode.enabled,
+        guardrail_conversational_continuation_policy=GuardrailConversationalContinuationPolicy.allow,
+    )
+    isolated_db.add(agent_type)
+    await isolated_db.commit()
+
+    session_id = await _create_optimize_session(
+        isolated_db, tenant.id, agent_type.id
+    )
+
+    context = await get_agent_context(
+        agent_type_id=agent_type.id, db=isolated_db, session_id=session_id
+    )
+
+    # Full inherent tool set — including the AUTHORING tools.
     for bare in get_inherent_tool_names():
         assert f"system____{bare}" in context.allowed_tools, bare
 
-    # 3. Tool definitions carry registry schemas under sanitised canonical names.
+    # Both inherent skills in the summary.
+    skill_names = {s.name for s in context.skills}
+    assert set(INHERENT_SKILL_NAMES) <= skill_names
+
     def_names = {
         d["function"]["name"] for d in context.tool_definitions
         if d.get("type") == "function"
     }
     assert _inherent_def_names() <= def_names
-    schema = next(
-        d for d in context.tool_definitions
-        if d["function"]["name"] == "system__get_scripts"
-    )
-    expected = SystemToolRegistry.get_schema("get_scripts")
-    assert schema is not None
-    assert schema["function"]["parameters"] == expected["function"]["parameters"]
-
-    # 4. The inherent skills are surfaced in the skills summary.
-    skill_names = {s.name for s in context.skills}
-    assert set(INHERENT_SKILL_NAMES) <= skill_names
 
 
 @pytest.mark.asyncio
@@ -248,13 +324,79 @@ async def test_roleless_assistant_gets_inherent_tools(isolated_db) -> None:
 
     context = await get_agent_context(agent_type_id=assistant.id, db=isolated_db)
 
-    for bare in get_inherent_tool_names():
+    # Conversational sessions have no opt-in dialog → default = NO
+    # optimization → the workflow-optimization skill is GATED OFF.
+    from app.services.agents.builtin_skills import (
+        WORKFLOW_OPTIMIZATION_AUTHORING_TOOLS,
+        get_inherent_tool_names_for,
+    )
+
+    for bare in get_inherent_tool_names_for(optimization_enabled=False):
         assert f"system____{bare}" in context.allowed_tools, bare
+    for bare in WORKFLOW_OPTIMIZATION_AUTHORING_TOOLS:
+        assert f"system____{bare}" not in context.allowed_tools, bare
+    skill_names = {s.name for s in context.skills}
+    assert "self-context" in skill_names
+    assert "workflow-optimization" not in skill_names
 
     def_names = {
         d["function"]["name"] for d in context.tool_definitions
         if d.get("type") == "function"
     }
-    assert _inherent_def_names() <= def_names
     # Meta tools still present.
     assert "cc__invoke_management_tool" in def_names
+
+
+@pytest.mark.asyncio
+async def test_conversational_prepare_gates_workflow_optimization(isolated_db) -> None:
+    """Conversational prepare (no session id passed — the chat path in
+    ``agent_runtime/api/conversation.py``) NEVER gets the workflow-optimization
+    skill: no summary, no authoring tool schemas; ``execute_script`` and the
+    self-context tools remain available."""
+    from app.api.v1.internal.agent_data import get_agent_context
+    from app.services.agents.builtin_skills import (
+        WORKFLOW_OPTIMIZATION_AUTHORING_TOOLS,
+    )
+
+    await AssistantSeeder().run(isolated_db)
+    await isolated_db.commit()
+
+    root_tenant = (
+        await isolated_db.execute(
+            select(Tenant).where(Tenant.is_system_tenant.is_(True))
+        )
+    ).scalar_one()
+    assistant = (
+        await isolated_db.execute(
+            select(AgentType).where(
+                AgentType.tenant_id == root_tenant.id,
+                AgentType.name == "control-center-assistant",
+            )
+        )
+    ).scalar_one()
+
+    # Conversational prepare: no session_id → gated.
+    context = await get_agent_context(agent_type_id=assistant.id, db=isolated_db)
+
+    allowed = context.allowed_tools
+    for bare in WORKFLOW_OPTIMIZATION_AUTHORING_TOOLS:
+        assert f"system____{bare}" not in allowed, bare
+    assert "system____execute_script" in allowed
+    for bare in (
+        "get_implementation_plan",
+        "get_optimized_implementation_plan",
+        "get_scripts",
+        "get_execution_log",
+    ):
+        assert f"system____{bare}" in allowed, bare
+
+    assert {s.name for s in context.skills} >= {"self-context"}
+    assert "workflow-optimization" not in {s.name for s in context.skills}
+
+    def_names = {
+        d["function"]["name"] for d in context.tool_definitions
+        if d.get("type") == "function"
+    }
+    for bare in WORKFLOW_OPTIMIZATION_AUTHORING_TOOLS:
+        assert _sanitized(f"system____{bare}") not in def_names, bare
+    assert _sanitized("system____execute_script") in def_names

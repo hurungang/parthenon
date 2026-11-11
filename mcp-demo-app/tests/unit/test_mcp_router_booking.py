@@ -105,6 +105,15 @@ async def test_call_search_flights_missing_args_is_structured_error(client):
     assert body["result"]["result"]["error"] is True
 
 
+async def test_call_search_flights_arbitrary_route_generates_results(client):
+    body = await _tools_call(client, "searchFlights", {
+        "origin": "Port Lumina", "destination": "Vega Hollow", "date": "2031-07-04",
+    })
+    result = body["result"]["result"]
+    assert "error" not in result
+    assert 3 <= result["count"] <= 5
+
+
 # ── tools/call — bookTicket ──────────────────────────────────────────────────
 
 

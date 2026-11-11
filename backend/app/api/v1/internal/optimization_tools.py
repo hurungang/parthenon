@@ -114,15 +114,13 @@ def extract_tools_call_names(python_source: str) -> list[str]:
 async def _allowed_tool_names_for_agent(
     db: AsyncSession, agent_type_id: uuid.UUID
 ) -> set[str]:
-    """Resolve the agent's ACTUAL allowed MCP tool names (role → skills → tools).
+    """Resolve the agent's ACTUAL allowed MCP tool names.
 
-    Mirrors the agent-context permission resolution: agent-type SOP/Skill
-    bindings override the role scope when bindings exist.
+    Mirrors the agent-context permission resolution: visibility from the
+    agent type's own bindings, permission gated by the role grants.
     """
     from app.db.models.agents import (
         AgentType,
-        AgentTypeSkillBinding,
-        AgentTypeSopBinding,
     )
     from app.services.agents.permission_manager import AgentPermissionManager
 
@@ -130,27 +128,18 @@ async def _allowed_tool_names_for_agent(
     if agent_type is None or not agent_type.role_id:
         return set()
 
-    sop_rows = await db.execute(
-        select(AgentTypeSopBinding.sop_id).where(
-            AgentTypeSopBinding.agent_type_id == agent_type_id
-        )
-    )
-    bound_sop_ids = {row[0] for row in sop_rows.fetchall()}
-    skill_rows = await db.execute(
-        select(AgentTypeSkillBinding.skill_id).where(
-            AgentTypeSkillBinding.agent_type_id == agent_type_id
-        )
-    )
-    bound_skill_ids = {row[0] for row in skill_rows.fetchall()}
-
-    has_bindings = bool(bound_sop_ids or bound_skill_ids)
+    # Agent-type-scoped resolution: visibility from the agent type's own
+    # bindings, permission gated by the role grants. LEGACY FALLBACK: agent
+    # types with no own bindings (role-only, pre-visibility-model configs)
+    # validate against the ROLE's granted tools — script tool-name
+    # validation must never silently degrade to no scope.
     manager = AgentPermissionManager()
-    return await manager.calculate_allowed_tools(
-        agent_type.role_id,
-        db,
-        override_skill_ids=bound_skill_ids if has_bindings else None,
-        override_sop_ids=bound_sop_ids if has_bindings else None,
-    )
+    allowed = await manager.calculate_agent_allowed_tools(agent_type_id, db)
+    if allowed:
+        return allowed
+    if agent_type is not None and agent_type.role_id:
+        return await manager.calculate_allowed_tools(agent_type.role_id, db)
+    return set()
 
 
 async def _validate_script_tool_names(

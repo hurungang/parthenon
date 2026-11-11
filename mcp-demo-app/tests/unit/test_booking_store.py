@@ -10,6 +10,11 @@ from __future__ import annotations
 import pytest
 
 from app.booking_store import (
+    GENERATED_FARE_MAX,
+    GENERATED_FARE_MIN,
+    GENERATED_MAX_RESULTS,
+    GENERATED_MIN_RESULTS,
+    GENERATED_SEATS_TOTAL,
     SEAT_HOLD_SEED,
     SEED_TRAVEL_DATE,
     STATUS_BOOKED,
@@ -120,9 +125,76 @@ def test_search_flights_case_insensitive_city(store):
     assert len(results) == 3
 
 
-def test_search_flights_empty_result_is_clean(store):
+def test_search_flights_arbitrary_route_generates_flights(store):
     results = store.search_flights("Nowhere", "Elsewhere", SEED_TRAVEL_DATE)
-    assert results == []
+    assert GENERATED_MIN_RESULTS <= len(results) <= GENERATED_MAX_RESULTS
+    for flight in results:
+        assert flight["origin"] == "Nowhere"
+        assert flight["destination"] == "Elsewhere"
+        assert flight["departure_date"] == SEED_TRAVEL_DATE
+
+
+def test_generated_flights_are_deterministic_per_query():
+    s1, s2 = BookingStore(), BookingStore()
+    r1 = s1.search_flights("Nowhere", "Elsewhere", SEED_TRAVEL_DATE)
+    r2 = s2.search_flights("Nowhere", "Elsewhere", SEED_TRAVEL_DATE)
+    assert [f["flight_id"] for f in r1] == [f["flight_id"] for f in r2]
+    assert r1 == r2
+
+
+def test_repeated_search_does_not_duplicate_generated_flights(store):
+    first = store.search_flights("Nowhere", "Elsewhere", SEED_TRAVEL_DATE)
+    second = store.search_flights("Nowhere", "Elsewhere", SEED_TRAVEL_DATE)
+    assert [f["flight_id"] for f in first] == [f["flight_id"] for f in second]
+    assert len(second) == len(first)
+
+
+def test_generated_flights_have_valid_shape_and_fresh_seat_map(store):
+    results = store.search_flights("Nowhere", "Elsewhere", SEED_TRAVEL_DATE)
+    for flight in results:
+        assert GENERATED_FARE_MIN <= flight["fare"] <= GENERATED_FARE_MAX
+        assert flight["seats_total"] == GENERATED_SEATS_TOTAL
+        assert flight["seats_available"] == GENERATED_SEATS_TOTAL  # no holds
+        assert flight["flight_id"] in store.flights
+        assert flight["flight_id"] in store.seat_map
+        assert flight["departure_time"] != flight["arrival_time"]
+
+
+def test_generated_flight_ids_follow_prefix(store):
+    results = store.search_flights("Nowhere", "Elsewhere", SEED_TRAVEL_DATE)
+    assert all(f["flight_id"].startswith("FL-") for f in results)
+
+
+def test_search_flights_same_origin_destination_rejected(store):
+    with pytest.raises(BookingError, match="must be different"):
+        store.search_flights("Aurora City", "aurora city", SEED_TRAVEL_DATE)
+
+
+def test_generated_flight_full_lifecycle(store):
+    """Generated flights are fully operable by every downstream operation."""
+    results = store.search_flights("Nowhere", "Elsewhere", SEED_TRAVEL_DATE)
+    flight_id = results[0]["flight_id"]
+    fare = results[0]["fare"]
+    booking = store.create_booking(
+        flight_id, [_pax("Jane Doe"), _pax("Timmy Doe", "child", bags=1)], booked_by="agent-1"
+    )
+    pnr = booking["pnr"]
+    assert booking["status"] == STATUS_BOOKED
+    assert len({p["seat"] for p in booking["passengers"]}) == 2
+    link = store.generate_payment_link(pnr)
+    assert store.bookings[pnr].status == STATUS_PAID
+    assert link["amount"] == fare * 2
+    assert store.get_booking(pnr)["flight"]["flight_id"] == flight_id
+    store.check_in(pnr)
+    assert store.bookings[pnr].status == STATUS_CHECKED_IN
+    updated = store.select_seat(pnr, "Jane Doe", "4F")
+    assert updated["passengers"][0]["seat"] == "4F"
+    store.cancel(pnr)
+    assert store.bookings[pnr].status == STATUS_CANCELLED
+    assert store.seat_map[flight_id]["4F"] is None
+    # Re-book works after cancellation
+    rebooking = store.create_booking(flight_id, [_pax("Bob Ray")])
+    assert rebooking["status"] == STATUS_BOOKED
 
 
 def test_search_results_include_seats_available(store):

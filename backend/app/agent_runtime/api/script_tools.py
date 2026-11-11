@@ -157,12 +157,16 @@ async def execute_script_tool(
     # events are shipped to the Control Center execution log stream so
     # tool-mode script runs are as visible as dispatcher-served ones. The
     # data client may be absent (early startup) — logs are best-effort.
+    # Conversational turns SKIP shipping entirely: execution_log_entries
+    # only accepts AgentJob sessions (FK), and conversation sessions don't
+    # need execution-log persistence.
     from app.agent_runtime.scripts.dispatch import _script_log_shipper
 
     data_client = getattr(request.app.state, "data_client", None)
+    is_conversation_turn = bool(body.conv_session_id)
     log_shipper = (
         _script_log_shipper(data_client, body.session_id)
-        if data_client is not None
+        if data_client is not None and not is_conversation_turn
         else None
     )
     runner = ScriptRunner(tool_client, log_shipper=log_shipper)

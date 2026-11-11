@@ -43,6 +43,9 @@ def _all_rule_text() -> str:
         ("why don't the MCP tools work for my agent", "mcp session"),
         ("which session should the role use on supabase", "passthrough"),
         ("mcp_session_mappings", "additive"),
+        # Role permission vs agent-type visibility (corrected semantics)
+        ("agent can't see an expected tool", "visibility"),
+        ("router role only sees its delegated agents", "agent type"),
     ],
 )
 def test_relevant_rule_returned(query: str, expected_fragment: str) -> None:
@@ -93,6 +96,10 @@ def test_corpus_covers_required_topics() -> None:
         # Task 2.7 / 4.4 — SOP steps parity.
         "sop-composition",
         "sop-steps-replace-semantics",
+        # SOP-only router roles (delegation + direct-grant warning guidance).
+        "sop-only-router-roles",
+        # SOPs must never mention/instruct direct MCP-tool calls.
+        "sop-no-raw-tool-mentions",
     }
     assert required <= ids
     assert get_entry_count() >= len(required)
@@ -116,6 +123,40 @@ def test_sop_steps_knowledge_covers_authoring_contract() -> None:
     assert "skill_id" in composition and "target_agent_type_id" in composition
 
 
+def test_sop_no_raw_tool_mentions_knowledge() -> None:
+    """SOP authoring must never instruct direct MCP-tool calls — the corpus
+    entry exists, states the hard rule, and is retrievable."""
+    from app.services.agents.assistant_knowledge import _KNOWLEDGE_ENTRIES
+
+    by_id = {e["id"]: e for e in _KNOWLEDGE_ENTRIES}
+    entry = by_id["sop-no-raw-tool-mentions"]
+    text = entry["rule_text"]
+    assert "NEVER" in text.upper()
+    assert "server____tool" in text
+    assert "agent_delegation" in text and "skill_invocation" in text
+    assert "SKILL" in text.upper()
+    # Retrieval via the documented keywords.
+    for query in ("sop tool mention", "mcp tool in sop", "sop step rule"):
+        results = search_knowledge(query, top_k=5)
+        assert any(r["id"] == "sop-no-raw-tool-mentions" for r in results), query
+
+
+def test_sop_hard_rule_in_seeder_instruction() -> None:
+    """The always-on assistant instruction carries the SOP no-raw-tool hard
+    rule."""
+    from app.services.agents.assistant_seeder import (
+        ASSISTANT_SYSTEM_INSTRUCTION,
+        MANAGEMENT_SKILL_INSTRUCTIONS,
+    )
+
+    combined = (
+        f"{ASSISTANT_SYSTEM_INSTRUCTION}\n{MANAGEMENT_SKILL_INSTRUCTIONS}"
+    ).lower()
+    assert "never mention or instruct direct mcp-tool calls" in combined
+    assert "server____tool" in combined
+    assert "tool visibility flows only through" in combined
+
+
 def test_seeder_instruction_teaches_sop_steps() -> None:
     """Task 4.4: the always-on assistant instruction covers the steps replace
     semantics and the ordered-step preview rows."""
@@ -129,6 +170,35 @@ def test_seeder_instruction_teaches_sop_steps() -> None:
     assert "skill_invocation" in combined and "agent_delegation" in combined
     assert "1. skill_invocation:" in combined
     assert "omitted steps are deleted" in combined
+
+
+def test_role_permission_vs_agent_visibility_knowledge_and_seeder_guidance() -> None:
+    """Corrected semantics: the knowledge corpus and seeder teach that a role
+    controls PERMISSION only and the agent TYPE controls VISIBILITY (own
+    SOP/skill bindings as a subset of the role grants); extra role grants not
+    agent-type-associated are correctly invisible — never a warning."""
+    from app.services.agents.assistant_knowledge import _KNOWLEDGE_ENTRIES
+    from app.services.agents.assistant_seeder import (
+        ASSISTANT_SYSTEM_INSTRUCTION,
+        MANAGEMENT_SKILL_INSTRUCTIONS,
+    )
+
+    by_id = {e["id"]: e for e in _KNOWLEDGE_ENTRIES}
+    text = by_id["sop-only-router-roles"]["rule_text"]
+    assert "agent_delegation" in text
+    assert "PERMISSION" in text.upper()
+    assert "VISIBILITY" in text.upper()
+    assert "SUBSET" in text.upper()
+    # The wrong-model guidance must be gone.
+    assert "unions" not in text.lower()
+    assert "SOP-ONLY ROUTER RULE:" not in text
+
+    combined = f"{ASSISTANT_SYSTEM_INSTRUCTION}\n{MANAGEMENT_SKILL_INSTRUCTIONS}"
+    assert "ROLE-PERMISSION vs AGENT-VISIBILITY MODEL" in combined
+    assert "associate the SOP/skill" in combined
+    # Wrong-model phrases must be gone from the seeder too.
+    assert "SOP-ONLY ROUTER RULE" not in combined
+    assert "delegation steps AND direct skill grants" not in combined
 
 
 def test_role_session_knowledge_never_pass_passthrough_as_session_name() -> None:

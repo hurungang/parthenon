@@ -102,7 +102,7 @@ describe('useChatSession — activity indicator always visible mid-turn', () => 
     expect(result.current.chatStatus?.kind).toBe('thinking')
   })
 
-  it('(b2) the final agent reply clears the indicator', async () => {
+  it('(b2) an in-flight agent message is intermediate; a terminal finished status clears', async () => {
     const { useChatSession } = await import('../hooks/useChatSession')
     const { result } = renderHook(() => useChatSession('final-session'))
 
@@ -111,12 +111,21 @@ describe('useChatSession — activity indicator always visible mid-turn', () => 
     })
     sendWsMessage(sockets[0], { type: 'chat_status', status: 'using_tool', tool_name: 'cc____list' })
 
+    // An agent message while a tool-call phase is active is INTERMEDIATE — the
+    // turn may keep running (e.g. confirm-before-write), so the indicator must
+    // not blank.
     sendWsMessage(sockets[0], {
       sender_role: 'agent',
       content: 'All done.',
       timestamp: '2026-01-01T00:00:00Z',
     })
-    expect(result.current.chatStatus).toBeNull()
+    expect(result.current.chatStatus).not.toBeNull()
+    expect(result.current.turnInFlight).toBe(true)
+
+    // The authoritative terminal status (CH emits `finished` on completion)
+    // clears the indicator.
+    sendWsMessage(sockets[0], { type: 'chat_status', status: 'finished' })
+    expect(result.current.chatStatus?.kind).toBe('finished')
     expect(result.current.turnInFlight).toBe(false)
   })
 

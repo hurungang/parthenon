@@ -203,12 +203,15 @@ async def test_assistant_context_definitions_include_human_intervene(
     # FIX-20261101-000319: definitions carry category-aware sanitised
     # canonical names (cc__… / system__…).
     # FIX-20261101-120618: the inherent built-in skills are also injected
-    # into every agent context (meta + inherent).
-    from app.services.agents.builtin_skills import get_inherent_tool_names
+    # into every agent context (meta + inherent, gated default set — no
+    # workflow-optimization authoring tools without an opt-in run).
+    from app.services.agents.builtin_skills import (
+        get_inherent_tool_names_for,
+    )
 
     expected_defs = {canonical_def(m) for m in meta_names} | {
         f"system____{bare}".replace("____", "__")
-        for bare in get_inherent_tool_names()
+        for bare in get_inherent_tool_names_for(optimization_enabled=False)
     }
     assert set(def_names) == expected_defs
     assert "system__human_intervene" in def_names

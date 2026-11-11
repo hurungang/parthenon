@@ -194,6 +194,33 @@ class ConversationTurnAppendResponse(BaseModel):
     title: str | None = None
 
 
+class ConversationActivityUpsertRequest(BaseModel):
+    """Request body for PUT /conversations/{conv_session_id}/activity."""
+
+    state: str = Field(..., description="ActivityState value")
+    current_turn_id: uuid.UUID | None = None
+    tool_name: str | None = Field(default=None, max_length=400)
+    target_agent_type_id: uuid.UUID | None = None
+    pending_intervene_request_id: uuid.UUID | None = None
+    detail: dict[str, Any] | None = None
+
+
+class ConversationActivityResponse(BaseModel):
+    """The persisted current-activity record for a conversation session."""
+
+    conversation_session_id: uuid.UUID
+    state: str
+    current_turn_id: uuid.UUID | None = None
+    tool_name: str | None = None
+    target_agent_type_id: uuid.UUID | None = None
+    pending_intervene_request_id: uuid.UUID | None = None
+    detail: dict | None = None
+    is_terminal: bool = False
+    started_at: datetime | None = None
+    last_updated_at: datetime | None = None
+    finished_at: datetime | None = None
+
+
 class RuntimeToolCallRecord(BaseModel):
     """A single tool-execution record reported by Agent Runtime."""
 
@@ -936,13 +963,33 @@ async def prepare_conversation_turn(
     from app.services.conversations.store import ConversationStore
 
     store = ConversationStore()
-    await store.add_turn(conv_session_id, TurnRole.user, body.user_message, db)
+    user_turn = await store.add_turn(conv_session_id, TurnRole.user, body.user_message, db)
 
     conv_session = await db.get(ConversationSession, conv_session_id)
     if conv_session is None:
         await db.commit()
         return ConversationTurnPrepareResponse(
             no_agent_message=_build_no_agent_message(False, False)
+        )
+
+    # Persistent activity state: the assistant starts "thinking" on the new
+    # turn so reconnecting clients hydrate a working indicator immediately.
+    from app.db.models.conversation_activity import ActivityState
+    from app.services.conversations.activity_store import ConversationActivityStore
+
+    try:
+        await ConversationActivityStore().upsert(
+            conv_session_id,
+            db,
+            state=ActivityState.thinking,
+            current_turn_id=user_turn.id,
+        )
+    except LookupError:
+        pass  # Session missing — handled by the no_agent_message path above
+    except Exception as exc:
+        logger.warning(
+            "Failed to set thinking activity for conversation %s: %s",
+            conv_session_id, exc,
         )
 
     if conv_session.agent_type_id is None:
@@ -1027,6 +1074,35 @@ async def append_conversation_turn(
     if conv_session is not None and body.guardrail_usage is not None:
         conv_session.guardrail_usage = body.guardrail_usage
 
+    # Persistent activity state: resolve the activity to a terminal outcome.
+    # The final status event decides which terminal state — a watchdog/
+    # provider timeout maps to ``timed_out``, a guardrail stop to ``failed``,
+    # and a normal reply to ``finished``.
+    from app.db.models.conversation_activity import ActivityState
+    from app.services.conversations.activity_store import ConversationActivityStore
+
+    _activity_state = ActivityState.finished
+    for status_event in reversed(body.status_events):
+        if not isinstance(status_event, dict):
+            continue
+        status_value = status_event.get("status")
+        if not isinstance(status_value, str) or not status_value:
+            continue
+        if status_value == "timeout_or_failed":
+            _activity_state = ActivityState.timed_out
+        elif status_value.startswith("guardrail_"):
+            _activity_state = ActivityState.failed
+        break
+    try:
+        await ConversationActivityStore().resolve_terminal(
+            conv_session_id, db, state=_activity_state
+        )
+    except Exception as exc:
+        logger.warning(
+            "Failed to resolve terminal activity for conversation %s: %s",
+            conv_session_id, exc,
+        )
+
     title: str | None = None
     if body.is_first_message and body.first_user_message:
         agent_type_id = conv_session.agent_type_id if conv_session else None
@@ -1094,6 +1170,28 @@ async def log_execution_event(
         await db.flush()
         await db.commit()
     except Exception as exc:
+        # Defense-in-depth: conversation sessions have no row in the
+        # AgentJob-backed sessions table, so an FK violation here means the
+        # caller shipped an execution-log entry for a conversation session.
+        # Conversational turns don't need execution-log persistence — ack
+        # the write as a no-op (200) instead of breaking the caller with 500.
+        from sqlalchemy.exc import IntegrityError
+
+        from app.db.models.conversations import ConversationSession
+
+        if isinstance(exc, IntegrityError):
+            try:
+                await db.rollback()
+                conv_session = await db.get(ConversationSession, session_id)
+            except Exception:
+                conv_session = None
+            if conv_session is not None:
+                logger.debug(
+                    "Execution-log entry skipped for conversation session %s "
+                    "(conversation sessions don't persist execution logs)",
+                    session_id,
+                )
+                return LogExecutionEventResponse(entry_id=entry_id)
         logger.warning("Failed to persist log entry for session %s: %s", session_id, exc)
         raise HTTPException(status_code=500, detail="Failed to persist log entry")
 
@@ -1195,6 +1293,125 @@ async def auto_name_conversation(
     except Exception as exc:
         logger.warning("Auto-naming failed for conversation %s: %s", conv_session_id, exc)
         return AutoNameResponse(title=None)
+
+
+# ── Conversation activity (persistent agent activity state) ──────────────────
+
+
+def _activity_response(activity: Any, conv_session_id: uuid.UUID) -> ConversationActivityResponse:
+    from app.db.models.conversation_activity import ActivityState
+
+    state = activity.state
+    return ConversationActivityResponse(
+        conversation_session_id=conv_session_id,
+        state=state.value if isinstance(state, ActivityState) else str(state),
+        current_turn_id=activity.current_turn_id,
+        tool_name=activity.tool_name,
+        target_agent_type_id=activity.target_agent_type_id,
+        pending_intervene_request_id=activity.pending_intervene_request_id,
+        detail=activity.detail,
+        is_terminal=activity.is_terminal,
+        started_at=activity.started_at,
+        last_updated_at=activity.last_updated_at,
+        finished_at=activity.finished_at,
+    )
+
+
+@InternalSessionDataRouter.put(
+    "/conversations/{conv_session_id}/activity",
+    response_model=ConversationActivityResponse,
+    dependencies=[Depends(require_service_certificate)],
+    summary="Upsert the persisted conversation activity (single live row per session)",
+)
+async def upsert_conversation_activity(
+    conv_session_id: uuid.UUID,
+    body: ConversationActivityUpsertRequest,
+    db: DbSession,
+) -> ConversationActivityResponse:
+    """Persist an activity transition from Agent Runtime (relayed via Communication Hub).
+
+    Communication Hub calls this endpoint — Agent Runtime never touches the
+    database. The conversation session is tenant-scoped by the signed internal
+    tenant context; an unknown session fails with 404.
+    """
+    from app.db.models.conversation_activity import ActivityState
+    from app.db.models.conversations import ConversationSession
+    from app.services.conversations.activity_store import ConversationActivityStore
+
+    try:
+        state = ActivityState(body.state)
+    except ValueError:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Unknown activity state '{body.state}'",
+        )
+
+    conv_session = await db.get(ConversationSession, conv_session_id)
+    if conv_session is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Conversation session {conv_session_id} not found",
+        )
+
+    store = ConversationActivityStore()
+    try:
+        activity = await store.upsert(
+            conv_session_id,
+            db,
+            state=state,
+            current_turn_id=body.current_turn_id,
+            tool_name=body.tool_name,
+            target_agent_type_id=body.target_agent_type_id,
+            pending_intervene_request_id=body.pending_intervene_request_id,
+            detail=body.detail,
+        )
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    await db.commit()
+    # Re-load server-default / onupdate columns (started_at, last_updated_at)
+    # before building the response — after commit the instance is expired and a
+    # sync attribute access inside the response builder would trigger lazy IO
+    # (MissingGreenlet) on the second-and-later upsert (update path).
+    await db.refresh(activity)
+
+    logger.info(
+        "Activity upserted for conversation %s → %s",
+        conv_session_id,
+        state.value,
+    )
+    return _activity_response(activity, conv_session_id)
+
+
+@InternalSessionDataRouter.get(
+    "/conversations/{conv_session_id}/activity",
+    response_model=ConversationActivityResponse | None,
+    dependencies=[Depends(require_service_certificate)],
+    summary="Return the persisted current activity (explicit null when idle)",
+)
+async def get_conversation_activity(
+    conv_session_id: uuid.UUID,
+    db: DbSession,
+) -> ConversationActivityResponse | None:
+    """Hydrate the current activity for a conversation session.
+
+    Communication Hub calls this on WebSocket connect; an idle session
+    (no live activity row) returns an explicit ``null`` body.
+    """
+    from app.db.models.conversations import ConversationSession
+    from app.services.conversations.activity_store import ConversationActivityStore
+
+    conv_session = await db.get(ConversationSession, conv_session_id)
+    if conv_session is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Conversation session {conv_session_id} not found",
+        )
+
+    store = ConversationActivityStore()
+    activity = await store.get(conv_session_id, db)
+    if activity is None:
+        return None
+    return _activity_response(activity, conv_session_id)
 
 
 # ── Internal intervention respond (CH cert auth, no JWT needed) ──────────────

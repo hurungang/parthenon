@@ -107,6 +107,13 @@ class AgentTypeService:
             )
             db.add(binding)
 
+        # Invalidate the agent-type visibility permission caches — the
+        # agent's visible tools depend on its own bindings (role still gates
+        # permission).
+        from app.services.agents.permission_manager import get_shared_permission_manager
+
+        get_shared_permission_manager().invalidate_agent_type(agent_type_id)
+
         await db.flush()
         logger.info(
             "Set %d SOP bindings and %d Skill bindings for agent_type=%s",

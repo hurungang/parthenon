@@ -218,6 +218,17 @@ async def _send_to_live_socket(
     ws = ActiveSessionTracker.get_ws(session_id) or fallback_ws
     if ws is None:
         return
+    logger.info(
+        "WS->client session=%s type=%s status=%s state=%s role=%s tool=%s final=%s len=%s",
+        session_id,
+        payload.get("type"),
+        payload.get("status"),
+        payload.get("state"),
+        payload.get("sender_role"),
+        payload.get("tool_name"),
+        payload.get("final"),
+        len(payload.get("content") or ""),
+    )
     try:
         await ws.send_json(payload)
     except Exception as exc:
@@ -246,6 +257,131 @@ def _build_chat_status_event(
         payload["receiver_session_id"] = receiver_session_id
     payload["timestamp"] = timestamp or datetime.now(timezone.utc).isoformat()
     return payload
+
+
+# ── Persistent agent activity state (AR transition → CC activity row) ────────
+# Wire status values from Agent Runtime mapped onto the persisted ``ActivityState``
+# enum. ``waiting`` is context-dependent (delegating when an agent_type is
+# present, thinking otherwise) and is resolved at forward time.
+_WIRE_STATUS_TO_ACTIVITY_STATE: dict[str, str] = {
+    "thinking": "thinking",
+    "using_tool": "using_tool",
+    "delegating": "delegating",
+    "waiting_for_human": "waiting_for_human",
+    "timeout_or_failed": "timed_out",
+    "failed": "failed",
+}
+
+_TERMINAL_ACTIVITY_STATES = {"finished", "failed", "timed_out"}
+
+
+def _map_wire_status_to_activity_state(
+    status_value: str,
+    agent_type: str | None = None,
+) -> str | None:
+    """Map an AR wire status onto a persisted ``ActivityState`` value (None = skip)."""
+    if status_value == "waiting":
+        return "delegating" if agent_type else "thinking"
+    return _WIRE_STATUS_TO_ACTIVITY_STATE.get(status_value)
+
+
+async def _persist_activity_transition(
+    app: Any,
+    conv_session_id: uuid.UUID,
+    status_value: str,
+    agent_type: str | None,
+    tool_name: str | None,
+) -> None:
+    """Forward one AR status transition to the CC activity endpoint.
+
+    Communication Hub never writes the database — the transition is persisted
+    by Control Center via the internal data API. Failures are logged and
+    swallowed: a CC hiccup must never crash the turn pipeline (same spirit as
+    ``_send_to_live_socket``).
+    """
+    data_client: ControlCenterDataClient | None = getattr(app.state, "data_client", None)
+    if data_client is None:
+        return
+    state = _map_wire_status_to_activity_state(status_value, agent_type)
+    if state is None:
+        return
+    detail: dict[str, Any] | None = None
+    if agent_type:
+        detail = {"agent_type": agent_type}
+    if status_value == "waiting_for_human":
+        detail = {**(detail or {}), "pending_intervention": True}
+    try:
+        with _signed_tenant_forwarding():
+            await data_client.upsert_conversation_activity(
+                conv_session_id,
+                state,
+                tool_name=tool_name if state == "using_tool" else None,
+                detail=detail,
+            )
+    except Exception as exc:
+        logger.warning(
+            "Activity upsert failed for conversation %s (state=%s): %s",
+            conv_session_id,
+            state,
+            exc,
+        )
+
+
+def _activity_state_message(activity: dict[str, Any] | None) -> dict[str, Any]:
+    """Build a normalized ``activity_state`` message from a CC activity record.
+
+    An idle session (no live activity row) pushes ``state: null``.
+    """
+    detail = (
+        activity.get("detail")
+        if isinstance(activity, dict) and isinstance(activity.get("detail"), dict)
+        else {}
+    )
+    pending_intervention = bool(
+        activity
+        and (
+            activity.get("pending_intervene_request_id")
+            or detail.get("pending_intervention")
+        )
+    )
+    return {
+        "type": "activity_state",
+        "state": activity.get("state") if isinstance(activity, dict) else None,
+        "tool_name": activity.get("tool_name") if isinstance(activity, dict) else None,
+        "agent_type": detail.get("agent_type") if detail else None,
+        "pending_intervention": pending_intervention,
+        "is_terminal": bool(activity.get("is_terminal", False))
+        if isinstance(activity, dict)
+        else False,
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+    }
+
+
+async def _fetch_conversation_activity(
+    websocket: WebSocket,
+    conv_session_id: uuid.UUID,
+) -> dict[str, Any] | None:
+    """Hydrate the persisted activity for ``conv_session_id`` from CC (or None).
+
+    Failures are logged and swallowed — hydration is best-effort and must
+    never reject the connection or crash the message loop.
+    """
+    app = getattr(websocket, "app", None)
+    if app is None:
+        return None
+    data_client: ControlCenterDataClient | None = getattr(
+        app.state, "data_client", None
+    )
+    if data_client is None:
+        return None
+    try:
+        with _signed_tenant_forwarding():
+            return await data_client.get_conversation_activity(conv_session_id)
+    except Exception as exc:
+        logger.warning(
+            "Activity hydration failed for conversation %s: %s", conv_session_id, exc
+        )
+        return None
 
 
 # FIX-20261031-091657 (Defect B): in-flight CH-side turn tasks per session so
@@ -343,6 +479,7 @@ async def run_conversation_turn(
             {
                 "sender_role": "agent",
                 "content": agent_reply,
+                "final": True,
                 "timestamp": datetime.now(timezone.utc).isoformat(),
             },
         )
@@ -355,6 +492,22 @@ async def run_conversation_turn(
         )
 
     try:
+        # Guardrail-panel regression fix: emit guardrail_update the moment the
+        # delegation returns (before persistence) so a hung/failing
+        # append_conversation_turn can no longer swallow the event.
+        guardrail_usage_sent = False
+
+        async def deliver_guardrail_usage(usage: dict[str, Any]) -> None:
+            nonlocal guardrail_usage_sent
+            if guardrail_usage_sent:
+                return
+            guardrail_usage_sent = True
+            await _send_to_live_socket(
+                session_id,
+                websocket,
+                {"type": "guardrail_update", "guardrail_usage": usage},
+            )
+
         agent_reply, session_title, guardrail_usage, status_events = await asyncio.wait_for(
             _process_message(
                 conv_session_id=conv_session_id,
@@ -363,6 +516,7 @@ async def run_conversation_turn(
                 app=app,
                 on_status_event=send_status_event,
                 on_reply=deliver_reply,
+                on_guardrail_usage=deliver_guardrail_usage,
             ),
             timeout=timeout_seconds,
         )
@@ -378,10 +532,27 @@ async def run_conversation_turn(
             )
 
         if guardrail_usage:
+            await deliver_guardrail_usage(guardrail_usage)
+
+        # Authoritative turn completion. The client clears its processing bubble
+        # from a terminal status rather than guessing from the agent message
+        # (which may be an intermediate message mid-turn, e.g. during the
+        # confirm-before-write tool-calling phase). Only emit ``finished`` when
+        # the turn actually completed successfully — an error/guardrail
+        # terminal status was already streamed and must not be overwritten.
+        _completed_ok = True
+        for _ev in status_events or []:
+            _sv = _ev.get("status") if isinstance(_ev, dict) else None
+            if isinstance(_sv, str) and (
+                _sv == "timeout_or_failed" or _sv.startswith("guardrail_")
+            ):
+                _completed_ok = False
+                break
+        if _completed_ok:
             await _send_to_live_socket(
                 session_id,
                 websocket,
-                {"type": "guardrail_update", "guardrail_usage": guardrail_usage},
+                {"type": "chat_status", **_build_chat_status_event("finished")},
             )
     except asyncio.TimeoutError:
         if reply_delivered:
@@ -469,6 +640,7 @@ async def run_conversation_turn(
             {
                 "sender_role": "agent",
                 "content": "I encountered an error processing your request. Please try again.",
+                "final": True,
                 "timestamp": datetime.now(timezone.utc).isoformat(),
             },
         )
@@ -508,6 +680,7 @@ async def _persist_and_surface_turn_error(
         {
             "sender_role": "agent",
             "content": error_text,
+            "final": True,
             "timestamp": datetime.now(timezone.utc).isoformat(),
         },
     )
@@ -770,6 +943,17 @@ async def websocket_chat(websocket: WebSocket, session_id: str) -> None:
         await websocket.close(code=4003, reason="Invalid session ID format")
         return
 
+    # Hydrate the persisted activity on connect (persistent agent activity
+    # state): a fresh/restarted CH pushes the authoritative status immediately
+    # so a reload/reconnect restores the processing indicator without an empty
+    # window. Idle sessions (no live row) push ``state: null``. Best-effort.
+    hydrated_activity = await _fetch_conversation_activity(websocket, conv_session_id)
+    await _send_to_live_socket(
+        session_id,
+        websocket,
+        _activity_state_message(hydrated_activity),
+    )
+
     message_count = 0
 
     try:
@@ -796,6 +980,35 @@ async def websocket_chat(websocket: WebSocket, session_id: str) -> None:
                 await _handle_intervention_cancel(
                     websocket, session_id, payload
                 )
+                continue
+
+            # ── Client status watchdog ──────────────────────────────────────
+            # The client sends this when no WS traffic was observed for the
+            # stale threshold (e.g. after a sleep/wake or a dropped but not
+            # yet detected socket). Reply with the server-side truth so the
+            # client can reconcile its indicator (missing replies, pending
+            # interventions) without waiting for the next natural event.
+            if msg_type == "status_ping":
+                # Source of truth is the PERSISTED activity in CC — the
+                # in-memory task registry is kept only for cancellation. A
+                # non-terminal persisted state means a turn is in flight even
+                # when this CH process has no local task (restart/failover).
+                activity = await _fetch_conversation_activity(websocket, conv_session_id)
+                activity_state = (
+                    activity.get("state")
+                    if isinstance(activity, dict)
+                    else None
+                )
+                turn_in_flight = bool(
+                    activity_state and activity_state not in _TERMINAL_ACTIVITY_STATES
+                )
+                pong = _activity_state_message(activity)
+                pong.update({
+                    "type": "status_pong",
+                    "turn_in_flight": turn_in_flight,
+                    "intervention_pending": pong.get("pending_intervention", False),
+                })
+                await _send_to_live_socket(session_id, websocket, pong)
                 continue
 
             # ── Handle live JWT refresh ────────────────────────────────────
@@ -1055,6 +1268,7 @@ async def _process_message(
     app: Any,
     on_status_event: Callable[[dict[str, str]], Awaitable[None]] | None = None,
     on_reply: Callable[[str], Awaitable[None]] | None = None,
+    on_guardrail_usage: Callable[[dict[str, Any]], Awaitable[None]] | None = None,
 ) -> tuple[str, str | None, dict[str, Any] | None, list[dict[str, str]]]:
     """
     Persist user turn, call LLM, persist agent turn, optionally auto-name the session.
@@ -1062,6 +1276,12 @@ async def _process_message(
     ``on_reply`` (FIX-20261031-091657) is invoked with the agent reply the
     moment the LLM delegation returns — BEFORE the persistence call — so a
     slow/hung persistence path can never delay or swallow the live reply.
+
+    ``on_guardrail_usage`` (guardrail-panel regression fix) is invoked with
+    the guardrail usage the moment the LLM delegation returns — also BEFORE
+    the persistence call — so a slow/failing ``append_conversation_turn``
+    can never swallow the ``guardrail_update`` websocket event (the panel
+    previously went dark whenever persistence hung after a delivered reply).
 
     Returns:
         (agent_reply, session_title, guardrail_usage, status_events) — session_title is set only on the first message.
@@ -1100,6 +1320,10 @@ async def _process_message(
             )
     else:
         agent_reply = "No model is configured for this agent."
+
+    if on_guardrail_usage is not None and guardrail_usage:
+        with contextlib.suppress(Exception):
+            await on_guardrail_usage(guardrail_usage)
 
     if on_reply is not None:
         await on_reply(agent_reply)
@@ -1303,6 +1527,16 @@ async def _delegate_conversation_turn_to_agent_runtime(
                             else None,
                         )
                         status_events.append(normalized)
+                        # Persist the transition via CC (best-effort) so the
+                        # authoritative activity state survives CH restarts
+                        # and reconnects — before/alongside the live push.
+                        await _persist_activity_transition(
+                            app,
+                            conv_session_id,
+                            status_value,
+                            normalized.get("agent_type"),
+                            normalized.get("tool_name"),
+                        )
                         await on_status_event(normalized)
                         continue
 

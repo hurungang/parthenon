@@ -110,23 +110,27 @@ class TestNoAutoInjection:
         # Call the context endpoint directly
         context = await get_agent_context(agent_type_id=agent_type.id, db=db_session)
 
-        # FIX-20261101-120618: the built-in inherent skills (self-context +
-        # workflow-optimization) are now injected into EVERY agent context;
-        # no OTHER system tool may be auto-injected.
-        from app.services.agents.builtin_skills import get_inherent_tool_names
+        # FIX-20261101-120618: the built-in inherent skills are injected into
+        # EVERY agent context (gated default set — no workflow-optimization
+        # authoring tools without a user-confirmed optimize run); no OTHER
+        # system tool may be auto-injected.
+        from app.services.agents.builtin_skills import (
+            get_inherent_tool_names_for,
+        )
 
+        inherent_names = get_inherent_tool_names_for(optimization_enabled=False)
         auto_injected = [
             t for t in context.allowed_tools
-            if is_system_tool(t) and t.split("____")[-1] not in get_inherent_tool_names()
+            if is_system_tool(t) and t.split("____")[-1] not in inherent_names
         ]
         assert auto_injected == [], (
             f"System tools were auto-injected into allowed_tools: {auto_injected}"
         )
         inherent_injected = {
             t for t in context.allowed_tools
-            if t.split("____")[-1] in get_inherent_tool_names()
+            if t.split("____")[-1] in inherent_names
         }
-        assert len(inherent_injected) == len(get_inherent_tool_names())
+        assert len(inherent_injected) == len(inherent_names)
 
     @pytest.mark.asyncio
     async def test_system_tools_appear_when_explicitly_bound(
@@ -186,8 +190,12 @@ class TestNoAutoInjection:
 
         assert "system____send_notification" not in context.allowed_tools
         assert "system____get_recipient_group" not in context.allowed_tools
-        # The inherent optimization/self-context set is present for every agent.
-        for bare in get_inherent_tool_names():
+        # The inherent (gated default) set is present for every agent.
+        from app.services.agents.builtin_skills import (
+            get_inherent_tool_names_for,
+        )
+
+        for bare in get_inherent_tool_names_for(optimization_enabled=False):
             assert f"system____{bare}" in context.allowed_tools
 
 

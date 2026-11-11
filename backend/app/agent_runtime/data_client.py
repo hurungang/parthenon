@@ -242,10 +242,18 @@ class ControlCenterDataClient:
             logger.warning("Failed to fetch plan for agent_type=%s: %s", agent_type_id, exc)
             return None
 
-    async def get_agent_context(self, agent_type_id: uuid.UUID) -> dict[str, Any]:
+    async def get_agent_context(
+        self, agent_type_id: uuid.UUID, session_id: uuid.UUID | None = None
+    ) -> dict[str, Any]:
         """Return full execution context for an agent type.
 
         Calls ``GET /internal/data/agent-types/{agent_type_id}/context``.
+
+        When ``session_id`` is given, Control Center inspects the stored
+        session ``input_data`` and enables the workflow-optimization inherent
+        skill only for user-confirmed optimize-and-verify runs.  Callers that
+        omit ``session_id`` (conversational prepare, auto-compile, ...) get
+        the gated (default) context — no optimization skill.
 
         Returns a dict with keys: system_instruction, model_id, model_config_id,
         role_id, allowed_tools, sop_content, mcp_session_context,
@@ -253,7 +261,10 @@ class ControlCenterDataClient:
         identity_name, role_name, identity_role_valid, input_type, output_type,
         output_schema, primary_sop_id, is_active.
         """
-        return await self._get(f"/agent-types/{agent_type_id}/context")
+        path = f"/agent-types/{agent_type_id}/context"
+        if session_id is not None:
+            path += f"?session_id={session_id}"
+        return await self._get(path)
 
     async def get_model_config(self, model_config_id: uuid.UUID) -> dict[str, Any]:
         """Return model configuration with decrypted API credentials.

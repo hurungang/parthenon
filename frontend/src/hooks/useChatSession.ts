@@ -37,6 +37,23 @@ export type ChatStatusKind =
   | 'waiting_for_human'
   | 'delegation_resumed'
   | 'timeout_or_failed'
+  // Persisted ActivityState values (conversation_activity) — surfaced via the
+  // `activity_state` hydration push and enriched `status_pong` answers.
+  | 'finished'
+  | 'failed'
+  | 'timed_out'
+
+/** Persisted activity states that end a conversational turn. */
+export const TERMINAL_CHAT_STATUS_KINDS: readonly ChatStatusKind[] = [
+  'timeout_or_failed',
+  'finished',
+  'failed',
+  'timed_out',
+]
+
+export function isTerminalChatStatusKind(kind: ChatStatusKind): boolean {
+  return TERMINAL_CHAT_STATUS_KINDS.includes(kind)
+}
 
 export interface ChatStatus {
   kind: ChatStatusKind
@@ -44,6 +61,11 @@ export interface ChatStatus {
   toolName: string | null
   receiverSessionId: string | null
   timestamp: string
+  /** True when the persisted activity carries a pending human intervention. */
+  pendingIntervention?: boolean
+  /** Optional human-readable detail (e.g. the reason a turn was interrupted
+   * by a service restart) — surfaced instead of the generic terminal label. */
+  message?: string
 }
 
 export interface DelegationSnippetLine {
@@ -73,6 +95,18 @@ export interface ChatError {
   code: string
   message: string
 }
+
+// ── Client-side status watchdog ────────────────────────────────────────────
+// If no WS traffic of any kind arrives for this long while a turn is in
+// flight, the client can no longer trust that the connection is healthy
+// (silently-dropped sockets, sleep/wake, dead upstream turn). It then pings
+// the server for the authoritative state and surfaces a "checking" hint.
+const STATUS_STALE_THRESHOLD_MS = 60_000
+// If the status ping itself goes unanswered for this long, the socket is
+// presumed dead even though the browser may not have fired onclose yet —
+// force-close it so the existing reconnect + recovery path takes over.
+const STATUS_STALE_HARD_LIMIT_MS = 90_000
+const WATCHDOG_TICK_MS = 5_000
 
 interface ExecutionLogListEntry {
   id: string
@@ -122,6 +156,69 @@ function normalizeDelegatedAgentType(value: unknown): string | null {
   return trimmed
 }
 
+const PERSISTED_ACTIVITY_STATES: readonly ChatStatusKind[] = [
+  'thinking',
+  'using_tool',
+  'delegating',
+  'waiting_for_human',
+  'finished',
+  'failed',
+  'timed_out',
+]
+
+function isChatStatusKind(value: unknown): value is ChatStatusKind {
+  return (
+    value === 'thinking' ||
+    value === 'delegating' ||
+    value === 'waiting' ||
+    value === 'using_tool' ||
+    value === 'waiting_for_human' ||
+    value === 'timeout_or_failed' ||
+    value === 'delegation_resumed' ||
+    value === 'finished' ||
+    value === 'failed' ||
+    value === 'timed_out'
+  )
+}
+
+/**
+ * Maps a persisted-activity payload (`state` + optional context) to the
+ * normalized `ChatStatus` shape. A null/absent state (idle session) yields
+ * null. Used by both the `activity_state` connect-hydration push and the
+ * reworked `status_pong` answer.
+ */
+function activityStateFromPayload(payload: Record<string, unknown>): ChatStatus | null {
+  const state = payload['state']
+  if (!isChatStatusKind(state) || !PERSISTED_ACTIVITY_STATES.includes(state)) {
+    return null
+  }
+
+  const timestamp = typeof payload['timestamp'] === 'string'
+    ? payload['timestamp']
+    : new Date().toISOString()
+
+  return {
+    kind: state,
+    agentType: normalizeDelegatedAgentType(payload['agent_type']),
+    toolName: normalizeToolDisplayName(payload['tool_name']),
+    receiverSessionId: null,
+    timestamp,
+    pendingIntervention: payload['pending_intervention'] === true,
+  }
+}
+
+/** Parses the `activity_state` hydration message pushed on WebSocket connect. */
+export function parseActivityState(value: unknown): ChatStatus | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return null
+  }
+  const payload = value as Record<string, unknown>
+  if (payload['type'] !== 'activity_state') {
+    return null
+  }
+  return activityStateFromPayload(payload)
+}
+
 function parseChatStatus(value: unknown): ChatStatus | null {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     return null
@@ -135,12 +232,7 @@ function parseChatStatus(value: unknown): ChatStatus | null {
 
   const status = payload['status']
   if (
-    status !== 'thinking' &&
-    status !== 'delegating' &&
-    status !== 'waiting' &&
-    status !== 'using_tool' &&
-    status !== 'timeout_or_failed' &&
-    status !== 'delegation_resumed'
+    !isChatStatusKind(status)
   ) {
     return null
   }
@@ -158,6 +250,9 @@ function parseChatStatus(value: unknown): ChatStatus | null {
         ? payload['receiver_session_id'].trim()
         : null,
     timestamp,
+    ...(typeof payload['message'] === 'string' && payload['message'].trim().length > 0
+      ? { message: payload['message'] }
+      : {}),
   }
 }
 
@@ -278,10 +373,34 @@ export function useChatSession(sessionId: string | null, convSessionId?: string 
   const [interventionRequest, setInterventionRequest] = useState<InterveneRequestMessage | null>(null)
   const [interventionQueueLength, _setInterventionQueueLength] = useState(0)
   const interventionActiveRef = useRef(false)
+  // True once a message was sent (or queued) after the current socket
+  // connected. The connect-time `activity_state` hydration snapshot predates
+  // any such message, so it must not clobber the optimistic in-flight state
+  // (the live status stream / status_pong reconcile it afterwards).
+  const localSendSinceConnectRef = useRef(false)
+  // Hydrated pending-intervention flag: true when the persisted activity (or a
+  // live waiting_for_human status) reports an unresolved intervention but no
+  // request object has (yet) arrived — drives the pending-intervention
+  // indicator without fabricating a request payload.
+  const [pendingIntervention, setPendingIntervention] = useState(false)
+
+  // Status watchdog state: last inbound WS traffic timestamp (ANY message —
+  // chat messages, status events, heartbeats) and whether the current status
+  // has gone stale past the threshold.
+  const lastActivityAtRef = useRef<number>(Date.now())
+  const [statusStale, setStatusStale] = useState(false)
 
   useEffect(() => {
     chatStatusRef.current = chatStatus
   }, [chatStatus])
+
+  // TEMP DIAGNOSTIC (remove after the status-race investigation): logs every
+  // chat-status transition so the browser console can be used to see exactly
+  // what the client believes while the assistant is calling tools.
+  useEffect(() => {
+    // eslint-disable-next-line no-console
+    console.info('[chatStatus]', chatStatus?.kind ?? null, chatStatus?.toolName ?? null, 'turnInFlight=', turnInFlight)
+  }, [chatStatus, turnInFlight])
 
   useEffect(() => {
     turnInFlightRef.current = turnInFlight
@@ -334,12 +453,31 @@ export function useChatSession(sessionId: string | null, convSessionId?: string 
       wsUrl += `&conv_session_id=${convSessionId}`
     }
     const ws = new WebSocket(wsUrl)
+    // FIX-20261110 (new-session routing): capture this socket instance so
+    // handlers can detect when it has been superseded. When the dialog
+    // switches sessions (e.g. "New Session"), the effect cleanup closes the
+    // old socket — but that socket's `onclose` fires ASYNCHRONOUSLY, after
+    // the new `connect()` has already reset `intentionalCloseRef`. Without
+    // a staleness check, the old socket's close handler treats the switch
+    // as an unexpected drop and reconnects to the OLD session, overwriting
+    // `wsRef.current` — so subsequent user messages were routed to (and
+    // persisted in) the previous conversation session instead of the new one.
+    const socket = ws
     wsRef.current = ws
 
     ws.onopen = () => {
       setConnected(true)
       reconnectAttemptsRef.current = 0
+      lastActivityAtRef.current = Date.now()
+      setStatusStale(false)
+      localSendSinceConnectRef.current = false
       flushOutboundQueue()
+      // A queued message flushed right at connect starts a new turn whose
+      // persisted state does not exist yet — the hydration snapshot must
+      // not clobber it.
+      if (outboundQueueRef.current.length > 0) {
+        localSendSinceConnectRef.current = true
+      }
       // If a turn was in flight while the socket was down, its reply may have
       // been missed — signal the dialog to refresh persisted history.
       if (turnInFlightAtDisconnectRef.current) {
@@ -362,6 +500,15 @@ export function useChatSession(sessionId: string | null, convSessionId?: string 
     }
 
     ws.onmessage = (event: MessageEvent<string>) => {
+      // Stale socket: a superseded connection (session switch) must never
+      // inject messages into the current session's timeline.
+      if (wsRef.current !== socket) {
+        return
+      }
+      // Any inbound traffic is proof the connection is alive — reset the
+      // watchdog clock and clear the stale hint.
+      lastActivityAtRef.current = Date.now()
+      setStatusStale(false)
       try {
         const data = JSON.parse(event.data) as {
           type?: string
@@ -380,6 +527,12 @@ export function useChatSession(sessionId: string | null, convSessionId?: string 
           conversation_session_id?: string
           code?: string
           message?: string
+          turn_in_flight?: boolean
+          intervention_pending?: boolean
+          is_terminal?: boolean
+          state?: string
+          tool_name?: string
+          final?: boolean
         }
 
         // ── Handle intervention messages ───────────────────────────────────
@@ -396,6 +549,7 @@ export function useChatSession(sessionId: string | null, convSessionId?: string 
           }
           setInterventionRequest(interveneMsg)
           interventionActiveRef.current = true
+          setPendingIntervention(true)
           setChatStatus({
             kind: 'waiting_for_human',
             agentType: data.agent_type ?? null,
@@ -411,7 +565,16 @@ export function useChatSession(sessionId: string | null, convSessionId?: string 
           if (statusVal === 'responded' || statusVal === 'cancelled' || statusVal === 'expired') {
             setInterventionRequest(null)
             interventionActiveRef.current = false
+            setPendingIntervention(false)
             setChatStatus((prev) => {
+              // FIX-20261110: a terminal status (e.g. orphaned-resume
+              // timeout_or_failed delivered right after the response was
+              // persisted) must never be overwritten by the post-response
+              // demotion — the turn is over and nothing will replace it,
+              // which left the thinking bubble stuck forever.
+              if (prev?.kind === 'timeout_or_failed') {
+                return prev
+              }
               const agentType = prev?.agentType ?? null
               if (statusVal === 'responded') {
                 // The resumed turn is processing again — show the thinking
@@ -420,6 +583,14 @@ export function useChatSession(sessionId: string | null, convSessionId?: string 
               }
               return { kind: 'waiting', agentType, toolName: null, receiverSessionId: null, timestamp: new Date().toISOString() }
             })
+            if (statusVal === 'responded') {
+              // The turn resumed server-side — open the in-flight window so
+              // the status watchdog covers the post-response silence (if the
+              // resumed turn hangs or the socket dies, polling kicks in). If
+              // a terminal status was just delivered, the next status_pong
+              // closes the window again — self-correcting either way.
+              markTurnInFlight(true)
+            }
           }
           return
         }
@@ -441,11 +612,126 @@ export function useChatSession(sessionId: string | null, convSessionId?: string 
           return
         }
 
+        // ── Connect-time hydration (persisted activity state) ───────────────
+        // CH pushes the persisted ConversationActivity on every (re)connect.
+        // Reconcile chatStatus / in-flight window / pending-intervention flag
+        // from it — a non-terminal state re-opens the in-flight window
+        // immediately (no blank gap on a mid-turn reconnect), a terminal
+        // state closes it, and `waiting_for_human` re-arms the intervention
+        // flag so the pending indicator re-surfaces after a reload.
+        if (data.type === 'activity_state') {
+          // A message already sent/queued for this connection started a NEW
+          // turn — the hydration snapshot predates it and would wrongly
+          // clear the optimistic in-flight indicator. The live status
+          // stream / status_pong reconcile the real state instead.
+          if (localSendSinceConnectRef.current) {
+            return
+          }
+          const hydrated = parseActivityState(data)
+          if (hydrated) {
+            setChatStatus(hydrated)
+            if (isTerminalChatStatusKind(hydrated.kind)) {
+              markTurnInFlight(false)
+              interventionActiveRef.current = false
+              setPendingIntervention(false)
+            } else {
+              markTurnInFlight(true)
+              if (hydrated.kind === 'waiting_for_human' && hydrated.pendingIntervention) {
+                interventionActiveRef.current = true
+                setPendingIntervention(true)
+              }
+            }
+          } else {
+            // Explicit null state — the session is idle: clear any lingering
+            // client-side status instead of keeping a stale bubble. Never
+            // clear an optimistically-open in-flight window though: a
+            // queued message flushed right at reconnect can race the
+            // hydration push (the server persisted state is still null) —
+            // the watchdog/status stream reconciles it afterwards.
+            if (!turnInFlightRef.current) {
+              setChatStatus(null)
+              markTurnInFlight(false)
+              interventionActiveRef.current = false
+              setPendingIntervention(false)
+            }
+          }
+          return
+        }
+
+        // ── Watchdog reconciliation (reply to our status_ping) ─────────────
+        // The server reports the authoritative turn state — now derived from
+        // the persisted ConversationActivity. If it disagrees with what the
+        // client believes (e.g. the turn already finished but the final reply
+        // / intervention event was lost to a dead socket), bump
+        // `recoveryEpoch` so the dialog refetches persisted history and the
+        // missed reply or pending intervention becomes visible.
+        if (data.type === 'status_pong') {
+          const serverTurnInFlight = data.turn_in_flight === true
+          const serverInterventionPending = data.intervention_pending === true
+          const pongActivity = activityStateFromPayload(data as Record<string, unknown>)
+          if (pongActivity) {
+            // Persisted state available — reconcile directly from it.
+            setChatStatus(pongActivity)
+            if (isTerminalChatStatusKind(pongActivity.kind)) {
+              if (turnInFlightRef.current) {
+                // We never received the final reply / terminal event —
+                // trigger the persisted-history recovery path.
+                setRecoveryEpoch((epoch) => epoch + 1)
+              }
+              markTurnInFlight(false)
+              interventionActiveRef.current = false
+              setPendingIntervention(false)
+            } else if (pongActivity.kind === 'waiting_for_human' && pongActivity.pendingIntervention) {
+              if (!interventionActiveRef.current) {
+                // The pending intervention request object never arrived —
+                // the recovery refetch restores it.
+                setRecoveryEpoch((epoch) => epoch + 1)
+              }
+              interventionActiveRef.current = true
+              setPendingIntervention(true)
+              markTurnInFlight(true)
+            } else {
+              markTurnInFlight(true)
+            }
+            return
+          }
+          if (
+            turnInFlightRef.current &&
+            !serverTurnInFlight &&
+            !serverInterventionPending
+          ) {
+            // Server says the turn is over but we never got the final reply —
+            // trigger the persisted-history recovery path.
+            markTurnInFlight(false)
+            setChatStatus(null)
+            setRecoveryEpoch((epoch) => epoch + 1)
+          } else if (serverInterventionPending && !interventionActiveRef.current) {
+            // A pending intervention exists server-side but never arrived —
+            // recovery refetch restores it.
+            setRecoveryEpoch((epoch) => epoch + 1)
+          }
+          return
+        }
+
         // FIX-20261031-091657: app-level keepalive from the CH while a turn is
-        // in flight — no-op except refreshing the status timestamp so the
-        // "thinking" indicator stays visibly alive during long turns.
+        // in flight — refreshes the status timestamp so the indicator stays
+        // visibly alive during long turns. If the bubble was blanked while the
+        // turn is still in flight (e.g. an intermediate message cleared it),
+        // the heartbeat restores a visible thinking indicator.
         if (data.type === 'chat_status' && data.status === 'thinking_heartbeat') {
-          setChatStatus((prev) => (prev ? { ...prev, timestamp: new Date().toISOString() } : prev))
+          setChatStatus((prev) =>
+            prev
+              ? { ...prev, timestamp: new Date().toISOString() }
+              : turnInFlightRef.current
+                ? {
+                    kind: 'thinking',
+                    agentType: null,
+                    toolName: null,
+                    receiverSessionId: null,
+                    timestamp: new Date().toISOString(),
+                  }
+                : prev,
+          )
           return
         }
 
@@ -458,9 +744,25 @@ export function useChatSession(sessionId: string | null, convSessionId?: string 
 
           setChatStatus(parsedStatus)
 
-          if (parsedStatus.kind === 'timeout_or_failed') {
-            // Terminal status — the turn is over; close the in-flight window.
+          if (isTerminalChatStatusKind(parsedStatus.kind)) {
+            // Terminal status — the turn is over; close the in-flight window
+            // and disarm the pending-intervention flag.
             markTurnInFlight(false)
+            interventionActiveRef.current = false
+            setPendingIntervention(false)
+          }
+
+          if (parsedStatus.kind === 'waiting_for_human') {
+            // Server-pushed pause — surface the pending-intervention
+            // indicator continuously (no blank gap between the agent pausing
+            // and the intervene_request arriving). When the payload carries
+            // the persisted pending flag, arm the intervention state so
+            // message sends stay blocked until it resolves.
+            if (parsedStatus.pendingIntervention) {
+              interventionActiveRef.current = true
+              setPendingIntervention(true)
+            }
+            return
           }
 
           if (parsedStatus.kind === 'delegation_resumed') {
@@ -620,24 +922,32 @@ export function useChatSession(sessionId: string | null, convSessionId?: string 
           const isAskUserTurn = (data.content ?? '').startsWith('?')
           const wasTurnInFlight = turnInFlightRef.current
           const statusKindNow = chatStatusRef.current?.kind
-          // An agent message arriving mid-delegation (an active delegation
-          // cycle, or a delegation status kind in flight) is an INTERMEDIATE
-          // sub-agent message — the turn keeps running afterwards. A plain
-          // in-flight turn's agent message is the turn's FINAL reply.
-          const isIntermediateMidTurn =
-            wasTurnInFlight &&
-            activeDelegationCycleIdRef.current !== null &&
-            (statusKindNow === 'delegating' || statusKindNow === 'waiting' || statusKindNow === 'delegation_resumed')
-          if (wasTurnInFlight && !isAskUserTurn && !isIntermediateMidTurn) {
-            // The turn's FINAL reply arrived while in flight — close the
-            // in-flight window exactly once and clear the status as today.
+          // A message is the turn's FINAL reply when the server marks it with
+          // `final: true`. Legacy fallback (no flag): final when the turn is
+          // not in flight, or when no working status is active. In-flight
+          // messages during a working status are INTERMEDIATE and must not
+          // blank the bubble — that is exactly the confirm-before-write gap
+          // where the indicator vanished while the agent kept calling tools.
+          const isWorkingKind =
+            statusKindNow === 'delegating' ||
+            statusKindNow === 'waiting' ||
+            statusKindNow === 'using_tool' ||
+            statusKindNow === 'waiting_for_human' ||
+            statusKindNow === 'delegation_resumed'
+          const isFinal =
+            typeof data.final === 'boolean'
+              ? data.final
+              : !wasTurnInFlight || !isWorkingKind
+          const isIntermediateMidTurn = wasTurnInFlight && !isFinal
+
+          if (wasTurnInFlight && isFinal) {
+            // The turn's final reply arrived — close the in-flight window.
             markTurnInFlight(false)
           }
           setChatStatus((prev) => {
-            if (prev?.kind === 'timeout_or_failed') return prev
+            if (prev && isTerminalChatStatusKind(prev.kind)) return prev
             if (isAskUserTurn || isIntermediateMidTurn) {
-              // Mid-turn agent message (ask-user or intermediate during an
-              // active delegation): the turn continues — keep a visible
+              // Mid-turn message: the turn keeps running — keep a visible
               // indicator instead of blanking the window.
               return {
                 kind: 'thinking',
@@ -647,22 +957,8 @@ export function useChatSession(sessionId: string | null, convSessionId?: string 
                 timestamp: new Date().toISOString(),
               }
             }
-            if (wasTurnInFlight) {
-              // Final reply of the in-flight turn: clear the indicator.
-              return null
-            }
-            // Intermediate agent message while the turn is still running
-            // (no ask-user marker): demote to `thinking` — never blank the
-            // window mid-turn.
-            if (turnInFlightRef.current) {
-              return {
-                kind: 'thinking',
-                agentType: prev?.agentType ?? null,
-                toolName: null,
-                receiverSessionId: null,
-                timestamp: new Date().toISOString(),
-              }
-            }
+            // Final reply (explicit flag, or legacy non-working / not-in-flight
+            // message): clear the indicator.
             return null
           })
         }
@@ -675,6 +971,13 @@ export function useChatSession(sessionId: string | null, convSessionId?: string 
     }
 
     ws.onclose = () => {
+      // Stale socket guard (FIX-20261110): if this socket was superseded by a
+      // session switch or a newer reconnect, its closure is expected cleanup —
+      // never update connection state and NEVER schedule a reconnect from a
+      // stale closure (that would resurrect the old session's socket).
+      if (wsRef.current !== socket) {
+        return
+      }
       setConnected(false)
       // Unexpected close while a turn is still processing: remember it so the
       // reconnect can recover the missed reply, and reconnect automatically.
@@ -807,6 +1110,43 @@ export function useChatSession(sessionId: string | null, convSessionId?: string 
     }
   }, [connect])
 
+  // ── Status watchdog ────────────────────────────────────────────────────────
+  // While a turn is in flight, silence on the WS is ambiguous: the agent may
+  // just be thinking, or the connection may be silently dead. After the stale
+  // threshold, ping the server for authoritative state (and surface a
+  // "checking status" hint in the UI); if even the ping goes unanswered,
+  // force-close the socket so the reconnect + recovery path takes over.
+  useEffect(() => {
+    if (typeof window !== 'undefined' && (window as unknown as { __VITEST__?: boolean }).__VITEST__) {
+      return
+    }
+    const timer = setInterval(() => {
+      if (!turnInFlightRef.current || interventionActiveRef.current) {
+        setStatusStale(false)
+        return
+      }
+      const idleMs = Date.now() - lastActivityAtRef.current
+      if (idleMs < STATUS_STALE_THRESHOLD_MS) {
+        return
+      }
+      setStatusStale(true)
+      const ws = wsRef.current
+      if (idleMs >= STATUS_STALE_HARD_LIMIT_MS) {
+        // Even the status_ping got no reply — the socket is presumed dead.
+        // Force-close so onclose schedules the reconnect; the in-flight
+        // flag makes that reconnect run the history recovery.
+        if (ws && ws.readyState === WebSocket.OPEN) {
+          ws.close()
+        }
+        return
+      }
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ type: 'status_ping' }))
+      }
+    }, WATCHDOG_TICK_MS)
+    return () => clearInterval(timer)
+  }, [])
+
   const sendMessage = useCallback((content: string) => {
     if (!content.trim()) return false
 
@@ -828,11 +1168,16 @@ export function useChatSession(sessionId: string | null, convSessionId?: string 
       timestamp: new Date().toISOString(),
     }
     pendingNewDelegationCycleRef.current = true
+    localSendSinceConnectRef.current = true
     setMessages((prev) => [...prev, msg])
     // The turn is in flight from the moment the user message is sent until
     // its final agent reply (or a terminal status) — keeps an indicator
     // visible regardless of intermediate status transitions.
     markTurnInFlight(true)
+    // The watchdog clock starts from the send, not from the last unrelated
+    // traffic — otherwise a long-idle session would go stale immediately.
+    lastActivityAtRef.current = Date.now()
+    setStatusStale(false)
     setChatStatus({
       kind: 'thinking',
       agentType: null,
@@ -1012,13 +1357,24 @@ export function useChatSession(sessionId: string | null, convSessionId?: string 
         )
         setInterventionRequest(null)
         interventionActiveRef.current = false
-        setChatStatus((prev) => ({
-          kind: 'waiting',
-          agentType: prev?.agentType ?? null,
-          toolName: null,
-          receiverSessionId: null,
-          timestamp: new Date().toISOString(),
-        }))
+        setChatStatus((prev) => {
+          // Never clobber a just-delivered terminal status (e.g. an
+          // orphaned-resume timeout_or_failed racing the response submit).
+          if (prev?.kind === 'timeout_or_failed') {
+            return prev
+          }
+          return {
+            kind: 'waiting',
+            agentType: prev?.agentType ?? null,
+            toolName: null,
+            receiverSessionId: null,
+            timestamp: new Date().toISOString(),
+          }
+        })
+        // The turn is resuming server-side — from now until its final reply
+        // (or a terminal status) the in-flight window must stay open so an
+        // indicator is always visible and the watchdog polls on silence.
+        markTurnInFlight(true)
         return true
       }
       return false
@@ -1092,6 +1448,10 @@ export function useChatSession(sessionId: string | null, convSessionId?: string 
     /** True from user-message send until the turn's final agent reply or a
      * terminal status — drives the fallback activity indicator. */
     turnInFlight,
+    /** True when the watchdog detected no WS traffic past the stale
+     * threshold while a turn is in flight — UI should show a "checking
+     * status" hint and the hook is actively pinging/reconnecting. */
+    statusStale,
     setDelegationSnippetsCollapsed,
     toggleDelegationSnippetsCollapsed,
     hydrateDelegationFromHistory,
@@ -1100,6 +1460,10 @@ export function useChatSession(sessionId: string | null, convSessionId?: string 
     chatError,
     // Intervention
     interventionRequest,
+    /** True when the persisted/live activity reports a pending intervention
+     * but no request object has arrived (hydration) — drives the
+     * pending-intervention indicator. */
+    pendingIntervention,
     interventionQueueLength,
     sendInterventionResponse,
     cancelIntervention,

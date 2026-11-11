@@ -67,6 +67,10 @@ _CH_ALLOWLIST: set[tuple[str, str]] = {
     ("POST", "/api/v1/internal/data/conversations/{conv_session_id}/prepare-turn"),
     ("POST", "/api/v1/internal/data/conversations/{conv_session_id}/append-turn"),
     ("POST", "/api/v1/internal/data/conversations/{conv_session_id}/auto-name"),
+    # Persistent conversation activity state (persistent-agent-activity-state):
+    # CH forwards AR status transitions and hydrates on connect via these routes.
+    ("PUT", "/api/v1/internal/data/conversations/{conv_session_id}/activity"),
+    ("GET", "/api/v1/internal/data/conversations/{conv_session_id}/activity"),
     ("POST", "/api/v1/internal/data/a2a/request"),
     ("POST", "/api/v1/internal/data/a2a/sessions/{session_link_id}/disconnect"),
     ("POST", "/api/v1/internal/system-tools/save-data"),

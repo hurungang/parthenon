@@ -54,13 +54,59 @@ def test_search_flights_happy_path():
     assert result["results"][0]["flight_id"].startswith("FL-1")
 
 
-def test_search_flights_empty_results_not_error():
+def test_search_flights_arbitrary_route_not_error_and_bookable():
     result = search_flights_tool(_IDENTITY, {
-        "origin": "Nowhere", "destination": "Elsewhere", "date": SEED_TRAVEL_DATE,
+        "origin": "Port Lumina", "destination": "Vega Hollow", "date": "2031-07-04",
     })
     assert "error" not in result
-    assert result["count"] == 0
-    assert result["results"] == []
+    assert 3 <= result["count"] <= 5
+    assert all(f["seats_available"] == f["seats_total"] for f in result["results"])
+
+
+def test_search_flights_generated_flights_deterministic():
+    args = {"origin": "Port Lumina", "destination": "Vega Hollow", "date": "2031-07-04"}
+    r1 = search_flights_tool(_IDENTITY, args)
+    r2 = search_flights_tool(_IDENTITY, args)
+    assert [f["flight_id"] for f in r1["results"]] == [f["flight_id"] for f in r2["results"]]
+
+
+def test_search_flights_generated_flight_full_tool_lifecycle():
+    search = search_flights_tool(_IDENTITY, {
+        "origin": "Port Lumina", "destination": "Vega Hollow", "date": "2031-07-04",
+    })
+    flight = search["results"][0]
+    booked = book_ticket_tool(_IDENTITY, {
+        "flight_id": flight["flight_id"],
+        "passengers": [_pax("Jane Doe"), _pax("Timmy", "child", bags=1)],
+    })
+    assert "error" not in booked
+    pnr = booked["booking"]["pnr"]
+    paid = generate_payment_link_tool(_IDENTITY, {"pnr": pnr})
+    assert paid["payment"]["amount"] == flight["fare"] * 2
+    assert check_ticket_status_tool(_IDENTITY, {"pnr": pnr})["booking"]["status"] == "paid"
+    checked_in = check_in_passenger_tool(_IDENTITY, {"pnr": pnr})
+    assert checked_in["booking"]["status"] == "checked-in"
+    seat = select_seat_tool(_IDENTITY, {"pnr": pnr, "passenger": "Jane Doe", "seat": "4F"})
+    assert seat["booking"]["passengers"][0]["seat"] == "4F"
+    cancelled = cancel_booking_tool(_IDENTITY, {"pnr": pnr})
+    assert cancelled["booking"]["status"] == "cancelled"
+    rebooked = book_ticket_tool(_IDENTITY, {
+        "flight_id": flight["flight_id"], "passengers": [_pax("Bob Ray")],
+    })
+    assert "error" not in rebooked
+
+
+def test_search_flights_same_origin_destination_is_error():
+    result = search_flights_tool(_IDENTITY, {
+        "origin": "Aurora City", "destination": "aurora city", "date": SEED_TRAVEL_DATE,
+    })
+    assert result["error"] is True
+    assert "different" in result["message"]
+
+
+def test_manifest_search_flights_describes_dynamic_generation():
+    entry = next(e for e in TOOL_MANIFEST if e["name"] == "searchFlights")
+    assert "dynamically generated" in entry["description"]
 
 
 def test_search_flights_missing_arguments():

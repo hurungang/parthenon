@@ -23,8 +23,8 @@ async def test_conversation_turn_includes_delegated_agent_tools_from_role_permis
     _db_result.fetchall.return_value = []
     db.execute.return_value = _db_result
 
-    executor._permission_manager.calculate_allowed_tools = AsyncMock(return_value=set())
-    executor._permission_manager.calculate_allowed_agent_types = AsyncMock(
+    executor._permission_manager.calculate_agent_allowed_tools = AsyncMock(return_value=set())
+    executor._permission_manager.calculate_agent_allowed_agent_types = AsyncMock(
         return_value={"supabase-agent"}
     )
     executor._load_tool_definitions = AsyncMock(return_value=([], {}))
@@ -52,10 +52,9 @@ async def test_conversation_turn_includes_delegated_agent_tools_from_role_permis
 
     allowed_tools = executor._load_tool_definitions.await_args.args[0]
     assert build_tool_name("agent", "supabase-agent") in allowed_tools
-    executor._permission_manager.calculate_allowed_agent_types.assert_awaited_once_with(
-        agent_type.role_id,
+    executor._permission_manager.calculate_agent_allowed_agent_types.assert_awaited_once_with(
+        agent_type.id,
         db,
-        override_sop_ids=None,
     )
 
 
@@ -74,8 +73,8 @@ async def test_conversation_turn_delegation_waits_for_receiver_response() -> Non
     _db_result.fetchall.return_value = []
     db.execute.return_value = _db_result
 
-    executor._permission_manager.calculate_allowed_tools = AsyncMock(return_value=set())
-    executor._permission_manager.calculate_allowed_agent_types = AsyncMock(
+    executor._permission_manager.calculate_agent_allowed_tools = AsyncMock(return_value=set())
+    executor._permission_manager.calculate_agent_allowed_agent_types = AsyncMock(
         return_value={"supabase-agent"}
     )
     executor._load_tool_definitions = AsyncMock(

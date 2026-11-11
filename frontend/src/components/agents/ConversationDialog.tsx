@@ -52,6 +52,7 @@ import { useConversationIntervention } from '../../hooks/useConversationInterven
 import {
   useChatSession,
   type ChatMessage,
+  type ChatStatus,
   type DelegationCycle,
   type ConversationalGuardrailUsage,
 } from '../../hooks/useChatSession'
@@ -396,8 +397,21 @@ function mergeUnseenMessages(
   return unseen.length > 0 ? [...rendered, ...unseen] : rendered
 }
 
-function parsePersistedGuardrailUsage(value: unknown): ConversationalGuardrailUsage | null {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+/** Persisted terminal activity kinds — local mirror of the hook's
+ * TERMINAL_CHAT_STATUS_KINDS (kept inline so test-only hook mocks that
+ * export just `useChatSession` keep working). */
+const TERMINAL_CHAT_STATUS_KINDS: readonly ChatStatus['kind'][] = [
+  'timeout_or_failed',
+  'finished',
+  'failed',
+  'timed_out',
+]
+
+function isTerminalChatStatus(status: ChatStatus | null): boolean {
+  return status != null && TERMINAL_CHAT_STATUS_KINDS.includes(status.kind)
+}
+
+function parsePersistedGuardrailUsage(value: unknown): ConversationalGuardrailUsage | null {  if (!value || typeof value !== 'object' || Array.isArray(value)) {
     return null
   }
 
@@ -692,6 +706,8 @@ export function ConversationDialog({
     clearMessages,
     recoveryEpoch,
     turnInFlight,
+    statusStale,
+    pendingIntervention,
   } =
     useChatSession(wsSessionId, convSessionId)
   const effectiveGuardrailUsage = liveGuardrailUsage ?? resumedGuardrailUsage
@@ -766,19 +782,9 @@ export function ConversationDialog({
 
   // FIX: invariant — from the moment the user sends a message until the
   // turn's final agent reply (or a terminal status), an activity indicator
-  // MUST always render. When the turn is in flight but the current
-  // chatStatus kind would render nothing (null, or a kind with no
-  // indicator), fall back to the thinking-equivalent bubble. Kinds that
-  // already render their own indicator (delegation line, waiting_for_human,
-  // terminal alert) keep precedence over the fallback.
-  const showThinking =
-    chatStatus?.kind === 'thinking' ||
-    chatStatus?.kind === 'delegation_resumed' ||
-    (turnInFlight &&
-      (!chatStatus ||
-        !['thinking', 'delegation_resumed', 'using_tool', 'waiting', 'delegating', 'waiting_for_human', 'timeout_or_failed'].includes(
-          chatStatus.kind,
-        )))
+  // MUST always render. `showThinking` is computed below (after the
+  // delegation status visibility flags are known) so it can fall back to the
+  // thinking bubble whenever NO other indicator will actually render.
 
   const formatTokenCountK = (value: number | null): string => {
     if (value == null) return t('agents.sessions.logViewer.summary.notAvailable')
@@ -954,6 +960,15 @@ export function ConversationDialog({
   const effectiveActiveDelegationCycleId =
     activeDelegationCycleId ??
     (effectiveDelegationCycles.length > 0 ? effectiveDelegationCycles[effectiveDelegationCycles.length - 1].id : null)
+  // Is the *active* cycle actually among the rendered (non-empty) cycles? A
+  // `using_tool` status creates an EMPTY delegation cycle that
+  // `filterEmptyDelegationCycles` drops, so the active-cycle id can point at a
+  // cycle that is not rendered. In that case the standalone status line must
+  // still render — otherwise the processing bubble goes blank whenever the
+  // session already has any (e.g. resumed) delegation history.
+  const activeCycleRendered =
+    effectiveActiveDelegationCycleId != null &&
+    effectiveDelegationCycles.some((cycle) => cycle.id === effectiveActiveDelegationCycleId)
   const timelineEntries: Array<
     | { kind: 'message'; id: string; timestamp: string; message: ChatMessage }
     | { kind: 'delegation_cycle'; id: string; timestamp: string; cycle: DelegationCycle }
@@ -982,22 +997,68 @@ export function ConversationDialog({
       data,
     })),
   ].sort((a, b) => toEpochMs(a.timestamp) - toEpochMs(b.timestamp))
+  // Transitional "requesting human intervention" phase: the agent has called
+  // the human-intervene management tool but the intervene_request bubble has
+  // not arrived yet — show a distinct status instead of a generic tool line.
+  const isHumanInterveneToolCall =
+    chatStatus?.kind === 'using_tool' &&
+    Boolean(chatStatus.toolName && /intervene|human/i.test(chatStatus.toolName))
   const standaloneDelegationStatusLine =
     chatStatus?.kind === 'waiting'
       ? t('conversations.sessions.statusWaiting')
       : chatStatus?.kind === 'using_tool' && chatStatus.toolName
-        ? t('conversations.sessions.statusUsingTool', { toolName: chatStatus.toolName })
+        ? isHumanInterveneToolCall
+          ? t('conversations.sessions.statusRequestingHuman')
+          : t('conversations.sessions.statusUsingTool', { toolName: chatStatus.toolName })
         : chatStatus?.kind === 'delegating' && chatStatus.agentType
           ? t('conversations.sessions.statusDelegatingToAgent', { agentType: chatStatus.agentType })
           : chatStatus?.kind === 'delegation_resumed'
             ? t('conversations.sessions.statusThinking')
             : null
   const shouldShowStandaloneDelegationStatus =
-    effectiveDelegationCycles.length === 0 &&
+    !activeCycleRendered &&
     Boolean(standaloneDelegationStatusLine) &&
     Boolean(chatStatus) &&
     chatStatus?.kind !== 'thinking' &&
     chatStatus?.kind !== 'timeout_or_failed'
+
+  // Persisted terminal states (finished / failed / timed_out, or the legacy
+  // timeout_or_failed wire status) end the turn — they clear the activity
+  // bubble / in-flight spinner and render a clear terminal message instead.
+  const terminalStatusKind =
+    chatStatus && isTerminalChatStatus(chatStatus) ? chatStatus.kind : null
+  const terminalStatusLabel =
+    (chatStatus?.message
+      ? chatStatus.message
+      : terminalStatusKind === 'timeout_or_failed'
+        ? t('conversations.sessions.statusTimeoutOrFailed')
+        : terminalStatusKind === 'finished'
+          ? t('conversations.sessions.statusFinished')
+          : terminalStatusKind === 'failed'
+            ? t('conversations.sessions.statusFailed')
+            : terminalStatusKind === 'timed_out'
+              ? t('conversations.sessions.statusTimedOut')
+              : null)
+
+  // FIX-20261109-BUG: invariant enforcement — while a turn is in flight the
+  // window must never be blank. Compute whether each non-thinking indicator
+  // would actually render: the standalone delegation status line (only when
+  // no delegation cycles exist) or the in-cycle live status line (requires a
+  // hydrated cycle whose id matches the active cycle and a non-null status
+  // line, e.g. `using_tool` without a toolName renders nothing). If neither
+  // renders, `showThinking` falls back to the thinking bubble.
+  const standaloneStatusVisible = shouldShowStandaloneDelegationStatus
+  const cycleLiveStatusVisible =
+    activeCycleRendered &&
+    Boolean(standaloneDelegationStatusLine) &&
+    chatStatus != null &&
+    !isTerminalChatStatus(chatStatus)
+  const showThinking =    (chatStatus?.kind === 'thinking' || chatStatus?.kind === 'delegation_resumed') ||
+    (turnInFlight &&
+      chatStatus?.kind !== 'waiting_for_human' &&
+      (chatStatus == null || !isTerminalChatStatus(chatStatus)) &&
+      !standaloneStatusVisible &&
+      !cycleLiveStatusVisible)
 
   // Resume session when dialog opens with a sessionId
   // For new chats, session is created only when user sends first message
@@ -1211,6 +1272,13 @@ export function ConversationDialog({
   // newly rendered entries (markdown tables, tall bubbles) has settled, so
   // the latest message is fully visible instead of half-cut.
   const timelineScrollRef = useRef<HTMLDivElement | null>(null)
+  // On first content load of a session (history hydration, reopen, session
+  // switch) always jump to the newest message regardless of scroll position —
+  // the "only when near bottom" rule applies to ongoing updates afterwards.
+  // NOTE: the effect depends on the values themselves (a new array identity
+  // each render) — a ref-based dependency would never re-run, since ref
+  // identity is stable across renders.
+  const lastForcedScrollKeyRef = useRef<string | null>(null)
   const autoScrollDeps = [
     messages,
     effectiveDelegationCycles,
@@ -1218,21 +1286,29 @@ export function ConversationDialog({
     liveResolvedInterventions,
     activeIntervention,
   ]
-  const autoScrollDepsRef = useRef(autoScrollDeps)
-  autoScrollDepsRef.current = autoScrollDeps
   useEffect(() => {
     const el = timelineScrollRef.current
     if (!el) return
+    const sessionKey = `${wsSessionId ?? ''}:${convSessionId ?? ''}`
+    const needsInitialScroll =
+      messages.length > 0 && lastForcedScrollKeyRef.current !== sessionKey
     const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight
     // Stick-to-bottom: always follow when within ~160px of the end.
-    if (distanceFromBottom > 160) return
+    if (!needsInitialScroll && distanceFromBottom > 160) return
+    if (needsInitialScroll) {
+      lastForcedScrollKeyRef.current = sessionKey
+    }
+    // Double rAF ensures layout from the newly rendered entries (markdown
+    // tables, tall bubbles) has settled, so the latest message is fully
+    // visible instead of half-cut.
     const raf = requestAnimationFrame(() => {
       requestAnimationFrame(() => {
         el.scrollTop = el.scrollHeight
       })
     })
     return () => cancelAnimationFrame(raf)
-  }, [autoScrollDepsRef])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, autoScrollDeps)
 
   const displayTitle = sessionTitle ?? agentTypeName
   const connectionLabel =
@@ -1398,7 +1474,9 @@ export function ConversationDialog({
                         chatStatus?.kind === 'waiting'
                           ? t('conversations.sessions.statusWaiting')
                           : chatStatus?.kind === 'using_tool' && chatStatus.toolName
-                            ? t('conversations.sessions.statusUsingTool', { toolName: chatStatus.toolName })
+                            ? /intervene|human/i.test(chatStatus.toolName)
+                              ? t('conversations.sessions.statusRequestingHuman')
+                              : t('conversations.sessions.statusUsingTool', { toolName: chatStatus.toolName })
                             : chatStatus?.kind === 'delegating' && chatStatus.agentType
                               ? t('conversations.sessions.statusDelegatingToAgent', { agentType: chatStatus.agentType })
                               : chatStatus?.kind === 'delegation_resumed'
@@ -1409,7 +1487,7 @@ export function ConversationDialog({
                           statusLine &&
                           chatStatus &&
                           chatStatus.kind !== 'thinking' &&
-                          chatStatus.kind !== 'timeout_or_failed',
+                          !isTerminalChatStatus(chatStatus),
                       )
                       return (
                         <Box
@@ -1466,13 +1544,13 @@ export function ConversationDialog({
                     })
                   )}
 
-                  {chatStatus && chatStatus.kind === 'timeout_or_failed' && (
+                  {terminalStatusKind && terminalStatusKind !== 'finished' && (
                     <Alert
                       severity="warning"
                       sx={{ mt: 1 }}
                       data-testid={testId('chat-status-terminal')}
                     >
-                      {t('conversations.sessions.statusTimeoutOrFailed')}
+                      {terminalStatusLabel}
                     </Alert>
                   )}
 
@@ -1492,6 +1570,9 @@ export function ConversationDialog({
                         </Paper>
                         <Typography color="text.secondary" display="block" sx={{ fontSize: '0.65rem', mt: 0.25, whiteSpace: 'nowrap' }}>
                           {formatDateTime(chatStatus?.timestamp)}
+                          {statusStale && turnInFlight
+                            ? ` · ${t('conversations.sessions.statusChecking')}`
+                            : ''}
                         </Typography>
                       </Box>
                     </Box>
@@ -1513,13 +1594,20 @@ export function ConversationDialog({
                         </Paper>
                         <Typography color="text.secondary" display="block" sx={{ fontSize: '0.65rem', mt: 0.25, whiteSpace: 'nowrap' }}>
                           {formatDateTime(chatStatus?.timestamp)}
+                          {statusStale && turnInFlight
+                            ? ` · ${t('conversations.sessions.statusChecking')}`
+                            : ''}
                         </Typography>
                       </Box>
                     </Box>
                   )}
 
-                  {/* Intervention Waiting Indicator */}
-                  {chatStatus?.kind === 'waiting_for_human' && !activeIntervention && (
+                  {/* Intervention Waiting Indicator — rendered CONTINUOUSLY
+                      while the persisted/live state is waiting_for_human
+                      (no blank gap between the agent pausing and the
+                      intervene_request dialog), and for a hydrated
+                      pending-intervention flag without a request object. */}
+                  {(chatStatus?.kind === 'waiting_for_human' || pendingIntervention) && !activeIntervention && (
                     <Box mb={2} data-testid={testId('intervention-pending-indicator')}>
                       <InterventionPendingIndicator />
                     </Box>

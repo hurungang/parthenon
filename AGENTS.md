@@ -2,7 +2,7 @@
 
 ## Mandatory Pre-Change Check
 
-Before making any code or documentation change, first review `docs/config.yaml` to understand the highlevel folder structure, and ensure the change complies with every `top_priority_rules` entry; if any conflict exists, stop and escalate for clarification.
+Before making any code or documentation change, first review `easyspec-config.yaml` (project root — migrated from the former `docs/config.yaml`) to understand the highlevel folder structure, and ensure the change complies with every `top_priority_rules` entry; if any conflict exists, stop and escalate for clarification.
 
 **If the change involves database schema changes (or you're unsure), verify `.change.yaml` for `has_db_changes: true` and apply pending migrations with `alembic upgrade head` before testing.**
 

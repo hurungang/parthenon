@@ -756,15 +756,24 @@ SystemToolRegistry.register(SystemTool(
 SystemToolRegistry.register(SystemTool(
     name="execute_script",
     description=(
-        "Run a script version's python_source through the real sandbox with "
-        "the given input. Returns the output, or an error on a sandbox "
-        "compile/violation/resource-cap failure. This is the verification "
-        "primitive — a script that runs here runs at serving time."
+        "Iteration saver: combine MULTIPLE associated tool calls plus "
+        "intermediate computation into ONE sandboxed script, so a chain that "
+        "would cost several LLM iterations costs one. Use it only when the "
+        "workflow is script-feasible (deterministic data flow between calls) "
+        "and the request warrants it. Inside the sandbox, `tools` is available "
+        "to call YOUR associated MCP tools by their names — the facade exposes "
+        "exactly the tools associated with you. Define run(context, tools), "
+        "which must return a dict. Do NOT use it for a single tool call or a "
+        "purely conversational answer — call those tools directly / reply "
+        "directly. Secondary use: verification primitive — run a script "
+        "version's python_source through the real sandbox (pass inline "
+        "python_source or script_version_id); a script that runs here runs at "
+        "serving time."
     ),
     parameters={
         "type": "object",
         "properties": {
-            "python_source": {"type": "string", "description": "FULL inline python_source of the script to execute (preferred for verification — pass the complete script you authored; do not save first)"},
+            "python_source": {"type": "string", "description": "Sandboxed Python defining run(context, tools) — call your associated MCP tools via `tools.<name>(...)`, do intermediate computation, and return a dict (often one derived field from the last call's result)"},
             "script_version_id": {"type": "string", "description": "A saved script version id to run (alternative to python_source)"},
             "input": {"type": "object", "description": "Input context dict for run(context, tools)"},
         },

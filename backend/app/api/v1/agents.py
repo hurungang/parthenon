@@ -1664,6 +1664,11 @@ async def update_agent_type(
 
     await db.refresh(agent_type, attribute_names=["sop_bindings", "skill_bindings"])
 
+    # Invalidate the agent-type visibility permission cache when the agent
+    # type's role changed (bindings changes invalidate inside set_bindings).
+    if "role_id" in update_data:
+        _permission_manager.invalidate_agent_type(agent_type.id)
+
     # Recursion/dead-loop validation (may block in strict_block mode)
     claims = get_current_claims(request)
     user_id_str: str | None = claims.get("platform_user_id")

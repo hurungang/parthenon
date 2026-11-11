@@ -437,6 +437,7 @@ async def startup_event() -> None:
     await _seed_command_prompts()
     await _initialize_certificate_authority()
     await _start_scheduling_engine()
+    _start_activity_reaper()
 
 
 @app.on_event("shutdown")
@@ -444,7 +445,32 @@ async def shutdown_event() -> None:
     from app.core.cc_service_cert_renewal import stop_daily_renewal_task
 
     await stop_daily_renewal_task()
+    _stop_activity_reaper()
     await _stop_scheduling_engine()
+
+
+def _start_activity_reaper() -> None:
+    """Start the conversation activity reaper background task (Phase 2.5).
+
+    Resolves stale / orphaned / non-resumable ``ConversationActivity`` rows to
+    a terminal state so a stuck status never persists forever.  Failures are
+    logged — the reaper must never block application startup.
+    """
+    try:
+        from app.services.conversations.activity_reaper import get_activity_reaper
+
+        get_activity_reaper().start()
+    except Exception:
+        logger.exception("Failed to start conversation activity reaper; continuing.")
+
+
+def _stop_activity_reaper() -> None:
+    try:
+        from app.services.conversations.activity_reaper import get_activity_reaper
+
+        get_activity_reaper().shutdown()
+    except Exception:
+        logger.exception("Failed to stop conversation activity reaper.")
 
 
 async def _cleanup_super_admin_db_records() -> None:

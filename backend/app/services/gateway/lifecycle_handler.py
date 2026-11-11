@@ -171,8 +171,10 @@ class GatewayLifecycleHandler:
             # No role — only the save_data pseudo-tool is exposed
             return [{"name": "save_data"}]
 
-        allowed_tools = await self._permission_manager.calculate_allowed_tools(
-            agent_type.role_id, db
+        # Agent-type-scoped resolution: visibility from the agent type's own
+        # bindings, permission gated by the role grants.
+        allowed_tools = await self._permission_manager.calculate_agent_allowed_tools(
+            agent_type.id, db
         )
 
         # Expose tool names only — no descriptions or schemas

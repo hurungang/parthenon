@@ -18,6 +18,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import uuid
+from datetime import datetime, timezone
 from typing import Any
 
 import httpx
@@ -28,6 +29,52 @@ from pydantic import BaseModel
 
 from app.core.config import get_settings
 from app.core.ssl_context import get_ssl_context
+
+# FIX-20261110 (orphaned-turn surfacing): when Agent Runtime reports a resume
+# as ``not_awaiting``, the suspended turn no longer exists server-side — most
+# commonly because a service restart destroyed the in-memory suspended state.
+# Without an explicit terminal event the conversation UI would keep showing
+# "thinking" forever. Notify the live WebSocket client (if connected) with the
+# same terminal status the turn watchdog uses so the indicator resolves and
+# the operator can simply send a new message.
+_ORPHANED_RESUME_STATUSES = {"not_awaiting"}
+
+
+async def _notify_orphaned_resume(session_id: uuid.UUID, status: str) -> None:
+    if status not in _ORPHANED_RESUME_STATUSES:
+        return
+    try:
+        # Imported late to avoid a circular import at module load time.
+        from app.api.ws.chat import ActiveSessionTracker, _send_to_live_socket
+
+        if not ActiveSessionTracker.is_connected(str(session_id)):
+            logger.info(
+                "Orphaned resume: no live WebSocket client for session %s — "
+                "terminal status not delivered (client will recover on reload)",
+                session_id,
+            )
+            return
+        await _send_to_live_socket(str(session_id), None, {
+            "type": "chat_status",
+            "status": "timeout_or_failed",
+            "reason": "orphaned_resume",
+            "message": (
+                "The agent turn was interrupted by a service restart and cannot "
+                "be resumed. Please send your message again."
+            ),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        })
+        logger.info(
+            "Orphaned resume: delivered terminal timeout_or_failed status to "
+            "session %s (status=%s)",
+            session_id,
+            status,
+        )
+    except Exception:
+        logger.exception(
+            "Orphaned resume: failed to deliver terminal status for session %s",
+            session_id,
+        )
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
@@ -138,9 +185,12 @@ async def forward_resume_session(
                     max_retries,
                 )
 
+                resumed_status = str(result.get("status", "resumed"))
+                await _notify_orphaned_resume(session_id, resumed_status)
+
                 return AgentResumeResponse(
                     session_id=uuid.UUID(result["session_id"]),
-                    status=str(result.get("status", "resumed")),
+                    status=resumed_status,
                 )
 
         except httpx.HTTPStatusError as exc:

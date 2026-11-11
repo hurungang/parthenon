@@ -44,6 +44,11 @@ class AgentPermissionManager:
     # Internal LRU cache mapping role_id (str) → frozenset[str]
     _cache: dict[str, frozenset[str]] = {}
     _agent_type_cache: dict[str, frozenset[str]] = {}
+    # Agent-type-scoped visibility caches: agent_type_id (str) → frozenset.
+    # Visibility depends on the agent type's OWN bindings intersected with the
+    # role grants, so it is invalidated when either side changes.
+    _agent_visibility_cache: dict[str, frozenset[str]] = {}
+    _agent_visibility_agent_types_cache: dict[str, frozenset[str]] = {}
 
     # ── Public API ─────────────────────────────────────────────────────────────
 
@@ -172,7 +177,11 @@ class AgentPermissionManager:
             raise PermissionDeniedError(requested, role_id)
 
     def invalidate(self, role_id: uuid.UUID) -> None:
-        """Evict the cached permission set for a role."""
+        """Evict the cached permission set for a role.
+
+        Role grants gate every agent-type visibility set (permission filter),
+        so a role change also evicts ALL agent-type visibility caches.
+        """
         key = str(role_id)
         if key in self._cache:
             del self._cache[key]
@@ -180,6 +189,150 @@ class AgentPermissionManager:
         if key in self._agent_type_cache:
             del self._agent_type_cache[key]
             logger.debug("Agent-type permission cache invalidated for role %s", role_id)
+        if self._agent_visibility_cache or self._agent_visibility_agent_types_cache:
+            self._agent_visibility_cache.clear()
+            self._agent_visibility_agent_types_cache.clear()
+            logger.debug("Agent-type visibility caches invalidated (role %s changed)", role_id)
+
+    def invalidate_agent_type(self, agent_type_id: uuid.UUID) -> None:
+        """Evict the cached visibility sets for one agent type.
+
+        Called when the agent type's SOP/skill bindings change.
+        """
+        key = str(agent_type_id)
+        self._agent_visibility_cache.pop(key, None)
+        self._agent_visibility_agent_types_cache.pop(key, None)
+        logger.debug("Agent-type visibility cache invalidated for agent type %s", agent_type_id)
+
+    # ── Agent-type-scoped resolution (visibility ∩ role permission) ───────────
+
+    async def calculate_agent_allowed_tools(
+        self, agent_type_id: uuid.UUID, db: AsyncSession
+    ) -> set[str]:
+        """Resolve the tools VISIBLE to an agent type execution.
+
+        Model (product-owner corrected):
+        - Role controls PERMISSION only.
+        - Agent type controls VISIBILITY: the agent sees only what is directly
+          associated to it — its skill bindings plus the ``skill_invocation``
+          steps of its bound SOPs.
+        - Final set = visibility set ∩ role-allowed tools.
+
+        Cached per agent_type_id; invalidated on binding change
+        (``invalidate_agent_type``) and on role change (``invalidate``).
+        """
+        cache_key = str(agent_type_id)
+        if cache_key in self._agent_visibility_cache:
+            return set(self._agent_visibility_cache[cache_key])
+
+        from app.db.models.agents import AgentTypeSkillBinding, AgentTypeSopBinding
+
+        agent_type = await db.get(AgentType, agent_type_id)
+        if agent_type is None or agent_type.role_id is None:
+            return set()
+
+        # 1. Visibility skill IDs from the agent type's own associations.
+        visibility_skill_ids: set[uuid.UUID] = set()
+        skill_rows = await db.execute(
+            select(AgentTypeSkillBinding.skill_id).where(
+                AgentTypeSkillBinding.agent_type_id == agent_type_id
+            )
+        )
+        for (skill_id,) in skill_rows.fetchall():
+            visibility_skill_ids.add(skill_id)
+
+        sop_rows = await db.execute(
+            select(AgentTypeSopBinding.sop_id).where(
+                AgentTypeSopBinding.agent_type_id == agent_type_id
+            )
+        )
+        bound_sop_ids = [row[0] for row in sop_rows.fetchall()]
+        if bound_sop_ids:
+            step_rows = await db.execute(
+                select(SopStep.skill_id).where(
+                    SopStep.sop_id.in_(bound_sop_ids),
+                    SopStep.step_type == SopStepType.skill_invocation,
+                    SopStep.skill_id.isnot(None),
+                )
+            )
+            for (skill_id,) in step_rows.fetchall():
+                visibility_skill_ids.add(skill_id)
+
+        # 2. Resolve the visibility tools and intersect with role permission.
+        visibility_tools = await self._resolve_tools_from_skills(
+            visibility_skill_ids, db
+        )
+        role_tools = await self.calculate_allowed_tools(agent_type.role_id, db)
+        allowed = visibility_tools & role_tools
+
+        self._agent_visibility_cache[cache_key] = frozenset(allowed)
+        logger.info(
+            "Resolved %d visible tools for agent type %s (visibility=%d, role=%d)",
+            len(allowed),
+            agent_type_id,
+            len(visibility_tools),
+            len(role_tools),
+        )
+        return set(allowed)
+
+    async def calculate_agent_allowed_agent_types(
+        self, agent_type_id: uuid.UUID, db: AsyncSession
+    ) -> set[str]:
+        """Resolve the agent type NAMES an agent type may delegate to.
+
+        The delegation set comes from the ``agent_delegation`` steps of the
+        agent type's OWN bound SOPs, filtered by role permission: when the
+        role expresses delegation targets via its own SOPs, the result is the
+        intersection; when the role expresses no delegation targets, the SOP
+        targets are used as-is (fallback — roles do not carry explicit
+        agent-type permission grants beyond SOP steps).
+        """
+        cache_key = str(agent_type_id)
+        if cache_key in self._agent_visibility_agent_types_cache:
+            return set(self._agent_visibility_agent_types_cache[cache_key])
+
+        from app.db.models.agents import AgentType, AgentTypeSopBinding
+
+        agent_type = await db.get(AgentType, agent_type_id)
+        if agent_type is None or agent_type.role_id is None:
+            return set()
+
+        sop_rows = await db.execute(
+            select(AgentTypeSopBinding.sop_id).where(
+                AgentTypeSopBinding.agent_type_id == agent_type_id
+            )
+        )
+        bound_sop_ids = [row[0] for row in sop_rows.fetchall()]
+        if not bound_sop_ids:
+            self._agent_visibility_agent_types_cache[cache_key] = frozenset()
+            return set()
+
+        delegated_rows = await db.execute(
+            select(SopStep.target_agent_type_id)
+            .where(
+                SopStep.sop_id.in_(bound_sop_ids),
+                SopStep.step_type == SopStepType.agent_delegation,
+                SopStep.target_agent_type_id.isnot(None),
+            )
+        )
+        sop_target_ids = {row[0] for row in delegated_rows.fetchall() if row[0] is not None}
+        if not sop_target_ids:
+            self._agent_visibility_agent_types_cache[cache_key] = frozenset()
+            return set()
+
+        rows = await db.execute(
+            select(AgentType.name).where(AgentType.id.in_(list(sop_target_ids)))
+        )
+        sop_targets = {row[0] for row in rows.fetchall() if row[0]}
+
+        role_allowed = await self.calculate_allowed_agent_types(agent_type.role_id, db)
+        if not role_allowed:
+            allowed = sop_targets
+        else:
+            allowed = sop_targets & role_allowed
+
+        self._agent_visibility_agent_types_cache[cache_key] = frozenset(allowed)
+        return set(allowed)
 
     # ── Internal resolution ────────────────────────────────────────────────────
 

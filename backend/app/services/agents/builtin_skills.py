@@ -87,6 +87,21 @@ INHERENT_SKILL_NAMES: tuple[str, ...] = tuple(
     definition.name for definition in INHERENT_SKILL_DEFINITIONS
 )
 
+#: Skill name of the gated inherent skill.
+WORKFLOW_OPTIMIZATION_SKILL_NAME = "workflow-optimization"
+SELF_CONTEXT_SKILL_NAME = "self-context"
+
+#: Bare tool names of the workflow-optimization AUTHORING tools — these load
+#: ONLY on user-confirmed optimization runs (opt-in dialog → optimize-and-verify
+#: command).  ``execute_script`` is intentionally NOT here: it is the inherent
+#: iteration-saver and stays available on every run by design.
+WORKFLOW_OPTIMIZATION_AUTHORING_TOOLS: frozenset[str] = frozenset({
+    "generate_optimized_plan",
+    "generate_script",
+    "list_scripts",
+    "get_script",
+})
+
 
 def get_inherent_skill_definitions() -> tuple[InherentSkillDefinition, ...]:
     """Return the built-in inherent skill definitions (registry-derived)."""
@@ -109,6 +124,36 @@ def get_inherent_tool_names() -> frozenset[str]:
             f"{sorted(unknown)}"
         )
     return frozenset(names)
+
+
+def get_inherent_tool_names_for(optimization_enabled: bool) -> frozenset[str]:
+    """Inherent bare tool names for a run, gated on user-confirmed optimization.
+
+    When ``optimization_enabled`` is ``False`` (the default for every run that
+    did not go through the opt-in optimize dialog — including conversational
+    sessions), the workflow-optimization AUTHORING tools are excluded while
+    ``execute_script`` and all self-context tools remain (iteration-saver by
+    design).
+    """
+    if optimization_enabled:
+        return get_inherent_tool_names()
+    return get_inherent_tool_names() - WORKFLOW_OPTIMIZATION_AUTHORING_TOOLS
+
+
+def get_inherent_skill_summaries_for(
+    optimization_enabled: bool,
+) -> list[tuple[uuid.UUID, str]]:
+    """Inherent ``(skill_id, skill_name)`` summaries, gated on optimization.
+
+    Mirrors :func:`get_inherent_skill_summaries` but omits the
+    ``workflow-optimization`` skill when the run is not a user-confirmed
+    optimization run.
+    """
+    return [
+        (skill_id, name)
+        for skill_id, name in get_inherent_skill_summaries()
+        if optimization_enabled or name != WORKFLOW_OPTIMIZATION_SKILL_NAME
+    ]
 
 
 def get_inherent_skill_summaries() -> list[tuple[uuid.UUID, str]]:
@@ -135,6 +180,23 @@ def get_inherent_canonical_tool_names() -> frozenset[str]:
     """
     canonical: set[str] = set()
     for bare in get_inherent_tool_names():
+        tool = SystemToolRegistry.get(bare)
+        assert tool is not None and tool.server_slug == "system", bare
+        canonical.add(f"system____{bare}")
+    return frozenset(canonical)
+
+
+def get_inherent_canonical_tool_names_for(
+    optimization_enabled: bool,
+) -> frozenset[str]:
+    """Canonical ``system____<bare>`` names, gated on optimization runs.
+
+    Gated (``optimization_enabled=False``) set excludes the workflow-
+    optimization AUTHORING tools but keeps ``execute_script`` and the
+    self-context tools (see :func:`get_inherent_tool_names_for`).
+    """
+    canonical: set[str] = set()
+    for bare in get_inherent_tool_names_for(optimization_enabled):
         tool = SystemToolRegistry.get(bare)
         assert tool is not None and tool.server_slug == "system", bare
         canonical.add(f"system____{bare}")

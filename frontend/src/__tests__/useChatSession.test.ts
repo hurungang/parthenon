@@ -69,6 +69,76 @@ describe('useChatSession', () => {
     expect(result.current.messages).toHaveLength(0)
   })
 
+  // FIX-20261110 (new-session routing): a stale (superseded) socket's close
+  // must never schedule a reconnect to the OLD session. Previously the old
+  // socket's `onclose` fired after the new session's `connect()` had reset
+  // `intentionalCloseRef`, so the stale handler re-opened a socket to the old
+  // session and overwrote `wsRef.current` — subsequent messages were then
+  // persisted to the previous conversation session instead of the new one.
+  it('does not reconnect a superseded socket when its close fires after a session switch', async () => {
+    const { useChatSession } = await import('../hooks/useChatSession')
+    const { result, rerender } = renderHook(
+      ({ sessionId }) => useChatSession(sessionId),
+      { initialProps: { sessionId: 'session-old' } },
+    )
+
+    const oldSocket = sockets[0]
+    expect(oldSocket).toBeDefined()
+    act(() => {
+      oldSocket.onopen?.call(oldSocket as unknown as WebSocket, new Event('open'))
+    })
+    expect(result.current.connected).toBe(true)
+
+    // Session switch ("New Session"): effect cleanup closes the old socket and
+    // connects to the new one.
+    rerender({ sessionId: 'session-new' })
+
+    const newSocket = sockets[sockets.length - 1]
+    expect(newSocket).not.toBe(oldSocket)
+    act(() => {
+      newSocket.onopen?.call(newSocket as unknown as WebSocket, new Event('open'))
+    })
+    expect(result.current.connected).toBe(true)
+
+    const socketCountAfterSwitch = sockets.length
+
+    // The old socket's onclose now fires asynchronously (after the new
+    // connect() reset the intentional-close flag).
+    act(() => {
+      oldSocket.onclose?.call(
+        oldSocket as unknown as WebSocket,
+        new CloseEvent('close'),
+      )
+    })
+
+    // No reconnect socket for the old session may be created.
+    expect(sockets.length).toBe(socketCountAfterSwitch)
+    // The current socket stays the new session's socket.
+    expect(result.current.connected).toBe(true)
+
+    // Messages sent after the switch must go to the NEW session's socket.
+    act(() => {
+      result.current.sendMessage('hello new session')
+    })
+    expect(newSocket.send).toHaveBeenCalled()
+    expect(oldSocket.send).not.toHaveBeenCalled()
+
+    // A stale socket's messages must not leak into the new session's timeline.
+    act(() => {
+      oldSocket.onmessage?.call(
+        oldSocket as unknown as WebSocket,
+        new MessageEvent('message', {
+          data: JSON.stringify({
+            sender_role: 'agent',
+            content: 'late reply from the OLD session',
+          }),
+        }),
+      )
+    })
+    expect(result.current.messages).toHaveLength(1)
+    expect(result.current.messages[0].content).toBe('hello new session')
+  })
+
   it('applies delegating and waiting status from websocket events', async () => {
     const { useChatSession } = await import('../hooks/useChatSession')
     const { result } = renderHook(() => useChatSession('test-session-123'))

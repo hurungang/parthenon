@@ -413,14 +413,16 @@ _KNOWLEDGE_ENTRIES: tuple[dict[str, Any], ...] = (
             "GRANT-AT-THE-RIGHT-LEVEL PRINCIPLE (generic): access is granted "
             "through the platform's permission model, and it must be granted "
             "at the level the configuration actually consumes it. Reference "
-            "facts: agent ROLES are permission sets that grant skills/SOPs and "
-            "resolve to the complete allowed tool set; identities are assigned "
-            "to roles; a ROLE-BASED agent type gets runtime access from its "
-            "ROLE's grants, while a ROLE-LESS agent type gets access from its "
-            "DIRECT skill/SOP bindings. So when a configuration consumes a "
-            "capability through a role, the grant must live on that role — a "
-            "capability merely bound on the agent type but not granted where "
-            "the configuration consumes it is INACCESSIBLE at runtime. "
+            "facts: agent ROLES are permission sets that grant skills/SOPs "
+            "(PERMISSION scope); agent TYPES define VISIBILITY — the agent "
+            "only sees what is directly associated to it (its SOP/skill "
+            "bindings), as a subset of the role's grants; identities are "
+            "assigned to roles; both a role grant AND an agent-type "
+            "association are needed for a tool to be visible at runtime. "
+            "So when an agent cannot see an expected capability, grant it "
+            "on the role (permission) AND associate it to the agent type "
+            "(visibility) — a capability granted only on the role is "
+            "INVISIBLE to agent types without the association. "
             "MECHANICS: create_agent_role / update_agent_role accept skill_ids "
             "/ sop_ids (ids or names, tenant-scoped); grants are additive and "
             "idempotent, existing grants are never removed, an unknown "
@@ -428,6 +430,38 @@ _KNOWLEDGE_ENTRIES: tuple[dict[str, Any], ...] = (
             "check the level the configuration uses (role vs direct binding) "
             "and whether the grant exists there — do not add a second grant at "
             "a random level."
+        ),
+    },
+    {
+        "id": "sop-only-router-roles",
+        "topic": (
+            "Role = permission, agent type = visibility — why an agent can't "
+            "see an expected tool"
+        ),
+        "keywords": [
+            "router", "router role", "delegation", "agent_delegation",
+            "sop-only", "sop only", "visibility", "permission",
+            "cannot see", "no tools", "missing tool", "tool not visible",
+            "agent bindings", "skill bindings", "sop bindings",
+            "delegation-style role", "role grants", "subset",
+            "sop-only-router",
+        ],
+        "rule_text": (
+            "ROLE-PERMISSION vs AGENT-VISIBILITY MODEL (correct semantics): a "
+            "role controls PERMISSION only — what tools the role's grants "
+            "(skills/SOPs) allow. An AGENT TYPE controls VISIBILITY: the "
+            "agent sees only what is DIRECTLY ASSOCIATED to the agent type — "
+            "its assigned SOPs (their skill_invocation steps' skills' tools, "
+            "and agent_delegation steps' target agents for delegation) plus "
+            "its direct skill bindings. The agent uses a SUBSET of what the "
+            "role granted; role grants alone do NOT make a tool visible. So "
+            "if an agent can't see an expected tool, associate the SOP/skill "
+            "to the AGENT TYPE (agent-type bindings), not just the role. "
+            "Conversely, extra role grants that are not agent-type-associated "
+            "are correctly invisible — this is by design, not a warning "
+            "condition; do not try to 'fix' a router agent that only sees "
+            "its SOP's delegated agents. Search the knowledge for "
+            "'sop-only-router'."
         ),
     },
     {
@@ -552,6 +586,12 @@ _KNOWLEDGE_ENTRIES: tuple[dict[str, Any], ...] = (
             "that role's agents. The constituent skills must exist before the "
             "SOP can reference them (prerequisite-ordering); the composition "
             "order itself is whatever the procedure requires.\n"
+            "HARD RULE: a SOP must NEVER mention or instruct direct "
+            "MCP-tool calls — no 'server____tool' names in steps or "
+            "instructions. Capability is expressed ONLY via agent_delegation "
+            "and skill_invocation steps; if a capability lives in a raw "
+            "tool, bind the tool into a SKILL and use a skill_invocation "
+            "step.\n"
             "STEP AUTHORING (create_sop / update_sop 'steps'): a SOP is an "
             "ORDERED list of steps. A skill_invocation step references a "
             "skill by id or exact name (skill_id — REQUIRED for that step "
@@ -585,6 +625,31 @@ _KNOWLEDGE_ENTRIES: tuple[dict[str, Any], ...] = (
             "rows (e.g. 'Steps | 1. skill_invocation: check-credit-score, "
             "2. agent_delegation: FraudCheckAgent'); on updates show the full "
             "old → new step list, and warn that omitted steps are deleted."
+        ),
+    },
+    {
+        "id": "sop-no-raw-tool-mentions",
+        "topic": "HARD RULE — SOPs must never mention or instruct direct MCP-tool calls",
+        "keywords": [
+            "sop tool mention", "mcp tool in sop", "sop step rule",
+            "sop raw tool", "tool name in step", "direct tool call in sop",
+            "sop instructions tool", "server____tool in sop", "skill_invocation",
+            "agent_delegation", "sop capability", "bind tool to skill",
+            "tool visibility", "sop authoring rule",
+            "mention", "raw", "instruct", "tool name", "mcp", "tool",
+        ],
+        "rule_text": (
+            "HARD RULE — SOPs NEVER mention raw MCP tools: a SOP's step "
+            "instructions must not name or instruct direct MCP-tool calls — "
+            "no 'server____tool' names (e.g. 'mcp-demo____searchFlights') in "
+            "any step description, instruction, or free text, and never tell "
+            "an agent to 'call tool X yourself'. Tool visibility flows ONLY "
+            "through SOP associations: a SOP expresses capability exclusively "
+            "as agent_delegation steps (target agent type, id-or-name) and "
+            "skill_invocation steps (skill, id-or-name). If a needed "
+            "capability lives in a raw MCP tool, bind the tool into a SKILL "
+            "(create_skill / update_skill tool bindings) and reference that "
+            "skill with a skill_invocation step — never the tool directly."
         ),
     },
     {
