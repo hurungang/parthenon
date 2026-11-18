@@ -37,6 +37,7 @@ export function TenantSettingsPage() {
   const [name, setName] = useState('')
   const [contactName, setContactName] = useState('')
   const [contactEmail, setContactEmail] = useState('')
+  const [resumeTtlMinutes, setResumeTtlMinutes] = useState('15')
   const [saved, setSaved] = useState(false)
   const [initialized, setInitialized] = useState(false)
 
@@ -53,6 +54,14 @@ export function TenantSettingsPage() {
       setName(settings.name)
       setContactName(settings.admin_contact_name ?? '')
       setContactEmail(settings.admin_contact_email ?? '')
+      setResumeTtlMinutes(
+        String(
+          Math.max(
+            1,
+            Math.round((settings.conversation_turn_resume_ttl_seconds ?? 900) / 60),
+          ),
+        ),
+      )
       setInitialized(true)
     }
   }, [settings, initialized])
@@ -63,6 +72,14 @@ export function TenantSettingsPage() {
         name: name.trim(),
         admin_contact_name: contactName.trim() || null,
         admin_contact_email: contactEmail.trim() || null,
+        conversation_turn_resume_ttl_seconds: Math.max(
+          30,
+          Math.round(
+            (Number.isFinite(Number(resumeTtlMinutes)) && Number(resumeTtlMinutes) >= 1
+              ? Number(resumeTtlMinutes)
+              : 15) * 60,
+          ),
+        ),
       }),
     onSuccess: () => {
       setSaved(true)
@@ -155,10 +172,21 @@ export function TenantSettingsPage() {
             margin="normal"
             type="email"
           />
+          <TextField
+            label={t('tenant.settings.resumeWindow')}
+            value={resumeTtlMinutes}
+            onChange={(e) => setResumeTtlMinutes(e.target.value)}
+            fullWidth
+            margin="normal"
+            type="number"
+            inputProps={{ min: 1, step: 1 }}
+            helperText={t('tenant.settings.resumeWindowHint')}
+            data-testid="tenant-settings-resume-ttl"
+          />
           <Box mt={2}>
             <Button
               variant="contained"
-              disabled={saveMutation.isPending || !name.trim()}
+              disabled={saveMutation.isPending || !name.trim() || !(Number(resumeTtlMinutes) >= 1)}
               onClick={() => {
                 clearDialogError()
                 setSaved(false)

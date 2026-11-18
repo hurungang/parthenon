@@ -14,6 +14,7 @@ from __future__ import annotations
 import logging
 import uuid
 from datetime import datetime, timedelta, timezone
+from typing import Any
 
 import httpx
 from sqlalchemy import select
@@ -22,12 +23,38 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import get_settings
 from app.core.credential_vault import get_vault
 from app.core.ssl_context import get_ssl_context
-from app.db.models.agents import AgentIdentity, AgentIdentityStatus
+from app.db.models.agent_security import TokenRefreshOutcome
+from app.db.models.agents import AgentIdentity, AgentIdentityStatus, AgentTokenStatus
 
 logger = logging.getLogger(__name__)
 
 # How far in advance to refresh tokens (5 minutes)
 REFRESH_WINDOW_SECONDS = 300
+
+
+def _now_utc() -> datetime:
+    return datetime.now(timezone.utc)
+
+
+def _parse_refresh_token_expires_at(token_data: dict[str, Any]) -> datetime | None:
+    """Derive the refresh token's own expiry from a provider token response.
+
+    Returns ``None`` when the provider reports no (or a zero) ``refresh_expires_in``
+    — "no known refresh expiry" — so an existing known expiry is never lost.
+    """
+    refresh_expires_in = token_data.get("refresh_expires_in")
+    if not refresh_expires_in:
+        return None
+    try:
+        seconds = int(refresh_expires_in)
+    except (TypeError, ValueError):
+        logger.warning(
+            "Invalid refresh_expires_in in refresh response: %s", refresh_expires_in
+        )
+        return None
+    if seconds <= 0:
+        return None
+    return _now_utc() + timedelta(seconds=seconds)
 
 
 def _legacy_token_config() -> tuple[str, str, str | None]:
@@ -187,6 +214,13 @@ class TokenRefreshService:
             )
             # Mark the identity as needing re-authorization
             identity.status = AgentIdentityStatus.suspended
+            identity.token_status = AgentTokenStatus.refresh_failed
+            # Persist the unrecoverable health state (lazy import avoids a cycle).
+            from app.services.token_health import persist_identity_health_state
+
+            persist_identity_health_state(
+                identity, refresh_outcome=TokenRefreshOutcome.failure
+            )
             await db.flush()
             raise TokenRefreshError(
                 f"Token refresh failed (HTTP {response.status_code}): {response.text[:200]}"
@@ -196,12 +230,23 @@ class TokenRefreshService:
         new_access_token: str = token_data["access_token"]
         new_refresh_token: str | None = token_data.get("refresh_token")
         expires_in: int = int(token_data.get("expires_in", 300))
+        refresh_token_expires_at = _parse_refresh_token_expires_at(token_data)
 
         identity.access_token = vault.encrypt(new_access_token)
         if new_refresh_token:
             identity.refresh_token = vault.encrypt(new_refresh_token)
         identity.token_expires_at = datetime.fromtimestamp(
             datetime.now(timezone.utc).timestamp() + expires_in, tz=timezone.utc
+        )
+        if refresh_token_expires_at is not None:
+            identity.refresh_token_expires_at = refresh_token_expires_at
+        identity.token_status = AgentTokenStatus.active
+        identity.last_token_refresh_at = _now_utc()
+        # Persist the health classification after the successful refresh.
+        from app.services.token_health import persist_identity_health_state
+
+        persist_identity_health_state(
+            identity, refresh_outcome=TokenRefreshOutcome.success
         )
 
         await db.flush()

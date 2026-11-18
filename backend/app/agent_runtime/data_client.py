@@ -30,8 +30,36 @@ def _allow_insecure_internal_fallback() -> bool:
     return environment == "development" and opt_in in {"1", "true", "yes", "on"}
 
 
+def _safe_json_detail(response: httpx.Response) -> Any:
+    """Parse the upstream ``detail`` body without ever raising."""
+    try:
+        body = response.json()
+    except Exception:  # noqa: BLE001 - non-JSON error body → no structured detail
+        return None
+    if isinstance(body, dict):
+        return body.get("detail")
+    return None
+
+
 class ControlCenterDataError(Exception):
-    """Raised when a Control Center data API call fails."""
+    """Raised when a Control Center data API call fails.
+
+    ``status_code`` / ``detail`` carry the upstream HTTP status and the parsed
+    JSON ``detail`` body when Control Center rejected the call with a
+    structured 4xx (e.g. ``412 optimizer_model_unavailable``). Callers use them
+    to fail closed with the same structured reason instead of a generic error.
+    """
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        status_code: int | None = None,
+        detail: Any = None,
+    ) -> None:
+        super().__init__(message)
+        self.status_code = status_code
+        self.detail = detail
 
 
 class ControlCenterDataClient:
@@ -129,7 +157,9 @@ class ControlCenterDataClient:
                 
                 raise ControlCenterDataError(
                     f"CC data API GET {url} returned {exc.response.status_code}: "
-                    f"{exc.response.text[:200]}"
+                    f"{exc.response.text[:200]}",
+                    status_code=exc.response.status_code,
+                    detail=_safe_json_detail(exc.response),
                 ) from exc
             except Exception as exc:
                 raise ControlCenterDataError(
@@ -167,7 +197,9 @@ class ControlCenterDataClient:
                 
                 raise ControlCenterDataError(
                     f"CC data API POST {url} returned {exc.response.status_code}: "
-                    f"{exc.response.text[:200]}"
+                    f"{exc.response.text[:200]}",
+                    status_code=exc.response.status_code,
+                    detail=_safe_json_detail(exc.response),
                 ) from exc
             except Exception as exc:
                 raise ControlCenterDataError(
@@ -243,27 +275,42 @@ class ControlCenterDataClient:
             return None
 
     async def get_agent_context(
-        self, agent_type_id: uuid.UUID, session_id: uuid.UUID | None = None
+        self,
+        agent_type_id: uuid.UUID,
+        session_id: uuid.UUID | None = None,
+        conv_session_id: uuid.UUID | None = None,
     ) -> dict[str, Any]:
         """Return full execution context for an agent type.
 
         Calls ``GET /internal/data/agent-types/{agent_type_id}/context``.
 
         When ``session_id`` is given, Control Center inspects the stored
-        session ``input_data`` and enables the workflow-optimization inherent
-        skill only for user-confirmed optimize-and-verify runs.  Callers that
-        omit ``session_id`` (conversational prepare, auto-compile, ...) get
-        the gated (default) context — no optimization skill.
+        session ``input_data``: the workflow-optimization inherent skill is
+        enabled only for user-confirmed optimize-and-verify runs, and a
+        ``__command`` run receives the workspace AUTHORING model as
+        ``model_id``/``model_config_id`` (with no fallback to the agent
+        runtime model).
+
+        When ``conv_session_id`` names an optimization conversation, Control
+        Center returns the optimization-mode context (mission instruction,
+        optimizer model identifiers, optimization tool set, no typed output
+        schema). A business / missing conversation id keeps the normal context.
 
         Returns a dict with keys: system_instruction, model_id, model_config_id,
         role_id, allowed_tools, sop_content, mcp_session_context,
         tool_definitions, tool_name_map, role_mcp_sessions, sops, skills,
         identity_name, role_name, identity_role_valid, input_type, output_type,
-        output_schema, primary_sop_id, is_active.
+        output_schema, primary_sop_id, is_active (plus ``optimization`` for an
+        optimization conversation).
         """
         path = f"/agent-types/{agent_type_id}/context"
+        query: list[str] = []
         if session_id is not None:
-            path += f"?session_id={session_id}"
+            query.append(f"session_id={session_id}")
+        if conv_session_id is not None:
+            query.append(f"conv_session_id={conv_session_id}")
+        if query:
+            path += "?" + "&".join(query)
         return await self._get(path)
 
     async def get_model_config(self, model_config_id: uuid.UUID) -> dict[str, Any]:
@@ -537,6 +584,7 @@ class ControlCenterDataClient:
         duration_ms: int | None = None,
         mcp_slug: str | None = None,
         error: str | None = None,
+        optimization_live_test_request_id: uuid.UUID | None = None,
     ) -> None:
         """Record a single tool execution to Control Center (fire-and-forget).
 
@@ -544,23 +592,28 @@ class ControlCenterDataClient:
         Monitor can render per-node tool-call history for agent jobs AND
         conversation turns (``session_kind`` distinguishes the two).
 
+        ``optimization_live_test_request_id`` is set ONLY by the approved
+        live-test runner: the row then flags work that really contacted an
+        integration, so it can never be confused with replay verification.
+
         Best-effort by design: recording failures are logged and swallowed —
         they must never break the tool execution they describe.
         """
-        body: dict[str, Any] = {
-            "records": [
-                {
-                    "session_id": str(session_id),
-                    "session_kind": session_kind,
-                    "tool_name": tool_name,
-                    "route_type": route_type,
-                    "mcp_slug": mcp_slug,
-                    "status": status,
-                    "duration_ms": duration_ms,
-                    "error": error,
-                }
-            ]
+        record: dict[str, Any] = {
+            "session_id": str(session_id),
+            "session_kind": session_kind,
+            "tool_name": tool_name,
+            "route_type": route_type,
+            "mcp_slug": mcp_slug,
+            "status": status,
+            "duration_ms": duration_ms,
+            "error": error,
         }
+        if optimization_live_test_request_id is not None:
+            record["optimization_live_test_request_id"] = str(
+                optimization_live_test_request_id
+            )
+        body: dict[str, Any] = {"records": [record]}
         try:
             await self._post("/tool-calls", body)
         except Exception as exc:

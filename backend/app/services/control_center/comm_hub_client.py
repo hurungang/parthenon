@@ -261,6 +261,106 @@ class CommunicationHubClient:
                     f"Communication Hub agent execute call failed: {exc}"
                 ) from exc
 
+    async def forward_live_test(
+        self,
+        *,
+        live_test_request_id: str,
+        conversation_session_id: str,
+        target_agent_type_id: str,
+        script_version_id: str | None,
+        script_name: str | None,
+        script_version_label: str | None,
+        python_source: str,
+        input_context: dict[str, Any] | None = None,
+        tenant_context: TenantContext | None = None,
+    ) -> dict[str, Any]:
+        """Run ONE operator-approved live test through ``CH → AR``.
+
+        A live test runs the approved **script** end to end — never individual
+        MCP tool calls; MCP tools are assumed to work. This is the ONLY live
+        route in the platform. Control Center has already validated the ledger
+        (tenant, ``status``, single-shot claim, expiry) and forwards the
+        approved version's source verbatim:
+
+        1. CC → CH ``POST /internal/live-test/run`` (CC service certificate);
+        2. CH → AR ``POST /internal/live-test/run`` (CH service certificate);
+        3. AR executes the script once in the real sandbox through the subject
+           agent type's own CH tool route — its own identity, tenant and
+           existing grants, no override, no shared/elevated identity. The
+           script's ``tools.call(...)`` lines are the only egress.
+
+        ``input_context`` is the reference execution's input (server-derived, the
+        same context replay uses) so the script runs the real scenario.
+
+        Neither CH nor AR can originate a live test; AR/CH add no authorization
+        of their own beyond their existing control-plane checks and the
+        capability check against the subject's own grants.
+
+        Returns AR's contract dict:
+        ``{status, executed_operations[script_run], started_at, finished_at,
+        error}``. A run failure surfaces as ``status="failed"`` — it is never
+        retried here and never committed twice.
+
+        Raises:
+            CommunicationHubClientError — on any HTTP or network failure.
+        """
+        url = f"{self._comm_hub_url}/internal/live-test/run"
+        body: dict[str, Any] = {
+            "live_test_request_id": str(live_test_request_id),
+            "conversation_session_id": str(conversation_session_id),
+            "target_agent_type_id": str(target_agent_type_id),
+            "script_version_id": (
+                str(script_version_id) if script_version_id else None
+            ),
+            "script_name": script_name,
+            "script_version_label": script_version_label,
+            "python_source": python_source,
+            "input_context": input_context or {},
+        }
+        headers = tenant_context_headers(tenant_context)
+        # The run bound is enforced by AR too; this is the transport backstop.
+        try:
+            from app.core.config import get_settings
+
+            _run_timeout = int(
+                getattr(
+                    get_settings(),
+                    "optimizer_live_test_run_timeout_seconds",
+                    120,
+                )
+            )
+        except Exception:  # noqa: BLE001 — a missing setting must not block the call
+            _run_timeout = 120
+        timeout = float(max(30, _run_timeout))
+
+        async with self._make_client() as client:
+            try:
+                resp = await client.post(
+                    url, json=body, headers=headers, timeout=timeout
+                )
+                resp.raise_for_status()
+                data: dict[str, Any] = resp.json()
+                logger.info(
+                    "Live test %s forwarded to Agent Runtime (status=%s, "
+                    "script_version=%s, source_chars=%d)",
+                    live_test_request_id,
+                    data.get("status"),
+                    script_version_id,
+                    len(python_source or ""),
+                )
+                return data
+            except httpx.HTTPStatusError as exc:
+                raise CommunicationHubClientError(
+                    f"Communication Hub returned {exc.response.status_code}: "
+                    f"{exc.response.text[:200]}"
+                ) from exc
+            except CommunicationHubClientError:
+                raise
+            except Exception as exc:
+                raise CommunicationHubClientError(
+                    f"Communication Hub live-test call failed: {exc}"
+                ) from exc
+
     async def forward_sandboxed_script(
         self,
         *,
@@ -269,6 +369,8 @@ class CommunicationHubClient:
         agent_type_id: str,
         input_context: dict[str, Any] | None = None,
         tenant_context: TenantContext | None = None,
+        reference_tool_responses: list[dict[str, Any]] | None = None,
+        replay_required: bool = False,
     ) -> dict[str, Any]:
         """Execute inline ``python_source`` in the Agent Runtime sandbox.
 
@@ -279,9 +381,13 @@ class CommunicationHubClient:
         certificates on ``/internal/tools/``). CH then forwards to Agent
         Runtime's ``/internal/script-tools/execute`` using CH's OWN service
         certificate — the exact same CH→AR hop ``script____<name>`` tools
-        take — where the sandbox runs with the SESSION-BOUND tool client
-        (AR cert + agent identity, SEC1). Scripts execute ONLY in Agent
-        Runtime (top-priority rule) — Control Center never runs the sandbox.
+        take — where the sandbox runs. Scripts execute ONLY in Agent Runtime
+        (top-priority rule) — Control Center never runs the sandbox.
+
+        Optimization verification is REPLAY-ONLY: when ``replay_required`` is
+        set, AR uses its replay tool client and answers every ``tools.call``
+        from ``reference_tool_responses`` (the recorded transcript) — it never
+        reaches the live session-bound MCP client and never mutates data.
 
         Args:
             python_source:  Full script source (defines ``run(context, tools)``).
@@ -289,6 +395,10 @@ class CommunicationHubClient:
             agent_type_id:  Agent type identity ("" when unresolvable).
             input_context:  Optional input dict — becomes the script's ``context``.
             tenant_context: Resolved tenant context (None in single-tenant mode).
+            reference_tool_responses: Recorded ``{tool, arguments, response}``
+                entries replayed for every script tool call.
+            replay_required: Hard replay-only switch — AR refuses to fall back
+                to live tool calls.
 
         Returns:
             AR contract dict: ``{"result": ..., "error": str | None}`` — a
@@ -304,6 +414,10 @@ class CommunicationHubClient:
             "agent_type_id": str(agent_type_id or ""),
             "tool_args": {"input": input_context or {}},
         }
+        if reference_tool_responses:
+            body["reference_tool_responses"] = reference_tool_responses
+        if replay_required:
+            body["replay_required"] = True
         headers = tenant_context_headers(tenant_context)
 
         async with self._make_client() as client:

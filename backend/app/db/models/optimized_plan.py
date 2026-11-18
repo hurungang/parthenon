@@ -33,15 +33,31 @@ from app.db.session import Base
 
 
 class OptimizedPlanStatus(str, enum.Enum):
-    """Lifecycle status of an optimized-plan generation attempt."""
+    """Lifecycle status of an optimized plan.
+
+    Authoring-side terminal states are set at the end of an "Optimize &
+    Verify" run; ``requires_fix`` is set later, after the fact, when an
+    execution of the ready plan fails and falls back to the model-driven
+    path.
+    """
 
     generating = "generating"
     ready = "ready"
     failed = "failed"
-    # Verification exhausted its attempts without a passing composition:
-    # surfaced to the user so they can steer the next regeneration via
-    # feedback (never silently "failed").
+    # AUTHORING-SIDE: verification (the optimize side-run) exhausted its
+    # attempts without a passing composition, so optimization itself could
+    # not complete. Surfaced to the user so they can steer the next
+    # regeneration via feedback (never silently "failed"). The authoring
+    # failure reason is carried in ``error``.
     needs_feedback = "needs_feedback"
+    # EXECUTION-SIDE: a LATER execution of this ready plan failed and fell
+    # back to the LLM path, and this plan is attributed as the cause (via
+    # ScriptDefinition.source_optimized_plan_id). Set automatically at
+    # fallback time — distinct from ``needs_feedback``, which is about the
+    # optimization run itself. The plan is never silently re-served while in
+    # this state; the reason lives in an auto-recorded
+    # ``execution_derived`` feedback entry, not in ``error``.
+    requires_fix = "requires_fix"
     # Plan superseded by "Retire plan" (or a regeneration) — the row is KEPT
     # for reference and never gates execution; one active (non-retired)
     # record per agent type at any time.
@@ -56,6 +72,13 @@ class OptimizedImplementationPlan(Base):
     LLM bridge steps, output decision), the ``fully_scripted`` execution mark,
     and lineage to the script versions it authored (via
     ``ScriptDefinition.source_optimized_plan_id``).
+
+    Status semantics: ``needs_feedback`` marks an optimization run that could
+    not verify a passing composition (authoring-side); ``requires_fix`` marks
+    a plan whose later execution fell back because of it (execution-side).
+    A plan in ``requires_fix`` stems from that lineage traversal and is never
+    silently re-served — execution keeps falling back to the model-driven
+    path until the plan is re-optimized.
     """
 
     __tablename__ = "optimized_implementation_plans"

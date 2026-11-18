@@ -32,6 +32,7 @@ class TestModelContract:
             "state",
             "current_turn_id",
             "pending_intervene_request_id",
+            "active_resume_id",
             "tool_name",
             "target_agent_type_id",
             "detail",
@@ -50,6 +51,7 @@ class TestModelContract:
         for optional in (
             "current_turn_id",
             "pending_intervene_request_id",
+            "active_resume_id",
             "tool_name",
             "target_agent_type_id",
             "detail",
@@ -81,6 +83,7 @@ class TestModelContract:
         for col_name, expected in (
             ("current_turn_id", "conversation_turns.id"),
             ("pending_intervene_request_id", "intervene_requests.id"),
+            ("active_resume_id", "conversation_turn_resumes.id"),
             ("target_agent_type_id", "agent_types.id"),
         ):
             target, ondelete = _target(col_name)

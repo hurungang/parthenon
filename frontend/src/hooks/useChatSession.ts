@@ -1,7 +1,21 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { API_CONFIG } from '../api/API_CONFIG'
 import apiClient from '../api/apiClient'
-import type { InterventionType, InterveneRequestMessage } from '../types'
+import { normalizeResumeState } from '../utils/resumeState'
+import type { ResumeState } from '../utils/resumeState'
+import type {
+  InterventionType,
+  InterveneRequestMessage,
+  LiveTestApprovalSummary,
+  LiveTestOperation,
+  LiveTestResultMessage,
+  LiveTestStatus,
+  ScriptRunRecord,
+  ScriptRunToolCall,
+} from '../types'
+
+export type { ResumeState }
+export { hasLiveResume, isActionableWaiting } from '../utils/resumeState'
 
 export type ChatRole = 'user' | 'agent' | 'system'
 
@@ -66,6 +80,19 @@ export interface ChatStatus {
   /** Optional human-readable detail (e.g. the reason a turn was interrupted
    * by a service restart) — surfaced instead of the generic terminal label. */
   message?: string
+  /** Durable resume state projected by the server (absent for turns that never
+   * paused, e.g. plain thinking/finished legs). */
+  resumeState?: ResumeState | null
+  /** Live resume-record id backing this status. It is the only structural
+   * proof that a pause is still answerable — "shown as waiting" must never
+   * drift from "actually resumable". */
+  activeResumeId?: string | null
+  /** Durable terminal reason code (`expired`, `checkpoint_unavailable`, …). */
+  terminalReason?: string | null
+  /** True when the status came from persisted-activity hydration
+   * (`activity_state` / `status_pong`) rather than the live status stream. A
+   * hydrated `waiting_for_human` without a live resume id is stale. */
+  persisted?: boolean
 }
 
 export interface DelegationSnippetLine {
@@ -181,11 +208,43 @@ function isChatStatusKind(value: unknown): value is ChatStatusKind {
   )
 }
 
+function normalizeOptionalText(value: unknown): string | null {
+  if (typeof value !== 'string') {
+    return null
+  }
+  const trimmed = value.trim()
+  return trimmed.length > 0 ? trimmed : null
+}
+
+/**
+ * Extracts the durable-resume projection carried by an `activity_state`
+ * hydration push, a `status_pong` answer, or a `chat_status` event. All three
+ * use snake_case wire keys.
+ */
+function resumeProjectionFromPayload(payload: Record<string, unknown>): {
+  activeResumeId: string | null
+  resumeState: ResumeState | null
+  terminalReason: string | null
+  message?: string
+} {
+  const message = normalizeOptionalText(payload['message'])
+  return {
+    activeResumeId: normalizeOptionalText(payload['active_resume_id']),
+    resumeState: normalizeResumeState(payload['resume_state']),
+    terminalReason: normalizeOptionalText(payload['terminal_reason_code']),
+    ...(message ? { message } : {}),
+  }
+}
+
 /**
  * Maps a persisted-activity payload (`state` + optional context) to the
  * normalized `ChatStatus` shape. A null/absent state (idle session) yields
  * null. Used by both the `activity_state` connect-hydration push and the
  * reworked `status_pong` answer.
+ *
+ * The durable-resume projection (live resume id, resume state, terminal reason
+ * and the server-rendered message) is preserved so a reconnect renders exactly
+ * what the live socket would have shown.
  */
 function activityStateFromPayload(payload: Record<string, unknown>): ChatStatus | null {
   const state = payload['state']
@@ -196,6 +255,7 @@ function activityStateFromPayload(payload: Record<string, unknown>): ChatStatus 
   const timestamp = typeof payload['timestamp'] === 'string'
     ? payload['timestamp']
     : new Date().toISOString()
+  const projection = resumeProjectionFromPayload(payload)
 
   return {
     kind: state,
@@ -204,6 +264,13 @@ function activityStateFromPayload(payload: Record<string, unknown>): ChatStatus 
     receiverSessionId: null,
     timestamp,
     pendingIntervention: payload['pending_intervention'] === true,
+    activeResumeId: projection.activeResumeId,
+    resumeState: projection.resumeState,
+    terminalReason: projection.terminalReason,
+    ...(projection.message ? { message: projection.message } : {}),
+    // Hydration provenance — lets the dialog tell a stale persisted wait from
+    // a live pause whose request object has not arrived yet.
+    persisted: true,
   }
 }
 
@@ -240,19 +307,23 @@ function parseChatStatus(value: unknown): ChatStatus | null {
   const timestamp = typeof payload['timestamp'] === 'string'
     ? payload['timestamp']
     : new Date().toISOString()
+  const projection = resumeProjectionFromPayload(payload)
+  const receiverSessionId = normalizeOptionalText(payload['receiver_session_id'])
 
   return {
     kind: status,
     agentType: normalizeDelegatedAgentType(payload['agent_type']),
     toolName: normalizeToolDisplayName(payload['tool_name']),
-    receiverSessionId:
-      typeof payload['receiver_session_id'] === 'string' && payload['receiver_session_id'].trim().length > 0
-        ? payload['receiver_session_id'].trim()
-        : null,
+    receiverSessionId,
     timestamp,
-    ...(typeof payload['message'] === 'string' && payload['message'].trim().length > 0
-      ? { message: payload['message'] }
-      : {}),
+    // Live wire statuses carry the same optional resume projection — keep them
+    // so a resumed/terminal turn renders identically on both paths.
+    activeResumeId: projection.activeResumeId,
+    resumeState: projection.resumeState,
+    terminalReason: projection.terminalReason,
+    // Provenance: a live status is not persisted-activity hydration.
+    persisted: false,
+    ...(projection.message ? { message: projection.message } : {}),
   }
 }
 
@@ -329,6 +400,165 @@ function parseGuardrailUsage(value: unknown): ConversationalGuardrailUsage | nul
 }
 
 /**
+ * One step of the visible turn activity ("what it looked at"). Derived from the
+ * live status stream so the optimizer chat can expand tool calls without a new
+ * endpoint; a step is `running` until the next tool call or the turn's end.
+ */
+export interface ChatActivityStep {
+  id: string
+  toolName: string | null
+  state: 'running' | 'done'
+  timestamp: string
+}
+
+/** A `chat_blocked` chunk — the input is refused while a decision is pending. */
+export interface ChatBlockedState {
+  reason: string
+  message: string
+  liveTestRequestId: string | null
+  expiresAt: string | null
+}
+
+/** Latest authoritative answer to a decision (`intervene_status` chunk). */
+export interface InterventionStatusState {
+  requestId: string
+  status: 'pending' | 'responded' | 'cancelled' | 'expired' | 'error'
+  timestamp: string
+}
+
+const LIVE_TEST_STATUSES: readonly LiveTestStatus[] = [
+  'pending',
+  'approved',
+  'executed',
+  'failed',
+  'denied',
+  'expired',
+  'cancelled',
+]
+
+function normalizeLiveTestStatus(value: unknown): LiveTestStatus {
+  return typeof value === 'string' && (LIVE_TEST_STATUSES as readonly string[]).includes(value)
+    ? (value as LiveTestStatus)
+    : 'pending'
+}
+
+function normalizeLiveTestOperations(value: unknown): LiveTestOperation[] {
+  if (!Array.isArray(value)) return []
+  return value
+    .filter((entry): entry is Record<string, unknown> => !!entry && typeof entry === 'object')
+    .map((entry) => ({
+      tool_name: typeof entry['tool_name'] === 'string' ? entry['tool_name'] : '',
+      arguments:
+        entry['arguments'] && typeof entry['arguments'] === 'object' && !Array.isArray(entry['arguments'])
+          ? (entry['arguments'] as Record<string, unknown>)
+          : {},
+      purpose: typeof entry['purpose'] === 'string' ? entry['purpose'] : null,
+    }))
+}
+
+function normalizeLiveTestOutcomes(value: unknown): ScriptRunRecord[] {
+  if (!Array.isArray(value)) return []
+  return value
+    .filter((entry): entry is Record<string, unknown> => !!entry && typeof entry === 'object')
+    .map((entry) => {
+      const toolCalls = Array.isArray(entry['tool_calls'])
+        ? entry['tool_calls'].filter(
+            (call): call is Record<string, unknown> => !!call && typeof call === 'object',
+          )
+        : []
+      return {
+        kind: typeof entry['kind'] === 'string' ? entry['kind'] : 'script_run',
+        script_version_id:
+          typeof entry['script_version_id'] === 'string' ? entry['script_version_id'] : null,
+        script_name: typeof entry['script_name'] === 'string' ? entry['script_name'] : null,
+        script_version_label:
+          typeof entry['script_version_label'] === 'string'
+            ? entry['script_version_label']
+            : null,
+        status: typeof entry['status'] === 'string' ? entry['status'] : 'error',
+        result_summary:
+          typeof entry['result_summary'] === 'string' ? entry['result_summary'] : null,
+        error: typeof entry['error'] === 'string' ? entry['error'] : null,
+        duration_ms: typeof entry['duration_ms'] === 'number' ? entry['duration_ms'] : null,
+        tool_calls: toolCalls.map(
+          (call): ScriptRunToolCall => ({
+            tool_name: typeof call['tool_name'] === 'string' ? call['tool_name'] : '',
+            status: typeof call['status'] === 'string' ? call['status'] : 'error',
+            duration_ms:
+              typeof call['duration_ms'] === 'number' ? call['duration_ms'] : null,
+            result_summary:
+              typeof call['result_summary'] === 'string' ? call['result_summary'] : null,
+            error: typeof call['error'] === 'string' ? call['error'] : null,
+          }),
+        ),
+        telemetry:
+          entry['telemetry'] && typeof entry['telemetry'] === 'object'
+            ? (entry['telemetry'] as Record<string, unknown>)
+            : {},
+      }
+    })
+}
+
+/**
+ * Parses the optional `live_test` block carried by an `intervene_request` (live
+ * dispatch AND reconnect re-surface). Plain ask/decide requests have none.
+ */
+export function parseLiveTestApproval(value: unknown): LiveTestApprovalSummary | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null
+  const payload = value as Record<string, unknown>
+  const requestId = payload['live_test_request_id']
+  if (typeof requestId !== 'string' || !requestId) return null
+  const executed = normalizeLiveTestOutcomes(payload['executed_operations'])
+  return {
+    live_test_request_id: requestId,
+    status: normalizeLiveTestStatus(payload['status']),
+    expires_at: typeof payload['expires_at'] === 'string' ? payload['expires_at'] : null,
+    script_version_id:
+      typeof payload['script_version_id'] === 'string' ? payload['script_version_id'] : null,
+    script_name: typeof payload['script_name'] === 'string' ? payload['script_name'] : null,
+    script_version_label:
+      typeof payload['script_version_label'] === 'string'
+        ? payload['script_version_label']
+        : null,
+    operations: normalizeLiveTestOperations(payload['operations']),
+    executed_operations: executed.length > 0 ? executed : null,
+    target_agent_type_id:
+      typeof payload['target_agent_type_id'] === 'string'
+        ? payload['target_agent_type_id']
+        : null,
+  }
+}
+
+/**
+ * Parses the `live_test_result` chunk emitted after an approved live test runs
+ * (before the resumed reply) so the card can be replaced with the script run
+ * record.
+ */
+export function parseLiveTestResult(value: unknown): LiveTestResultMessage | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null
+  const payload = value as Record<string, unknown>
+  if (payload['type'] !== 'live_test_result') return null
+  const requestId = payload['live_test_request_id']
+  if (typeof requestId !== 'string' || !requestId) return null
+  const status = payload['live_test_status'] === 'failed' ? 'failed' : 'executed'
+  const records = normalizeLiveTestOutcomes(payload['executed_operations'])
+  const scriptRun = normalizeLiveTestOutcomes(
+    payload['script_run'] != null ? [payload['script_run']] : [],
+  )[0] ?? records[0] ?? null
+  return {
+    type: 'live_test_result',
+    live_test_request_id: requestId,
+    live_test_status: status,
+    script_version_id:
+      typeof payload['script_version_id'] === 'string' ? payload['script_version_id'] : null,
+    script_run: scriptRun,
+    executed_operations: records.length > 0 ? records : scriptRun ? [scriptRun] : [],
+    live_test_error:
+      typeof payload['live_test_error'] === 'string' ? payload['live_test_error'] : null,
+  }
+}
+
+/**
  * Manages WebSocket connection lifecycle, inbound message queue,
  * pending question state, and reconnection for a chat session.
  */
@@ -384,6 +614,18 @@ export function useChatSession(sessionId: string | null, convSessionId?: string 
   // indicator without fabricating a request payload.
   const [pendingIntervention, setPendingIntervention] = useState(false)
 
+  // ── Optimization-mode projections (additive; unused by business chats) ────
+  // Per-request `live_test_result` chunks — the approval card swaps the pending
+  // operation list for what actually ran.
+  const [liveTestResults, setLiveTestResults] = useState<Record<string, LiveTestResultMessage>>({})
+  // Latest decision answer for a request (`intervene_status`), so an approval
+  // card that is no longer actionable can distinguish denied / expired.
+  const [interventionStatus, setInterventionStatus] = useState<InterventionStatusState | null>(null)
+  // A `chat_blocked` chunk — input is refused while a decision is pending.
+  const [chatBlocked, setChatBlocked] = useState<ChatBlockedState | null>(null)
+  // Visible turn activity: tool calls seen on the live status stream.
+  const [activitySteps, setActivitySteps] = useState<ChatActivityStep[]>([])
+
   // Status watchdog state: last inbound WS traffic timestamp (ANY message —
   // chat messages, status events, heartbeats) and whether the current status
   // has gone stale past the threshold.
@@ -393,14 +635,6 @@ export function useChatSession(sessionId: string | null, convSessionId?: string 
   useEffect(() => {
     chatStatusRef.current = chatStatus
   }, [chatStatus])
-
-  // TEMP DIAGNOSTIC (remove after the status-race investigation): logs every
-  // chat-status transition so the browser console can be used to see exactly
-  // what the client believes while the assistant is calling tools.
-  useEffect(() => {
-    // eslint-disable-next-line no-console
-    console.info('[chatStatus]', chatStatus?.kind ?? null, chatStatus?.toolName ?? null, 'turnInFlight=', turnInFlight)
-  }, [chatStatus, turnInFlight])
 
   useEffect(() => {
     turnInFlightRef.current = turnInFlight
@@ -533,6 +767,13 @@ export function useChatSession(sessionId: string | null, convSessionId?: string 
           state?: string
           tool_name?: string
           final?: boolean
+          live_test?: unknown
+          live_test_request_id?: string
+          live_test_status?: string
+          live_test_error?: string
+          executed_operations?: unknown
+          intervene_request_id?: string
+          expires_at?: string
         }
 
         // ── Handle intervention messages ───────────────────────────────────
@@ -546,10 +787,16 @@ export function useChatSession(sessionId: string | null, convSessionId?: string 
             agent_type: data.agent_type,
             delegation_depth: data.delegation_depth ?? 0,
             conversation_session_id: data.conversation_session_id ?? '',
+            // Optimization live-test approvals carry the exact operation list +
+            // expiry so the card renders identically after a reconnect.
+            live_test: parseLiveTestApproval(data.live_test),
           }
           setInterventionRequest(interveneMsg)
           interventionActiveRef.current = true
           setPendingIntervention(true)
+          setChatBlocked(null)
+          setInterventionStatus(null)
+          setActivitySteps((prev) => prev.map((step) => ({ ...step, state: 'done' as const })))
           setChatStatus({
             kind: 'waiting_for_human',
             agentType: data.agent_type ?? null,
@@ -560,26 +807,50 @@ export function useChatSession(sessionId: string | null, convSessionId?: string 
           return
         }
 
+        if (data.type === 'live_test_result') {
+          const result = parseLiveTestResult(data)
+          if (result) {
+            setLiveTestResults((prev) => ({
+              ...prev,
+              [result.live_test_request_id]: result,
+            }))
+          }
+          return
+        }
+
         if (data.type === 'intervene_status') {
           const statusVal = data.status
           if (statusVal === 'responded' || statusVal === 'cancelled' || statusVal === 'expired') {
+            setInterventionStatus({
+              requestId: data.request_id ?? '',
+              status: statusVal,
+              timestamp: new Date().toISOString(),
+            })
             setInterventionRequest(null)
             interventionActiveRef.current = false
             setPendingIntervention(false)
             setChatStatus((prev) => {
-              // FIX-20261110: a terminal status (e.g. orphaned-resume
-              // timeout_or_failed delivered right after the response was
-              // persisted) must never be overwritten by the post-response
-              // demotion — the turn is over and nothing will replace it,
-              // which left the thinking bubble stuck forever.
-              if (prev?.kind === 'timeout_or_failed') {
+              // FIX-20261110: a terminal status must never be overwritten by
+              // the post-response demotion (e.g. a durably unresumable turn
+              // delivered one right after the response was persisted) — the
+              // turn is over and nothing will replace it, which left the
+              // thinking bubble stuck forever.
+              if (prev && isTerminalChatStatusKind(prev.kind)) {
                 return prev
               }
               const agentType = prev?.agentType ?? null
               if (statusVal === 'responded') {
-                // The resumed turn is processing again — show the thinking
-                // indicator instead of a silent gap until the next tool call.
-                return { kind: 'thinking', agentType, toolName: null, receiverSessionId: null, timestamp: new Date().toISOString() }
+                // The turn is processing again — show the ordinary thinking
+                // indicator. A normal in-process approval is NOT a "resumed"
+                // turn (no chip); the resumed vocabulary comes only from server
+                // hydration after a real reconnect/restart.
+                return {
+                  kind: 'thinking',
+                  agentType,
+                  toolName: null,
+                  receiverSessionId: null,
+                  timestamp: new Date().toISOString(),
+                }
               }
               return { kind: 'waiting', agentType, toolName: null, receiverSessionId: null, timestamp: new Date().toISOString() }
             })
@@ -607,8 +878,17 @@ export function useChatSession(sessionId: string | null, convSessionId?: string 
         }
 
         if (data.type === 'chat_blocked') {
-          // Client tried to send a message while intervention is pending
-          // The message is silently dropped; the UI blocks input anyway
+          // The message was refused because a decision is pending (an
+          // intervention, including an optimization live-test approval).
+          // Surface the reason so the dialog can block input and point at the
+          // pending card instead of silently dropping what was typed.
+          setChatBlocked({
+            reason: typeof data.reason === 'string' ? data.reason : 'decision_pending',
+            message: typeof data.message === 'string' ? data.message : '',
+            liveTestRequestId:
+              typeof data.live_test_request_id === 'string' ? data.live_test_request_id : null,
+            expiresAt: typeof data.expires_at === 'string' ? data.expires_at : null,
+          })
           return
         }
 
@@ -744,12 +1024,28 @@ export function useChatSession(sessionId: string | null, convSessionId?: string 
 
           setChatStatus(parsedStatus)
 
+          // Visible turn activity: every tool call becomes a step; starting a
+          // new one closes the previous (a turn ends by closing the last).
+          if (parsedStatus.kind === 'using_tool' && parsedStatus.toolName) {
+            const step: ChatActivityStep = {
+              id: crypto.randomUUID(),
+              toolName: parsedStatus.toolName,
+              state: 'running',
+              timestamp: parsedStatus.timestamp,
+            }
+            setActivitySteps((prev) => [
+              ...prev.map((existing) => ({ ...existing, state: 'done' as const })),
+              step,
+            ])
+          }
+
           if (isTerminalChatStatusKind(parsedStatus.kind)) {
             // Terminal status — the turn is over; close the in-flight window
             // and disarm the pending-intervention flag.
             markTurnInFlight(false)
             interventionActiveRef.current = false
             setPendingIntervention(false)
+            setActivitySteps((prev) => prev.map((step) => ({ ...step, state: 'done' as const })))
           }
 
           if (parsedStatus.kind === 'waiting_for_human') {
@@ -943,6 +1239,7 @@ export function useChatSession(sessionId: string | null, convSessionId?: string 
           if (wasTurnInFlight && isFinal) {
             // The turn's final reply arrived — close the in-flight window.
             markTurnInFlight(false)
+            setActivitySteps((prev) => prev.map((step) => ({ ...step, state: 'done' as const })))
           }
           setChatStatus((prev) => {
             if (prev && isTerminalChatStatusKind(prev.kind)) return prev
@@ -1187,6 +1484,10 @@ export function useChatSession(sessionId: string | null, convSessionId?: string 
     })
     setPendingQuestion(null)
     setChatError(null)
+    // A fresh message starts a fresh activity group and clears the "decision
+    // pending" refusal notice from a previous attempt.
+    setActivitySteps([])
+    setChatBlocked(null)
     return true
   }, [])
 
@@ -1198,6 +1499,12 @@ export function useChatSession(sessionId: string | null, convSessionId?: string 
     setActiveDelegationCycleId(null)
     seenExecutionLogIdsByCycleRef.current = new Map()
     pendingNewDelegationCycleRef.current = false
+    // Session switch / new optimization session: the previous session's
+    // activity, decisions and live-test evidence never leak into the next one.
+    setActivitySteps([])
+    setLiveTestResults({})
+    setInterventionStatus(null)
+    setChatBlocked(null)
   }, [])
 
   const toggleDelegationSnippetsCollapsed = useCallback(() => {
@@ -1357,14 +1664,21 @@ export function useChatSession(sessionId: string | null, convSessionId?: string 
         )
         setInterventionRequest(null)
         interventionActiveRef.current = false
+        // The pause is resolved locally: clear the pending-intervention flag so
+        // the amber "waiting for your input" indicator disappears immediately.
+        setPendingIntervention(false)
+        setChatBlocked(null)
         setChatStatus((prev) => {
-          // Never clobber a just-delivered terminal status (e.g. an
-          // orphaned-resume timeout_or_failed racing the response submit).
-          if (prev?.kind === 'timeout_or_failed') {
+          // Never clobber a just-delivered terminal status (e.g. a durably
+          // unresumable turn racing the response submit).
+          if (prev && isTerminalChatStatusKind(prev.kind)) {
             return prev
           }
+          // A normal, in-process approval is NOT a "resumed" turn — just show
+          // the ordinary processing bubble (no "resumed" chip). The resumed
+          // chip is only produced by server hydration after a real reconnect.
           return {
-            kind: 'waiting',
+            kind: 'thinking',
             agentType: prev?.agentType ?? null,
             toolName: null,
             receiverSessionId: null,
@@ -1464,6 +1778,15 @@ export function useChatSession(sessionId: string | null, convSessionId?: string 
      * but no request object has arrived (hydration) — drives the
      * pending-intervention indicator. */
     pendingIntervention,
+    /** Latest `intervene_status` answer, so a resolved optimization card can
+     * distinguish denied / cancelled / expired without a second request. */
+    interventionStatus,
+    /** Per-request `live_test_result` chunks (executed operations, failures). */
+    liveTestResults,
+    /** Input was refused because a decision is pending (message + reason). */
+    chatBlocked,
+    /** Visible turn activity derived from the live status stream. */
+    activitySteps,
     interventionQueueLength,
     sendInterventionResponse,
     cancelIntervention,

@@ -32,7 +32,12 @@ import {
 import { useAgentType } from '../../hooks/useAgentTypes'
 import PermissionDeniedAlert from '../permissions/PermissionDeniedAlert'
 import { ConversationDialog } from './ConversationDialog'
-import type { ConversationStatus } from '../../types'
+import {
+  RESUME_BADGE_LABEL_KEYS,
+  RESUME_STATE_CHIP_COLORS,
+  normalizeResumeState,
+} from '../../utils/resumeState'
+import type { ConversationSession, ConversationStatus } from '../../types'
 
 interface ConversationSessionsTabProps {
   agentTypeId: string
@@ -48,6 +53,31 @@ function statusColor(
   if (status === 'error') return 'error'
   if (status === 'archived') return 'warning'
   return 'default'
+}
+
+/**
+ * Resume badge for a session, derived ONLY from the server-projected
+ * `resume_state` (resumable-agent-turn-persistence, 6.5). Sessions with no
+ * resume record (`resume_state` null/absent) render no badge, and nothing is
+ * inferred from the session status or the message stream.
+ */
+function ResumeBadge({ session }: { session: ConversationSession }) {
+  const { t } = useTranslation()
+  const state = normalizeResumeState(session.resume_state)
+  if (!state) {
+    return null
+  }
+  return (
+    <Chip
+      data-testid={`conversation-sessions-resume-badge-${session.id}`}
+      data-resume-state={state}
+      label={t(RESUME_BADGE_LABEL_KEYS[state])}
+      color={RESUME_STATE_CHIP_COLORS[state]}
+      size="small"
+      variant="outlined"
+      sx={{ ml: 0.75, fontWeight: 600 }}
+    />
+  )
 }
 
 /**
@@ -160,11 +190,14 @@ export function ConversationSessionsTab({ agentTypeId, onClose }: ConversationSe
                     </Typography>
                   </TableCell>
                   <TableCell>
-                    <Chip
-                      label={t(`conversations.sessions.status.${session.status}`)}
-                      color={statusColor(session.status)}
-                      size="small"
-                    />
+                    <Box display="flex" alignItems="center" flexWrap="wrap">
+                      <Chip
+                        label={t(`conversations.sessions.status.${session.status}`)}
+                        color={statusColor(session.status)}
+                        size="small"
+                      />
+                      <ResumeBadge session={session} />
+                    </Box>
                   </TableCell>
                   <TableCell>
                     <Typography variant="body2">

@@ -713,8 +713,11 @@ SystemToolRegistry.register(SystemTool(
     description=(
         "Upsert the optimized implementation plan and associate/promote the "
         "authored script versions. Provide steps (each with python_source and "
-        "optional script_version_id), fully_scripted, output_mode, "
-        "output_template, and status."
+        "optional script_version_id; a sub-step may set `parent_order` to the "
+        "`order` of its parent step so the plan renders as a tree; use "
+        "`sop_invocation`/`skill_invocation`/`tool_call` only when the step "
+        "invokes an existing SOP/skill/tool, otherwise `processing`), "
+        "fully_scripted, output_mode, output_template, and status."
     ),
     parameters={
         "type": "object",
@@ -765,17 +768,22 @@ SystemToolRegistry.register(SystemTool(
         "exactly the tools associated with you. Define run(context, tools), "
         "which must return a dict. Do NOT use it for a single tool call or a "
         "purely conversational answer — call those tools directly / reply "
-        "directly. Secondary use: verification primitive — run a script "
-        "version's python_source through the real sandbox (pass inline "
-        "python_source or script_version_id); a script that runs here runs at "
-        "serving time."
+        "directly. Verification use (REPLAY-ONLY, the verification primitive "
+        "for optimization): `execute_script` validates "
+        "a script by replaying the reference execution's exact `input` and its "
+        "recorded `tool_calls` responses (from `get_execution_log`) in the real "
+        "sandbox. It NEVER calls live MCP tools and NEVER changes data. Pass "
+        "inline `python_source` (or a saved `script_version_id`); a script that "
+        "runs here runs at serving time. When no recorded tool data exists the "
+        "tool returns a validation_error instead of executing."
     ),
     parameters={
         "type": "object",
         "properties": {
             "python_source": {"type": "string", "description": "Sandboxed Python defining run(context, tools) — call your associated MCP tools via `tools.<name>(...)`, do intermediate computation, and return a dict (often one derived field from the last call's result)"},
             "script_version_id": {"type": "string", "description": "A saved script version id to run (alternative to python_source)"},
-            "input": {"type": "object", "description": "Input context dict for run(context, tools)"},
+            "input": {"type": "object", "description": "Input context dict for run(context, tools) — must use the agent's exact input keys"},
+            "reference_session_id": {"type": "string", "description": "Optional: replay this reference execution instead of the latest successful one"},
         },
         "required": [],
     },
@@ -840,20 +848,98 @@ SystemToolRegistry.register(SystemTool(
 SystemToolRegistry.register(SystemTool(
     name="get_execution_log",
     description=(
-        "Self-reflection: read the agent's recent execution logs (most recent "
-        "first, including failures) to learn from past errors before "
-        "authoring or re-authoring scripts."
+        "Self-reflection: list the agent's recent normal executions and return "
+        "the TEXT LOG of the latest successful (completed) execution, plus "
+        "that execution's actual `input`, the agent's typed `input_schema`, and "
+        "its `tool_calls` (recorded tool name + arguments + response). Use the "
+        "returned `input` keys/values EXACTLY as the script `context` and pass "
+        "it as `execute_script`'s `input` — do not invent or rename input "
+        "fields. `execute_script` replays ONLY these recorded responses; a tool "
+        "call that is not in `tool_calls` cannot be verified. The current "
+        "optimization run and other optimization side-runs are excluded. Pass "
+        "`session_id` to read a specific execution's log instead."
     ),
     parameters={
         "type": "object",
         "properties": {
             "agent_type_id": {"type": "string", "description": "The target agent type id"},
-            "limit": {"type": "integer", "description": "Max entries (default 30, max 100)"},
+            "session_id": {
+                "type": "string",
+                "description": (
+                    "Optional: read this specific execution's log instead of "
+                    "the latest successful execution."
+                ),
+            },
+            "limit": {
+                "type": "integer",
+                "description": "Max log lines for the selected execution (default 100, max 500)",
+            },
+            "executions_limit": {
+                "type": "integer",
+                "description": "Max recent executions to list (default 10, max 50)",
+            },
         },
         "required": ["agent_type_id"],
     },
     cc_endpoint_path="/api/v1/internal/system-tools/get-execution-log",
     mcp_hub_id=uuid.UUID("00000000-0000-0000-0000-000000000018"),
+))
+
+
+# ``request_live_test`` — the ONLY path by which an optimization conversation
+# may ask to contact a real integration. Available only inside an optimization
+# conversation (gated like the authoring tools). A live test runs the SCRIPT
+# end-to-end in one go — MCP tools are assumed to work — so the request names a
+# SAVED script version (never a per-tool list); the tool-call preview shown to
+# the operator is derived from that script's own source.
+# UUID allocation (continue the reserved system-tool block):
+#   00000000-0000-0000-0000-000000000059  → request_live_test
+SystemToolRegistry.register(SystemTool(
+    name="request_live_test",
+    description=(
+        "Request ONE operator-approved live run of a SCRIPT you already saved. "
+        "A live test runs the whole script end-to-end against live MCP tools — "
+        "it is NOT a per-tool test, and MCP tools are assumed to work. Use it "
+        "when replay verification cannot prove the script, OR when the operator "
+        "explicitly asks for a live verification — do not refuse an explicit "
+        "request solely because replay passed. Save it first with "
+        "`generate_script`, then pass the returned `version_id` as "
+        "`script_version_id` plus the reason live data is needed. The operator "
+        "must approve; the script runs once, as this agent, and never "
+        "automatically. The approval card's tool-call preview is derived from "
+        "your script's `tools.call(...)` lines — you do not list operations. "
+        "Never request a live test for an individual tool or an unsaved draft, "
+        "never repeat an earlier approval, and never ask for a fan-out or a "
+        "session-long live mode. Never include credentials, tokens, passwords "
+        "or secrets. Replay (`execute_script`) remains the default and never "
+        "contacts a live integration."
+    ),
+    parameters={
+        "type": "object",
+        "properties": {
+            "agent_type_id": {
+                "type": "string",
+                "description": "The subject agent type id (this conversation's agent)",
+            },
+            "script_version_id": {
+                "type": "string",
+                "description": (
+                    "The SAVED script version to run (the `version_id` returned "
+                    "by `generate_script`). The whole script runs once."
+                ),
+            },
+            "reason": {
+                "type": "string",
+                "description": (
+                    "Why replay cannot prove this script — what the reference "
+                    "execution is missing."
+                ),
+            },
+        },
+        "required": ["agent_type_id", "script_version_id", "reason"],
+    },
+    cc_endpoint_path="/api/v1/internal/system-tools/request-live-test",
+    mcp_hub_id=uuid.UUID("00000000-0000-0000-0000-000000000059"),
 ))
 
 

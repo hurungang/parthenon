@@ -93,14 +93,37 @@ SELF_CONTEXT_SKILL_NAME = "self-context"
 
 #: Bare tool names of the workflow-optimization AUTHORING tools — these load
 #: ONLY on user-confirmed optimization runs (opt-in dialog → optimize-and-verify
-#: command).  ``execute_script`` is intentionally NOT here: it is the inherent
-#: iteration-saver and stays available on every run by design.
+#: command) or inside an optimization-mode conversation.  ``execute_script`` is
+#: intentionally NOT here: it is the inherent iteration-saver and stays
+#: available on every run by design.
 WORKFLOW_OPTIMIZATION_AUTHORING_TOOLS: frozenset[str] = frozenset({
     "generate_optimized_plan",
     "generate_script",
     "list_scripts",
     "get_script",
 })
+
+#: Live-test request tool — available ONLY inside an optimization conversation
+#: (added to the turn tool set by the optimization-mode context, never to the
+#: inherent set: a normal run, assistant turn, integration turn and
+#: ``__command`` run must not gain it).
+REQUEST_LIVE_TEST_TOOL: str = "request_live_test"
+
+
+def get_optimization_mode_tool_names() -> frozenset[str]:
+    """Bare tool names added ONLY to an optimization-mode conversation turn.
+
+    Registry-validated like :func:`get_inherent_tool_names`, so the
+    optimization turn tool set can never drift from ``SystemToolRegistry``.
+    """
+    names = frozenset({REQUEST_LIVE_TEST_TOOL})
+    unknown = names - SystemToolRegistry.get_names()
+    if unknown:
+        raise RuntimeError(
+            "Optimization-mode tools not registered in SystemToolRegistry: "
+            f"{sorted(unknown)}"
+        )
+    return names
 
 
 def get_inherent_skill_definitions() -> tuple[InherentSkillDefinition, ...]:

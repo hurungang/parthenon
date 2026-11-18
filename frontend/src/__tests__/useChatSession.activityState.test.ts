@@ -100,6 +100,58 @@ describe('useChatSession — persisted activity hydration', () => {
       expect(parsed?.agentType).toBe('assistant')
       expect(parsed?.toolName).toBe('human_intervene')
     })
+
+    it('carries the durable resume projection (id, state, reason, message)', async () => {
+      // resumable-agent-turn-persistence 6.1 — hydration must not drop the
+      // paused-turn projection, otherwise a reconnect cannot render the same
+      // outcome as the live socket push.
+      const { parseActivityState } = await import('../hooks/useChatSession')
+      const parsed = parseActivityState({
+        type: 'activity_state',
+        state: 'failed',
+        is_terminal: true,
+        pending_intervention: false,
+        active_resume_id: 'resume-42',
+        resume_state: 'unresumable',
+        terminal_reason_code: 'expired',
+        terminal_message_key: 'conversation_turn_expired',
+        message: 'This confirmation expired. Nothing was applied.',
+        timestamp: '2026-01-02T03:04:05Z',
+      })
+
+      expect(parsed?.kind).toBe('failed')
+      expect(parsed?.activeResumeId).toBe('resume-42')
+      expect(parsed?.resumeState).toBe('unresumable')
+      expect(parsed?.terminalReason).toBe('expired')
+      expect(parsed?.message).toBe('This confirmation expired. Nothing was applied.')
+      expect(parsed?.pendingIntervention).toBe(false)
+      expect(parsed?.persisted).toBe(true)
+    })
+
+    it('keeps a live resume id for an answerable waiting pause', async () => {
+      const { parseActivityState } = await import('../hooks/useChatSession')
+      const parsed = parseActivityState({
+        type: 'activity_state',
+        state: 'waiting_for_human',
+        pending_intervention: true,
+        active_resume_id: 'resume-live',
+        resume_state: 'waiting_for_human',
+      })
+
+      expect(parsed?.activeResumeId).toBe('resume-live')
+      expect(parsed?.resumeState).toBe('waiting_for_human')
+      expect(parsed?.terminalReason).toBeNull()
+    })
+
+    it('ignores unknown resume states instead of widening the vocabulary', async () => {
+      const { parseActivityState } = await import('../hooks/useChatSession')
+      const parsed = parseActivityState({
+        type: 'activity_state',
+        state: 'thinking',
+        resume_state: 'not_a_real_state',
+      })
+      expect(parsed?.resumeState).toBeNull()
+    })
   })
 
   describe('connect-time hydration', () => {
@@ -157,6 +209,67 @@ describe('useChatSession — persisted activity hydration', () => {
       sendWsMessage(sockets[0], { type: 'activity_state', state: null })
 
       expect(result.current.chatStatus).toBeNull()
+      expect(result.current.turnInFlight).toBe(false)
+    })
+
+    it('survives the terminal message and live resume id into chatStatus', async () => {
+      const { useChatSession } = await import('../hooks/useChatSession')
+      const { result } = renderHook(() => useChatSession('hydrate-resume'))
+
+      sendWsMessage(sockets[0], {
+        type: 'activity_state',
+        state: 'timed_out',
+        is_terminal: true,
+        active_resume_id: 'resume-7',
+        resume_state: 'unresumable',
+        terminal_reason_code: 'expired',
+        message: 'The confirmation window closed. Nothing was applied.',
+      })
+
+      expect(result.current.chatStatus?.kind).toBe('timed_out')
+      expect(result.current.chatStatus?.activeResumeId).toBe('resume-7')
+      expect(result.current.chatStatus?.resumeState).toBe('unresumable')
+      expect(result.current.chatStatus?.terminalReason).toBe('expired')
+      expect(result.current.chatStatus?.message).toBe(
+        'The confirmation window closed. Nothing was applied.',
+      )
+      expect(result.current.turnInFlight).toBe(false)
+    })
+  })
+
+  describe('live chat_status projection', () => {
+    it('keeps the optional resume fields on a live status event', async () => {
+      const { useChatSession } = await import('../hooks/useChatSession')
+      const { result } = renderHook(() => useChatSession('live-resume'))
+
+      sendWsMessage(sockets[0], {
+        type: 'chat_status',
+        status: 'thinking',
+        active_resume_id: 'resume-9',
+        resume_state: 'resuming',
+        timestamp: '2026-01-01T00:00:00Z',
+      })
+
+      expect(result.current.chatStatus?.kind).toBe('thinking')
+      expect(result.current.chatStatus?.activeResumeId).toBe('resume-9')
+      expect(result.current.chatStatus?.resumeState).toBe('resuming')
+      expect(result.current.chatStatus?.persisted).toBe(false)
+    })
+
+    it('keeps a terminal reason + message on a live terminal status event', async () => {
+      const { useChatSession } = await import('../hooks/useChatSession')
+      const { result } = renderHook(() => useChatSession('live-terminal'))
+
+      sendWsMessage(sockets[0], {
+        type: 'chat_status',
+        status: 'timed_out',
+        terminal_reason_code: 'expired',
+        message: 'Expired — nothing was applied.',
+      })
+
+      expect(result.current.chatStatus?.kind).toBe('timed_out')
+      expect(result.current.chatStatus?.terminalReason).toBe('expired')
+      expect(result.current.chatStatus?.message).toBe('Expired — nothing was applied.')
       expect(result.current.turnInFlight).toBe(false)
     })
   })

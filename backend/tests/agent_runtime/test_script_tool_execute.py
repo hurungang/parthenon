@@ -336,3 +336,132 @@ class TestInlineSourceExecution:
         assert response.result is None
         assert response.error is not None
         assert "sandbox" in response.error.lower()
+
+
+class TestReplayOnlyExecution:
+    """Optimization verification is REPLAY-ONLY (hard safety requirement).
+
+    A ``replay_required`` request answers every ``tools.call`` from the
+    recorded reference transcript: the live session-bound MCP client is never
+    built, never called, and a missing transcript fails closed.
+    """
+
+    _SOURCE_WITH_TOOL_CALL = (
+        "def run(context, tools):\n"
+        "    project = tools.call('supabase____get_project', {'id': context['project_id']})\n"
+        "    return {'project': project['name']}\n"
+    )
+
+    @pytest.mark.asyncio
+    async def test_replay_required_uses_recorded_response_not_live(self, monkeypatch):
+        def _fail_session_bound(cm: Any) -> Any:
+            raise AssertionError(
+                "the live session-bound tool client must NEVER be built for "
+                "replay-only verification"
+            )
+
+        monkeypatch.setattr(
+            script_tools, "_session_bound_tool_client", _fail_session_bound
+        )
+
+        response = await script_tools.execute_script_tool(
+            _body(
+                tool_name="script____inline",
+                tool_args={"input": {"project_id": "p-1"}},
+                python_source=self._SOURCE_WITH_TOOL_CALL,
+                reference_tool_responses=[
+                    {
+                        "tool": "supabase____get_project",
+                        "arguments": {"id": "p-1"},
+                        "response": {"name": "Replayed"},
+                    }
+                ],
+                replay_required=True,
+            ),
+            _request(),
+        )
+
+        assert response.error is None
+        assert response.result == {"project": "Replayed"}
+
+    @pytest.mark.asyncio
+    async def test_replay_required_without_transcript_fails_closed(self, monkeypatch):
+        def _fail_session_bound(cm: Any) -> Any:
+            raise AssertionError("live client must not be used")
+
+        monkeypatch.setattr(
+            script_tools, "_session_bound_tool_client", _fail_session_bound
+        )
+
+        response = await script_tools.execute_script_tool(
+            _body(
+                tool_name="script____inline",
+                python_source="def run(context, tools):\n    return {'ok': True}\n",
+                replay_required=True,
+            ),
+            _request(),
+        )
+
+        assert response.result is None
+        assert "recorded tool responses" in (response.error or "")
+
+    @pytest.mark.asyncio
+    async def test_replay_miss_is_a_structured_tool_error(self, monkeypatch):
+        """A tool call with no recorded response fails with a clear message."""
+
+        def _fail_session_bound(cm: Any) -> Any:
+            raise AssertionError("live client must not be used")
+
+        monkeypatch.setattr(
+            script_tools, "_session_bound_tool_client", _fail_session_bound
+        )
+
+        response = await script_tools.execute_script_tool(
+            _body(
+                tool_name="script____inline",
+                tool_args={"input": {"project_id": "p-1"}},
+                python_source=self._SOURCE_WITH_TOOL_CALL,
+                reference_tool_responses=[
+                    {
+                        "tool": "supabase____list_projects",
+                        "arguments": {},
+                        "response": [],
+                    }
+                ],
+                replay_required=True,
+            ),
+            _request(),
+        )
+
+        assert response.result is None
+        assert "No recorded response for tool 'supabase____get_project'" in (
+            response.error or ""
+        )
+
+    @pytest.mark.asyncio
+    async def test_normal_script_tool_path_keeps_the_live_client(self, monkeypatch):
+        """Without ``replay_required`` (agent-invoked ``script____<name>``) the
+        session-bound live client is used unchanged."""
+        tool_client = _RecordingToolClient()
+        monkeypatch.setattr(
+            script_tools, "_session_bound_tool_client", lambda cm: tool_client
+        )
+        monkeypatch.setattr(
+            script_tools,
+            "ScriptRegistryClient",
+            lambda cm: _FakeRegistry(
+                {
+                    "name": "report",
+                    "script_version_label": "v1",
+                    "python_source": self._SOURCE_WITH_TOOL_CALL,
+                }
+            ),
+        )
+
+        response = await script_tools.execute_script_tool(
+            _body(tool_args={"project_id": "p-1"}), _request()
+        )
+
+        assert response.error is None
+        assert response.result == {"project": "Ada"}
+        assert len(tool_client.calls) == 1

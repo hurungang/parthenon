@@ -33,6 +33,7 @@ __all__ = [
     "TENANT_UNSET",
     "get_tenant_context",
     "is_tenancy_enabled",
+    "optional_tenant_context",
     "require_tenant_context",
     "set_tenant_context",
 ]
@@ -146,6 +147,25 @@ def is_tenancy_enabled(request: Request) -> bool:
     decide whether tenancy features apply.
     """
     return bool(getattr(request.state, "tenancy_enabled", False))
+
+
+def optional_tenant_context(request: Request) -> TenantContext | None:
+    """The request's resolved tenant context, or ``None`` when tenancy is off.
+
+    Reads ONLY the middleware-resolved ``request.state`` value — **never** the
+    module contextvar.  The contextvar is not bound on bypassed paths (the
+    ``/api/v1/internal/*`` data plane resolves its tenant from the signed
+    headers in ``require_internal_tenant_context`` instead) and is not a
+    reliable propagation source downstream of ``BaseHTTPMiddleware``.
+
+    Use this on HTTP paths that need to thread the tenant into an outbound
+    call; use the dependency's verified :class:`TenantContext` on internal
+    data-plane paths.
+    """
+    if not is_tenancy_enabled(request):
+        return None
+    context = get_tenant_context(request)
+    return context if isinstance(context, TenantContext) else None
 
 
 def require_tenant_context(request: Request) -> TenantContext:

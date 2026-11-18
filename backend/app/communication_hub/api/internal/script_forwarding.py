@@ -56,6 +56,10 @@ class ScriptForwardRequest(BaseModel):
     AR executes the sandbox with the same identity as the agent's own tool
     calls (SEC1). ``tool_args`` normally holds ``{"input": {...}}`` — the
     script's ``context``.
+
+    ``reference_tool_responses`` + ``replay_required`` are the REPLAY-ONLY
+    verification contract: optimization verification must never call live MCP
+    tools, so AR answers every ``tools.call`` from the recorded transcript.
     """
 
     session_id: str
@@ -63,6 +67,8 @@ class ScriptForwardRequest(BaseModel):
     tool_args: dict[str, Any] = Field(default_factory=dict)
     python_source: str | None = None
     conv_session_id: str | None = None
+    reference_tool_responses: list[dict[str, Any]] | None = None
+    replay_required: bool = False
 
 
 @router.post("/forward")
@@ -82,6 +88,10 @@ async def forward_script_execution(
         payload["python_source"] = body.python_source
     if body.conv_session_id:
         payload["conv_session_id"] = body.conv_session_id
+    if body.reference_tool_responses:
+        payload["reference_tool_responses"] = body.reference_tool_responses
+    if body.replay_required:
+        payload["replay_required"] = True
 
     from app.communication_hub.api.internal.tool_routing import (
         _post_ar_script_execute,
@@ -89,10 +99,12 @@ async def forward_script_execution(
 
     logger.info(
         "Forwarding CC verification script to Agent Runtime (session=%s, "
-        "agent_type=%s, inline=%s)",
+        "agent_type=%s, inline=%s, replay=%s, recorded_calls=%s)",
         body.session_id[:8],
         body.agent_type_id[:8] if body.agent_type_id else "",
         bool(body.python_source),
+        body.replay_required,
+        len(body.reference_tool_responses or []),
     )
     try:
         return await _post_ar_script_execute(_ar_base(), payload, request)

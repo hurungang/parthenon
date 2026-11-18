@@ -7,6 +7,40 @@ from pydantic import BaseModel, ConfigDict, model_validator
 from app.db.models.intervene import InterveneRequestStatus, InterventionType
 
 
+class LiveTestOperationSummary(BaseModel):
+    """One entry of the tool-call PREVIEW (never secrets).
+
+    Derived server-side from the approved script's own ``tools.call(...)``
+    lines: it describes what the script will call. It is **not** the unit of
+    approval — the whole script is.
+    """
+
+    tool_name: str
+    arguments: dict = {}
+    purpose: str | None = None
+
+
+class LiveTestApprovalSummary(BaseModel):
+    """The live-test approval attached to an intervention read.
+
+    Present only when the intervention is the decision point of an
+    ``OptimizationLiveTestRequest``; a plain ask/decide request stays
+    unchanged. Lets the chat re-surface the approved script, its tool-call
+    preview (and the expiry) after a reconnect and tells the client the
+    approval is single-use: one end-to-end run of the script.
+    """
+
+    live_test_request_id: uuid.UUID
+    status: str
+    expires_at: datetime | None = None
+    script_version_id: uuid.UUID | None = None
+    script_name: str | None = None
+    script_version_label: str | None = None
+    operations: list[LiveTestOperationSummary] = []
+    executed_operations: list[dict] | None = None
+    target_agent_type_id: uuid.UUID | None = None
+
+
 class InterveneRequestCreate(BaseModel):
     """Payload to create a new intervene request from an agent session."""
 
@@ -38,6 +72,9 @@ class InterveneRequestRead(BaseModel):
     response: "InterveneResponseRead | None" = None
     agent_name: str | None = None
     triggered_by_user_name: str | None = None
+    #: Present only for a live-test approval (see ``LiveTestApprovalSummary``).
+    #: A plain question / choice / approval intervention leaves it null.
+    live_test: LiveTestApprovalSummary | None = None
 
 
 class InterveneResponseSubmit(BaseModel):

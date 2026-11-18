@@ -20,12 +20,19 @@ export interface TenantSettings {
   your_role: TenantRole
   /** True when the caller holds the immutable root (owner) membership */
   is_root: boolean
+  /**
+   * Answerable window for a paused conversational turn (seconds). Resolved
+   * server-side: the tenant override, else the platform default (900 = 15 min).
+   */
+  conversation_turn_resume_ttl_seconds: number
 }
 
 export interface TenantSettingsUpdate {
   name?: string | null
   admin_contact_name?: string | null
   admin_contact_email?: string | null
+  /** Tenant answerable-window override (seconds); server rejects < 30. */
+  conversation_turn_resume_ttl_seconds?: number | null
 }
 
 export interface OnboardingStatus {

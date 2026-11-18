@@ -1461,3 +1461,27 @@ def test_extract_structured_output_returns_none_for_none_response():
     
     assert result is None
 
+
+
+def test_raw_output_for_failed_validation_unwraps_plain_text():
+    """A plain-text result keeps its text as the Result-tab raw fallback.
+
+    Optimization command runs return a markdown summary; the typed validation
+    wraps it as {"value": text}. Storing ``str(payload)`` showed a Python dict
+    repr instead of the formatted result.
+    """
+    from app.services.agents.runtime_executor import _raw_output_for_failed_validation
+
+    assert (
+        _raw_output_for_failed_validation({"value": "Optimization complete.\n\n**Summary:**"})
+        == "Optimization complete.\n\n**Summary:**"
+    )
+    # Structured payloads keep the existing repr fallback.
+    assert _raw_output_for_failed_validation({"pnr": "ABC123"}) == "{'pnr': 'ABC123'}"
+
+
+def test_raw_output_for_failed_validation_handles_non_value_dicts():
+    from app.services.agents.runtime_executor import _raw_output_for_failed_validation
+
+    assert _raw_output_for_failed_validation({"value": 3}) == "{'value': 3}"
+    assert _raw_output_for_failed_validation({"value": "x", "other": 1}) == "{'value': 'x', 'other': 1}"

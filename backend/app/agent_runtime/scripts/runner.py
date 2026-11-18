@@ -404,6 +404,7 @@ class ScriptRunner:
         script_version_label: str | None = None,
         caps: SandboxCaps | None = None,
         initial_context: dict[str, Any] | None = None,
+        tool_calls_out: list[dict[str, Any]] | None = None,
     ) -> dict[str, Any]:
         """Execute a whole model-authored script (``ScriptVersion.python_source``)
         in the sandbox (N3) with the session's MCP-only client injected.
@@ -411,6 +412,11 @@ class ScriptRunner:
         Returns the script's result payload with ``__execution_telemetry__``
         attached (tools invoked through the facade, duration). Typed sandbox
         failures propagate for fallback classification (Flow C).
+
+        ``tool_calls_out`` is an optional per-call sink (tool name, arguments,
+        duration, bounded result, error). The approved live-test runner uses it
+        to record each ``tools.call`` in the raw tool log and in the ledger's
+        script-run record; replay/verification callers leave it unset.
         """
         if not session_id or not agent_type_id:
             raise ExecutionError(
@@ -424,6 +430,15 @@ class ScriptRunner:
             f"Sandboxed script started (version {script_version_label or 'n/a'})",
             {"script_version": script_version_label, "sandboxed": True},
         )
+        # Detailed per-call records (name, arguments, duration, result preview)
+        # for the execution log — a fully-scripted run must not be a black box.
+        # The caller may supply its own sink (the approved live-test runner
+        # reads it even when the run fails), otherwise the local list is used so
+        # telemetry and the per-call log entries are always populated.
+        local_tool_calls: list[dict[str, Any]] = []
+        tool_calls: list[dict[str, Any]] = (
+            tool_calls_out if tool_calls_out is not None else local_tool_calls
+        )
         try:
             loop = asyncio.get_running_loop()
             result = await asyncio.to_thread(
@@ -436,6 +451,7 @@ class ScriptRunner:
                 input_context=initial_context,
                 caps=caps,
                 loop=loop,
+                tool_calls_out=tool_calls,
             )
         except (SandboxViolationError, ResourceLimitExceededError) as exc:
             await self._ship_log(
@@ -469,9 +485,33 @@ class ScriptRunner:
             raise ExecutionError(
                 f"Tool call inside sandboxed script failed: {detail}"
             ) from exc
+        # Ship each script-internal tool call: name, arguments, duration and a
+        # result preview. This is the missing "what did the script actually
+        # do?" evidence for fully-scripted runs.
+        for call in tool_calls:
+            await self._ship_log(
+                "script_tool_call",
+                f"Script tool call: {call['tool_name']}",
+                {
+                    "script_version": script_version_label,
+                    "tool": call["tool_name"],
+                    "arguments": call["arguments"],
+                    "duration_ms": call["duration_ms"],
+                    "result_preview": call["result_preview"],
+                    # Full recorded response (capped) — the replay source for
+                    # optimization verification.
+                    "result": call.get("result"),
+                    "result_truncated": bool(call.get("result_truncated", False)),
+                    "error": call["error"],
+                },
+                log_level="WARNING" if call.get("error") else "INFO",
+            )
+
         telemetry = {
             "duration_ms": int((time.monotonic() - started) * 1000),
             "sandboxed": True,
+            "tool_call_count": len(tool_calls),
+            "tools_invoked": [call["tool_name"] for call in tool_calls],
         }
         if isinstance(result, dict):
             result.setdefault("__execution_telemetry__", telemetry)
@@ -483,6 +523,8 @@ class ScriptRunner:
                 "script_version": script_version_label,
                 "duration_ms": telemetry["duration_ms"],
                 "outcome_brief": self._brief(result),
+                "tool_call_count": len(tool_calls),
+                "tools_invoked": [call["tool_name"] for call in tool_calls],
             },
         )
         return result

@@ -42,12 +42,17 @@ class InterveneRequestStore:
         choices: list[str] | None = None,
         conversation_session_id: uuid.UUID | None = None,
         delegation_depth: int = 0,
+        idempotency_key: str | None = None,
     ) -> InterveneRequest:
         """Create a new intervene request for an agent session.
 
         ``agent_session_id`` may be None for conversation-scoped requests
         (FIX-20261031-133253): the conversational assistant has no agent_jobs
         row; ``conversation_session_id`` is then the resume key.
+
+        ``idempotency_key`` is the paused turn's opaque key supplied by Agent
+        Runtime.  It becomes the durable resume record's ``idempotency_key`` so
+        a replayed tool task and the confirmed write share one stable key.
 
         Raises ValueError if a pending request already exists for the session.
         """
@@ -116,6 +121,42 @@ class InterveneRequestStore:
                 )
                 span.set_attribute("intervene.question_turn_created", True)
 
+                # Durable pause: register the resume index in the same
+                # transaction that persists the confirmation request. A
+                # replayed pause intent for this intervention reuses the live
+                # record; a newer pause supersedes it. This is what makes the
+                # "waiting_for_human" activity state structurally answerable.
+                from app.services.conversations.turn_resume_settings import (
+                    resolve_resume_expiry,
+                )
+                from app.services.conversations.turn_resume_store import (
+                    ConversationTurnResumeStore,
+                )
+
+                # Control Center is the authority for the answerable window:
+                # the pause's expiry is the tenant's configured resume TTL
+                # (default 15 minutes), never the intervention timeout and never
+                # a value supplied by Agent Runtime.
+                tenant_id = request.tenant_id
+                if tenant_id is None:
+                    session_row = await db.get(
+                        ConversationSession, conversation_session_id
+                    )
+                    tenant_id = (
+                        session_row.tenant_id if session_row is not None else None
+                    )
+                expires_at = await resolve_resume_expiry(db, tenant_id=tenant_id)
+
+                resume = await ConversationTurnResumeStore().create_or_reuse(
+                    conversation_session_id,
+                    db,
+                    intervene_request_id=request.id,
+                    expires_at=expires_at,
+                    idempotency_key=idempotency_key,
+                    tenant_id=tenant_id,
+                )
+                span.set_attribute("intervene.resume_id", str(resume.id))
+
             return request
 
     async def get_request(
@@ -136,6 +177,22 @@ class InterveneRequestStore:
         request = result.scalar_one_or_none()
         if request:
             await self._populate_user_names(db, request)
+            try:
+                from app.services.agents.optimization_live_test_service import (
+                    get_live_test_service,
+                )
+
+                summaries = await get_live_test_service().pending_intervention_summaries(
+                    db, [request.id]
+                )
+                if request.id in summaries:
+                    request.live_test = summaries[request.id]
+            except Exception:  # noqa: BLE001 — projection is additive, never fatal
+                logger.warning(
+                    "Failed to attach the live-test summary for request %s",
+                    request_id,
+                    exc_info=True,
+                )
         return request
 
     async def list_requests(
@@ -386,9 +443,35 @@ class InterveneRequestStore:
 
         Results are ordered by created_at ascending (FIFO queue semantics).
         Returns an empty list (not an error) when no pending requests exist.
+
+        A live-test approval additionally carries its ledger projection
+        (``live_test``) so a reconnecting chat can re-surface the exact
+        operation list — and any overdue request is closed first, so a dead
+        approval is never offered.
         """
         with tracer.start_as_current_span("intervene.list_pending_for_conversation") as span:
             span.set_attribute("intervene.conversation_session_id", str(conversation_session_id))
+
+            # Lazy expiry: an approval whose answerable window elapsed must stop
+            # being offered before we answer "what is pending?".
+            try:
+                from app.services.agents.optimization_live_test_service import (
+                    get_live_test_service,
+                )
+
+                expired = await get_live_test_service().expire_overdue(
+                    db, conversation_session_id=conversation_session_id
+                )
+                if expired:
+                    await db.flush()
+            except Exception:  # noqa: BLE001 — a read must never fail on the sweep
+                logger.warning(
+                    "Live-test expiry check failed while listing pending "
+                    "interventions for conversation %s",
+                    conversation_session_id,
+                    exc_info=True,
+                )
+
             stmt = (
                 select(InterveneRequest)
                 .options(
@@ -420,6 +503,26 @@ class InterveneRequestStore:
                 if req.agent_session:
                     req.agent_name = req.agent_session.agent_type.name if req.agent_session.agent_type else None
                     req.triggered_by_user_name = identity_map.get(req.agent_session.triggered_by_user_id) if req.agent_session.triggered_by_user_id else None
+
+            # Attach the live-test approval projection (single-use ledger row).
+            try:
+                from app.services.agents.optimization_live_test_service import (
+                    get_live_test_service,
+                )
+
+                summaries = await get_live_test_service().pending_intervention_summaries(
+                    db, [req.id for req in requests]
+                )
+                for req in requests:
+                    summary = summaries.get(req.id)
+                    if summary is not None:
+                        req.live_test = summary
+            except Exception:  # noqa: BLE001 — projection is additive, never fatal
+                logger.warning(
+                    "Failed to attach live-test summaries for conversation %s",
+                    conversation_session_id,
+                    exc_info=True,
+                )
 
             return requests
 

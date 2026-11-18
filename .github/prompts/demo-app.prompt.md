@@ -83,6 +83,23 @@ The `airline-booking-demo` change is a **live-platform** demo (MCP demo app book
 
 | Feature | Test | What You'll See |
 |---------|------|-----------------|
+| **Optimization Split** (separate-optimization-from-execution) | | |
+| Separate, gated Optimize | `Optimize gate — blocks then enables the separate Optimize action > a completed run satisfies the gate and Optimize becomes enabled without a reload` | Run stays execution-only; Optimize is disabled with a reason until a successful run, then enables and launches a dedicated optimization run |
+| Self-healing plan (requires-fix) | `Optimized plan — requires-fix alert and re-optimization journey > optimize → ready plan → fallback marks requires_fix → re-optimize from the alert refreshes the tab` | Fallback marks the plan requires_fix with auto-recorded feedback; Re-optimize carries the prior plan + feedback and refreshes the tab |
+| Explicit plan generation | `Agent Plan Mode — explicit-only generation (mocked) > explicit Generate plan authors the plan and it renders without a page reload` | Saving an agent authors nothing; the Plan Preview offers an explicit Generate plan that renders the plan without a reload |
+| Authoring model + System Config | `System Config — plan & workflow authoring model > unset authoring model: reminder is visible, and saving a model clears it` | The workspace authoring model is used for plan + optimization authoring; an unset model shows a reminder that clears on save |
+| Conversational agents excluded | `Agent Plan Mode — explicit-only generation (mocked) > conversational agent: no plan-generation affordances, only the explanation` | Conversational agents expose no Plan or Optimize affordances — only a clear explanation |
+| **Conversational Optimizer** (optimizer-conversational-agent) | | |
+| Talk to optimizer (typed) | `Conversational optimizer — conversation journey (mocked) > typed agent: entry → scoped chat → activity → plan refresh without a reload` | Open the optimizer chat from the Optimized Plan tab, watch the work, and see the plan refresh in place |
+| Conversational agent entry | `Conversational optimizer — conversation journey (mocked) > conversational agent: same entry, informational empty state, no work started` | The same entry on a conversational agent; a missing plan is informational and nothing is fabricated |
+| In-chat ask/decide | `Conversational optimizer — conversation journey (mocked) > in-chat ask/decide: the question pauses the turn and is answered once` | The optimizer asks inline; the composer blocks until the operator answers |
+| Out-of-scope refusal | `Conversational optimizer — conversation journey (mocked) > an out-of-scope request is declined in the conversation with zero writes` | A prompt-injected cross-agent request is refused with zero writes |
+| Business chat unaffected | `Conversational optimizer — conversation journey (mocked) > a business conversation on the same agent type keeps the ordinary chat` | Optimization mode does not leak into normal business chat |
+| Live-test approve | `Live-test approval — approve runs exactly the listed operations once > review → approve → running → executed with results → plan ready` | Approve the exact operation list once; results return to the chat and the plan lands ready |
+| Live-test deny | `Live-test approval — approve runs exactly the listed operations once > deny runs nothing, keeps replay-only and does not retry` | Deny → nothing runs, replay-only stays, no retry |
+| Live-test expiry | `Live-test approval — approve runs exactly the listed operations once > expiry is a distinct terminal state — nothing ran and no retry` | An unanswered request expires; nothing ran and it is not retried |
+| Optimizer model (stale) | `System Config — optimizer model (workspace-scoped) > a stale saved value stays visible, blocks Save, and can be re-selected` | A removed model stays visible disabled, blocks Save, and can be re-selected |
+| Optimizer model missing | `Optimizer model missing — entry annotated, chat blocked, System Config path > the Optimized Plan entry explains the reason and the chat blocks on the model` | No usable model → annotated entry, blocked composer, System Config shortcut |
 | **API Key Management** (api-key-mcp-hub) | | |
 | API Key List View | `API Key Management - Mocked Admin CRUD > displays status chips` | Active (green) and revoked (red) status chips in key table |
 | Create API Key | `API Key Management - Create Key Flow > can select identity and role then create` | Two-step dialog: select identity+role → one-time key reveal with copy |

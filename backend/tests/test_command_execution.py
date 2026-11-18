@@ -231,13 +231,13 @@ class TestCommandTokenBudget:
         assert guardrail.token_budget == 123_456
 
 
-# ── Issue regression: the command run's final output serves the USER ──────────
+# ── Issue regression: the command run's final output serves the OPERATOR ─────
 
 
-def test_command_mission_final_answer_is_business_result_not_meta_talk():
-    """The command prompt must separate 'do the task for the user' (final
-    message = the user's result in the required format) from 'record
-    optimization details via your tools, not in your final message'."""
+def test_command_mission_final_answer_is_operator_facing_status_report():
+    """The reworded mission separates 'author + verify the plan via tools'
+    from 'report the outcome in the final message': an optimization run is not
+    a business run, so the final message is a concise operator-facing status."""
     from app.services.agents.command_prompts import (
         OPTIMIZE_AND_VERIFY_COMMAND,
         build_command_mission,
@@ -246,18 +246,50 @@ def test_command_mission_final_answer_is_business_result_not_meta_talk():
     mission = build_command_mission(OPTIMIZE_AND_VERIFY_COMMAND, agent_type_id="x")
     normalized = " ".join(mission.split())
     assert "Final answer" in mission
-    assert "Your FINAL message must BE the user-facing result of that task" in normalized
-    assert "ONLY into the optimized plan record through your tools" in normalized
-    assert "never into your final message" in normalized
-    # The old meta-report instruction is gone.
-    assert "Respond with a concise summary of what you found" not in mission
+    assert (
+        "Your FINAL message must be a short status report for the operator"
+        in normalized
+    )
+    assert "This is an optimization run, not a business run" in normalized
+    assert "keep the final message concise and operator-facing" in normalized
+
+
+def test_command_mission_verifies_syntax_and_tool_invocation_not_identical_output():
+    """The optimization goal is correct script syntax + correct tool
+    invocation — NOT reproducing the reference execution's output. Differing
+    or empty tool results must not trigger re-attempts."""
+    from app.services.agents.command_prompts import OPTIMIZE_AND_VERIFY_COMMAND
+
+    normalized = " ".join(OPTIMIZE_AND_VERIFY_COMMAND.split())
+    assert "correct syntax" in normalized
+    assert "invokes the agent's tools CORRECTLY" in normalized
+    # The identical-result framing is explicitly rejected.
+    assert "A script does NOT need to reproduce the reference execution's tool" in normalized
+    assert "do NOT treat it as a failure" in normalized
+    assert "NEVER re-attempt a script merely to force an output match" in normalized
+    assert "Do NOT re-attempt it to force an identical result" in normalized
+
+
+def test_command_mission_mandates_bounded_needs_feedback_stop_with_error():
+    """No dead loop: when confidence cannot be reached the run MUST stop and
+    persist ``needs_feedback`` with a mandatory ``error`` reason."""
+    from app.services.agents.command_prompts import OPTIMIZE_AND_VERIFY_COMMAND
+
+    normalized = " ".join(OPTIMIZE_AND_VERIFY_COMMAND.split())
+    assert "needs_feedback" in normalized
+    assert "you MUST STOP" in normalized
+    assert "`error` is MANDATORY" in normalized
+    assert "no dead loop" in normalized
+    assert "never keep retrying to avoid it" in normalized
+    # Per-script retries are explicitly bounded.
+    assert "Bounded 3 attempts per script" in normalized
 
 
 @pytest.mark.asyncio
-async def test_command_run_final_answer_is_business_result():
-    """Regression: a command run with a mocked LLM whose scripted final
-    response is the business result completes with THAT result as the session
-    output — no optimization meta-talk leaks into the user-facing result."""
+async def test_command_run_final_message_is_passed_through():
+    """A command run completes with its final assistant message as the session
+    output (the optimize mission defines that message as an operator-facing
+    status report; the executor must not rewrite it)."""
     from langchain_core.messages import AIMessage
 
     from app.services.agents.runtime_executor import AgentRuntimeExecutor
@@ -266,16 +298,16 @@ async def test_command_run_final_answer_is_business_result():
     session_id = str(uuid.uuid4())
     agent_type_id = str(uuid.uuid4())
 
-    business_result = (
-        "# Q3 Sales Summary\n\nTotal revenue: $1.2M (up 8% QoQ).\n"
-        "Top region: EMEA. Churn: 2.1%."
+    status_report = (
+        "Optimized plan authored and verified. Script `fetch-contact` compiles "
+        "and its tool calls validate. No re-authoring was needed."
     )
     job_data = {
         "id": session_id,
         "agent_type_id": agent_type_id,
         "input_data": {
             "__command": OPTIMIZE_AND_VERIFY_SLUG,
-            "message": "produce the Q3 sales summary",
+            "message": "author the optimized plan",
         },
     }
     context = {
@@ -301,9 +333,8 @@ async def test_command_run_final_answer_is_business_result():
     data_client.log_prompt = AsyncMock()
 
     fake_agent = MagicMock()
-    # The scripted final response IS the business result.
     fake_agent.ainvoke = AsyncMock(
-        return_value={"messages": [AIMessage(content=business_result)]}
+        return_value={"messages": [AIMessage(content=status_report)]}
     )
 
     with patch.object(
@@ -320,10 +351,4 @@ async def test_command_run_final_answer_is_business_result():
     ):
         output_data = await executor._run_task_loop_ar(job_data, context, data_client)
 
-    result = output_data.get("result")
-    assert result == business_result
-    # No optimization meta-talk in the user-facing result.
-    lowered = str(result).lower()
-    for meta_marker in ("optimized plan", "generate_script", "verification",
-                        "tool-name", "authored"):
-        assert meta_marker not in lowered
+    assert output_data.get("result") == status_report

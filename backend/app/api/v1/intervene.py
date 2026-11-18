@@ -37,13 +37,21 @@ async def _resume_agent_session(
     session_id: uuid.UUID,
     response_value: dict,
     tenant_context: "TenantContext | None" = None,
+    *,
+    resume_id: uuid.UUID | None = None,
+    request_id: uuid.UUID | None = None,
 ) -> str | None:
     """Notify Agent Runtime that this session can resume after intervention.
 
-    Returns the Agent Runtime resume status (``"resumed"`` or
-    ``"not_awaiting"``), or ``None`` when the resume call itself failed.
-    Failures are logged but do NOT propagate — the response has already been
-    committed and the operator sees success regardless of the resume call.
+    Returns the dispatch status (``"resumed"``, ``"already_resolved"``,
+    ``"unresumable"``, ``"not_awaiting"``, ``"in_flight"``, …), or ``None`` when
+    the resume call itself failed.  Failures are logged but do NOT propagate —
+    the response has already been committed and the operator sees success
+    regardless of the resume call.
+
+    ``resume_id`` / ``request_id`` carry the durable resume identity so
+    Communication Hub can de-duplicate a repeated answer and the confirmed
+    write can be applied exactly once.
     """
     try:
         from app.services.control_center.agent_runtime_client import (
@@ -51,13 +59,17 @@ async def _resume_agent_session(
         )
         client = AgentRuntimeClient()
         result = await client.resume_session(
-            session_id, response_value, tenant_context=tenant_context
+            session_id,
+            response_value,
+            tenant_context=tenant_context,
+            resume_id=resume_id,
+            request_id=request_id,
         )
         status = str((result or {}).get("status") or "resumed")
         if status == "not_awaiting":
             logger.warning(
-                "Agent Runtime reports session %s is not awaiting resume "
-                "(likely a service restart orphaned the suspended turn)",
+                "Resume dispatch reports session %s is not awaiting resume "
+                "(no live durable resume record for this turn)",
                 session_id,
             )
         else:
@@ -154,13 +166,8 @@ async def respond_to_intervene_request(
     # trigger greenlet_spawn in an async context).
     req = await db.get(InterveneRequest, request_id)
     # FIX-20261031-133253: conversation-scoped requests (conversational
-    # assistant, no agent_jobs row) resume via the conversation session id —
-    # Agent Runtime resolves it against the in-process conversational HITL
-    # registry first.
+    # assistant, no agent_jobs row) resume through the durable resume record.
     agent_session_id = req.agent_session_id if req else None
-    resume_session_id: uuid.UUID | None = agent_session_id
-    if resume_session_id is None and req is not None:
-        resume_session_id = req.conversation_session_id
     response_value: dict = {}
     if body.approval_value is not None:
         response_value["approval_value"] = body.approval_value
@@ -169,14 +176,47 @@ async def respond_to_intervene_request(
     if body.text_value is not None:
         response_value["text_value"] = body.text_value
 
+    # Same transaction as the stored answer: advance the durable resume record
+    # (conversation-scoped pauses only).  Terminal records return the stored
+    # outcome; an elapsed window settles as `unresumable/expired`.
+    from app.services.conversations.turn_resolution import (
+        advance_answered_intervention,
+        dispatch_answered_conversation_turn,
+    )
+
+    advance = await advance_answered_intervention(
+        db, req, operator_user_id=identity.id
+    )
+
     # Convert to Pydantic model before commit to avoid serializing an
     # expired ORM object after commit() expires all tracked instances.
     response_data = InterveneResponseRead.model_validate(orm_response)
     await db.commit()
 
-    # Resume the agent session (or the paused conversational turn) so
-    # execution continues.
-    if resume_session_id is not None:
+    if req.conversation_session_id is not None:
+        # Multi-tenancy: sign the request-resolved tenant onto the resume call
+        # so the resumed turn stays tenant-bound. Resolved from the REQUEST
+        # (never the module contextvar — the internal WS answer path resolves
+        # its tenant from signed headers and never binds the contextvar).
+        # Switch off → None → no headers, single-tenant behaviour unchanged.
+        from app.core.tenant_context import optional_tenant_context
+
+        if advance.dispatch or advance.expired:
+            await dispatch_answered_conversation_turn(
+                db,
+                req,
+                advance,
+                response_value,
+                tenant_context=optional_tenant_context(http_request),
+            )
+        else:
+            logger.info(
+                "Answered intervention %s is already terminal (%s) — returning "
+                "the stored outcome without re-dispatching",
+                request_id,
+                advance.reason_code,
+            )
+    elif agent_session_id is not None:
         # Multi-tenancy: sign the resolved tenant onto the resume call so
         # the resumed run stays tenant-bound (switch off → no headers,
         # single-tenant behaviour unchanged).
@@ -188,7 +228,7 @@ async def respond_to_intervene_request(
             if _ctx.is_set:
                 _tenant_context = _ctx
         await _resume_agent_session(
-            resume_session_id, response_value, tenant_context=_tenant_context
+            agent_session_id, response_value, tenant_context=_tenant_context
         )
     else:
         logger.warning(

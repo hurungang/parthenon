@@ -100,6 +100,36 @@ class TestChForwardEndpoint:
         assert result == {}
 
     @pytest.mark.asyncio
+    async def test_forward_passes_replay_contract_to_ar(self, fwd):
+        """CC's replay-only contract (recorded transcript + hard flag) reaches
+        Agent Runtime verbatim — verification never reaches live tools."""
+        captured: list[httpx.Request] = []
+        recorded = [
+            {
+                "tool": "supabase____get_project",
+                "arguments": {"id": "p-1"},
+                "response": {"name": "Ada"},
+            }
+        ]
+        body = fwd.ScriptForwardRequest(
+            session_id=str(uuid.uuid4()),
+            agent_type_id=str(uuid.uuid4()),
+            tool_args={"input": {"project_id": "p-1"}},
+            python_source=SOURCE,
+            reference_tool_responses=recorded,
+            replay_required=True,
+        )
+
+        with patch.object(
+            tool_routing.httpx, "AsyncClient", _client_factory(captured)
+        ):
+            await fwd.forward_script_execution(body, _fake_request())
+
+        payload = json.loads(captured[0].content)
+        assert payload["replay_required"] is True
+        assert payload["reference_tool_responses"] == recorded
+
+    @pytest.mark.asyncio
     async def test_forward_passes_ar_result_through(self, fwd):
         """AR's ``{"result": ...}`` contract is returned verbatim."""
         captured: list[httpx.Request] = []
@@ -198,6 +228,52 @@ class TestCcClientDestination:
         assert payload["agent_type_id"] == "at-1"
         assert payload["tool_args"] == {"input": {"x": 1}}
         assert resp == {"result": {"ok": 1}, "error": None}
+
+    @pytest.mark.asyncio
+    async def test_cc_client_sends_replay_contract(self, monkeypatch):
+        """Replay-only verification fields are part of the CC→CH body."""
+        captured: list[httpx.Request] = []
+
+        def responder(request: httpx.Request) -> httpx.Response:
+            captured.append(request)
+            return httpx.Response(200, json={"result": {"ok": 1}, "error": None})
+
+        client = comm_hub_client.CommunicationHubClient(
+            comm_hub_url="https://ch-test:8002",
+            cert_path="/tmp/cc-cert.pem",
+            key_path="/tmp/cc-key.pem",
+        )
+        real_client = httpx.AsyncClient
+        transport = httpx.MockTransport(responder)
+
+        def factory(**kw):
+            return real_client(transport=transport, event_hooks=kw.get("event_hooks"))
+
+        monkeypatch.setattr(client, "_make_client", factory)
+
+        recorded = [
+            {"tool": "crm____get", "arguments": {"id": 1}, "response": {"n": 1}}
+        ]
+        await client.forward_sandboxed_script(
+            python_source=SOURCE,
+            session_id="sess-1",
+            agent_type_id="at-1",
+            input_context={"x": 1},
+            reference_tool_responses=recorded,
+            replay_required=True,
+        )
+
+        payload = json.loads(captured[0].content)
+        assert payload["replay_required"] is True
+        assert payload["reference_tool_responses"] == recorded
+
+    def test_forward_defaults_to_no_replay(self):
+        """The plain (agent-invoked) path keeps its non-replay defaults."""
+        body = script_forwarding.ScriptForwardRequest(
+            session_id=str(uuid.uuid4()), python_source=SOURCE
+        )
+        assert body.replay_required is False
+        assert body.reference_tool_responses is None
 
     def test_execute_sandboxed_script_removed_from_client(self):
         """The broken CC-cert ``/internal/tools/call`` path is gone."""

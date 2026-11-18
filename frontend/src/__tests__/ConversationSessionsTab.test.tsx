@@ -126,4 +126,36 @@ describe('ConversationSessionsTab', () => {
     renderTab([])
     expect(screen.getByText('conversations.sessions.empty')).toBeDefined()
   })
+
+  it('renders the resume badge from the API projection', () => {
+    // 6.5 — the badge comes from the server-projected resume_state, never from
+    // client-side heuristics.
+    renderTab([
+      makeSession({ id: 'waiting-1', resume_state: 'waiting_for_human' }),
+      makeSession({ id: 'resuming-1', resume_state: 'resuming' }),
+      makeSession({ id: 'resolved-1', resume_state: 'resolved', resume_outcome: 'approved_applied' }),
+      makeSession({ id: 'dead-1', resume_state: 'unresumable', resume_outcome: 'expired' }),
+    ])
+
+    expect(screen.getByTestId('conversation-sessions-resume-badge-waiting-1').textContent).toBe(
+      'conversations.sessions.resumeBadge.waiting',
+    )
+    expect(screen.getByTestId('conversation-sessions-resume-badge-resuming-1').textContent).toBe(
+      'conversations.sessions.resumeBadge.resumed',
+    )
+    expect(screen.getByTestId('conversation-sessions-resume-badge-resolved-1').textContent).toBe(
+      'conversations.sessions.resumeBadge.resolved',
+    )
+    expect(screen.getByTestId('conversation-sessions-resume-badge-dead-1').textContent).toBe(
+      'conversations.sessions.resumeBadge.unresumable',
+    )
+  })
+
+  it('renders no resume badge when the session has no resume record', () => {
+    renderTab([makeSession({ id: 'idle-1' })])
+    expect(screen.queryByTestId('conversation-sessions-resume-badge-idle-1')).toBeNull()
+    // An unknown/legacy projection value is ignored rather than guessed.
+    renderTab([makeSession({ id: 'legacy-1', resume_state: null })])
+    expect(screen.queryByTestId('conversation-sessions-resume-badge-legacy-1')).toBeNull()
+  })
 })

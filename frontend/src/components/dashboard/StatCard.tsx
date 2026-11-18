@@ -18,6 +18,21 @@ export type CardColorVariant =
   | 'amber'
   | 'slate'
 
+/**
+ * Health tone of a dashboard tile. Drives the card tint / border highlight and
+ * the `data-status-tone` attribute used by the severity-ranked dashboard layout.
+ */
+export type CardStatusTone = 'success' | 'warning' | 'error'
+
+const STATUS_TONE_STYLES: Record<
+  CardStatusTone,
+  { bgcolor: string; borderColor: string }
+> = {
+  success: { bgcolor: '#F0FDF4', borderColor: '#BBF7D0' },
+  warning: { bgcolor: '#FFFBEB', borderColor: '#FDE68A' },
+  error: { bgcolor: '#FEF2F2', borderColor: '#FECACA' },
+}
+
 const ICON_COLORS: Record<CardColorVariant, string> = {
   blue: '#1D4ED8',
   green: '#15803D',
@@ -39,6 +54,44 @@ export interface StatCardProps {
   isPermissionDenied: boolean
   colorVariant?: CardColorVariant
   navigateTo?: string
+  /** Card health tone (`neutral` when omitted). */
+  statusTone?: CardStatusTone
+  /** Renders the "Action required" badge and the action-highlight styling. */
+  actionRequired?: boolean
+}
+
+/**
+ * Small "Action required" pill rendered in the top-right of an actionable card.
+ * Kept inside the header row (not absolutely positioned) so it never overlaps
+ * the icon or the label.
+ */
+export function ActionRequiredBadge({ tone }: { tone?: CardStatusTone }) {
+  const { t } = useTranslation()
+  const color =
+    tone === 'warning' ? '#B45309' : tone === 'success' ? '#15803D' : '#B91C1C'
+
+  return (
+    <Box
+      component="span"
+      sx={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        flexShrink: 0,
+        px: 0.75,
+        py: 0.125,
+        borderRadius: 8,
+        fontSize: 10,
+        fontWeight: 700,
+        textTransform: 'uppercase',
+        letterSpacing: 0.4,
+        whiteSpace: 'nowrap',
+        bgcolor: tone ? STATUS_TONE_STYLES[tone].borderColor : '#E2E8F0',
+        color,
+      }}
+    >
+      {t('dashboard.actionRequired')}
+    </Box>
+  )
 }
 
 export function StatCard({
@@ -51,11 +104,20 @@ export function StatCard({
   isPermissionDenied,
   colorVariant = 'blue',
   navigateTo,
+  statusTone,
+  actionRequired = false,
 }: StatCardProps) {
   const { t } = useTranslation()
   const iconColor = ICON_COLORS[colorVariant]
   const isZero = value === 0 && !isLoading && !isPermissionDenied
   const isClickable = !!navigateTo && !isLoading && !isPermissionDenied
+
+  // Permission-denied visuals always win over the action highlight.
+  const actionHighlight =
+    actionRequired && !isPermissionDenied && !!statusTone
+      ? STATUS_TONE_STYLES[statusTone]
+      : undefined
+  const showActionBadge = actionRequired && !isPermissionDenied && !isLoading
 
   const content = (
     <>
@@ -102,6 +164,7 @@ export function StatCard({
               {label}
             </Typography>
           )}
+          {showActionBadge && <ActionRequiredBadge tone={statusTone} />}
         </Box>
 
         <Box sx={{ mt: 'auto' }}>
@@ -130,14 +193,20 @@ export function StatCard({
 
   return (
     <Card
+      data-status-tone={statusTone ?? 'neutral'}
+      data-action-required={actionRequired ? 'true' : 'false'}
       sx={{
         height: '100%',
         minHeight: 120,
         borderRadius: 2,
-        border: isPermissionDenied ? '1px dashed #EF4444' : '1px solid',
-        borderColor: isPermissionDenied ? undefined : 'divider',
+        border: isPermissionDenied
+          ? '1px dashed #EF4444'
+          : actionHighlight
+            ? `1px solid ${actionHighlight.borderColor}`
+            : '1px solid',
+        borderColor: isPermissionDenied || actionHighlight ? undefined : 'divider',
         boxShadow: 1,
-        bgcolor: isPermissionDenied ? '#FFF5F5' : undefined,
+        bgcolor: isPermissionDenied ? '#FFF5F5' : actionHighlight?.bgcolor,
         opacity: isPermissionDenied ? 0.7 : 1,
         position: 'relative',
         overflow: 'hidden',

@@ -117,6 +117,13 @@ class ConversationSession(Base):
         uselist=False,
         cascade="all, delete-orphan",
     )
+    # Durable resume index rows for this session (at most one live/non-terminal).
+    turn_resumes: Mapped[list["ConversationTurnResume"]] = relationship(
+        "ConversationTurnResume",
+        back_populates="conversation_session",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
 
     def __repr__(self) -> str:
         return f"<ConversationSession id={self.id} status={self.status}>"

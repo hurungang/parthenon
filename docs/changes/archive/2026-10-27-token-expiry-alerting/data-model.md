@@ -41,13 +41,13 @@ Existing entity (`backend/app/db/models/agents.py`). Already stores encrypted to
 
 | Change | Field | Type | Purpose |
 |---|---|---|---|
-| New | `refresh_token_expires_at` | datetime (nullable) | Expiry of the refresh token; drives "expiring within 7 days" vs "expired" when access token can be renewed |
+| New | `refresh_token_expires_at` | datetime (nullable) | Expiry of the refresh token. **Authoritative** for health when a refresh token exists: drives healthy / "expiring within 7 days" / "expired". An expired access token is not an alert while this value is in the future. Persisted from the provider's `refresh_expires_in` on every token issuance/refresh; `0`/absent means "no known refresh expiry" (healthy). |
 | New | `last_token_refresh_outcome` | enum (nullable): `success \| failure` | Outcome of the most recent automatic refresh by Control Center |
 | New | `token_health_state` | enum (nullable): `healthy \| expiring \| expired \| unknown` | Computed health state surfaced on dashboard and topology; refreshed on token refresh and dashboard read |
 
 ### McpSession — add token health fields
 
-Existing entity (`backend/app/db/models/mcp_hub.py`). Already stores `oauth_expires_at` and `oauth_refresh_expires_at`. Modified:
+Existing entity (`backend/app/db/models/mcp_hub.py`). Already stores `oauth_expires_at` and `oauth_refresh_expires_at`. `oauth_refresh_expires_at` is **authoritative** for health when present; `oauth_expires_at` is only the fallback when no refresh-token expiry is recorded. `requires_reauth = true` is always an `expired`/unrecoverable state. Modified:
 
 | Change | Field | Type | Purpose |
 |---|---|---|---|
@@ -69,17 +69,9 @@ None. No entities or fields are dropped by this change.
 
 ---
 
-## 4. Schema Files to Update
+## 4. Source Files (reference only)
 
-Per `docs/config.yaml` (`source.schema` = `backend/app/db/models/`):
-
-| File | Change |
-|---|---|
-| `backend/app/db/models/agents.py` | Add `refresh_token_expires_at`, `last_token_refresh_outcome`, `token_health_state` to `AgentIdentity`; extend `AgentTokenStatus` enum values if the health state reuses it (prefer a new `TokenHealthState` enum) |
-| `backend/app/db/models/mcp_hub.py` | Add `last_token_refresh_at`, `last_token_refresh_outcome`, `token_health_state` to `McpSession` |
-| `backend/app/db/models/agent_security.py` | Optionally add nullable `mcp_session_id` FK on `TokenRefreshLog`; define `TokenRefreshOutcome` reuse for sessions |
-| New file `backend/app/db/models/token_health.py` | `TokenHealthCheck` entity + `TokenHealthState` / `TokenCheckOutcome` enums |
-| `backend/app/db/models/__init__.py` | Export the new model so autogenerate detects it |
+Entity definitions live in the backend model modules — `agents.py` (`AgentIdentity`), `mcp_hub.py` (`McpSession`), `agent_security.py` (`TokenRefreshLog`), plus a dedicated token-health module for the preflight audit entity. This document intentionally contains entity and relationship definitions only; model, enum, and migration detail belongs in the tech spec.
 
 ---
 

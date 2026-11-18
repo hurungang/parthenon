@@ -36,6 +36,10 @@ class CommHubToolClient:
         self._comm_hub_url = getattr(settings, "communication_hub_url", "http://localhost:8002")
         self._cert_path: str | None = None
         self._key_path: str | None = None
+        #: Opaque per-paused-turn idempotency key (None outside a paused turn).
+        #: Set from the durable resume record on a resume and from the turn key
+        #: on a pause; never derived from user input.
+        self._turn_idempotency_key: str | None = None
 
     def set_certificate(self, cert_path: str, key_path: str) -> None:
         """Set mTLS certificate for authentication.
@@ -48,6 +52,19 @@ class CommHubToolClient:
         self._key_path = key_path
         logger.debug("mTLS certificate configured for tool calls")
 
+    def set_turn_idempotency_key(self, idempotency_key: str | None) -> None:
+        """Bind the paused turn's idempotency key to every subsequent tool call.
+
+        The key comes from the durable resume record (Control Center generated),
+        is stable for the whole paused turn, and is only present while the turn
+        is being continued from a pause.
+        """
+        self._turn_idempotency_key = idempotency_key or None
+
+    @property
+    def turn_idempotency_key(self) -> str | None:
+        return self._turn_idempotency_key
+
     async def call_tool(
         self,
         tool_name: str,
@@ -57,6 +74,7 @@ class CommHubToolClient:
         conv_session_id: str | None = None,
         provenance: str | None = None,
         script_version: str | None = None,
+        idempotency_key: str | None = None,
     ) -> dict[str, Any]:
         """Call a tool through Communication Hub.
 
@@ -66,6 +84,8 @@ class CommHubToolClient:
             session_id: Agent session ID
             agent_type_id: Agent type ID
             conv_session_id: Parent conversation session ID (for conversation-context interventions)
+            idempotency_key: Override for the paused turn's idempotency key
+                (defaults to the value bound by ``set_turn_idempotency_key``).
 
         Returns:
             Tool execution result
@@ -74,6 +94,8 @@ class CommHubToolClient:
             CommHubToolClientError: If tool call fails
         """
         endpoint = f"{self._comm_hub_url}/internal/tools/call"
+
+        _effective_key = idempotency_key or self._turn_idempotency_key
 
         payload: dict[str, Any] = {
             "tool_name": tool_name,
@@ -88,6 +110,11 @@ class CommHubToolClient:
             payload["provenance"] = provenance
         if script_version:
             payload["script_version"] = script_version
+        # Paused-turn idempotency key: CH forwards it to Control Center as a
+        # request header so the confirmed management write commits its applied
+        # marker in the same transaction.  Absent outside a paused turn.
+        if _effective_key:
+            payload["idempotency_key"] = _effective_key
 
         logger.info(
             "Calling tool '%s' via Communication Hub (session=%s)",
@@ -112,6 +139,12 @@ class CommHubToolClient:
             # Prepare headers (cert header added below when on HTTP);
             # tenant headers are attached by the internal_httpx_client hook.
             headers: dict[str, str] = {}
+            if _effective_key:
+                from app.agent_runtime.checkpoint_transport import (
+                    turn_idempotency_headers,
+                )
+
+                headers.update(turn_idempotency_headers(_effective_key))
 
             # For HTTP (localhost dev), send certificate as header
             # For HTTPS (production), use actual TLS client cert
@@ -283,6 +316,7 @@ class CommHubToolClient:
         choices: list[str] | None = None,
         prompt: str | None = None,
         conv_session_id: str | None = None,
+        idempotency_key: str | None = None,
     ) -> dict[str, Any]:
         """Request human intervention through Communication Hub.
 
@@ -296,6 +330,9 @@ class CommHubToolClient:
             choices: Available options when type is ``choice``.
             prompt: Descriptive prompt when type is ``text``.
             conv_session_id: Parent conversation session ID for conversation-context routing.
+            idempotency_key: The paused turn's opaque idempotency key. Control
+                Center stores it on the resume record, so a replayed tool task
+                and the confirmed write share one stable key.
 
         Returns:
             Dict with ``request_id`` and ``status``.
@@ -305,6 +342,8 @@ class CommHubToolClient:
         """
         endpoint = f"{self._comm_hub_url}/internal/tools/call"
 
+        _effective_key = idempotency_key or self._turn_idempotency_key
+
         tool_args: dict[str, Any] = {
             "intervention_type": intervention_type,
             "reason": reason,
@@ -313,6 +352,10 @@ class CommHubToolClient:
             tool_args["choices"] = choices
         if prompt is not None:
             tool_args["prompt"] = prompt
+        if _effective_key:
+            # Consumed by CC's human_intervene handler when it registers the
+            # durable resume record — registration replay then reuses it.
+            tool_args["turn_idempotency_key"] = _effective_key
 
         payload: dict[str, Any] = {
             "tool_name": "human_intervene",
@@ -322,6 +365,8 @@ class CommHubToolClient:
         }
         if conv_session_id:
             payload["conv_session_id"] = conv_session_id
+        if _effective_key:
+            payload["idempotency_key"] = _effective_key
 
         try:
             client_kwargs: dict[str, Any] = {
@@ -330,6 +375,12 @@ class CommHubToolClient:
             }
             headers: dict[str, str] = {}
             # Tenant headers are attached by the internal_httpx_client hook.
+            if _effective_key:
+                from app.agent_runtime.checkpoint_transport import (
+                    turn_idempotency_headers,
+                )
+
+                headers.update(turn_idempotency_headers(_effective_key))
 
             if self._cert_path and self._key_path:
                 if self._comm_hub_url.startswith("https://"):
@@ -359,6 +410,110 @@ class CommHubToolClient:
             ) from exc
         except Exception as exc:
             raise CommHubToolClientError(f"Human intervene error: {exc}") from exc
+
+    async def call_request_live_test(
+        self,
+        session_id: str,
+        script_version_id: str,
+        reason: str,
+        agent_type_id: str,
+        conv_session_id: str | None = None,
+        idempotency_key: str | None = None,
+    ) -> dict[str, Any]:
+        """Ask the operator for ONE approved live run of a saved script.
+
+        Forwards a ``request_live_test`` system tool call to Control Center,
+        which validates the request (the script version must be this agent
+        type's own, saved and runnable, with a previewable ``tools.call`` set)
+        and records the ledger row + the approval intervention. The tool-call
+        preview on the approval card is derived server-side from the script
+        source — this call never sends an operation list.
+
+        Returns Control Center's result dict:
+        ``{"status": "pending"|"refused"|"executed"|"failed"|"denied"|"expired"|…}``
+        with ``live_test_request_id`` / ``intervene_request_id`` for a pending
+        request, or the stored outcome when the tool task was replayed after the
+        operator's decision (so the replay never asks for approval twice).
+
+        Raises:
+            CommHubToolClientError: If the call fails.
+        """
+        endpoint = f"{self._comm_hub_url}/internal/tools/call"
+
+        _effective_key = idempotency_key or self._turn_idempotency_key
+        tool_args: dict[str, Any] = {
+            "script_version_id": script_version_id,
+            "reason": reason,
+            "agent_type_id": agent_type_id,
+        }
+        if _effective_key:
+            tool_args["turn_idempotency_key"] = _effective_key
+
+        payload: dict[str, Any] = {
+            "tool_name": "system____request_live_test",
+            "tool_args": tool_args,
+            "session_id": session_id,
+            "agent_type_id": agent_type_id,
+        }
+        if conv_session_id:
+            payload["conv_session_id"] = conv_session_id
+        if _effective_key:
+            payload["idempotency_key"] = _effective_key
+
+        try:
+            client_kwargs: dict[str, Any] = {
+                "timeout": 60.0,
+                "verify": get_ssl_context(),
+            }
+            headers: dict[str, str] = {}
+            if _effective_key:
+                from app.agent_runtime.checkpoint_transport import (
+                    turn_idempotency_headers,
+                )
+
+                headers.update(turn_idempotency_headers(_effective_key))
+
+            if self._cert_path and self._key_path:
+                if self._comm_hub_url.startswith("https://"):
+                    client_kwargs["cert"] = (self._cert_path, self._key_path)
+                else:
+                    from pathlib import Path
+
+                    cert_content = Path(self._cert_path).read_text()
+                    headers["X-Client-Certificate"] = cert_content.replace("\n", "\\n")
+
+            async with internal_httpx_client(**client_kwargs) as client:
+                response = await client.post(endpoint, json=payload, headers=headers)
+                response.raise_for_status()
+                result_data = response.json()
+
+                if result_data.get("error"):
+                    error_msg = result_data["error"]
+                    logger.error("Live-test request call failed: %s", error_msg)
+                    raise CommHubToolClientError(error_msg)
+
+                payload = result_data.get("result", {})
+                # Control Center wraps its tool payload in a ``result`` key and CH
+                # relays that body verbatim, so unwrap the single wrapper level
+                # (same normalisation the human_intervene tool applies).
+                if (
+                    isinstance(payload, dict)
+                    and isinstance(payload.get("result"), dict)
+                    and "status" not in payload
+                ):
+                    payload = payload["result"]
+                return payload if isinstance(payload, dict) else {}
+
+        except httpx.HTTPStatusError as exc:
+            detail = exc.response.text[:500] if exc.response else "Unknown error"
+            raise CommHubToolClientError(
+                f"Live-test request call failed: HTTP "
+                f"{exc.response.status_code if exc.response else 'unknown'} - {detail}"
+            ) from exc
+        except CommHubToolClientError:
+            raise
+        except Exception as exc:
+            raise CommHubToolClientError(f"Live-test request error: {exc}") from exc
 
     async def wait_for_a2a_response(
         self,

@@ -124,14 +124,16 @@ test.describe('Human Intervene', () => {
     await page.goto('/agents/intervene')
     await page.waitForLoadState('load')
 
-    // Click first respond button
-    const respondButtons = page.getByText('intervene.respond')
+    // Click first respond button (rendered label is the translated "Respond")
+    const respondButtons = page.getByRole('button', { name: /respond/i })
     await respondButtons.first().click()
 
     // Dialog should open with approval options
-    await expect(page.getByText('intervene.responseDialogTitle')).toBeVisible({ timeout: 3000 })
-    await expect(page.getByText('app.yes')).toBeVisible()
-    await expect(page.getByText('app.no')).toBeVisible()
+    await expect(page.getByRole('heading', { name: /Human Intervention Required/i })).toBeVisible({
+      timeout: 3000,
+    })
+    await expect(page.getByRole('button', { name: /^yes$/i })).toBeVisible()
+    await expect(page.getByRole('button', { name: /^no$/i })).toBeVisible()
   })
 
   test('submitting approval response sends API call', async ({ page }) => {
@@ -154,25 +156,26 @@ test.describe('Human Intervene', () => {
     await page.waitForLoadState('load')
 
     // Open dialog
-    await page.getByText('intervene.respond').first().click()
-    await expect(page.getByText('intervene.responseDialogTitle')).toBeVisible({ timeout: 3000 })
+    await page.getByRole('button', { name: /respond/i }).first().click()
+    await expect(page.getByRole('heading', { name: /Human Intervention Required/i })).toBeVisible({
+      timeout: 3000,
+    })
 
-    // Click Yes then Submit
-    await page.getByText('app.yes').click()
-    await page.getByText('intervene.submitResponse').click()
+    // For an approval-type request, choosing Yes submits immediately.
+    await page.getByRole('button', { name: /^yes$/i }).click()
 
     // Wait for API call
     await page.waitForTimeout(1000)
     expect(responseSubmitted).toBe(true)
   })
 
-  test('pending count badge shows in navigation', async ({ page }) => {
-    await page.goto('/dashboard')
+  test('intervene page shows the pending requests count', async ({ page }) => {
+    await page.goto('/agents/intervene')
     await page.waitForLoadState('load')
 
-    // The navigation badge for intervene should appear with count 3
-    const badge = page.locator('[class*="MuiBadge-badge"]').first()
-    await expect(badge).toBeVisible({ timeout: 5000 })
+    // The page-level stat replaces the former navigation badge.
+    await expect(page.getByText(/Pending Requests/i).first()).toBeVisible({ timeout: 5000 })
+    await expect(page.getByText('Approve this action?').first()).toBeVisible()
   })
 
   test('intervene page shows responded requests section', async ({ page }) => {

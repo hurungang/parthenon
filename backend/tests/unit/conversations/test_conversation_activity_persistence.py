@@ -41,15 +41,21 @@ async def test_activity_survives_store_instance_change(db_session: AsyncSession)
 
 @pytest.mark.asyncio
 async def test_waiting_for_human_is_readable_on_reconnect(db_session: AsyncSession):
+    from app.services.conversations.turn_resume_store import (
+        ConversationTurnResumeStore,
+    )
+
     conv = await _make_session(db_session)
     turn_id = uuid.uuid4()
     intervention_id = uuid.uuid4()
+    resume = await ConversationTurnResumeStore().create_or_reuse(conv.id, db_session)
     await ConversationActivityStore().upsert(
         conv.id,
         db_session,
         state=ActivityState.waiting_for_human,
         current_turn_id=turn_id,
         pending_intervene_request_id=intervention_id,
+        active_resume_id=resume.id,
     )
 
     hydrated = await ConversationActivityStore().get(conv.id, db_session)
@@ -57,6 +63,7 @@ async def test_waiting_for_human_is_readable_on_reconnect(db_session: AsyncSessi
     assert hydrated.state == ActivityState.waiting_for_human
     assert hydrated.current_turn_id == turn_id
     assert hydrated.pending_intervene_request_id == intervention_id
+    assert hydrated.active_resume_id == resume.id
 
 
 @pytest.mark.asyncio

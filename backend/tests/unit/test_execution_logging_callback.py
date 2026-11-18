@@ -134,6 +134,57 @@ async def test_on_tool_start_calls_log_execution_event():
 
 
 @pytest.mark.asyncio
+async def test_on_tool_start_logs_canonical_tool_name_for_replay():
+    """Tool events must log the canonical name, not the sanitized model name.
+
+    Replay matches a script's ``server____tool`` call against the transcript;
+    logging ``server__tool`` made the reference look like it never called it.
+    """
+    from app.services.agents.execution_logging_callback import ExecutionLoggingCallback
+
+    data_client = AsyncMock()
+    data_client.log_execution_event = AsyncMock()
+    # Real shape: the CC map key keeps the hyphen, LangChain's serialized name
+    # does not (``mcp-demo__generatePaymentLink`` vs ``mcp_demo__...``).
+    cb = ExecutionLoggingCallback(
+        session_id="sess-canon",
+        data_client=data_client,
+        tool_name_map={
+            "mcp-demo__generatePaymentLink": "mcp-demo____generatePaymentLink"
+        },
+    )
+
+    await cb.on_tool_start(
+        serialized={"name": "mcp_demo__generatePaymentLink"},
+        input_str='{"order_id": "ORD-1"}',
+        inputs={"order_id": "ORD-1"},
+    )
+
+    call_kwargs = data_client.log_execution_event.call_args[1]
+    assert call_kwargs["data"]["tool"] == "mcp-demo____generatePaymentLink"
+    assert call_kwargs["data"]["tool_raw"] == "mcp_demo__generatePaymentLink"
+    assert call_kwargs["data"]["arguments"] == {"order_id": "ORD-1"}
+
+
+@pytest.mark.asyncio
+async def test_on_tool_start_canonicalizes_without_map():
+    """Even without the map, a sanitized ``server__tool`` becomes canonical."""
+    from app.services.agents.execution_logging_callback import ExecutionLoggingCallback
+
+    data_client = AsyncMock()
+    data_client.log_execution_event = AsyncMock()
+    cb = ExecutionLoggingCallback(session_id="sess-canon-2", data_client=data_client)
+
+    await cb.on_tool_start(
+        serialized={"name": "mcp_demo__searchFlights"},
+        input_str="{}",
+    )
+
+    call_kwargs = data_client.log_execution_event.call_args[1]
+    assert call_kwargs["data"]["tool"] == "mcp_demo____searchFlights"
+
+
+@pytest.mark.asyncio
 async def test_on_tool_end_calls_log_execution_event():
     """on_tool_end emits tool_response event."""
     from app.services.agents.execution_logging_callback import ExecutionLoggingCallback
@@ -240,18 +291,69 @@ async def test_on_tool_start_keeps_full_source_for_execute_script():
 
 @pytest.mark.asyncio
 async def test_on_tool_start_truncates_other_tools():
-    """Non-execute_script tool inputs are still truncated at 500 chars."""
-    from app.services.agents.execution_logging_callback import ExecutionLoggingCallback
+    """Non-execute_script tool inputs are still truncated (10,000 chars).
+
+    The cap is generous because the recorded ``arguments``/``input`` are the
+    REPLAY source for optimization verification, not just a log line.
+    """
+    from app.services.agents.execution_logging_callback import (
+        MAX_INPUT_CHARS,
+        ExecutionLoggingCallback,
+    )
 
     data_client = AsyncMock()
     data_client.log_execution_event = AsyncMock()
     cb = ExecutionLoggingCallback(session_id="sess-12", data_client=data_client)
 
-    big = "y" * 2000
+    big = "y" * (MAX_INPUT_CHARS + 500)
     await cb.on_tool_start(serialized={"name": "other_tool"}, input_str=big)
 
     call_kwargs = data_client.log_execution_event.call_args[1]
-    assert len(call_kwargs["data"]["input"]) == 500
+    assert len(call_kwargs["data"]["input"]) == MAX_INPUT_CHARS
+    assert call_kwargs["data"]["input_truncated"] is True
+
+
+@pytest.mark.asyncio
+async def test_on_tool_start_records_structured_arguments_for_replay():
+    """Structured ``inputs`` become ``arguments`` — the replay matching key."""
+    from app.services.agents.execution_logging_callback import ExecutionLoggingCallback
+
+    data_client = AsyncMock()
+    data_client.log_execution_event = AsyncMock()
+    cb = ExecutionLoggingCallback(session_id="sess-13", data_client=data_client)
+
+    await cb.on_tool_start(
+        serialized={"name": "crm____getContact"},
+        input_str='{"id": "c-1"}',
+        run_id="run-1",
+        inputs={"id": "c-1"},
+    )
+
+    data = data_client.log_execution_event.call_args[1]["data"]
+    assert data["tool"] == "crm____getContact"
+    assert data["arguments"] == {"id": "c-1"}
+    assert data["run_id"] == "run-1"
+    assert data["input_truncated"] is False
+
+
+@pytest.mark.asyncio
+async def test_on_tool_end_records_run_id_and_truncation_flag():
+    """``tool_response`` carries the pairing ``run_id`` + a truncation flag."""
+    from app.services.agents.execution_logging_callback import (
+        MAX_OUTPUT_CHARS,
+        ExecutionLoggingCallback,
+    )
+
+    data_client = AsyncMock()
+    data_client.log_execution_event = AsyncMock()
+    cb = ExecutionLoggingCallback(session_id="sess-14", data_client=data_client)
+
+    await cb.on_tool_end(output="x" * (MAX_OUTPUT_CHARS + 10), run_id="run-42")
+
+    data = data_client.log_execution_event.call_args[1]["data"]
+    assert data["run_id"] == "run-42"
+    assert data["output_truncated"] is True
+    assert len(data["output"]) == MAX_OUTPUT_CHARS
 
 
 # ── iteration_ref tracking ────────────────────────────────────────────────────

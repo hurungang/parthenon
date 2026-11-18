@@ -213,6 +213,10 @@ async def test_get_workflow_generation_model_options_are_sourced_from_enabled_mo
         display_name="OpenAI Prod",
         provider_type="openai",
         enabled_models=["gpt-4o-mini", "gpt-4o"],
+        # A real ModelConfig row carries a boolean; a bare MagicMock attribute
+        # would be truthy and look like a disabled provider (the options/
+        # allow-list paths skip disabled configs).
+        is_disabled=False,
         created_at=now,
         updated_at=now,
     )
@@ -221,6 +225,7 @@ async def test_get_workflow_generation_model_options_are_sourced_from_enabled_mo
         display_name="Anthropic Prod",
         provider_type="anthropic",
         enabled_models=["claude-3-5-sonnet"],
+        is_disabled=False,
         created_at=now,
         updated_at=now,
     )

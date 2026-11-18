@@ -46,6 +46,8 @@ const NAMES = {
   skillToolIds: {},
   identityTokenHealth: { 'identity-1': 'expired' } as Record<string, 'expiring' | 'expired'>,
   sopComposedSkillIds: {},
+  sopDelegatedAgentTypeIds: {},
+  agentTypeNames: {},
 }
 
 const LABELS = {
@@ -62,7 +64,7 @@ const LABELS = {
   boundaryTyped: 'typed',
   boundaryConversational: 'conversational',
   sections: { contract: 'c', signsInAs: 's', assumesAs: 'a', sops: 'sops', skills: 'skills' },
-  edges: { equippedWith: 'eq', grants: 'gr', composed: 'co' },
+  edges: { equippedWith: 'eq', grants: 'gr', composed: 'co', delegates: 'dl' },
   zones: {
     config: { title: 'cfg', subtitle: '' },
     capabilities: { title: 'cap', subtitle: '' },

@@ -233,7 +233,7 @@ class InterventionRouter:
         metadata: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         """Build a WebSocket intervene_request message from raw dispatch content."""
-        return {
+        message = {
             "type": "intervene_request",
             "request_id": str(content.get("request_id") or content.get("id", "")),
             "intervention_type": content.get("intervention_type", "approval"),
@@ -243,13 +243,20 @@ class InterventionRouter:
             "delegation_depth": content.get("delegation_depth", 0),
             "conversation_session_id": str(content.get("conversation_session_id", "")),
         }
+        # Optional optimization live-test approval block: the exact operation
+        # list, its ledger id and expiry, so the chat renders the approval card
+        # (and re-renders it identically on reconnect). Plain ask/decide
+        # interventions never carry it.
+        if content.get("live_test"):
+            message["live_test"] = content["live_test"]
+        return message
 
     @staticmethod
     def _build_intervene_request_message_from_db(
         db_record: dict[str, Any],
     ) -> dict[str, Any]:
         """Build a WebSocket intervene_request message from a DB record."""
-        return {
+        message = {
             "type": "intervene_request",
             "request_id": str(db_record.get("id", "")),
             "intervention_type": db_record.get("intervention_type", "approval"),
@@ -259,3 +266,8 @@ class InterventionRouter:
             "delegation_depth": db_record.get("delegation_depth", 0),
             "conversation_session_id": str(db_record.get("conversation_session_id", "")),
         }
+        # Re-surface a live-test approval identically after a reconnect: the
+        # pending read carries the ledger projection (operations + expiry).
+        if db_record.get("live_test"):
+            message["live_test"] = db_record["live_test"]
+        return message

@@ -37,6 +37,7 @@ const MOCK_IDENTITY: AgentIdentity = {
   status: 'active',
   token_expires_at: null,
   has_refresh_token: true,
+  refresh_token_expires_at: null,
   created_at: '2026-01-01T00:00:00Z',
   updated_at: '2026-01-01T00:00:00Z',
 }

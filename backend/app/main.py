@@ -438,6 +438,7 @@ async def startup_event() -> None:
     await _initialize_certificate_authority()
     await _start_scheduling_engine()
     _start_activity_reaper()
+    _start_live_test_sweeper()
 
 
 @app.on_event("shutdown")
@@ -446,6 +447,7 @@ async def shutdown_event() -> None:
 
     await stop_daily_renewal_task()
     _stop_activity_reaper()
+    _stop_live_test_sweeper()
     await _stop_scheduling_engine()
 
 
@@ -471,6 +473,33 @@ def _stop_activity_reaper() -> None:
         get_activity_reaper().shutdown()
     except Exception:
         logger.exception("Failed to stop conversation activity reaper.")
+
+
+def _start_live_test_sweeper() -> None:
+    """Start the overdue live-test expiry sweep (optimization, single-use).
+
+    An unanswered live-test approval must expire on its own and leave the
+    session replay-only (no retry). Failures never block startup.
+    """
+    try:
+        from app.services.conversations.live_test_expiry import (
+            get_live_test_sweeper,
+        )
+
+        get_live_test_sweeper().start()
+    except Exception:
+        logger.exception("Failed to start the live-test expiry sweeper; continuing.")
+
+
+def _stop_live_test_sweeper() -> None:
+    try:
+        from app.services.conversations.live_test_expiry import (
+            get_live_test_sweeper,
+        )
+
+        get_live_test_sweeper().shutdown()
+    except Exception:
+        logger.exception("Failed to stop the live-test expiry sweeper.")
 
 
 async def _cleanup_super_admin_db_records() -> None:

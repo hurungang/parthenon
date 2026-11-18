@@ -50,6 +50,15 @@ test.describe('Conversation Sessions (Mocked)', () => {
         body: JSON.stringify([CONV_AGENT_TYPE]),
       })
     })
+    // `useAgentTypes()` paginates (`?limit=&offset=`); a bare glob misses the
+    // query string, so cover it explicitly.
+    await page.route(/\/api\/v1\/agents\/types(\?.*)?$/, async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify([CONV_AGENT_TYPE]),
+      })
+    })
     await page.route('**/api/v1/agents/types/**', async (route) => {
       await route.fulfill({
         status: 200,
@@ -83,6 +92,38 @@ test.describe('Conversation Sessions (Mocked)', () => {
             closed_at: null,
           },
         ]),
+      })
+    })
+
+    // Mock the paginated sessions endpoint the Sessions tab uses today
+    // (`GET /conversations/sessions?agent_type_id=...`).
+    await page.route(/\/api\/v1\/conversations\/sessions(\?.*)?$/, async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          items: [
+            {
+              id: SESSION_ID,
+              agent_type_id: AGENT_TYPE_ID,
+              triggered_by_user_id: 'user-1',
+              agent_job_id: null,
+              title: 'Auto-Generated Session Title',
+              channel: 'web',
+              status: 'active',
+              turn_count: 2,
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+              closed_at: null,
+              resume_state: 'waiting_for_human',
+              resume_outcome: null,
+              resume_expires_at: null,
+            },
+          ],
+          total: 1,
+          page: 1,
+          page_size: 25,
+        }),
       })
     })
 
@@ -184,7 +225,7 @@ test.describe('Conversation Sessions (Mocked)', () => {
 
   test('Sessions tab is visible for conversation-type agents', async ({ page }) => {
     await page.goto('/agents')
-    await page.waitForLoadState('networkidle')
+    await page.waitForLoadState('load')
 
     // Click on the conversation agent row to open details dialog
     await page.getByText('Test Conv Agent').click()
@@ -195,7 +236,7 @@ test.describe('Conversation Sessions (Mocked)', () => {
 
   test('Sessions tab shows session list', async ({ page }) => {
     await page.goto('/agents')
-    await page.waitForLoadState('networkidle')
+    await page.waitForLoadState('load')
     await page.getByText('Test Conv Agent').click()
     await page.getByRole('tab', { name: /sessions/i }).click()
 
@@ -204,7 +245,7 @@ test.describe('Conversation Sessions (Mocked)', () => {
 
   test('Resume navigates to chat page with session history', async ({ page }) => {
     await page.goto(`/agents/${AGENT_TYPE_ID}/chat/${SESSION_ID}`)
-    await page.waitForLoadState('networkidle')
+    await page.waitForLoadState('load')
 
     // The ChatPage should load history from resume endpoint
     await expect(page.getByText('Hello agent')).toBeVisible({ timeout: 10_000 })
@@ -213,7 +254,7 @@ test.describe('Conversation Sessions (Mocked)', () => {
 
   test('End session shows confirmation dialog', async ({ page }) => {
     await page.goto('/agents')
-    await page.waitForLoadState('networkidle')
+    await page.waitForLoadState('load')
     await page.getByText('Test Conv Agent').click()
     await page.getByRole('tab', { name: /sessions/i }).click()
 

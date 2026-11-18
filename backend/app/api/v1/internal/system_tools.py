@@ -394,6 +394,13 @@ async def human_intervene_tool(
             choices=choices,
             conversation_session_id=conversation_session_id,
             delegation_depth=_delegation_depth,
+            # Paused-turn idempotency key (resumable-agent-turn-persistence):
+            # AR supplies it on the human_intervene call so the durable resume
+            # record carries a key that stays stable across task replay and the
+            # later confirmed-write dispatch.  Never derived from user input.
+            idempotency_key=(
+                str(body.tool_args.get("turn_idempotency_key") or "").strip() or None
+            ),
         )
 
         # Extract parent session ID from child's input_data BEFORE commit
@@ -945,6 +952,378 @@ async def get_output_tool(
     except Exception as exc:
         logger.exception("Failed to get output for session %s", body.session_id)
         raise HTTPException(status_code=500, detail=f"Failed to get output: {exc}")
+
+
+# ── Optimization live test (single-use, operator-approved) ───────────────────
+
+
+def _resolve_request_agent_type_id(body: SystemToolRequest) -> uuid.UUID | None:
+    """Parse the agent type id supplied for a tool call (None when absent)."""
+    raw = body.tool_args.get("agent_type_id") or body.agent_type_id
+    if not raw:
+        return None
+    try:
+        return uuid.UUID(str(raw))
+    except (ValueError, TypeError):
+        return None
+
+
+def _live_test_pending_payload(row: Any) -> dict[str, Any]:
+    """The tool result for a live-test proposal awaiting the operator.
+
+    ``operations`` is the tool-call PREVIEW derived from the saved script's own
+    ``tools.call(...)`` lines — it describes what the script will call and is
+    never the unit of execution (the script is).
+    """
+    from app.services.agents.optimization_live_test_service import status_value
+
+    return {
+        "status": "pending",
+        "live_test_request_id": str(row.id),
+        "intervene_request_id": (
+            str(row.intervene_request_id) if row.intervene_request_id else None
+        ),
+        "expires_at": row.expires_at.isoformat() if row.expires_at else None,
+        "script_version_id": (
+            str(row.script_version_id) if row.script_version_id else None
+        ),
+        "operations": list(row.requested_operations or []),
+        "live_test_status": status_value(row.status),
+        "instruction": (
+            "The operator is deciding whether to run this whole script once, "
+            "end to end, as this agent. MCP tools are assumed to work. Wait for "
+            "the decision — do not retry, do not request a per-tool test."
+        ),
+    }
+
+
+def _live_test_outcome_payload(row: Any) -> dict[str, Any]:
+    """The tool result for an already-decided (or replayed) live test."""
+    from app.services.agents.optimization_live_test_service import (
+        outcome_of,
+    )
+
+    outcome = outcome_of(row)
+    payload: dict[str, Any] = {
+        "status": outcome.status,
+        "live_test_status": outcome.status,
+        "live_test_request_id": str(outcome.request_id),
+        "script_version_id": (
+            str(outcome.script_version_id) if outcome.script_version_id else None
+        ),
+        "operations": outcome.requested_operations,
+        "executed_operations": outcome.executed_operations,
+        "script_run": outcome.script_run,
+        "execution_started_at": (
+            outcome.execution_started_at.isoformat()
+            if outcome.execution_started_at
+            else None
+        ),
+        "execution_finished_at": (
+            outcome.execution_finished_at.isoformat()
+            if outcome.execution_finished_at
+            else None
+        ),
+    }
+    if outcome.status in {"denied", "expired", "cancelled"}:
+        payload["message"] = (
+            f"The live-test approval was {outcome.status}: nothing ran, and "
+            "verification stays replay-only. Record `needs_feedback` with what "
+            "is missing or ask the operator with the human-intervene tool — do "
+            "not repeat the same request."
+        )
+    return payload
+
+
+@router.post("/request-live-test", response_model=SystemToolResponse)
+async def request_live_test_tool(
+    body: SystemToolRequest,
+    tenant_ctx: Annotated[TenantContext, Depends(require_internal_tenant_context)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> SystemToolResponse:
+    """Ask the operator for ONE approved run of a SAVED script (ledger + pause).
+
+    A live test runs the **script** end-to-end — never an individual MCP tool
+    call. MCP tools are assumed to work; the operator is approving one run of
+    the script the optimizer wrote, as the agent.
+
+    Only an optimization conversation may call this, and the subject is always
+    that conversation's own ``agent_type_id`` — a request naming another agent
+    type (or another agent type's script) is refused with the structured
+    ``out_of_scope`` payload and nothing is written.
+
+    On acceptance this creates, in ONE transaction:
+
+    * the ``OptimizationLiveTestRequest`` (``script_version_id`` + the
+      server-derived tool-call preview, ``pending``, ``expires_at``) with the
+      server-derived subject, and
+    * the linked ``approval`` ``InterveneRequest`` (+ durable resume record) the
+      operator answers.
+
+    Then it announces the approval card (with the ``live_test`` block) to the
+    chat and stamps the persisted activity as waiting. Refusals (unknown/foreign
+    script version, no ``tools.call`` lines, out-of-grant script, already
+    pending, quota exhausted) write nothing and return a readable reason.
+
+    Agent Runtime re-executes the interrupted tool task on resume, so a replay
+    of the same script version returns the stored ledger outcome instead of
+    creating a second request or asking for a second approval.
+    """
+    from app.db.models.intervene import InterventionType
+    from app.services.agents.intervene_service import InterveneRequestStore
+    from app.services.agents.optimization_live_test_service import (
+        get_live_test_service,
+        render_script_live_test_reason,
+        status_value,
+    )
+    from app.services.agents.optimization_mode import (
+        OPTIMIZATION_CHANNEL,
+        OUT_OF_SCOPE_STATUS,
+        require_subject_match,
+        resolve_optimization_mode,
+    )
+
+    conversation_session_id: uuid.UUID | None = None
+    if body.conversation_session_id:
+        try:
+            conversation_session_id = uuid.UUID(str(body.conversation_session_id))
+        except (ValueError, TypeError):
+            conversation_session_id = None
+
+    if conversation_session_id is None:
+        return SystemToolResponse(
+            result={
+                "status": "refused",
+                "reason_code": OUT_OF_SCOPE_STATUS,
+                "reason": (
+                    "A live test can only be requested from inside an "
+                    "optimization conversation. Nothing was recorded — "
+                    "verification stays replay-only."
+                ),
+            }
+        )
+
+    mode = await resolve_optimization_mode(db, conversation_session_id)
+    if mode is None or mode.channel != OPTIMIZATION_CHANNEL:
+        return SystemToolResponse(
+            result={
+                "status": "refused",
+                "reason_code": OUT_OF_SCOPE_STATUS,
+                "reason": (
+                    "This conversation is not an optimization conversation, so "
+                    "no live test may be requested. Nothing was recorded."
+                ),
+            }
+        )
+
+    requested_agent_type_id = _resolve_request_agent_type_id(body)
+    out_of_scope = await require_subject_match(
+        db, conversation_session_id, requested_agent_type_id
+    )
+    if out_of_scope is not None:
+        return SystemToolResponse(result=out_of_scope)
+
+    if mode.agent_type_id is None:
+        return SystemToolResponse(
+            result={
+                "status": "refused",
+                "reason_code": OUT_OF_SCOPE_STATUS,
+                "reason": (
+                    "This conversation has no subject agent type, so no live "
+                    "test was recorded."
+                ),
+            }
+        )
+    subject_agent_type_id = mode.agent_type_id
+
+    # The saved script version is the unit of approval; the tool-call preview is
+    # derived server-side from its source (the caller never lists operations).
+    script_version_id = body.tool_args.get("script_version_id")
+    reason = str(body.tool_args.get("reason") or "").strip()
+    service = get_live_test_service()
+
+    # ── Replay of the interrupted tool task: return the stored outcome ──────
+    existing = await service.find_replay(
+        db,
+        conversation_session_id=conversation_session_id,
+        script_version_id=script_version_id,
+    )
+    if existing is not None:
+        if status_value(existing.status) == "pending":
+            logger.info(
+                "request_live_test replay — returning existing pending request "
+                "%s (no duplicate)",
+                existing.id,
+            )
+            return SystemToolResponse(result=_live_test_pending_payload(existing))
+        logger.info(
+            "request_live_test replay — request %s is already %s; returning the "
+            "stored outcome (no second approval, no second execution)",
+            existing.id,
+            status_value(existing.status),
+        )
+        return SystemToolResponse(result=_live_test_outcome_payload(existing))
+
+    created = await service.create_request(
+        db,
+        conversation_session_id=conversation_session_id,
+        script_version_id=script_version_id,
+        reason=reason,
+    )
+    if not created.accepted:
+        logger.info(
+            "request_live_test refused (%s) for conversation %s — nothing written",
+            created.reason_code,
+            conversation_session_id,
+        )
+        return SystemToolResponse(result=created.refusal())
+
+    row = await service.get(db, created.request_id) if created.request_id else None
+    if row is None:  # pragma: no cover - defensive
+        return SystemToolResponse(
+            result={
+                "status": "refused",
+                "reason_code": "invalid_script_version",
+                "reason": "The live-test request could not be recorded.",
+            }
+        )
+
+    try:
+        intervention_reason = render_script_live_test_reason(
+            script_name=(created.script.script_name if created.script else None),
+            script_version_label=(
+                created.script.script_version_label if created.script else None
+            ),
+            tool_preview=(created.script.tool_preview if created.script else ()),
+            reason=reason,
+            expires_at=row.expires_at,
+        )
+        intervention = await InterveneRequestStore().create_request(
+            db=db,
+            # Always conversation-scoped: an optimization turn has no AgentJob.
+            agent_session_id=None,
+            agent_type_id=subject_agent_type_id,
+            intervention_type=InterventionType.approval,
+            reason=intervention_reason,
+            conversation_session_id=conversation_session_id,
+            idempotency_key=(
+                str(body.tool_args.get("turn_idempotency_key") or "").strip() or None
+            ),
+        )
+        row.intervene_request_id = intervention.id
+
+        from app.services.conversations.turn_resume_store import (
+            ConversationTurnResumeStore,
+        )
+
+        resume = await ConversationTurnResumeStore().get_for_intervention(
+            intervention.id, db
+        )
+        if resume is not None:
+            row.resume_id = resume.id
+
+        from sqlalchemy import select as _select
+
+        from app.db.models.conversations import ConversationTurn
+        from app.db.models.conversations import TurnType as _TurnType
+
+        turn_id = (
+            await db.execute(
+                _select(ConversationTurn.id)
+                .where(
+                    ConversationTurn.intervene_request_id == intervention.id,
+                    ConversationTurn.turn_type == _TurnType.intervene_request,
+                )
+                .order_by(ConversationTurn.created_at.desc())
+                .limit(1)
+            )
+        ).scalar_one_or_none()
+        if turn_id is not None:
+            row.request_turn_id = turn_id
+
+        await db.commit()
+    except Exception as exc:
+        logger.exception(
+            "Failed to create the live-test approval intervention for conversation %s",
+            conversation_session_id,
+        )
+        await db.rollback()
+        return SystemToolResponse(
+            result={
+                "status": "refused",
+                "reason_code": "invalid_operation",
+                "reason": (
+                    "The approval request could not be created, so nothing will "
+                    f"run. ({exc})"
+                ),
+            }
+        )
+
+    # Announce the approval card (best effort — the pending read re-surfaces it)
+    agent_type_row = await db.get(AgentType, subject_agent_type_id)
+    payload = _live_test_pending_payload(row)
+    try:
+        from app.db.models.conversation_activity import ActivityState
+        from app.services.conversations.activity_store import ConversationActivityStore
+        from app.services.control_center.comm_hub_client import (
+            CommunicationHubClient,
+        )
+
+        await ConversationActivityStore().upsert(
+            conversation_session_id,
+            db,
+            state=ActivityState.waiting_for_human,
+            pending_intervene_request_id=row.intervene_request_id,
+            detail={"pending_intervention": True, "live_test": True},
+        )
+        await db.commit()
+        await CommunicationHubClient().dispatch_message(
+            session_id=conversation_session_id,
+            message_type="intervene_request",
+            content={
+                "request_id": str(row.intervene_request_id),
+                "conversation_session_id": str(conversation_session_id),
+                "intervention_type": "approval",
+                "reason": intervention_reason,
+                "choices": None,
+                "agent_type": agent_type_row.name if agent_type_row else None,
+                "delegation_depth": 0,
+                "live_test": {
+                    "live_test_request_id": str(row.id),
+                    "status": "pending",
+                    "expires_at": (
+                        row.expires_at.isoformat() if row.expires_at else None
+                    ),
+                    "script_version_id": (
+                        str(row.script_version_id) if row.script_version_id else None
+                    ),
+                    "script_name": (
+                        created.script.script_name if created.script else None
+                    ),
+                    "script_version_label": (
+                        created.script.script_version_label if created.script else None
+                    ),
+                    # Tool-call PREVIEW of the script that will run; the script
+                    # itself is the unit of approval, not these calls.
+                    "operations": list(row.requested_operations or []),
+                },
+            },
+        )
+    except Exception:
+        logger.warning(
+            "Live-test approval %s created but its live announcement failed "
+            "(the pending read re-surfaces it)",
+            row.id,
+            exc_info=True,
+        )
+
+    logger.info(
+        "Recorded live-test request %s (intervention=%s) for conversation %s",
+        row.id,
+        row.intervene_request_id,
+        conversation_session_id,
+    )
+    return SystemToolResponse(result=payload)
 
 
 # ── Skills Resolution for External Agents ────────────────────────────────────

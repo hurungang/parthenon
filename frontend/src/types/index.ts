@@ -2,6 +2,10 @@
  * Shared TypeScript type definitions for the Parthenon platform.
  */
 
+import type { ResumeOutcome, ResumeState } from '../utils/resumeState'
+
+export type { ResumeOutcome, ResumeState }
+
 // ── Identity & Auth ────────────────────────────────────────────────────────────
 
 export type RoleType = 'user' | 'agent' | 'both'
@@ -257,6 +261,8 @@ export interface AgentIdentity {
   status: AgentIdentityStatus
   token_expires_at: string | null
   has_refresh_token: boolean
+  refresh_token_expires_at: string | null
+  token_status?: string | null
   created_at: string
   updated_at: string
 }
@@ -450,6 +456,8 @@ export type AgentPlanStatus = 'pending' | 'success' | 'failed'
 
 export interface PlanStep {
   order: number
+  /** Optional parent step ``order`` — flat steps render as a tree when set. */
+  parent_order?: number | null
   type: string
   name: string
   description: string | null
@@ -786,6 +794,11 @@ export interface ConversationSession {
   updated_at: string
   closed_at: string | null
   guardrail_usage?: Record<string, unknown> | null
+  /** Durable paused-turn projection (null/absent for sessions that never
+   * paused). Server-projected — never derived client-side. */
+  resume_state?: ResumeState | null
+  resume_outcome?: ResumeOutcome | null
+  resume_expires_at?: string | null
 }
 
 export interface ConversationSessionDetail extends ConversationSession {
@@ -1235,6 +1248,8 @@ export interface InterveneRequest {
   response?: InterveneResponse
   agent_name?: string
   triggered_by_user_name?: string
+  /** Present only for an optimization live-test approval (single use). */
+  live_test?: LiveTestApprovalSummary | null
 }
 
 export interface InterveneResponse {
@@ -1265,6 +1280,8 @@ export interface InterveneRequestMessage {
   agent_type?: string
   delegation_depth: number
   conversation_session_id: string
+  /** Optimization live-test approval (exact operation list + expiry). */
+  live_test?: LiveTestApprovalSummary | null
 }
 
 export interface InterveneResponseMessage {
@@ -1289,14 +1306,234 @@ export interface InterveneStatusMessage {
 
 export interface ChatBlockedMessage {
   type: 'chat_blocked'
+  /** `intervention_pending` or the optimization `decision_pending`. */
   reason: string
   message: string
+  intervene_request_id?: string
+  live_test_request_id?: string
+  expires_at?: string
 }
 
 export type InterventionWsMessage =
   | InterveneRequestMessage
   | InterveneStatusMessage
   | ChatBlockedMessage
+
+// ── Conversational optimizer (optimization mode) ───────────────────────────────
+//
+// Optimization is a MODE of the subject agent type: the conversation's
+// `agent_type_id` is the agent being optimized and runs with that agent's own
+// identity, role and tool grants. These payloads mirror the Control Center
+// `app/schemas/optimizer.py` contract — no path accepts a second agent type.
+
+/** Where the optimizer model came from: explicit workspace choice or inherit. */
+export type OptimizerModelSource = 'optimizer' | 'authoring'
+
+/** One selectable optimizer model from this workspace's enabled catalogue. */
+export interface OptimizerModelOption {
+  model_id: string
+  config_id: string
+  config_display_name: string
+  provider_type: ModelProviderType
+}
+
+/**
+ * Workspace optimizer-model configuration (`GET/PUT
+ * /agents/model-configs/optimizer-model`). `selected_model_id` echoes the RAW
+ * stored value (a stale id stays visible so the UI asks for a re-select);
+ * `effective_model_id` / `source` describe what optimization would really use.
+ */
+export interface OptimizerModelConfig {
+  selected_model_id: string | null
+  effective_model_id: string | null
+  source: OptimizerModelSource | null
+  configured: boolean
+  enabled: boolean
+  reason_code: string | null
+  options: OptimizerModelOption[]
+}
+
+export interface OptimizerModelConfigUpdate {
+  /** `null` clears the selection → inherit the plan-authoring model. */
+  model_id: string | null
+}
+
+/** Optimizer-model projection carried inside an availability payload. */
+export interface OptimizerModelState {
+  model_id: string | null
+  effective_model_id: string | null
+  source: OptimizerModelSource | null
+  configured: boolean
+  enabled: boolean
+  reason_code: string | null
+}
+
+/** The conversation's subject — always the session's own `agent_type_id`. */
+export interface OptimizationSubject {
+  agent_type_id: string
+  name: string
+  input_type: string
+  is_conversational: boolean
+}
+
+/**
+ * Computed (never stored) availability. Opening the conversation always
+ * succeeds; `available` answers "may optimization WORK start now?". A missing
+ * optimized plan is informational (`plan_present`), never a block.
+ */
+export interface OptimizationAvailability {
+  available: boolean
+  reason_code: string | null
+  reason: string | null
+  can_start_work: boolean
+  plan_present: boolean
+  optimized_plan_status: string | null
+  successful_executions: number
+  optimizer_model: OptimizerModelState
+}
+
+/** Replay-vs-live audit projection for an optimization conversation. */
+export interface OptimizationAudit {
+  replay_verifications: number
+  live_operations: number
+  last_live_at: string | null
+  replay_only: boolean
+}
+
+/** `POST /conversations/optimization` response (conversation + subject + availability). */
+export interface OptimizationConversation {
+  conversation: ConversationSession
+  subject: OptimizationSubject
+  availability: OptimizationAvailability
+}
+
+/** `GET /conversations/{id}/optimization` (adds the audit projection). */
+export interface OptimizationConversationDetail extends OptimizationConversation {
+  audit: OptimizationAudit
+}
+
+/** Ledger state machine of one live-test request. */
+export type LiveTestStatus =
+  | 'pending'
+  | 'approved'
+  | 'executed'
+  | 'failed'
+  | 'denied'
+  | 'expired'
+  | 'cancelled'
+
+/**
+ * UI-only state of the approval card. `running` exists between an approval and
+ * its result chunk — the ledger never stores it.
+ */
+export type LiveTestCardState =
+  | 'pending'
+  | 'running'
+  | 'executed'
+  | 'failed'
+  | 'denied'
+  | 'expired'
+  | 'cancelled'
+
+/**
+ * One entry of the tool-call PREVIEW of the script that will run (never
+ * secrets). Derived server-side from the script's own `tools.call(...)` lines —
+ * it is evidence for the card, NOT the unit of approval (the whole script is).
+ */
+export interface LiveTestOperation {
+  tool_name: string
+  arguments: Record<string, unknown>
+  purpose?: string | null
+}
+
+/** One `tools.call(...)` outcome inside a script run record. */
+export interface ScriptRunToolCall {
+  tool_name: string
+  status: 'success' | 'error' | string
+  duration_ms?: number | null
+  result_summary?: string | null
+  error?: string | null
+}
+
+/**
+ * The single run record of an approved live test (`executed_operations[0]`).
+ *
+ * A live test runs the SCRIPT end-to-end once under the subject's own identity;
+ * MCP tools are assumed to work. The record carries the script-level result plus
+ * telemetry and the per-`tools.call` outcomes — never per-operation approvals.
+ */
+export interface ScriptRunRecord {
+  kind: 'script_run' | string
+  script_version_id: string | null
+  script_name: string | null
+  script_version_label: string | null
+  status: 'success' | 'validation_failure' | 'fell_back' | 'partial_failure' | 'error' | string
+  result_summary: string | null
+  error: string | null
+  duration_ms: number | null
+  tool_calls: ScriptRunToolCall[]
+  telemetry: Record<string, unknown>
+}
+
+/**
+ * Live-test approval attached to an `intervene_request` / pending-intervention
+ * read. Present only when the intervention is a live-test decision point; a
+ * plain ask/decide request never carries it.
+ */
+export interface LiveTestApprovalSummary {
+  live_test_request_id: string
+  status: LiveTestStatus
+  expires_at?: string | null
+  /** The approved script version — the unit of approval. */
+  script_version_id?: string | null
+  script_name?: string | null
+  script_version_label?: string | null
+  /** Informational preview of the tools the script will call. */
+  operations: LiveTestOperation[]
+  /** The script run record (one entry) once executed/failed. */
+  executed_operations?: ScriptRunRecord[] | null
+  target_agent_type_id?: string | null
+}
+
+/** Decision attribution read from the linked intervention response. */
+export interface LiveTestDecision {
+  approval_value: boolean | null
+  operator_user_id: string | null
+  responded_at: string | null
+}
+
+/** One ledger row (`GET /conversations/{id}/live-test-requests`). */
+export interface LiveTestRequest {
+  id: string
+  status: LiveTestStatus
+  target_agent_type_id: string
+  script_version_id: string | null
+  script_name: string | null
+  script_version_label: string | null
+  requested_operations: LiveTestOperation[]
+  executed_operations: ScriptRunRecord[] | null
+  expires_at: string | null
+  execution_started_at: string | null
+  execution_finished_at: string | null
+  decision: LiveTestDecision | null
+  created_at: string | null
+}
+
+/**
+ * `live_test_result` server chunk — emitted after an approved live test runs,
+ * before the resumed reply, so the pending card can be replaced with the script
+ * run record.
+ */
+export interface LiveTestResultMessage {
+  type: 'live_test_result'
+  live_test_request_id: string
+  live_test_status: 'executed' | 'failed'
+  script_version_id?: string | null
+  /** The script run record (server also mirrors it into `executed_operations`). */
+  script_run?: ScriptRunRecord | null
+  executed_operations: ScriptRunRecord[]
+  live_test_error?: string | null
+}
 
 // ── Agent Management Panel ─────────────────────────────────────────────────────
 

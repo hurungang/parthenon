@@ -15,8 +15,7 @@ import {
 } from '@mui/material'
 import CodeIcon from '@mui/icons-material/Code'
 import EditIcon from '@mui/icons-material/Edit'
-import RefreshIcon from '@mui/icons-material/Refresh'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQuery } from '@tanstack/react-query'
 import apiClient from '../../api/apiClient'
 import QuotaBlockedAlert from '../../components/tenant/QuotaBlockedAlert'
 import { DynamicSchemaForm } from '../../components/DynamicSchemaForm'
@@ -28,7 +27,6 @@ interface AgentJobLaunchDialogProps {
   agentType: AgentType
   onClose: () => void
   onLaunched: (sessionId: string) => void
-  onRegeneratePlan?: () => Promise<void>
 }
 
 /**
@@ -38,6 +36,12 @@ interface AgentJobLaunchDialogProps {
  *   - "typed"        → JSON text input based on input_schema
  *   - "conversation" → initial message text area
  *
+ * Run is execution-only: it always uses the agent's own system/skill
+ * instructions. Optimization is a separate, gated action (see
+ * `AgentOptimizeAction`, plus the Optimized Plan tab's chat/help) and
+ * implementation-plan generation is explicit-only, offered from the Plan
+ * Preview tab — never from this dialog or as a side effect of saving an agent.
+ *
  * Follows the Dialog Error Handling Standard.
  */
 export function AgentJobLaunchDialog({
@@ -45,18 +49,13 @@ export function AgentJobLaunchDialog({
   agentType,
   onClose,
   onLaunched,
-  onRegeneratePlan,
 }: AgentJobLaunchDialogProps) {
   const { t } = useTranslation()
   const [dialogError, setDialogError] = useState<unknown>(null)
   const [submitting, setSubmitting] = useState(false)
-  const [regenerating, setRegenerating] = useState(false)
   const [inputText, setInputText] = useState('')
   const [typedInputData, setTypedInputData] = useState<Record<string, any>>({})
   const [useRawJson, setUseRawJson] = useState(false)
-  // Opt-in optimization dialog: shown when no verified (`ready`) optimized
-  // plan exists for the agent type and the user clicks Run Agent.
-  const [optimizeDialogOpen, setOptimizeDialogOpen] = useState(false)
 
   useEffect(() => {
     if (open) {
@@ -64,11 +63,8 @@ export function AgentJobLaunchDialog({
       setTypedInputData({})
       setUseRawJson(false)
       setDialogError(null)
-      setOptimizeDialogOpen(false)
     }
   }, [open])
-
-  const queryClient = useQueryClient()
 
   const { data: allRoles } = useQuery<AgentRole[]>({
     queryKey: ['agents', 'roles'],
@@ -140,27 +136,10 @@ export function AgentJobLaunchDialog({
 
   const planIsStale = !!planGeneratedAt && staleDefinitionLabels.length > 0
 
-  const regeneratePlanMutation = useMutation({
-    mutationFn: async () => {
-      const { data } = await apiClient.post(
-        `/agents/types/${agentType.id}/regenerate-plan`,
-        undefined,
-        { timeout: 180_000 },
-      )
-      return data
-    },
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ['agents', 'types', agentType.id] })
-      await queryClient.invalidateQueries({ queryKey: ['agents', 'types'] })
-    },
-    onError: (error) => {
-      setDialogError(error)
-    },
-  })
-
   // Optimized-plan existence check: a verified (`ready`) optimized plan means
-  // the run uses it directly; otherwise the Run Agent flow offers the opt-in
-  // optimization dialog. 404 (no plan yet) is an expected state.
+  // the run uses it directly; otherwise the run proceeds on the model path.
+  // 404 (no plan yet) is an expected state. This is informational only — a
+  // normal run never optimizes.
   const { data: optimizedPlan } = useQuery<OptimizedPlanView>({
     queryKey: ['agents', 'types', agentType.id, 'optimized-plan'],
     queryFn: async () => {
@@ -174,7 +153,7 @@ export function AgentJobLaunchDialog({
   })
   const hasReadyOptimizedPlan = optimizedPlan?.status === 'ready'
 
-  const handleLaunch = async (optimize: boolean) => {
+  const handleLaunch = async () => {
     try {
       setDialogError(null)
       setSubmitting(true)
@@ -195,10 +174,11 @@ export function AgentJobLaunchDialog({
         inputData = { message: inputText }
       }
 
+      // Execution-only launch: no `optimize` field — the backend runs the
+      // agent with its own instructions.
       const { data } = await apiClient.post<AgentJob>('/agents/sessions', {
         agent_type_id: agentType.id,
         input_data: inputData,
-        optimize,
       })
 
       onLaunched(data.id)
@@ -206,16 +186,6 @@ export function AgentJobLaunchDialog({
       setDialogError(err)
     } finally {
       setSubmitting(false)
-    }
-  }
-
-  // Run Agent entry point: with a verified optimized plan the run uses it
-  // directly; otherwise offer the opt-in optimization dialog first.
-  const handleRunClick = () => {
-    if (hasReadyOptimizedPlan) {
-      void handleLaunch(false)
-    } else {
-      setOptimizeDialogOpen(true)
     }
   }
 
@@ -241,34 +211,20 @@ export function AgentJobLaunchDialog({
         ) : null}
 
         {planIsStale && (
-          <Box display="flex" gap={1} alignItems="stretch" sx={{ mb: 1 }}>
-            <Alert severity="warning" sx={{ flex: 1, alignItems: 'center' }}>
-              {staleDefinitionsMessage}
-            </Alert>
-              <Button
-                variant="outlined"
-                size="small"
-                startIcon={<RefreshIcon />}
-                onClick={async () => {
-                  setRegenerating(true)
-                  try {
-                    if (onRegeneratePlan) {
-                      await onRegeneratePlan()
-                    } else {
-                      await regeneratePlanMutation.mutateAsync()
-                    }
-                  } finally {
-                    setRegenerating(false)
-                  }
-                }}
-                disabled={regeneratePlanMutation.isPending || regenerating}
-              >
-                Regenerate plan
-              </Button>
-          </Box>
+          <Alert severity="warning" sx={{ mb: 1 }} data-testid="stale-plan-note">
+            {staleDefinitionsMessage} {t('agents.sessions.stalePlanHint')}
+          </Alert>
         )}
 
         <Box display="flex" flexDirection="column" gap={2} pt={1}>
+          {agentType.input_type !== 'conversation' && (
+            <Alert severity="info" data-testid="run-execution-only-hint">
+              {hasReadyOptimizedPlan
+                ? t('agents.sessions.optimizedPlanPresent')
+                : t('agents.sessions.modelPath')}
+            </Alert>
+          )}
+
           {agentType.input_type === 'none' && (
             <Alert severity="info">{t('agents.sessions.confirmLaunch')}</Alert>
           )}
@@ -348,7 +304,7 @@ export function AgentJobLaunchDialog({
         </Button>
         <Button
           variant="contained"
-          onClick={handleRunClick}
+          onClick={() => void handleLaunch()}
           disabled={
             submitting ||
             (agentType.input_type === 'conversation' && !inputText.trim())
@@ -357,45 +313,6 @@ export function AgentJobLaunchDialog({
           {submitting ? t('agents.sessions.launching') : t('agents.sessions.launch')}
         </Button>
       </DialogActions>
-
-      {/* Opt-in optimization dialog: explains what optimization does and lets
-          the user run with it (this execution becomes the optimization
-          opportunity) or skip it and run normally. */}
-      <Dialog
-        open={optimizeDialogOpen}
-        onClose={() => setOptimizeDialogOpen(false)}
-        maxWidth="sm"
-        fullWidth
-      >
-        <DialogTitle>{t('agents.sessions.optimizePromptTitle')}</DialogTitle>
-        <DialogContent>
-          <Typography variant="body2" sx={{ whiteSpace: 'pre-line' }}>
-            {t('agents.sessions.optimizePromptDescription')}
-          </Typography>
-        </DialogContent>
-        <DialogActions>
-          <Button
-            onClick={() => {
-              setOptimizeDialogOpen(false)
-              void handleLaunch(false)
-            }}
-            disabled={submitting}
-          >
-            {t('agents.sessions.skipOptimization')}
-          </Button>
-          <Button
-            variant="contained"
-            onClick={() => {
-              setOptimizeDialogOpen(false)
-              void handleLaunch(true)
-            }}
-            disabled={submitting}
-            data-testid="run-with-optimization"
-          >
-            {t('agents.sessions.runWithOptimization')}
-          </Button>
-        </DialogActions>
-      </Dialog>
     </Dialog>
   )
 }

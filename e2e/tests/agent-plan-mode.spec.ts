@@ -1,19 +1,48 @@
+import { expect, test, type Page, type Route } from '@playwright/test'
+import { FAKE_TOKEN, mockApiCatchAllProxyAware, standardSetup } from './_helpers'
+import {
+  mockPanelWorld,
+  seedAgents,
+  selectMuiOption,
+  type PanelWorldState,
+} from './_agent_panel_world'
+
 /**
- * E2E tests for Agent Plan Mode feature.
+ * E2E: implementation-plan authoring is EXPLICIT-ONLY.
  *
- * Contains two test suites:
- * 1. Mocked tests (fast) — use page.route() to intercept API calls
- * 2. Real Backend Integration — ONE suite without page.route() mocks that
- *    verifies the actual backend creates and cascades plan records
+ * Fully mocked (mock-first convention, `page.route()`): no live backend.
+ *
+ * Journeys (docs/changes/separate-optimization-from-execution/test-plan.md —
+ * "Explicit-only plan generation" + "Generate-plan gate" + "Explicit
+ * Generate-plan UX"):
+ *   1. Creating / saving an agent type produces no plan and fires no
+ *      plan-generation request; the Plan Preview (tab 1 of the details dialog,
+ *      labeled "Agent Preview") shows the explicit empty state instead.
+ *   2. Generation happens only on the explicit **Generate plan** action, and
+ *      the authored plan renders in place without a page reload.
+ *   3. With no usable workspace authoring model, Plan Preview shows the blocked
+ *      state with the localized reason and a System Config shortcut, and the
+ *      Generate plan action is disabled — nothing is dispatched.
+ *   4. Conversational agents expose no plan-generation affordances at all; the
+ *      tab explains why.
+ *   5. A blocked explicit generation (`412 plan_generation_unavailable`) shows
+ *      its reason while the last good plan stays visible.
+ *
+ * The "Real Backend Integration" suite below is unchanged in intent and skips
+ * cleanly unless a live backend + token are available; it asserts the live
+ * create response carries no plan (explicit-only on the server).
  */
-import { test, expect } from '@playwright/test'
-import { standardSetup } from './_helpers'
 
-// ── Shared fixtures ────────────────────────────────────────────────────────────
+test.describe.configure({ timeout: 120_000 })
 
-const MOCK_AGENT_PLAN_SUCCESS = {
+const AGENT_ID = 'at-a'
+const AGENT_NAME = 'panel-e2e-alpha'
+const CONV_ID = 'at-c'
+const CONV_NAME = 'panel-e2e-conv'
+
+const PLAN_SUCCESS = {
   id: 'plan-e2e-1',
-  agent_type_id: 'at-e2e-1',
+  agent_type_id: AGENT_ID,
   plan_steps: [
     { order: 1, type: 'sop_invocation', name: 'Initialize Context', description: 'Gather required context' },
     { order: 2, type: 'skill_invocation', name: 'Execute Search', description: 'Run the search skill' },
@@ -30,324 +59,360 @@ const MOCK_AGENT_PLAN_SUCCESS = {
   generated_at: '2026-05-09T12:00:00Z',
 }
 
-const MOCK_AGENT_PLAN_FAILED = {
-  id: 'plan-e2e-fail',
-  agent_type_id: 'at-e2e-fail',
-  plan_steps: [],
-  topology_nodes: [],
-  topology_edges: [],
-  generation_status: 'failed',
-  generation_error: 'LLM provider unavailable — no model config found',
-  agent_config_hash: null,
-  generated_at: null,
+// Copy resolved from `frontend/src/i18n/locales/en.json` (the only locale).
+const EMPTY_TITLE = 'No implementation plan yet'
+const EMPTY_HINT =
+  'This agent has no plan. Generating one is an explicit action — creating or saving an agent never produces a plan.'
+const BLOCKED_TITLE = 'Plan generation unavailable'
+const MODEL_NOT_CONFIGURED_COPY =
+  'No authoring model is configured for this workspace. Select one in System Config before generating plans or optimizing.'
+const MODEL_NOT_ENABLED_COPY =
+  'The saved authoring model is no longer available in this workspace. Re-select an enabled model in System Config.'
+const CONVERSATIONAL_COPY = 'Implementation plans are not available for conversational agents.'
+const GENERATION_FAILED_TITLE = 'The last plan generation attempt failed'
+const GENERATION_FAILED_KEPT = 'The last successful plan is still shown below.'
+
+interface PlanState {
+  /** Gate payload the Plan Preview reads (see useOptimizationGate). */
+  canGeneratePlan: boolean
+  reasonCode: string | null
+  conversational?: boolean
+  /** Bodies of POST /agents/types/{id}/regenerate-plan. */
+  regenerateRequests: unknown[]
 }
 
-const MOCK_AGENT_TYPE_BASE = {
-  id: 'at-e2e-1',
-  name: 'E2E Test Agent',
-  description: 'Created by E2E test',
-  identity_id: null,
-  role_id: null,
-  model_id: null,
-  system_instruction: null,
-  input_type: 'typed',
-  input_schema: null,
-  output_type: 'markdown',
-  output_schema: null,
-  sop_bindings: [],
-  skill_bindings: [],
-  is_active: true,
-  created_at: '2026-05-09T12:00:00Z',
-  updated_at: '2026-05-09T12:00:00Z',
+function json(route: Route, status: number, body: unknown) {
+  return route.fulfill({
+    status,
+    contentType: 'application/json',
+    body: JSON.stringify(body),
+  })
 }
 
-// ── Standard API mocks used by most tests ──────────────────────────────────────
+/**
+ * Registers the plan surfaces on top of the panel world.
+ * MUST be called AFTER `mockPanelWorld` (routes resolve last-registered-first).
+ */
+async function mockPlanApi(
+  page: Page,
+  world: PanelWorldState,
+  state: PlanState,
+  opts: { generationFailure?: Record<string, unknown> } = {},
+) {
+  // ── Composed plan/optimize gate (can_generate_plan gates the action) ─────
+  await page.route(/\/api\/v1\/agents\/types\/[^/]+\/optimization-gate$/, (route) => {
+    const conversational = state.conversational === true
+    const canGenerate = state.canGeneratePlan && !conversational
+    return json(route, 200, {
+      // A successful execution is not required for base-plan generation.
+      can_optimize: false,
+      can_generate_plan: canGenerate,
+      successful_executions: 0,
+      workflow_model_configured: state.canGeneratePlan,
+      workflow_model_id: state.canGeneratePlan ? 'gpt-4o' : null,
+      is_conversational: conversational,
+      reason_code: state.reasonCode,
+      reason: state.reasonCode === 'authoring_model_not_configured' ? MODEL_NOT_CONFIGURED_COPY : null,
+    })
+  })
 
-async function setupStandardAgentMocks(page: Parameters<typeof test>[1]['page']) {
-  await page.route('**/api/v1/agents/types', (route) => {
-    if (route.request().method() === 'GET') {
-      route.fulfill({ status: 200, body: JSON.stringify([]) })
-    } else {
-      // POST — return agent type with a successful plan
-      route.fulfill({
-        status: 201,
-        body: JSON.stringify({ ...MOCK_AGENT_TYPE_BASE, plan: MOCK_AGENT_PLAN_SUCCESS }),
-      })
+  // ── Explicit generation (the ONLY authoring path) ────────────────────────
+  await page.route(/\/api\/v1\/agents\/types\/[^/]+\/regenerate-plan$/, (route) => {
+    if (route.request().method() !== 'POST') return route.fallback()
+    const id = route.request().url().split('/agents/types/')[1]?.split('/')[0]
+    state.regenerateRequests.push({ agentTypeId: id })
+    if (opts.generationFailure) {
+      return json(route, 412, { detail: opts.generationFailure })
     }
-  })
-  await page.route('**/api/v1/agents/types/**', (route) => {
-    if (route.request().method() === 'PUT') {
-      // Update — return with regenerated plan
-      route.fulfill({
-        status: 200,
-        body: JSON.stringify({
-          ...MOCK_AGENT_TYPE_BASE,
-          id: 'at-e2e-1',
-          name: 'Updated E2E Agent',
-          plan: MOCK_AGENT_PLAN_SUCCESS,
-        }),
-      })
-    } else if (route.request().method() === 'DELETE') {
-      route.fulfill({ status: 204 })
-    } else {
-      route.fulfill({
-        status: 200,
-        body: JSON.stringify({ ...MOCK_AGENT_TYPE_BASE, plan: MOCK_AGENT_PLAN_SUCCESS }),
-      })
+    const agent = world.agents.find((a) => a.id === id)
+    if (agent) {
+      // The server persists the authored plan; the UI then refetches it.
+      ;(agent as Record<string, unknown>).plan = PLAN_SUCCESS
+      return json(route, 200, agent)
     }
+    return json(route, 404, { detail: 'not found' })
   })
-  await page.route('**/api/v1/agents/roles', (route) =>
-    route.fulfill({ status: 200, body: JSON.stringify([]) })
+}
+
+const GATE_OK: PlanState = { canGeneratePlan: true, reasonCode: null, regenerateRequests: [] }
+
+async function openAgentDialog(page: Page, name: string) {
+  await page.getByText(name, { exact: true }).first().click()
+  const dialog = page
+    .getByRole('dialog')
+    .filter({ has: page.getByRole('tab', { name: 'Agent Preview' }) })
+  await expect(dialog.getByRole('tab', { name: 'Agent Preview' })).toBeVisible()
+  return dialog
+}
+
+/**
+ * Opens the plan surface: tab 1 of the details dialog is the Plan Preview
+ * (its visible label is "Agent Preview" after the unified-topology change).
+ */
+async function openPlanPreviewTab(dialog: ReturnType<Page['getByRole']>) {
+  await dialog.getByRole('tab', { name: 'Agent Preview' }).click()
+}
+
+async function gotoAgentsList(page: Page) {
+  await page.goto('/agents')
+  await page.waitForLoadState('load')
+  if (page.url().includes('/login')) {
+    test.skip()
+    return false
+  }
+  return true
+}
+
+async function gotoPanel(page: Page) {
+  await page.goto('/agents/panel')
+  await page.waitForLoadState('load')
+  if (page.url().includes('/login')) {
+    test.skip()
+    return false
+  }
+  await expect(page.getByRole('heading', { name: 'Agent Management Panel' })).toBeVisible()
+  return true
+}
+
+async function markNoReload(page: Page) {
+  await page.evaluate(() => {
+    ;(window as unknown as Record<string, unknown>).__e2e_no_reload = true
+  })
+}
+
+async function assertNoReload(page: Page) {
+  const marker = await page.evaluate(
+    () => (window as unknown as Record<string, unknown>).__e2e_no_reload,
   )
-  await page.route('**/api/v1/agents/identities', (route) =>
-    route.fulfill({ status: 200, body: JSON.stringify([]) })
-  )
-  await page.route('**/api/v1/agents/model-configs', (route) =>
-    route.fulfill({ status: 200, body: JSON.stringify([]) })
-  )
-  // SOPs are fetched by AgentTypeForm when input_type === 'none' (the default).
-  // Without this mock the real backend receives the fake JWT, returns 401, and the
-  // app redirects to login before any dialog interaction completes.
-  await page.route('**/api/v1/sops', (route) =>
-    route.fulfill({ status: 200, body: JSON.stringify([]) })
-  )
+  expect(marker).toBe(true)
+}
+
+/** Asserts the panel/agent API never received a plan-generation request. */
+function assertNoGenerationRequests(world: PanelWorldState, state: PlanState) {
+  expect(state.regenerateRequests).toEqual([])
+  expect(world.requests.filter((r) => r.includes('regenerate-plan'))).toEqual([])
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // Suite 1: Mocked E2E tests (fast, use page.route())
 // ═══════════════════════════════════════════════════════════════════════════════
 
-test.describe('Agent Plan Mode — Mocked', () => {
+test.describe('Agent Plan Mode — explicit-only generation (mocked)', () => {
+  let world: PanelWorldState
+  let state: PlanState
+
   test.beforeEach(async ({ page }) => {
+    state = { ...GATE_OK, regenerateRequests: [] }
+    // Lowest-priority catch-all FIRST (handlers resolve last-registered-first).
+    await mockApiCatchAllProxyAware(page)
+    await page.addInitScript((token: string) => {
+      localStorage.setItem('access_token', token)
+    }, FAKE_TOKEN)
     await standardSetup(page)
-    await setupStandardAgentMocks(page)
+    world = await mockPanelWorld(page, { agents: seedAgents() })
+    await mockPlanApi(page, world, state)
   })
 
-  test('Create agent type with plan: modal opens with steps and diagram after save', async ({ page }) => {
-    const errors: string[] = []
-    page.on('pageerror', (e) => errors.push(e.message))
+  test('saving an agent type generates nothing — Plan Preview stays in the explicit empty state', async ({
+    page,
+  }) => {
+    if (!(await gotoPanel(page))) return
 
-    await page.goto('/agents')
-    await page.waitForLoadState('load')
+    await markNoReload(page)
 
-    // Click "Add Agent Type" / "Create Agent Type" button
-    const createBtn = page.getByRole('button', { name: /create.*agent.*type|add.*agent/i })
-    await expect(createBtn).toBeVisible()
-    await createBtn.click()
+    // Select the seeded agent and edit it in place.
+    await page.getByRole('button', { name: AGENT_NAME }).click()
+    await expect(page.getByRole('heading', { name: AGENT_NAME, exact: true })).toBeVisible()
+    const descInput = page.getByLabel('Description')
+    await expect(descInput).toHaveValue('E2E panel agent')
+    await descInput.fill(`saved by e2e ${Date.now()}`)
+    await page.getByRole('button', { name: 'Save Changes' }).click()
 
-    // Wait for create dialog to open
-    await expect(page.getByRole('dialog')).toBeVisible()
+    // The save persisted exactly once…
+    await expect(page.getByText('saved', { exact: true })).toBeVisible()
+    expect(world.agentPutBodies).toHaveLength(1)
+    // …and no plan generation was scheduled by create/update.
+    assertNoGenerationRequests(world, state)
 
-    // Fill in the Name field
-    const nameInput = page.getByRole('dialog').getByRole('textbox').first()
-    await nameInput.fill('E2E Test Agent')
+    // Plan Preview shows the explicit empty state — no plan was authored.
+    await page.getByLabel('View').click()
+    const dialog = page
+      .getByRole('dialog')
+      .filter({ has: page.getByRole('tab', { name: 'Agent Preview' }) })
+    await openPlanPreviewTab(dialog)
+    const empty = dialog.getByTestId('plan-empty-state')
+    await expect(empty).toBeVisible()
+    await expect(empty.getByText(EMPTY_TITLE)).toBeVisible()
+    await expect(empty.getByText(EMPTY_HINT)).toBeVisible()
+    await expect(dialog.getByTestId('plan-generate')).toBeEnabled()
+    // No plan content leaked in from the save.
+    await expect(dialog.getByText('Initialize Context')).toHaveCount(0)
 
-    // Switch Input Type from 'none' to 'typed' to bypass primarySopRequired validation
-    await page.getByRole('dialog').getByText('None (no input required)').click()
-    await page.waitForSelector('[role="listbox"]', { state: 'visible' })
-    await page.locator('[role="option"][data-value="typed"]').click()
-
-    // Click Save
-    const saveBtn = page.getByRole('dialog').getByRole('button', { name: /save/i })
-    await saveBtn.click()
-
-    // PlanPreviewModal should open — look for plan steps
-    await expect(page.getByText('Initialize Context')).toBeVisible({ timeout: 8000 })
-    await expect(page.getByText('Execute Search')).toBeVisible()
-    await expect(page.getByText('Save Result')).toBeVisible()
-
-    // Console errors should not include plan-related failures
-    expect(errors.filter((e) => !e.includes('ResizeObserver'))).toHaveLength(0)
+    await assertNoReload(page)
   })
 
-  test('Create agent type with plan: topology section visible in modal', async ({ page }) => {
-    await page.goto('/agents')
-    await page.waitForLoadState('load')
+  test('creating an agent type generates nothing — the new agent has no plan', async ({ page }) => {
+    if (!(await gotoPanel(page))) return
 
-    const createBtn = page.getByRole('button', { name: /create.*agent.*type|add.*agent/i })
-    await createBtn.click()
-    await expect(page.getByRole('dialog')).toBeVisible()
+    const name = `e2e-plan-create-${Date.now()}`
+    await page.getByRole('button', { name: 'Create Agent' }).click()
+    const createDialog = page.getByRole('dialog')
+    await expect(createDialog.getByRole('heading', { name: 'Create Agent Type' })).toBeVisible()
+    await createDialog.getByLabel('Name').fill(name)
+    await selectMuiOption(page, createDialog, 'Agent Role', 'panel-e2e-role')
+    await createDialog.getByRole('button', { name: 'Add Binding' }).click()
+    await createDialog
+      .locator('.MuiToggleButtonGroup-root')
+      .locator('..')
+      .getByRole('combobox')
+      .click()
+    await page.getByRole('option', { name: 'panel-e2e-sop' }).click()
+    await createDialog.getByRole('button', { name: 'Add', exact: true }).click()
+    await createDialog.getByRole('button', { name: 'Save', exact: true }).click()
+    await expect(createDialog).toBeHidden()
 
-    const nameInput = page.getByRole('dialog').getByRole('textbox').first()
-    await nameInput.fill('E2E Plan Topology Test')
+    // Created exactly once, and no plan authoring was requested by create.
+    expect(world.agentPostBodies).toHaveLength(1)
+    assertNoGenerationRequests(world, state)
+    const created = world.agents.find((a) => a.name === name)
+    expect(created).toBeTruthy()
+    expect(created?.plan).toBeNull()
 
-    // Switch Input Type from 'none' to 'typed' to bypass primarySopRequired validation
-    await page.getByRole('dialog').getByText('None (no input required)').click()
-    await page.waitForSelector('[role="listbox"]', { state: 'visible' })
-    await page.locator('[role="option"][data-value="typed"]').click()
-
-    const saveBtn = page.getByRole('dialog').getByRole('button', { name: /save/i })
-    await saveBtn.click()
-
-    // Plan preview modal should open
-    await expect(page.getByText('Initialize Context')).toBeVisible({ timeout: 8000 })
-
-    // Topology section should be visible (plan has non-empty nodes)
-    // The topology heading uses t() key agents.plan.topology
-    await expect(page.getByText(/agents\.plan\.topology|agent topology/i)).toBeVisible()
+    // The created agent's Plan Preview opens on the empty state.
+    await page.getByLabel('View').click()
+    const dialog = page
+      .getByRole('dialog')
+      .filter({ has: page.getByRole('tab', { name: 'Agent Preview' }) })
+    await openPlanPreviewTab(dialog)
+    await expect(dialog.getByTestId('plan-empty-state')).toBeVisible()
+    await expect(dialog.getByTestId('plan-generate')).toBeVisible()
   })
 
-  test('Dismiss plan modal: modal closes and agent type row appears in table', async ({ page }) => {
-    // Set up GET to return the created agent type
-    await page.route('**/api/v1/agents/types', (route) => {
-      if (route.request().method() === 'GET') {
-        // After save, return the new agent type in the list
-        route.fulfill({
-          status: 200,
-          body: JSON.stringify([{ ...MOCK_AGENT_TYPE_BASE, name: 'E2E Test Agent' }]),
-        })
-      } else {
-        route.fulfill({
-          status: 201,
-          body: JSON.stringify({ ...MOCK_AGENT_TYPE_BASE, plan: MOCK_AGENT_PLAN_SUCCESS }),
-        })
-      }
+  test('explicit Generate plan authors the plan and it renders without a page reload', async ({
+    page,
+  }) => {
+    if (!(await gotoAgentsList(page))) return
+
+    const dialog = await openAgentDialog(page, AGENT_NAME)
+    await markNoReload(page)
+    await openPlanPreviewTab(dialog)
+
+    const generate = dialog.getByTestId('plan-generate')
+    await expect(generate).toBeVisible()
+    await expect(generate).toHaveText('Generate plan')
+    // Explicit-only: nothing has been generated just by opening the surface.
+    await expect(dialog.getByTestId('plan-empty-state')).toBeVisible()
+    expect(state.regenerateRequests).toEqual([])
+
+    await generate.click()
+
+    // Exactly one explicit authoring request.
+    await expect.poll(() => state.regenerateRequests.length).toBe(1)
+    expect(state.regenerateRequests[0]).toEqual({ agentTypeId: AGENT_ID })
+
+    // The refreshed agent type renders the authored plan in place (dependent
+    // queries invalidated — no manual page reload).
+    await expect(dialog.getByText('Initialize Context')).toBeVisible({ timeout: 15_000 })
+    await expect(dialog.getByText('Execute Search')).toBeVisible()
+    await expect(dialog.getByText('Save Result')).toBeVisible()
+    await expect(dialog.getByTestId('plan-empty-state')).toHaveCount(0)
+    // With a plan present the explicit action becomes "Regenerate plan".
+    await expect(dialog.getByTestId('plan-regenerate')).toHaveText('Regenerate plan')
+
+    await assertNoReload(page)
+  })
+
+  test('no authoring model: Plan Preview is blocked with the reason + System Config shortcut, nothing is dispatched', async ({
+    page,
+  }) => {
+    state.canGeneratePlan = false
+    state.reasonCode = 'authoring_model_not_configured'
+    await mockPlanApi(page, world, state)
+    if (!(await gotoAgentsList(page))) return
+
+    const dialog = await openAgentDialog(page, AGENT_NAME)
+    await openPlanPreviewTab(dialog)
+
+    const blocked = dialog.getByTestId('plan-generation-blocked')
+    await expect(blocked).toBeVisible()
+    await expect(blocked.getByText(BLOCKED_TITLE)).toBeVisible()
+    // The reason is the localized authoring-model message, not a generic one.
+    await expect(blocked.getByText(MODEL_NOT_CONFIGURED_COPY)).toBeVisible()
+
+    // The explicit action is disabled and never dispatches a request.
+    const generate = dialog.getByTestId('plan-generate')
+    await expect(generate).toBeDisabled()
+    await generate.click({ force: true })
+    await expect(dialog.getByTestId('plan-empty-state')).toBeVisible()
+    expect(state.regenerateRequests).toEqual([])
+    assertNoGenerationRequests(world, state)
+
+    // The shortcut points the operator at the fix.
+    await dialog.getByTestId('plan-system-config-shortcut').click()
+    await expect(page).toHaveURL(/\/system-config$/)
+    await expect(page.getByTestId('authoring-model-section')).toBeVisible()
+  })
+
+  test('conversational agent: no plan-generation affordances, only the explanation', async ({
+    page,
+  }) => {
+    state.conversational = true
+    state.reasonCode = 'conversational_agent'
+    await mockPlanApi(page, world, state)
+    if (!(await gotoAgentsList(page))) return
+
+    // The row exposes no Optimize action for a conversational agent (the typed
+    // rows do have one, so this is scoped to the conversational row).
+    await expect(page.getByText(CONV_NAME, { exact: true }).first()).toBeVisible()
+    const convRow = page.getByRole('row').filter({ hasText: CONV_NAME })
+    await expect(convRow.getByTestId('optimize-agent-action')).toHaveCount(0)
+
+    const dialog = await openAgentDialog(page, CONV_NAME)
+    await openPlanPreviewTab(dialog)
+
+    await expect(dialog.getByTestId('plan-conversational-unavailable')).toHaveText(
+      CONVERSATIONAL_COPY,
+    )
+    // No generate / regenerate / empty-state affordance at all.
+    await expect(dialog.getByTestId('plan-generate')).toHaveCount(0)
+    await expect(dialog.getByTestId('plan-regenerate')).toHaveCount(0)
+    await expect(dialog.getByTestId('plan-empty-state')).toHaveCount(0)
+    await expect(dialog.getByTestId('plan-generation-blocked')).toHaveCount(0)
+    expect(state.regenerateRequests).toEqual([])
+  })
+
+  test('a blocked explicit generation shows its reason and keeps the last successful plan', async ({
+    page,
+  }) => {
+    // An agent that already has a good plan; the authoring model went missing
+    // between the gate read and the request (server re-checks → 412).
+    ;(world.agents[0] as Record<string, unknown>).plan = PLAN_SUCCESS
+    await mockPlanApi(page, world, state, {
+      generationFailure: {
+        error: 'plan_generation_unavailable',
+        reason_code: 'authoring_model_not_enabled',
+        reason: 'The saved authoring model is no longer available in this workspace.',
+      },
     })
+    if (!(await gotoAgentsList(page))) return
 
-    await page.goto('/agents')
-    await page.waitForLoadState('load')
+    const dialog = await openAgentDialog(page, AGENT_NAME)
+    await openPlanPreviewTab(dialog)
+    await expect(dialog.getByText('Initialize Context')).toBeVisible()
 
-    const createBtn = page.getByRole('button', { name: /create.*agent.*type|add.*agent/i })
-    await createBtn.click()
-    await expect(page.getByRole('dialog')).toBeVisible()
+    await dialog.getByTestId('plan-regenerate').click()
+    await expect.poll(() => state.regenerateRequests.length).toBe(1)
 
-    const nameInput = page.getByRole('dialog').getByRole('textbox').first()
-    await nameInput.fill('E2E Test Agent')
-
-    // Switch Input Type from 'none' to 'typed' to bypass primarySopRequired validation
-    await page.getByRole('dialog').getByText('None (no input required)').click()
-    await page.waitForSelector('[role="listbox"]', { state: 'visible' })
-    await page.locator('[role="option"][data-value="typed"]').click()
-
-    const saveBtn = page.getByRole('dialog').getByRole('button', { name: /save/i })
-    await saveBtn.click()
-
-    // Wait for plan modal to open
-    await expect(page.getByText('Initialize Context')).toBeVisible({ timeout: 8000 })
-
-    // Close the plan modal
-    const closeBtn = page.getByRole('button', { name: /close/i })
-    await closeBtn.click()
-
-    // Wait for the plan modal to fully close before checking the table
-    await expect(page.getByText('Initialize Context')).not.toBeVisible({ timeout: 5000 })
-
-    // Agent type row should appear in the table (use role='cell' to avoid matching the dialog title)
-    await expect(page.getByRole('cell', { name: 'E2E Test Agent' })).toBeVisible({ timeout: 5000 })
-  })
-
-  test('Update agent type: PlanPreviewModal opens with updated plan on save', async ({ page }) => {
-    // Pre-populate the agent type list
-    await page.route('**/api/v1/agents/types', (route) => {
-      if (route.request().method() === 'GET') {
-        route.fulfill({
-          status: 200,
-          body: JSON.stringify([MOCK_AGENT_TYPE_BASE]),
-        })
-      } else {
-        route.fulfill({
-          status: 201,
-          body: JSON.stringify({ ...MOCK_AGENT_TYPE_BASE, plan: MOCK_AGENT_PLAN_SUCCESS }),
-        })
-      }
-    })
-
-    await page.goto('/agents')
-    await page.waitForLoadState('load')
-
-    // Click edit button for the existing agent type
-    const editBtn = page.getByRole('button', { name: /edit/i })
-    await expect(editBtn).toBeVisible()
-    await editBtn.click()
-
-    // Wait for edit dialog
-    await expect(page.getByRole('dialog')).toBeVisible()
-
-    // Modify the name
-    const nameInput = page.getByRole('dialog').getByRole('textbox').first()
-    await nameInput.fill('Updated E2E Agent')
-
-    // Save
-    const saveBtn = page.getByRole('dialog').getByRole('button', { name: /save/i })
-    await saveBtn.click()
-
-    // Plan modal should open with steps from the updated response
-    await expect(page.getByText('Initialize Context')).toBeVisible({ timeout: 8000 })
-  })
-
-  test('Failed plan: modal opens with error message when generation_status is failed', async ({ page }) => {
-    // Override POST to return failed plan
-    await page.route('**/api/v1/agents/types', (route) => {
-      if (route.request().method() === 'GET') {
-        route.fulfill({ status: 200, body: JSON.stringify([]) })
-      } else {
-        route.fulfill({
-          status: 201,
-          body: JSON.stringify({ ...MOCK_AGENT_TYPE_BASE, plan: MOCK_AGENT_PLAN_FAILED }),
-        })
-      }
-    })
-
-    await page.goto('/agents')
-    await page.waitForLoadState('load')
-
-    const createBtn = page.getByRole('button', { name: /create.*agent.*type|add.*agent/i })
-    await createBtn.click()
-    await expect(page.getByRole('dialog')).toBeVisible()
-
-    const nameInput = page.getByRole('dialog').getByRole('textbox').first()
-    await nameInput.fill('Failed Plan Agent')
-
-    // Switch Input Type from 'none' to 'typed' to bypass primarySopRequired validation
-    await page.getByRole('dialog').getByText('None (no input required)').click()
-    await page.waitForSelector('[role="listbox"]', { state: 'visible' })
-    await page.locator('[role="option"][data-value="typed"]').click()
-
-    const saveBtn = page.getByRole('dialog').getByRole('button', { name: /save/i })
-    await saveBtn.click()
-
-    // Error message from generation_error should be visible in the modal
-    await expect(
-      page.getByText('LLM provider unavailable — no model config found')
-    ).toBeVisible({ timeout: 8000 })
-  })
-
-  test('Plan modal does not reopen after dismissal without another save', async ({ page }) => {
-    await page.goto('/agents')
-    await page.waitForLoadState('load')
-
-    const createBtn = page.getByRole('button', { name: /create.*agent.*type|add.*agent/i })
-    await createBtn.click()
-    await expect(page.getByRole('dialog')).toBeVisible()
-
-    const nameInput = page.getByRole('dialog').getByRole('textbox').first()
-    await nameInput.fill('E2E Test Agent')
-
-    // Switch Input Type from 'none' to 'typed' to bypass primarySopRequired validation
-    await page.getByRole('dialog').getByText('None (no input required)').click()
-    await page.waitForSelector('[role="listbox"]', { state: 'visible' })
-    await page.locator('[role="option"][data-value="typed"]').click()
-
-    const saveBtn = page.getByRole('dialog').getByRole('button', { name: /save/i })
-    await saveBtn.click()
-
-    // Wait for plan modal
-    await expect(page.getByText('Initialize Context')).toBeVisible({ timeout: 8000 })
-
-    // Close plan modal
-    const closeBtn = page.getByRole('button', { name: /close/i })
-    await closeBtn.click()
-
-    // Verify modal is closed
-    await expect(page.getByText('Initialize Context')).not.toBeVisible({ timeout: 3000 })
-
-    // Click "Add Agent Type" again — the plan modal should NOT reopen automatically
-    const createBtn2 = page.getByRole('button', { name: /create.*agent.*type|add.*agent/i })
-    await createBtn2.click()
-
-    // Only the create dialog should be open, not the plan modal
-    await expect(page.getByRole('dialog')).toBeVisible()
-    await expect(page.getByText('Initialize Context')).not.toBeVisible()
+    const failed = dialog.getByTestId('plan-generation-failed')
+    await expect(failed).toBeVisible()
+    await expect(failed.getByText(GENERATION_FAILED_TITLE)).toBeVisible()
+    await expect(failed.getByText(MODEL_NOT_ENABLED_COPY)).toBeVisible()
+    await expect(failed.getByText(GENERATION_FAILED_KEPT)).toBeVisible()
+    // The authoring-model failure offers the System Config path.
+    await expect(dialog.getByTestId('plan-generation-failed-system-config')).toBeVisible()
+    // The previous plan is never discarded by a failed attempt.
+    await expect(dialog.getByText('Initialize Context')).toBeVisible()
+    await expect(dialog.getByText('Execute Search')).toBeVisible()
   })
 })
 
@@ -361,7 +426,9 @@ test.describe('Real Backend Integration — Agent Plan Mode', () => {
   // These tests require the backend and frontend to be running.
   // They are tagged as slow and may be skipped if the backend is not available.
 
-  test('POST /api/v1/agents/types returns plan field in response', async ({ request }) => {
+  test('POST /api/v1/agents/types never authors a plan (explicit-only on the server)', async ({
+    request,
+  }) => {
     const BACKEND_URL = process.env.API_BASE_URL ?? 'http://localhost:8000'
 
     // Check if backend is reachable first
@@ -403,24 +470,21 @@ test.describe('Real Backend Integration — Agent Plan Mode', () => {
         headers: { Authorization: `Bearer ${token}` },
       })
 
-      // Must be 201 — plan failure should not block this
+      // Must be 201 — plan generation is explicit, so it cannot block creation
       expect(createResp.status()).toBe(201)
       const body = await createResp.json()
 
-      // Response must include `plan` key
+      // Response must include `plan` key, and a brand-new agent has no plan:
+      // save/create must never author one (explicit-only contract).
       expect(body).toHaveProperty('plan')
+      expect(body.plan).toBeNull()
       createdId = body.id as string
-
-      // plan.generation_status must be either 'success' or 'failed' (not absent)
-      if (body.plan !== null) {
-        expect(['success', 'failed', 'pending']).toContain(body.plan.generation_status)
-      }
     } finally {
       // Cleanup: delete the created agent type to verify CASCADE
       if (createdId) {
         const deleteResp = await request.delete(
           `${BACKEND_URL}/api/v1/agents/types/${createdId}`,
-          { headers: { Authorization: `Bearer ${token}` } }
+          { headers: { Authorization: `Bearer ${token}` } },
         )
         // 204 means successful deletion — plan should cascade automatically
         expect([200, 204]).toContain(deleteResp.status())

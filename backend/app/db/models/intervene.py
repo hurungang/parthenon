@@ -102,6 +102,12 @@ class InterveneRequest(Base):
     conversation_turns: Mapped[list["ConversationTurn"]] = relationship(
         "ConversationTurn", back_populates="intervene_request"
     )
+    # The durable resume record that awaits this request's answer (if any).
+    turn_resume: Mapped["ConversationTurnResume | None"] = relationship(
+        "ConversationTurnResume",
+        back_populates="intervene_request",
+        uselist=False,
+    )
 
     def __repr__(self) -> str:
         return (

@@ -1,9 +1,20 @@
-"""PlanGenerationService — LLM-based plan generation on agent type save.
+"""PlanGenerationService — explicit-request LLM plan authoring.
 
 Traverses the role→SOP→Skill→Tool graph, constructs a detailed prompt with
-agent context, invokes the configured LLM, parses the response into structured
-plan steps, calls TopologyBuilderService for the topology payload, and upserts
-the AgentPlan row. Plan generation failure is non-blocking.
+agent context, invokes the workspace AUTHORING model, parses the response into
+structured plan steps, calls TopologyBuilderService for the topology payload,
+and upserts the AgentPlan row.
+
+Authoring model policy: implementation plans are authored by the workspace's
+single tenant-level authoring model (``TenantSetting.workflow_generation_model_id``)
+— never ``AgentType.model_id`` (the agent RUNTIME model) and never a
+first-available ``ModelConfig``. An unset/disabled authoring model raises
+``AuthoringModelNotConfigured`` (mapped to a structured 412 by the API) and
+writes nothing.
+
+Generation is EXPLICIT ONLY: the API endpoint ``POST /agents/types/{id}/regenerate-plan``
+is the single caller that authors a plan — agent create/update never schedules
+generation. A failed attempt preserves the last successful plan.
 """
 from __future__ import annotations
 
@@ -21,6 +32,10 @@ from sqlalchemy.orm import selectinload
 from app.db.models.agents import AgentPlan, AgentPlanStatus, AgentType
 from app.services.agents.tool_naming import build_tool_name, parse_tool_name
 from app.services.agents.topology_builder_service import TopologyBuilderService
+from app.services.agents.workflow_generation_settings import (
+    AuthoringModelNotConfigured,
+    require_authoring_model,
+)
 
 logger = logging.getLogger(__name__)
 tracer = trace.get_tracer(__name__)
@@ -45,11 +60,13 @@ def _canonicalize_mcp_tool_name(name: str, server_slug: str | None, original_nam
 
 class PlanGenerationService:
     """
-    Orchestrates LLM-based plan generation when an AgentType is saved.
+    Orchestrates LLM-based plan authoring on an EXPLICIT user request.
 
-    Call generate_plan(agent_type, db) after a successful commit of the agent type.
-    The method is non-blocking: any exception is caught, a failed AgentPlan record
-    is upserted, and the method returns the plan record without re-raising.
+    Call generate_plan(agent_type, db) from ``POST /agents/types/{id}/regenerate-plan``
+    only. The method is non-blocking for model failures (a failed AgentPlan
+    generation_status/error is written and the last successful plan is kept),
+    but ``AuthoringModelNotConfigured`` propagates so the API can return the
+    structured "not configured / re-select" 412 without writing anything.
     """
 
     async def generate_plan(
@@ -67,13 +84,14 @@ class PlanGenerationService:
             db: Active async SQLAlchemy session.
             user_requirement: Optional verbatim user requirement / session
                 input for this run. When provided it is included in the plan
-                prompt so the authored composition serves it exactly
-                (plans are normally generated at agent-type save time, when
-                no session input exists yet — callers that DO have it, e.g.
-                a per-run regeneration, pass it here).
+                prompt so the authored composition serves it exactly.
 
         Returns:
             The upserted AgentPlan row (success or failed status).
+
+        Raises:
+            AuthoringModelNotConfigured: the workspace authoring model is unset
+                or no longer enabled. Nothing is written.
         """
         with tracer.start_as_current_span(
             "plan_generation.generate_plan",
@@ -107,26 +125,34 @@ class PlanGenerationService:
                 )
                 return plan
 
+            except AuthoringModelNotConfigured as exc:
+                # No authoring model → nothing is authored and NOTHING is
+                # written (no plan row is created, no existing plan touched).
+                span.set_attribute("status", "authoring_model_unavailable")
+                span.set_attribute("reason_code", exc.reason_code)
+                logger.warning(
+                    "Plan generation unavailable for agent_type=%s (%s): %s",
+                    agent_type.id,
+                    exc.reason_code,
+                    exc.message,
+                )
+                raise
+
             except Exception as exc:
                 error_msg = str(exc)[:990]
                 logger.warning(
-                    "Plan generation failed for agent_type=%s (non-blocking): %s",
+                    "Plan generation failed for agent_type=%s (previous plan kept): %s",
                     agent_type.id,
                     error_msg,
                 )
                 span.set_attribute("status", "failed")
                 span.set_attribute("error", error_msg)
-                plan = await self._upsert_plan(
+                return await self._mark_failed(
                     agent_type_id=agent_type.id,
-                    plan_steps=None,
-                    topology=None,
-                    status=AgentPlanStatus.failed,
                     error=error_msg,
                     config_hash=config_hash,
                     db=db,
-                    fully_scripted=None,
                 )
-                return plan
 
     # ── Internal orchestration ────────────────────────────────────────────────
 
@@ -150,6 +176,9 @@ class PlanGenerationService:
 
         # Step 4: Parse plan steps (and the fully_scripted execution-semantics mark)
         plan_steps = self._parse_plan_steps(raw_response)
+        # Hard rule: a typed step must reference an entity the agent actually
+        # has (SOP/skill/tool/delegated agent); everything else is processing.
+        plan_steps = self._enforce_step_types(plan_steps, graph)
         fully_scripted = self._parse_fully_scripted(raw_response)
 
         # Step 5: Build topology
@@ -496,12 +525,21 @@ class PlanGenerationService:
             "## Task",
             "Generate a clear, step-by-step implementation plan for this agent.",
             "Each step should specify:",
-            "  1. The action type: `sop_invocation`, `skill_invocation`, `agent_delegation`, or `tool_call`",
+            "  1. The action type (see the hard rule below): `sop_invocation`, `skill_invocation`, `agent_delegation`, `tool_call`, or `processing`",
             "  2. A concise name for the step",
             "  3. A human-readable description of what the agent does in this step",
+            "  4. When a step is a sub-step of another, set its optional `parent_order` to the parent step's `order`; omit it for top-level steps.",
+            "",
+            "HARD RULE for the action type:",
+            "  - `sop_invocation` ONLY when the step invokes one of the SOPs listed above; name it explicitly.",
+            "  - `skill_invocation` ONLY when the step invokes one of the skills listed above; name it explicitly.",
+            "  - `tool_call` ONLY when the step invokes one of the MCP tools listed above; name the tool explicitly (use its exact name).",
+            "  - `agent_delegation` ONLY when the step hands work to one of the delegated agents listed above.",
+            "  - `processing` for everything else: validation, selection, calculation, formatting, decisions and output assembly.",
+            "Do not label validation/formatting/selection steps as skill or SOP invocations.",
             "",
             "Respond ONLY with a valid JSON array. Each element must be an object with these exact keys:",
-            '  {"order": <integer>, "type": "<sop_invocation|skill_invocation|agent_delegation|tool_call>", "name": "<string>", "description": "<string or null>"}',
+            '  {"order": <integer>, "parent_order": <integer or null>, "type": "<sop_invocation|skill_invocation|agent_delegation|tool_call|processing>", "name": "<string>", "description": "<string or null>"}',
             "",
             "Do not include any text before or after the JSON array.",
         ])
@@ -510,33 +548,24 @@ class PlanGenerationService:
     async def _invoke_llm(
         self, agent_type: AgentType, db: AsyncSession, prompt: str
     ) -> str:
-        """Invoke the configured LLM with the plan generation prompt."""
-        from app.services.agents.model_binding import ModelBindingLayer, ModelBindingError
-        from app.db.models.agents import ModelConfig
+        """Author ``prompt`` with the workspace AUTHORING model.
+
+        Resolution is delegated to ``require_authoring_model`` (tenant-scoped,
+        no fallback). ``agent_type`` is NOT used to pick the model — its
+        ``model_id`` is the agent RUNTIME model, never an authoring model.
+
+        The ORM ``ModelBindingLayer.complete()`` cannot be used here because it
+        derives the model name from ``AgentType.model_id``; instead the resolved
+        tenant ``ModelConfig`` is turned into the context dict and dispatched
+        through ``complete_from_context``.
+        """
+        from app.services.agents.model_binding import ModelBindingLayer
         import time
 
+        authoring = await require_authoring_model(db)
         model_layer = ModelBindingLayer()
-        model_config: ModelConfig | None = None
-
-        # Try to resolve using the agent type's own model first
-        if agent_type.model_id:
-            try:
-                model_config = await model_layer.resolve_model_config(agent_type.model_id, db)
-            except ModelBindingError:
-                logger.debug(
-                    "Agent model '%s' not found; trying first available config",
-                    agent_type.model_id,
-                )
-
-        # Fall back to the first available model config
-        if model_config is None:
-            result = await db.execute(select(ModelConfig).limit(1))
-            model_config = result.scalar_one_or_none()
-
-        if model_config is None:
-            raise RuntimeError(
-                "No ModelConfig available. Configure at least one LLM provider to enable plan generation."
-            )
+        provider_type = authoring.model_config.provider_type
+        model_config_dict = model_layer.build_completion_context(authoring.model_config)
 
         messages = [
             {"role": "system", "content": "You generate structured JSON implementation plans for AI agents."},
@@ -550,9 +579,9 @@ class PlanGenerationService:
         import asyncio
         try:
             response = await asyncio.wait_for(
-                model_layer.complete(
-                    agent_type=agent_type,
-                    model_config=model_config,
+                model_layer.complete_from_context(
+                    model_id=authoring.model_id,
+                    model_config_dict=model_config_dict,
                     messages=messages,
                     max_tokens=8192,
                 ),
@@ -565,13 +594,15 @@ class PlanGenerationService:
             ) from exc
         elapsed = time.monotonic() - start
 
-        # Extract text from the response
-        text = self._extract_text_from_response(response)
+        # Extract text from the response (provider-specific envelope)
+        text = ModelBindingLayer.extract_text(response, provider_type)
+        if not text:
+            text = str(response)
         logger.info(
-            "LLM plan generation completed in %.2fs for agent_type=%s (model=%s)",
+            "LLM plan generation completed in %.2fs for agent_type=%s (authoring model=%s)",
             elapsed,
             agent_type.id,
-            agent_type.model_id,
+            authoring.model_id,
         )
         return text
 
@@ -615,11 +646,27 @@ class PlanGenerationService:
                 for i, step in enumerate(steps):
                     if not isinstance(step, dict):
                         continue
+                    parent_order = step.get("parent_order")
                     normalized.append({
                         "order": int(step.get("order", i + 1)),
+                        # Optional step-tree link: a child step points at its
+                        # parent's order. Malformed values are dropped, not
+                        # fatal — the flat order remains the source of truth.
+                        "parent_order": (
+                            int(parent_order)
+                            if parent_order is not None
+                            and str(parent_order).lstrip("-").isdigit()
+                            else None
+                        ),
                         "type": str(step.get("type", "tool_call")),
                         "name": str(step.get("name", f"Step {i + 1}")),
                         "description": step.get("description") or None,
+                        # Optional explicit entity reference — used by the
+                        # step-type hard rule when the plan LLM provides it.
+                        "sop_id": step.get("sop_id") or None,
+                        "skill_id": step.get("skill_id") or None,
+                        "tool_name": step.get("tool_name") or None,
+                        "target_agent_type_id": step.get("target_agent_type_id") or None,
                         # Scriptability marks (Software 3.0): preserved when
                         # the plan LLM provides them, defaulted otherwise.
                         "scriptable": bool(step.get("scriptable", True)),
@@ -643,6 +690,92 @@ class PlanGenerationService:
                 "description": "Follow the configured system instruction using available skills and tools.",
             }
         ]
+
+    #: Step types that claim a concrete, existing entity.
+    _ENTITY_STEP_TYPES = (
+        "sop_invocation",
+        "skill_invocation",
+        "tool_call",
+        "agent_delegation",
+    )
+
+    @staticmethod
+    def _entity_terms(
+        items: list[dict[str, Any]],
+        keys: tuple[str, ...],
+    ) -> set[str]:
+        """Lower-cased names/ids of available entities, incl. bare tool names."""
+        terms: set[str] = set()
+        for item in items:
+            for key in keys:
+                value = item.get(key)
+                if value:
+                    terms.add(str(value).strip().lower())
+            name = item.get("name")
+            if name and "____" in str(name):
+                # ``server____searchFlights`` may be referenced by its bare name.
+                terms.add(str(name).split("____", 1)[1].strip().lower())
+        return {term for term in terms if term}
+
+    def _enforce_step_types(
+        self,
+        steps: list[dict[str, Any]],
+        graph: dict[str, Any],
+    ) -> list[dict[str, Any]]:
+        """Apply the plan step-type hard rule.
+
+        ``sop_invocation`` / ``skill_invocation`` / ``tool_call`` /
+        ``agent_delegation`` are only valid when the step references an entity
+        the agent actually has (explicit id/name field or the entity name in the
+        step text). All other steps become ``processing`` — validation,
+        selection, formatting, decisions and output assembly are not
+        invocations.
+        """
+        allowed: dict[str, set[str]] = {
+            "sop_invocation": self._entity_terms(
+                list(graph.get("sops") or []), ("id", "name")
+            ),
+            "skill_invocation": self._entity_terms(
+                list(graph.get("skills") or []), ("id", "name")
+            ),
+            "tool_call": self._entity_terms(
+                list(graph.get("tools") or []), ("name",)
+            ),
+            "agent_delegation": self._entity_terms(
+                list(graph.get("delegated_agents") or []), ("id", "name")
+            ),
+        }
+        ref_keys = {
+            "sop_invocation": ("sop_id",),
+            "skill_invocation": ("skill_id",),
+            "tool_call": ("tool_name",),
+            "agent_delegation": ("target_agent_type_id",),
+        }
+
+        for step in steps:
+            step_type = str(step.get("type") or "processing").strip().lower()
+            if step_type not in self._ENTITY_STEP_TYPES:
+                step["type"] = "processing"
+                continue
+
+            terms = allowed[step_type]
+            explicit_refs = [
+                str(step.get(key)).strip().lower()
+                for key in ref_keys[step_type]
+                if step.get(key)
+            ]
+            if explicit_refs:
+                # An explicit reference is authoritative: keep the type only
+                # when it points at an allowed entity.
+                if not any(ref in terms for ref in explicit_refs):
+                    step["type"] = "processing"
+                continue
+
+            text = f"{step.get('name') or ''} {step.get('description') or ''}".lower()
+            if not any(term in text for term in terms):
+                step["type"] = "processing"
+
+        return steps
 
     def _parse_fully_scripted(self, raw_response: str) -> bool:
         """Extract the plan LLM's ``fully_scripted`` execution-semantics mark.
@@ -675,8 +808,16 @@ class PlanGenerationService:
         config_hash: str | None,
         db: AsyncSession,
         fully_scripted: bool | None = None,
+        preserve_plan_on_failure: bool = False,
     ) -> AgentPlan:
-        """Insert or update the AgentPlan row for the given agent type."""
+        """Insert or update the AgentPlan row for the given agent type.
+
+        ``preserve_plan_on_failure`` is set by ``_mark_failed``: on a FAILED
+        attempt an existing row keeps its ``plan_steps``, ``topology``,
+        ``agent_config_hash``, ``fully_scripted`` and ``generated_at`` (the last
+        successful authoring) and only the status/error are updated, so the
+        plan stays readable while the UI surfaces the failure reason.
+        """
         result = await db.execute(
             select(AgentPlan).where(AgentPlan.agent_type_id == agent_type_id)
         )
@@ -685,14 +826,18 @@ class PlanGenerationService:
         now = datetime.now(timezone.utc)
 
         if existing:
-            existing.plan_steps = plan_steps
-            existing.topology = topology
+            keep_previous_plan = (
+                preserve_plan_on_failure and status == AgentPlanStatus.failed
+            )
+            if not keep_previous_plan:
+                existing.plan_steps = plan_steps
+                existing.topology = topology
+                existing.agent_config_hash = config_hash
+                existing.generated_at = now
+                if fully_scripted is not None or status == AgentPlanStatus.success:
+                    existing.fully_scripted = fully_scripted
             existing.generation_status = status
             existing.generation_error = error
-            existing.agent_config_hash = config_hash
-            existing.generated_at = now
-            if fully_scripted is not None or status == AgentPlanStatus.success:
-                existing.fully_scripted = fully_scripted
             await db.flush()
             await db.refresh(existing)
             return existing
@@ -711,6 +856,37 @@ class PlanGenerationService:
             await db.flush()
             await db.refresh(plan)
             return plan
+
+    async def _mark_failed(
+        self,
+        *,
+        agent_type_id: uuid.UUID,
+        error: str | None,
+        config_hash: str | None,
+        db: AsyncSession,
+    ) -> AgentPlan:
+        """Record a failed attempt WITHOUT discarding the last successful plan.
+
+        Delegates to ``_upsert_plan(..., preserve_plan_on_failure=True)``: an
+        existing row only gets ``generation_status``/``generation_error``
+        updated — ``plan_steps``, ``topology``, ``agent_config_hash``,
+        ``fully_scripted`` and ``generated_at`` of the last successful
+        authoring are preserved so the plan stays readable while the UI
+        surfaces the failure reason.  When no row exists yet (the very first
+        attempt failed), a failed row is inserted so the reason is visible;
+        nothing is overwritten.
+        """
+        return await self._upsert_plan(
+            agent_type_id=agent_type_id,
+            plan_steps=None,
+            topology=None,
+            status=AgentPlanStatus.failed,
+            error=error,
+            config_hash=config_hash,
+            db=db,
+            fully_scripted=None,
+            preserve_plan_on_failure=True,
+        )
 
     @staticmethod
     def _compute_config_hash(agent_type: AgentType) -> str:

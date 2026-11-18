@@ -24,6 +24,7 @@ from app.db.models.conversation_activity import (
     ActivityState,
     ConversationActivity,
 )
+from app.db.models.conversation_turn_resume import ResumeOutcome
 from app.db.models.conversations import ConversationSession, ConversationStatus
 from app.services.conversations.activity_store import ConversationActivityStore
 
@@ -128,6 +129,82 @@ class TestUpsert:
             await store.upsert(uuid.uuid4(), db_session, state=ActivityState.thinking)
 
     @pytest.mark.asyncio
+    async def test_waiting_without_live_resume_is_rejected(
+        self, db_session: AsyncSession, store
+    ):
+        from app.services.conversations.activity_store import (
+            ActivityResumeInvariantError,
+        )
+
+        conv = await _make_session(db_session)
+        with pytest.raises(ActivityResumeInvariantError):
+            await store.upsert(
+                conv.id, db_session, state=ActivityState.waiting_for_human
+            )
+        assert await store.get(conv.id, db_session) is None
+
+    @pytest.mark.asyncio
+    async def test_waiting_resolves_the_session_live_resume(
+        self, db_session: AsyncSession, store
+    ):
+        from app.services.conversations.turn_resume_store import (
+            ConversationTurnResumeStore,
+        )
+
+        conv = await _make_session(db_session)
+        resume = await ConversationTurnResumeStore().create_or_reuse(
+            conv.id, db_session
+        )
+        activity = await store.upsert(
+            conv.id, db_session, state=ActivityState.waiting_for_human
+        )
+        assert activity.active_resume_id == resume.id
+
+    @pytest.mark.asyncio
+    async def test_waiting_with_terminal_resume_is_rejected(
+        self, db_session: AsyncSession, store
+    ):
+        from app.services.conversations.activity_store import (
+            ActivityResumeInvariantError,
+        )
+        from app.services.conversations.turn_resume_store import (
+            ConversationTurnResumeStore,
+        )
+
+        conv = await _make_session(db_session)
+        resume_store = ConversationTurnResumeStore()
+        resume = await resume_store.create_or_reuse(conv.id, db_session)
+        await resume_store.resolve(resume.id, db_session, ResumeOutcome.denied)
+
+        with pytest.raises(ActivityResumeInvariantError):
+            await store.upsert(
+                conv.id,
+                db_session,
+                state=ActivityState.waiting_for_human,
+                active_resume_id=resume.id,
+            )
+
+    @pytest.mark.asyncio
+    async def test_non_terminal_transition_keeps_active_resume(
+        self, db_session: AsyncSession, store
+    ):
+        from app.services.conversations.turn_resume_store import (
+            ConversationTurnResumeStore,
+        )
+
+        conv = await _make_session(db_session)
+        resume = await ConversationTurnResumeStore().create_or_reuse(
+            conv.id, db_session
+        )
+        await store.upsert(
+            conv.id, db_session, state=ActivityState.thinking, active_resume_id=resume.id
+        )
+        waiting = await store.upsert(
+            conv.id, db_session, state=ActivityState.thinking
+        )
+        assert waiting.active_resume_id == resume.id
+
+    @pytest.mark.asyncio
     async def test_detail_round_trips_status_only_context(
         self, db_session: AsyncSession, store
     ):
@@ -152,7 +229,14 @@ class TestResolveTerminal:
     async def test_resolve_terminal_clears_checkpoint_fields(
         self, db_session: AsyncSession, store
     ):
+        from app.services.conversations.turn_resume_store import (
+            ConversationTurnResumeStore,
+        )
+
         conv = await _make_session(db_session)
+        resume = await ConversationTurnResumeStore().create_or_reuse(
+            conv.id, db_session
+        )
         turn_id = uuid.uuid4()
         await store.upsert(
             conv.id,
@@ -162,6 +246,7 @@ class TestResolveTerminal:
             pending_intervene_request_id=uuid.uuid4(),
             tool_name="human_intervene",
             target_agent_type_id=uuid.uuid4(),
+            active_resume_id=resume.id,
         )
         resolved = await store.resolve_terminal(
             conv.id, db_session, state=ActivityState.timed_out
@@ -172,6 +257,7 @@ class TestResolveTerminal:
         assert resolved.finished_at is not None
         assert resolved.current_turn_id is None
         assert resolved.pending_intervene_request_id is None
+        assert resolved.active_resume_id is None
         assert resolved.tool_name is None
         assert resolved.target_agent_type_id is None
 

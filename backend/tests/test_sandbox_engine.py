@@ -412,3 +412,93 @@ class TestMinimalBusinessLogicScriptEndToEnd:
         assert "ONLY business logic" in contract
         assert "no infra, no auth, no envelope handling" in contract
         assert "task input fields and each prior step's output" in contract
+
+
+# ── MCP envelope unwrap: structured result + Python-repr fallback ─────────────
+
+
+def test_unwrap_prefers_structured_result_over_repr_text():
+    """The demo app mirrors the payload in `result` while `content.text` is a
+    Python repr (single quotes). The facade must return the structured dict —
+    otherwise scripts see a string and report "no results"."""
+    from app.agent_runtime.scripts.sandbox import unwrap_mcp_tool_result
+
+    payload, was_unwrapped = unwrap_mcp_tool_result(
+        {
+            "content": [
+                {
+                    "type": "text",
+                    "text": "{'results': [{'flight_id': 'FL-1'}], 'count': 1}",
+                }
+            ],
+            "result": {"results": [{"flight_id": "FL-1"}], "count": 1},
+            "isError": False,
+        }
+    )
+
+    assert was_unwrapped is True
+    assert payload["count"] == 1
+    assert payload["results"][0]["flight_id"] == "FL-1"
+
+
+def test_unwrap_parses_python_repr_text_without_structured_result():
+    """Servers that only provide repr text still unwrap to a dict."""
+    from app.agent_runtime.scripts.sandbox import unwrap_mcp_tool_result
+
+    payload, was_unwrapped = unwrap_mcp_tool_result(
+        {
+            "content": [
+                {
+                    "type": "text",
+                    "text": "{'results': [{'flight_id': 'FL-1'}], 'count': 1}",
+                }
+            ],
+            "isError": False,
+        }
+    )
+
+    assert was_unwrapped is True
+    assert payload["count"] == 1
+    assert payload["results"][0]["flight_id"] == "FL-1"
+
+
+@pytest.mark.asyncio
+async def test_sandbox_records_detailed_tool_calls():
+    """Fully-scripted runs expose each tool call (name, args, preview)."""
+    from app.agent_runtime.scripts.sandbox import run_sandboxed_python
+
+    class _FakeToolClient:
+        async def call_tool(self, tool_name, arguments, **kwargs):
+            return {
+                "content": [
+                    {"type": "text", "text": "{'results': [], 'count': 0}"}
+                ],
+                "result": {"results": [{"flight_id": "FL-1"}], "count": 1},
+                "isError": False,
+            }
+
+    source = textwrap.dedent(
+        """
+        def run(context, tools):
+            payload = tools.call('mcp-demo____searchFlights', {'origin': 'MEL'})
+            return {'result': payload['count']}
+        """
+    )
+    records: list[dict[str, Any]] = []
+    result = await asyncio.to_thread(
+        run_sandboxed_python,
+        source,
+        tool_client=_FakeToolClient(),
+        session_id="sess-1",
+        agent_type_id="at-1",
+        input_context={"origin": "MEL"},
+        loop=asyncio.get_running_loop(),
+        tool_calls_out=records,
+    )
+
+    assert result["result"] == 1
+    assert len(records) == 1
+    assert records[0]["tool_name"] == "mcp-demo____searchFlights"
+    assert records[0]["arguments"] == {"origin": "MEL"}
+    assert "FL-1" in records[0]["result_preview"]
+    assert records[0]["error"] is None

@@ -59,7 +59,7 @@ The MCP Hub enables Parthenon to connect with external tool servers, synchronize
 
 ## Token Health States
 
-Each named MCP session exposes a visible credential health state — **valid**, **expiring within 7 days**, or **expired** — derived from its credential/identity binding. Session listings serve as the remediation target for dashboard token-expiry warnings: an administrator clicking a warning lands on the session page to re-authenticate, and warnings clear automatically once re-authentication completes. (See [Token Expiry Alerting](token-expiry-alerting.md).)
+Each named MCP session exposes a visible **refresh-token** health state — **valid**, **expiring within 7 days**, or **expired** — derived from its credential/identity binding, with the refresh-token expiry shown explicitly. An expired access token is not an error while the session can refresh; when no refresh-token expiry is recorded, the access-token expiry is the fallback. Session listings serve as the remediation target for dashboard token-expiry warnings: an administrator clicking a warning lands on the session page to re-authenticate, and warnings clear automatically once re-authentication completes. (See [Token Expiry Alerting](token-expiry-alerting.md).)
 
 ## Session Re-Authentication State
 

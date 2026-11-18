@@ -100,6 +100,13 @@ def create_app() -> FastAPI:
     from app.agent_runtime.api.script_tools import script_tools_router
     app.include_router(script_tools_router)
 
+    # Approved optimization live-test runner (Communication Hub → Agent
+    # Runtime): executes EXACTLY the operator-approved operation list once
+    # each, in order, under the subject agent type's own identity and grants.
+    # Reached only after Control Center consumed the single-use approval.
+    from app.agent_runtime.api.live_test import live_test_router
+    app.include_router(live_test_router)
+
     return app
 
 

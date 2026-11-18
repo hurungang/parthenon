@@ -268,19 +268,23 @@ class OptimizedPlanService:
         db: Any,
         raw_feedback: str,
     ) -> OptimizedImplementationPlan:
-        """Summarize user feedback (one-shot LLM via the model layer) and append."""
+        """Summarize user feedback (one-shot LLM via the model layer) and append.
+
+        The appended entry is tagged ``source: "manual"`` (readers treat a
+        missing ``source`` on legacy entries as manual).
+        """
         optimized = await self.get_latest_optimized_plan(db, agent_type.id)
         if optimized is None:
             raise ValueError(
                 "no optimized plan exists yet — run Optimize & Verify first"
             )
         summary = await self._summarize_feedback(agent_type, db, raw_feedback)
-        comments = list(optimized.feedback_comments or [])
-        comments.append({
-            "created_at": datetime.now(timezone.utc).isoformat(),
-            "raw_feedback": raw_feedback.strip(),
-            "summary": summary,
-        })
+        comments = self._append_feedback_entry(
+            optimized,
+            summary=summary,
+            raw_feedback=raw_feedback,
+            source="manual",
+        )
         optimized.feedback_comments = comments
         await db.flush()
         await db.refresh(optimized)
@@ -289,6 +293,102 @@ class OptimizedPlanService:
             optimized.id, len(comments),
         )
         return optimized
+
+    async def mark_requires_fix(
+        self,
+        db: Any,
+        agent_type_id: uuid.UUID,
+        *,
+        feedback_summary: str,
+        raw_feedback: str,
+        source_execution_id: uuid.UUID | None = None,
+        source_fallback_event_id: uuid.UUID | None = None,
+        plan_id: uuid.UUID | None = None,
+    ) -> OptimizedImplementationPlan | None:
+        """Flag a live optimized plan as ``requires_fix`` + append auto feedback.
+
+        Called by the Script Registry when a later execution of an
+        optimized-artifact script fell back to the LLM path. Only a live
+        (non-``retired``) plan is touched; when no live plan exists this is a
+        no-op. ``error`` is authoring-side and is intentionally left untouched —
+        the failure reason lives in the appended ``execution_derived`` feedback
+        entry instead.
+
+        ``plan_id`` optionally targets a specific attributed plan; without it
+        the latest live plan for the agent type is used.
+        """
+        if plan_id is not None:
+            optimized = await db.get(OptimizedImplementationPlan, plan_id)
+            if optimized is not None and optimized.agent_type_id != agent_type_id:
+                optimized = None
+        else:
+            result = await db.execute(
+                select(OptimizedImplementationPlan)
+                .where(
+                    OptimizedImplementationPlan.agent_type_id == agent_type_id,
+                    OptimizedImplementationPlan.status != OptimizedPlanStatus.retired,
+                )
+                .order_by(OptimizedImplementationPlan.created_at.desc())
+                .limit(1)
+            )
+            optimized = result.scalar_one_or_none()
+
+        if optimized is None or optimized.status == OptimizedPlanStatus.retired:
+            logger.info(
+                "No live optimized plan to flag for agent_type=%s "
+                "(plan_id=%s) — skipping requires_fix",
+                agent_type_id, plan_id,
+            )
+            return None
+
+        reason = (feedback_summary or raw_feedback or "").strip()[:500]
+        optimized.status = OptimizedPlanStatus.requires_fix
+        optimized.feedback_comments = self._append_feedback_entry(
+            optimized,
+            summary=reason,
+            raw_feedback=raw_feedback or reason,
+            source="execution_derived",
+            source_execution_id=source_execution_id,
+            source_fallback_event_id=source_fallback_event_id,
+        )
+        await db.flush()
+        await db.refresh(optimized)
+        logger.warning(
+            "Optimized plan %s marked requires_fix for agent_type=%s "
+            "(execution=%s, fallback_event=%s)",
+            optimized.id, agent_type_id,
+            source_execution_id, source_fallback_event_id,
+        )
+        return optimized
+
+    @staticmethod
+    def _append_feedback_entry(
+        optimized: OptimizedImplementationPlan,
+        *,
+        summary: str,
+        raw_feedback: str,
+        source: str,
+        source_execution_id: uuid.UUID | None = None,
+        source_fallback_event_id: uuid.UUID | None = None,
+    ) -> list[dict[str, Any]]:
+        """Return the plan's feedback list with one appended entry.
+
+        ``feedback_comments`` is an append-only JSON list; callers must assign
+        the returned list back to the column (in-place mutation is not
+        detected by SQLAlchemy's JSON type). Entries carry a ``source``
+        discriminator (``manual`` | ``execution_derived``).
+        """
+        entry: dict[str, Any] = {
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            "raw_feedback": (raw_feedback or "").strip(),
+            "summary": summary,
+            "source": source,
+        }
+        if source_execution_id is not None:
+            entry["source_execution_id"] = str(source_execution_id)
+        if source_fallback_event_id is not None:
+            entry["source_fallback_event_id"] = str(source_fallback_event_id)
+        return [*(optimized.feedback_comments or []), entry]
 
     async def _summarize_feedback(
         self, agent_type: AgentType, db: Any, raw_feedback: str

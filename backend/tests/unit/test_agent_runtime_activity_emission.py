@@ -46,22 +46,78 @@ class TestActivityStateMessage:
         assert "timestamp" in msg
 
     def test_waiting_state_exposes_pending_intervention(self):
+        resume_id = str(uuid.uuid4())
         msg = _activity_state_message(
             {
                 "state": "waiting_for_human",
                 "is_terminal": False,
                 "pending_intervene_request_id": str(uuid.uuid4()),
+                "active_resume_id": resume_id,
                 "detail": {"agent_type": "assistant"},
             }
         )
         assert msg["state"] == "waiting_for_human"
         assert msg["pending_intervention"] is True
         assert msg["agent_type"] == "assistant"
+        assert msg["active_resume_id"] == resume_id
+
+    def test_stale_waiting_without_live_resume_is_not_pending(self):
+        """'Shown as waiting' must equal 'actually answerable': a waiting row
+        with no live resume id must not offer an unanswerable prompt."""
+        msg = _activity_state_message(
+            {
+                "state": "waiting_for_human",
+                "is_terminal": False,
+                "pending_intervene_request_id": str(uuid.uuid4()),
+                "active_resume_id": None,
+                "detail": {"agent_type": "assistant", "pending_intervention": True},
+            }
+        )
+        assert msg["state"] == "waiting_for_human"
+        assert msg["pending_intervention"] is False
+        assert msg["active_resume_id"] is None
+
+    def test_paused_hydration_carries_resume_state_and_message(self):
+        """A connect-time hydration of a paused turn carries the live resume id
+        and the resume state so a reconnect renders the same state."""
+        resume_id = str(uuid.uuid4())
+        msg = _activity_state_message(
+            {
+                "state": "waiting_for_human",
+                "active_resume_id": resume_id,
+                "is_terminal": False,
+                "detail": {"agent_type": "assistant"},
+            }
+        )
+        assert msg["active_resume_id"] == resume_id
+        # Derived from the live resume id when CC does not project it.
+        assert msg["resume_state"] == "waiting_for_human"
+        assert msg["terminal_reason_code"] is None
+        assert msg["message"] is None
+
+    def test_resolved_hydration_carries_terminal_reason_and_message(self):
+        """A resolved-unresumable turn hydrates with the reason + actionable
+        message instead of a generic terminal label."""
+        msg = _activity_state_message(
+            {
+                "state": "timed_out",
+                "is_terminal": True,
+                "active_resume_id": None,
+                "terminal_reason_code": "expired",
+                "terminal_message_key": "conversation.resume.expired",
+            }
+        )
+        assert msg["is_terminal"] is True
+        assert msg["pending_intervention"] is False
+        assert msg["terminal_reason_code"] == "expired"
+        assert msg["terminal_message_key"] == "conversation.resume.expired"
+        assert isinstance(msg["message"], str) and "expired" in msg["message"].lower()
 
     def test_terminal_state_flags_terminal(self):
         msg = _activity_state_message({"state": "finished", "is_terminal": True})
         assert msg["state"] == "finished"
         assert msg["is_terminal"] is True
+        assert msg["message"] is None
 
 
 class _FakeDataClient:

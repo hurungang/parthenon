@@ -147,10 +147,10 @@ Both agent authentication paths converge at the same permission engine. The reso
 
 ## Agent Identity Token Health
 
-Every agent identity's token is continuously classified by the Control Center **Token Health Service** into `healthy` / `expiring-within-7-days` / `expired` (see [Token Refresh Service](token-refresh.md)). Two remediation entry points surface this state:
+Every agent identity's **refresh token** is continuously classified by the Control Center **Token Health Service** into `healthy` / `expiring-within-7-days` / `expired` (see [Token Refresh Service](token-refresh.md)). The access token is renewed automatically, so its expiry alone never produces an alert; identities without a refresh token fall back to their access-token expiry. Two remediation entry points surface this state:
 
 - **Dashboard token health cards** — per-category counts with click-through to the identity page, where an expired identity can be refreshed or re-authenticated.
-- **Execution preflight** — before any execution starts, the Communication Hub asks Control Center (via the internal preflight endpoint over `internal_httpx_client`, signed tenant headers) to validate every token the execution will use, including subagents. Expired blocks the execution (422) with a re-auth message; expiring-soon proceeds with a warning. Agents never see tokens — only the outcome.
+- **Execution preflight** — before any execution starts, the Communication Hub asks Control Center (via the internal preflight endpoint over `internal_httpx_client`, signed tenant headers) to validate every refresh-token credential the execution will use, including subagents. An expired refresh token (or unrecoverable refresh failure) blocks the execution (422) with a re-auth message; expiring-soon proceeds with a warning; a refreshable access token that happens to be expired does not block. Agents never see tokens — only the outcome.
 
 The identity → role → permission resolution chain is unchanged by token health.
 

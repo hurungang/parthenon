@@ -38,28 +38,68 @@ import AddIcon from '@mui/icons-material/Add'
 import apiClient from '../../api/apiClient'
 import { useSessionExecutionLogStream } from '../../hooks/useSessionExecutionLogStream'
 import { useAssistantModelConfig } from '../../hooks/useAssistantModelConfig'
+import { useOptimizationGate } from '../../hooks/useOptimizationGate'
+import {
+  liveTestCardStateFromStatus,
+  liveTestRequestsQueryKey,
+  liveTestScriptRun,
+  optimizationConversationQueryKey,
+  resolveLiveTestCardState,
+  useCreateOptimizationConversation,
+  useLiveTestRequests,
+  useOptimizationConversationDetail,
+} from '../../hooks/useOptimizationConversation'
+import {
+  CHAT_BLOCKED_REASON_DECISION_PENDING,
+  isDecisionPendingBlock,
+  isOptimizerChatErrorCode,
+  isOptimizerModelReasonCode,
+} from '../../utils/errorUtils'
+import { OptimizationSessionBar } from '../optimizer/OptimizationSessionBar'
+import { OptimizerAskCard } from '../optimizer/OptimizerAskCard'
+import { LiveTestApprovalCard } from '../optimizer/LiveTestApprovalCard'
+import {
+  OptimizerModelAlert,
+  OptimizerSystemConfigButton,
+} from '../optimizer/OptimizerModelAlert'
 import PermissionDeniedAlert from '../permissions/PermissionDeniedAlert'
 import { ContentRenderer } from '../ContentRenderer'
 import { MaximizableContent } from '../MaximizableContent'
 import { AgentExecutionDetailsDialog } from './AgentExecutionDetailsDialog'
 import { InlineInterventionDialog } from '../conversations/InlineInterventionDialog'
 import { InterventionPendingIndicator } from '../conversations/InterventionPendingIndicator'
+import { ResumeStateChip } from '../conversations/ResumeStateChip'
+import { ResumeTerminalCard } from '../conversations/ResumeTerminalCard'
 import {
   ResolvedInterventionBubble,
   type ResolvedInterventionData,
 } from '../conversations/ResolvedInterventionBubble'
-import { useConversationIntervention } from '../../hooks/useConversationIntervention'
+import {
+  useConversationIntervention,
+} from '../../hooks/useConversationIntervention'
 import {
   useChatSession,
   type ChatMessage,
   type ChatStatus,
   type DelegationCycle,
   type ConversationalGuardrailUsage,
+  type ResumeState,
 } from '../../hooks/useChatSession'
+import { isActionableWaiting } from '../../utils/resumeState'
 import { useEndConversationSession, useConversationSessionsPage } from '../../hooks/useConversationSessions'
 import { markAssistantSessionEnded } from '../../utils/assistantSessionState'
 import { buildDelegationHistoryFromTurns, buildHistoryMessagesFromTurns } from '../../utils/delegationHistory'
-import type { AgentJob, AgentJobStatus, ConversationSessionDetail, ExecutionLogEntry, InterveneRequestMessage } from '../../types'
+import type {
+  AgentJob,
+  AgentJobStatus,
+  ConversationSessionDetail,
+  ExecutionLogEntry,
+  InterveneRequestMessage,
+  LiveTestApprovalSummary,
+  LiveTestCardState,
+  LiveTestRequest,
+  ScriptRunRecord,
+} from '../../types'
 
 /**
  * FIX-20261101-120618 Work Item 1: in-chat "View All Sessions" list upgraded
@@ -281,6 +321,18 @@ interface ConversationDialogProps {
   /** Assistant-only: proactively check the tenant's assistant model selection
    * and show setup guidance (with a Configure-model action) when unconfigured. */
   assistantModelConfigCheck?: boolean
+  /**
+   * Optimization mode: this conversation is an optimization conversation on the
+   * SUBJECT agent type (`channel === 'optimization'`). It runs as that agent —
+   * same identity, role and tool grants — and reuses the multi-turn activity /
+   * pause / resume experience with optimization chrome, the ask card, the
+   * live-test approval card and the replay-vs-live audit block.
+   */
+  optimizationMode?: boolean
+  /** Optimization turn started/stopped — lets the host poll the plan. */
+  onOptimizationTurnStateChange?: (inFlight: boolean) => void
+  /** Optimization turn settled — lets the host refresh the optimized plan. */
+  onOptimizationTurnSettled?: () => void
 }
 
 function toNullableNumber(value: unknown): number | null {
@@ -540,6 +592,25 @@ function DelegationMiniLog({
 }
 
 /**
+ * A DECIDED live test, rendered as an inline chat-history entry (collapsed,
+ * expandable to the script-run record). It keeps the historical position of the
+ * approval request: `timestamp` is the decision time (falling back to the time
+ * the proposal was first shown), so a late `live_test_result` update changes the
+ * card IN PLACE instead of moving it to the end of the transcript.
+ */
+interface ResolvedLiveTestCardEntry {
+  id: string
+  proposal: LiveTestApprovalSummary
+  state: LiveTestCardState
+  scriptRun: ScriptRunRecord | null
+  errorText: string | null
+  decidedAt: string | null
+  timestamp: string
+  /** Stable index for the card's test-id prefix (`live-test-resolved-N`). */
+  testIdIndex: number
+}
+
+/**
  * Full-screen capable conversation dialog for real-time chat with agents.
  * Handles session resume, WebSocket connection, and session end.
  */
@@ -552,6 +623,9 @@ export function ConversationDialog({
   initialFullscreen = false,
   testIdPrefix = 'conversation-dialog',
   assistantModelConfigCheck = false,
+  optimizationMode = false,
+  onOptimizationTurnStateChange,
+  onOptimizationTurnSettled,
 }: ConversationDialogProps) {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
@@ -586,6 +660,26 @@ export function ConversationDialog({
     useState<ConversationalGuardrailUsage | null>(null)
   // FIX-20261101-111439 (defect 2): action-bar "View All Sessions" switcher.
   const [sessionsDialogOpen, setSessionsDialogOpen] = useState(false)
+  // resumable-agent-turn-persistence 6.3: the "no longer resumable" terminal
+  // card is dismissible, and a duplicate approval aimed at an already-terminal
+  // turn must never be re-sent — it surfaces a "nothing to replay" notice.
+  const [dismissedTerminalKey, setDismissedTerminalKey] = useState<string | null>(null)
+  const [nothingToReplay, setNothingToReplay] = useState(false)
+
+  // ── Optimization mode (same conversation experience, optimization chrome) ──
+  // The exact live-test proposals seen in this dialog, so a resolved card can
+  // still render the operation list after the pause has cleared.
+  const seenLiveTestsRef = useRef<Record<string, LiveTestApprovalSummary>>({})
+  // First time this dialog rendered each proposal. A decided card becomes an
+  // inline chat-history entry at its ORIGINAL position — this timestamp keeps
+  // it there even before the ledger row (decision/execution times) arrives, so
+  // the card never jumps to the bottom of the transcript.
+  const liveTestObservedAtRef = useRef<Record<string, string>>({})
+  // Request id whose approval was submitted — shows "running once" until the
+  // `live_test_result` chunk (or the ledger) reports the outcome.
+  const [liveTestApprovedRequestId, setLiveTestApprovedRequestId] = useState<string | null>(null)
+  // Turn-in-flight transitions drive the host's plan polling / refresh.
+  const optimizationTurnWasInFlightRef = useRef(false)
 
   const endSession = useEndConversationSession(agentTypeId)
   const testId = (suffix: string) => `${testIdPrefix}-${suffix}`
@@ -708,9 +802,51 @@ export function ConversationDialog({
     turnInFlight,
     statusStale,
     pendingIntervention,
+    interventionStatus,
+    liveTestResults = {},
+    chatBlocked,
   } =
     useChatSession(wsSessionId, convSessionId)
   const effectiveGuardrailUsage = liveGuardrailUsage ?? resumedGuardrailUsage
+
+  // ── Optimization-mode data ────────────────────────────────────────────────
+  // Creation goes through the dedicated optimization endpoint (subject only);
+  // the conversation itself carries the mode, so no client-supplied channel.
+  const createOptimizationConversation = useCreateOptimizationConversation(agentTypeId)
+  const { data: optimizationDetail } = useOptimizationConversationDetail(
+    optimizationMode ? convSessionId : null,
+    optimizationMode && open,
+  )
+  const { data: liveTestRequests } = useLiveTestRequests(
+    optimizationMode ? convSessionId : null,
+    optimizationMode && open,
+  )
+  // Pre-session model state comes from the gate (cached from the Optimized Plan
+  // tab); once the conversation exists the read's availability is authoritative.
+  const { data: optimizationGate } = useOptimizationGate(
+    optimizationMode ? agentTypeId : null,
+    optimizationMode && open,
+  )
+  const optimizationSubjectName = optimizationDetail?.subject.name ?? agentTypeName
+  const optimizationIsConversational =
+    optimizationDetail?.subject.is_conversational ??
+    optimizationGate?.is_conversational ??
+    false
+  const optimizationAvailability = optimizationDetail?.availability ?? null
+  const optimizationAudit = optimizationDetail?.audit ?? null
+  const optimizerModelReasonCode =
+    optimizationAvailability?.optimizer_model.reason_code ??
+    (isOptimizerModelReasonCode(chatError?.code) ? (chatError?.code ?? null) : null) ??
+    optimizationGate?.optimizer_model_reason_code ??
+    null
+  const optimizerModelBlocked =
+    optimizationMode && isOptimizerModelReasonCode(optimizerModelReasonCode)
+  const optimizerModelId =
+    optimizationAvailability?.optimizer_model.effective_model_id ??
+    optimizationGate?.optimizer_model_id ??
+    null
+  const planPresent = optimizationAvailability?.plan_present ?? true
+
   // Latest live WS messages for the mid-turn recovery merge (effect-safe read).
   const wsMessagesRef = useRef<ChatMessage[]>(wsMessages)
   wsMessagesRef.current = wsMessages
@@ -751,6 +887,9 @@ export function ConversationDialog({
   const activeIntervention: InterveneRequestMessage | null = useMemo(() => {
     if (interventionRequest) return interventionRequest
     if (fetchedPendingIntervention) {
+      // Same shape as the WS path — including the optimization `live_test`
+      // block (exact operation list + expiry), so a reconnected approval card
+      // renders identically instead of only showing the server-rendered text.
       return {
         type: 'intervene_request',
         request_id: fetchedPendingIntervention.id,
@@ -760,15 +899,37 @@ export function ConversationDialog({
         agent_type: fetchedPendingIntervention.agent_name ?? undefined,
         delegation_depth: fetchedPendingIntervention.delegation_depth ?? 0,
         conversation_session_id: fetchedPendingIntervention.conversation_session_id ?? '',
+        live_test: fetchedPendingIntervention.live_test ?? null,
       }
     }
     return null
   }, [interventionRequest, fetchedPendingIntervention])
 
-  // FIX-20261101-111439 (defect 2): a conversational turn is in flight —
-  // session-switching and end actions are blocked while this is true.
-  const turnStreaming =
-    isResuming ||
+  // Remember every live-test proposal this dialog rendered: after the pause
+  // clears (approved / denied / expired) the resolved card still needs the
+  // operation list to show what was requested and what ran.
+  useEffect(() => {
+    const proposal = activeIntervention?.live_test
+    if (proposal) {
+      seenLiveTestsRef.current[proposal.live_test_request_id] = proposal
+      if (!liveTestObservedAtRef.current[proposal.live_test_request_id]) {
+        liveTestObservedAtRef.current[proposal.live_test_request_id] =
+          new Date().toISOString()
+      }
+    }
+  }, [activeIntervention])
+
+  // A new confirmation request starts a fresh interaction — clear the stale
+  // "nothing to replay" notice from a previous terminal turn.
+  useEffect(() => {
+    setNothingToReplay(false)
+  }, [activeIntervention?.request_id])
+
+  // REAL turn activity only: create/resume requests are NOT turns. The
+  // optimization host derives "a turn settled → refresh the plan" from this, so
+  // counting the conversation-create request here made the first message of a
+  // fresh optimization chat look like a finished turn and destroyed the session.
+  const turnActive =
     !!pendingQuestion ||
     !!interventionRequest ||
     !!fetchedPendingIntervention ||
@@ -779,6 +940,70 @@ export function ConversationDialog({
       chatStatus?.kind === 'waiting_for_human' ||
       chatStatus?.kind === 'delegation_resumed' ||
       turnInFlight)
+
+  // FIX-20261101-111439 (defect 2): a conversational turn is in flight —
+  // session-switching and end actions are blocked while this is true. A
+  // create/resume request also blocks them (nothing to switch to yet).
+  const turnStreaming = isResuming || turnActive
+
+  // ── Optimization mode: plan refresh + live-test card projections ───────────
+  // Turn completion (reply, pause, denial, live-test result) refreshes the
+  // optimized plan on the host tab; while a turn is in flight the host polls.
+  // Only REAL turn activity counts — the conversation-create request must never
+  // report "settled", otherwise the host's plan refetch remounts this dialog and
+  // the just-created session is lost.
+  useEffect(() => {
+    if (!optimizationMode) return
+    onOptimizationTurnStateChange?.(turnActive)
+    if (optimizationTurnWasInFlightRef.current && !turnActive) {
+      onOptimizationTurnSettled?.()
+      // The audit projection ("what ran") is part of the conversation read —
+      // refresh it when a turn settles so replay/live counts never lag.
+      if (convSessionId) {
+        void queryClient.invalidateQueries({
+          queryKey: optimizationConversationQueryKey(convSessionId),
+        })
+      }
+    }
+    optimizationTurnWasInFlightRef.current = turnActive
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [optimizationMode, turnActive])
+
+  // A live-test result changes plan evidence too — refresh the plan even if the
+  // turn status was already idle when the chunk arrived.
+  const liveTestResultCount = Object.keys(liveTestResults).length
+  useEffect(() => {
+    if (!optimizationMode || liveTestResultCount === 0) return
+    onOptimizationTurnSettled?.()
+    if (convSessionId) {
+      void queryClient.invalidateQueries({
+        queryKey: optimizationConversationQueryKey(convSessionId),
+      })
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [optimizationMode, liveTestResultCount])
+
+  // The approved request stops being "running" as soon as its outcome is KNOWN
+  // — the `live_test_result` chunk or a terminal ledger row (executed / failed /
+  // denied / expired / cancelled). Without this the mode bar kept claiming
+  // "Live test running…" for the rest of the dialog's life.
+  useEffect(() => {
+    if (!liveTestApprovedRequestId) return
+    const result = liveTestResults[liveTestApprovedRequestId]
+    const ledgerRow = (liveTestRequests ?? []).find(
+      (row) => row.id === liveTestApprovedRequestId,
+    )
+    const ledgerTerminal =
+      ledgerRow != null &&
+      (ledgerRow.status === 'executed' ||
+        ledgerRow.status === 'failed' ||
+        ledgerRow.status === 'denied' ||
+        ledgerRow.status === 'expired' ||
+        ledgerRow.status === 'cancelled')
+    if (result || ledgerTerminal) {
+      setLiveTestApprovedRequestId(null)
+    }
+  }, [liveTestApprovedRequestId, liveTestResults, liveTestRequests])
 
   // FIX: invariant — from the moment the user sends a message until the
   // turn's final agent reply (or a terminal status), an activity indicator
@@ -969,10 +1194,240 @@ export function ConversationDialog({
   const activeCycleRendered =
     effectiveActiveDelegationCycleId != null &&
     effectiveDelegationCycles.some((cycle) => cycle.id === effectiveActiveDelegationCycleId)
+  // ── Live-pause gate (FIX-20261113) ─────────────────────────────────────────
+  // A confirmation is only actionable while the pause is actually LIVE. A
+  // stale working status (`using_tool` / `thinking`) with a pending/terminal
+  // confirmation must never render as a progressing bubble next to a live-looking
+  // dialog: the operator would approve a turn that can no longer continue.
+  const interventionIsLive =
+    interventionRequest != null ||
+    chatStatus?.kind === 'waiting_for_human' ||
+    pendingIntervention
+  // Suppress every working indicator when a confirmation exists (or the turn is
+  // terminal) but no live pause backs it — there is nothing progressing.
+  const workingStatusSuppressed =
+    !interventionIsLive &&
+    (activeIntervention != null ||
+      (chatStatus != null && isTerminalChatStatus(chatStatus)))
+
+  // Transitional "requesting human intervention" phase: the agent has called
+  // the human-intervene management tool but the intervene_request bubble has
+  // not arrived yet — show a distinct status instead of a generic tool line.
+  const isHumanInterveneToolCall =
+    chatStatus?.kind === 'using_tool' &&
+    Boolean(chatStatus.toolName && /intervene|human/i.test(chatStatus.toolName))
+  const standaloneDelegationStatusLine =
+    chatStatus?.kind === 'waiting'
+      ? t('conversations.sessions.statusWaiting')
+      : chatStatus?.kind === 'using_tool' && chatStatus.toolName
+        ? isHumanInterveneToolCall
+          ? t('conversations.sessions.statusRequestingHuman')
+          : t('conversations.sessions.statusUsingTool', { toolName: chatStatus.toolName })
+        : chatStatus?.kind === 'delegating' && chatStatus.agentType
+          ? t('conversations.sessions.statusDelegatingToAgent', { agentType: chatStatus.agentType })
+          : chatStatus?.kind === 'delegation_resumed'
+            ? t('conversations.sessions.statusThinking')
+            : null
+  const shouldShowStandaloneDelegationStatus =
+    !workingStatusSuppressed &&
+    !activeCycleRendered &&
+    Boolean(standaloneDelegationStatusLine) &&
+    Boolean(chatStatus) &&
+    chatStatus?.kind !== 'thinking' &&
+    chatStatus?.kind !== 'timeout_or_failed'
+
+  // Persisted terminal states (finished / failed / timed_out, or the legacy
+  // timeout_or_failed wire status) end the turn — they clear the activity
+  // bubble / in-flight spinner and render a clear terminal message instead.
+  const terminalStatus = chatStatus && isTerminalChatStatus(chatStatus) ? chatStatus : null
+  const terminalStatusKind = terminalStatus?.kind ?? null
+  const terminalStatusLabel =
+    (chatStatus?.message
+      ? chatStatus.message
+      : terminalStatusKind === 'timeout_or_failed'
+        ? t('conversations.sessions.statusTimeoutOrFailed')
+        : terminalStatusKind === 'finished'
+          ? t('conversations.sessions.statusFinished')
+          : terminalStatusKind === 'failed'
+            ? t('conversations.sessions.statusFailed')
+            : terminalStatusKind === 'timed_out'
+              ? t('conversations.sessions.statusTimedOut')
+              : null)
+
+  // ── Durable resume vocabulary (resumable-agent-turn-persistence, Phase 6) ──
+  // A pause is only rendered as "waiting for your input" when a live resume
+  // record backs it; a stale hydrated `waiting_for_human` without one is not a
+  // waiting turn. A resumed turn (thinking / using a tool after a pause) is
+  // rendered distinctly from a fresh turn.
+  const waitingForInput = isActionableWaiting(chatStatus)
+  const isUnresumableTurn =
+    terminalStatus != null &&
+    (terminalStatus.resumeState === 'unresumable' || terminalStatus.terminalReason != null)
+  const isResolvedResumeTurn = terminalStatus?.resumeState === 'resolved'
+  const resumedTurnActive =
+    chatStatus != null &&
+    !isTerminalChatStatus(chatStatus) &&
+    (chatStatus.resumeState === 'resuming' || Boolean(chatStatus.activeResumeId))
+  const resumeChipState: ResumeState | null = waitingForInput || pendingIntervention
+    ? 'waiting_for_human'
+    : isUnresumableTurn
+      ? 'unresumable'
+      : resumedTurnActive
+        ? 'resuming'
+        : isResolvedResumeTurn
+          ? 'resolved'
+          : null
+  // Identity of the terminal card; a NEW terminal status re-opens a dismissed
+  // card, while dismissing keeps it hidden for the same turn.
+  const terminalCardKey = terminalStatus
+    ? `${terminalStatus.kind}|${terminalStatus.terminalReason ?? ''}|${terminalStatus.activeResumeId ?? ''}|${terminalStatus.timestamp}`
+    : null
+  const showTerminalCard =
+    isUnresumableTurn && terminalCardKey != null && terminalCardKey !== dismissedTerminalKey
+  const dismissTerminalCard = () => {
+    setDismissedTerminalKey(terminalCardKey)
+    setNothingToReplay(false)
+  }
+  // "Ask again" retires the terminal card and REPEATS the last user request:
+  // re-sending it starts a fresh turn (nothing was written on the dead turn, so
+  // repeating is safe). Falls back to just clearing the input when there is no
+  // prior user message to replay.
+  const handleAskAgain = () => {
+    dismissTerminalCard()
+    setInputClearToken((n) => n + 1)
+    const lastUserMessage = [...messages]
+      .reverse()
+      .find((message) => message.role === 'user' && message.content.trim().length > 0)
+    if (lastUserMessage) {
+      sendMessage(lastUserMessage.content)
+    }
+  }
+
+  // A confirmation aimed at an already-terminal turn can no longer be replayed:
+  // surface "nothing to replay" and never dispatch the response (the write is
+  // over — applied once or not at all).
+  const interventionTargetTerminal = terminalStatus != null
+  // When the turn is terminal OR the pause is no longer live, a lingering
+  // confirmation must be folded into a grey read-only state — it can no longer
+  // be acted on and must not block the input (the operator retries via "Ask
+  // again" or a new message instead).
+  const interventionActionable =
+    activeIntervention != null && !interventionTargetTerminal && interventionIsLive
+
+  // ── Optimization mode: approval-card view models ──────────────────────────
+  // The actionable card is the pending proposal; decided ones render as read-only
+  // evidence (operation list + per-operation outcomes) so the chat shows what was
+  // requested and what actually ran, including after a reconnect.
+  const pendingLiveTest = interventionActionable ? (activeIntervention?.live_test ?? null) : null
+  const pendingLiveTestResult = pendingLiveTest
+    ? (liveTestResults[pendingLiveTest.live_test_request_id] ?? null)
+    : null
+  const pendingLiveTestState = pendingLiveTest
+    ? resolveLiveTestCardState(pendingLiveTest, {
+        result: pendingLiveTestResult,
+        localState:
+          liveTestApprovedRequestId === pendingLiveTest.live_test_request_id &&
+          !pendingLiveTestResult
+            ? 'running'
+            : liveTestCardStateFromStatus(pendingLiveTest.status),
+      })
+    : null
+
+  const resolvedLiveTestCards = useMemo<ResolvedLiveTestCardEntry[]>(() => {
+    if (!optimizationMode) {
+      return []
+    }
+    const ledgerById = new Map<string, LiveTestRequest>()
+    for (const row of liveTestRequests ?? []) ledgerById.set(row.id, row)
+    const ids = new Set<string>()
+    for (const id of Object.keys(liveTestResults)) ids.add(id)
+    for (const id of Object.keys(seenLiveTestsRef.current)) {
+      if (liveTestResults[id]) ids.add(id)
+    }
+    // Every request this dialog actually showed (denied / expired / executed
+    // with no result chunk) keeps its evidence card.
+    for (const row of liveTestRequests ?? []) {
+      if (seenLiveTestsRef.current[row.id]) ids.add(row.id)
+    }
+    // Reconnect / review: the newest decided row renders once even without a
+    // locally received result chunk.
+    const latestDecided = (liveTestRequests ?? []).find((row) => row.status !== 'pending')
+    if (latestDecided) ids.add(latestDecided.id)
+    if (pendingLiveTest) ids.delete(pendingLiveTest.live_test_request_id)
+
+    // The card's place in the transcript: where the approval was FIRST SHOWN
+    // (the operator's request position), so it stays in history and never
+    // re-sorts when the decision/result lands. Only a reloaded history (no
+    // local observation) falls back to the decision/creation time.
+    const sortTimestamp = (id: string, row: LiveTestRequest | undefined): string => {
+      const observedAt = liveTestObservedAtRef.current[id]
+      if (observedAt) return observedAt
+      const decidedAt = row?.decision?.responded_at
+      if (decidedAt) return decidedAt
+      if (row?.created_at) return row.created_at
+      // Transient only: never cache this as the observed time, otherwise the
+      // card stays pinned at "now" and cannot re-sort when the ledger lands.
+      return new Date().toISOString()
+    }
+
+    let index = 0
+    return [...ids].map((id) => {
+      const row = ledgerById.get(id)
+      const result = liveTestResults[id] ?? null
+      const proposal: LiveTestApprovalSummary = {
+        live_test_request_id: id,
+        status: row?.status ?? seenLiveTestsRef.current[id]?.status ?? 'expired',
+        expires_at: row?.expires_at ?? seenLiveTestsRef.current[id]?.expires_at ?? null,
+        script_version_id:
+          row?.script_version_id ?? seenLiveTestsRef.current[id]?.script_version_id ?? null,
+        script_name: row?.script_name ?? seenLiveTestsRef.current[id]?.script_name ?? null,
+        script_version_label:
+          row?.script_version_label ??
+          seenLiveTestsRef.current[id]?.script_version_label ??
+          null,
+        operations: row?.requested_operations ?? seenLiveTestsRef.current[id]?.operations ?? [],
+        executed_operations:
+          row?.executed_operations ?? seenLiveTestsRef.current[id]?.executed_operations ?? null,
+        target_agent_type_id: row?.target_agent_type_id ?? null,
+      }
+      const decidedDenied = row?.decision?.approval_value === false
+      const state = decidedDenied
+        ? ('denied' as const)
+        : resolveLiveTestCardState(proposal, {
+            result,
+            localState:
+              liveTestApprovedRequestId === id && !result ? ('running' as const) : null,
+          })
+      const card: ResolvedLiveTestCardEntry = {
+        id,
+        proposal,
+        state,
+        scriptRun: liveTestScriptRun(proposal, result),
+        errorText: result?.live_test_error ?? null,
+        decidedAt: row?.decision?.responded_at ?? null,
+        timestamp: sortTimestamp(id, row),
+        testIdIndex: index,
+      }
+      index += 1
+      return card
+    })
+  }, [
+    optimizationMode,
+    liveTestRequests,
+    liveTestResults,
+    pendingLiveTest,
+    liveTestApprovedRequestId,
+  ])
+
+  // Chronological transcript: persisted + live messages, delegation cycles,
+  // resolved interventions AND decided live tests, all sorted by their own
+  // timestamp. A decided live test is therefore ordinary chat history in the
+  // position where the approval happened — never a trailing card.
   const timelineEntries: Array<
     | { kind: 'message'; id: string; timestamp: string; message: ChatMessage }
     | { kind: 'delegation_cycle'; id: string; timestamp: string; cycle: DelegationCycle }
     | { kind: 'intervention_resolved'; id: string; timestamp: string; data: ResolvedInterventionData }
+    | { kind: 'live_test_resolved'; id: string; timestamp: string; card: ResolvedLiveTestCardEntry }
   > = [
     ...messages
       // Intervene Q&A turns render as resolved-intervention bubbles instead
@@ -996,49 +1451,29 @@ export function ConversationDialog({
       timestamp: data.resolvedAt,
       data,
     })),
+    ...resolvedLiveTestCards.map((card) => ({
+      kind: 'live_test_resolved' as const,
+      id: `live-test-resolved-${card.id}`,
+      timestamp: card.timestamp,
+      card,
+    })),
   ].sort((a, b) => toEpochMs(a.timestamp) - toEpochMs(b.timestamp))
-  // Transitional "requesting human intervention" phase: the agent has called
-  // the human-intervene management tool but the intervene_request bubble has
-  // not arrived yet — show a distinct status instead of a generic tool line.
-  const isHumanInterveneToolCall =
-    chatStatus?.kind === 'using_tool' &&
-    Boolean(chatStatus.toolName && /intervene|human/i.test(chatStatus.toolName))
-  const standaloneDelegationStatusLine =
-    chatStatus?.kind === 'waiting'
-      ? t('conversations.sessions.statusWaiting')
-      : chatStatus?.kind === 'using_tool' && chatStatus.toolName
-        ? isHumanInterveneToolCall
-          ? t('conversations.sessions.statusRequestingHuman')
-          : t('conversations.sessions.statusUsingTool', { toolName: chatStatus.toolName })
-        : chatStatus?.kind === 'delegating' && chatStatus.agentType
-          ? t('conversations.sessions.statusDelegatingToAgent', { agentType: chatStatus.agentType })
-          : chatStatus?.kind === 'delegation_resumed'
-            ? t('conversations.sessions.statusThinking')
-            : null
-  const shouldShowStandaloneDelegationStatus =
-    !activeCycleRendered &&
-    Boolean(standaloneDelegationStatusLine) &&
-    Boolean(chatStatus) &&
-    chatStatus?.kind !== 'thinking' &&
-    chatStatus?.kind !== 'timeout_or_failed'
 
-  // Persisted terminal states (finished / failed / timed_out, or the legacy
-  // timeout_or_failed wire status) end the turn — they clear the activity
-  // bubble / in-flight spinner and render a clear terminal message instead.
-  const terminalStatusKind =
-    chatStatus && isTerminalChatStatus(chatStatus) ? chatStatus.kind : null
-  const terminalStatusLabel =
-    (chatStatus?.message
-      ? chatStatus.message
-      : terminalStatusKind === 'timeout_or_failed'
-        ? t('conversations.sessions.statusTimeoutOrFailed')
-        : terminalStatusKind === 'finished'
-          ? t('conversations.sessions.statusFinished')
-          : terminalStatusKind === 'failed'
-            ? t('conversations.sessions.statusFailed')
-            : terminalStatusKind === 'timed_out'
-              ? t('conversations.sessions.statusTimedOut')
-              : null)
+  // Decision / result evidence: re-read the ledger so the resolved card shows
+  // the stored domain status (and denial attribution) without a reload.
+  useEffect(() => {
+    if (!optimizationMode || !convSessionId) return
+    if (!interventionStatus && liveTestResultCount === 0) return
+    void queryClient.invalidateQueries({ queryKey: liveTestRequestsQueryKey(convSessionId) })
+  }, [optimizationMode, convSessionId, interventionStatus, liveTestResultCount, queryClient])
+
+  const guardTerminalIntervention = (): boolean => {
+    if (!interventionTargetTerminal) {
+      return false
+    }
+    setNothingToReplay(true)
+    return true
+  }
 
   // FIX-20261109-BUG: invariant enforcement — while a turn is in flight the
   // window must never be blank. Compute whether each non-thinking indicator
@@ -1049,16 +1484,19 @@ export function ConversationDialog({
   // renders, `showThinking` falls back to the thinking bubble.
   const standaloneStatusVisible = shouldShowStandaloneDelegationStatus
   const cycleLiveStatusVisible =
+    !workingStatusSuppressed &&
     activeCycleRendered &&
     Boolean(standaloneDelegationStatusLine) &&
     chatStatus != null &&
     !isTerminalChatStatus(chatStatus)
-  const showThinking =    (chatStatus?.kind === 'thinking' || chatStatus?.kind === 'delegation_resumed') ||
-    (turnInFlight &&
-      chatStatus?.kind !== 'waiting_for_human' &&
-      (chatStatus == null || !isTerminalChatStatus(chatStatus)) &&
-      !standaloneStatusVisible &&
-      !cycleLiveStatusVisible)
+  const showThinking =
+    !workingStatusSuppressed &&
+    ((chatStatus?.kind === 'thinking' || chatStatus?.kind === 'delegation_resumed') ||
+      (turnInFlight &&
+        chatStatus?.kind !== 'waiting_for_human' &&
+        (chatStatus == null || !isTerminalChatStatus(chatStatus)) &&
+        !standaloneStatusVisible &&
+        !cycleLiveStatusVisible))
 
   // Resume session when dialog opens with a sessionId
   // For new chats, session is created only when user sends first message
@@ -1133,6 +1571,11 @@ export function ConversationDialog({
       setPendingInitialMessage(null)
       setGuardrailHintAnchorEl(null)
       setResumedGuardrailUsage(null)
+      setDismissedTerminalKey(null)
+      setNothingToReplay(false)
+      setLiveTestApprovedRequestId(null)
+      seenLiveTestsRef.current = {}
+      liveTestObservedAtRef.current = {}
       resumeRequestedForRef.current = null
       lastRecoveryEpochRef.current = 0
     }
@@ -1178,6 +1621,16 @@ export function ConversationDialog({
     setIsResuming(true)
     setError(null)
     try {
+      if (optimizationMode) {
+        // Optimization conversations are created through the dedicated
+        // endpoint: `{agent_type_id}` only — the subject IS the session's agent
+        // type, and the channel is never client-supplied.
+        const created = await createOptimizationConversation.mutateAsync()
+        setConvSessionId(created.conversation.id)
+        setWsSessionId(created.conversation.id)
+        setResumedGuardrailUsage(null)
+        return created.conversation.id
+      }
       const { data } = await apiClient.post('/conversations', {
         agent_type_id: agentTypeId,
       })
@@ -1217,6 +1670,8 @@ export function ConversationDialog({
     setResumedGuardrailUsage(null)
     setPendingInitialMessage(null)
     setInputClearToken((n) => n + 1)
+    setDismissedTerminalKey(null)
+    setNothingToReplay(false)
     setError(null)
     clearMessages()
     hydrateDelegationFromHistory({ cycles: [] })
@@ -1311,8 +1766,10 @@ export function ConversationDialog({
   }, autoScrollDeps)
 
   const displayTitle = sessionTitle ?? agentTypeName
+  // Show "waiting for your input" via the connection chip ONLY when no
+  // dedicated resume chip already conveys it (avoids the duplicated label).
   const connectionLabel =
-    activeIntervention
+    activeIntervention && !resumeChipState
       ? t('conversations.sessions.intervention.waitingForInput')
       : convSessionId && !connected
         ? pendingInitialMessage || isResuming
@@ -1348,13 +1805,33 @@ export function ConversationDialog({
           <Box display="flex" alignItems="center" gap={1}>
             <SmartToyIcon color="primary" />
             <Typography variant="h6" component="span" fontWeight={600}>
-              {displayTitle}
+              {optimizationMode ? optimizationSubjectName : displayTitle}
             </Typography>
+            {optimizationMode && (
+              <span
+                title={t('agents.optimizer.identityParity')}
+                data-testid={testId('optimization-identity')}
+                style={{ display: 'inline-flex' }}
+              >
+                <Chip
+                  label={t('agents.optimizer.modeOnAgent', { name: optimizationSubjectName })}
+                  color="secondary"
+                  size="small"
+                  data-testid={testId('optimization-mode-chip')}
+                />
+              </span>
+            )}
             {connectionLabel && (
               <Chip
                 label={connectionLabel}
                 color={activeIntervention ? 'warning' : connected ? 'success' : pendingInitialMessage || isResuming ? 'info' : 'error'}
                 size="small"
+              />
+            )}
+            {resumeChipState && (
+              <ResumeStateChip
+                state={resumeChipState}
+                testId={testId('resume-state-chip')}
               />
             )}
             <Box sx={{ ml: 'auto' }} display="flex" gap={1}>
@@ -1392,6 +1869,66 @@ export function ConversationDialog({
                 </Typography>
               </Alert>
             </Box>
+          )}
+
+          {/* ── Optimization mode chrome ─────────────────────────────────── */}
+          {optimizationMode && (
+            <>
+              {optimizerModelBlocked && (
+                <Box p={2} pb={0}>
+                  <OptimizerModelAlert
+                    reasonCode={optimizerModelReasonCode}
+                    modelId={optimizerModelId}
+                    testId={testId('optimizer-model-alert')}
+                    action={
+                      <OptimizerSystemConfigButton
+                        testId={testId('optimizer-open-system-config')}
+                      />
+                    }
+                  />
+                </Box>
+              )}
+              {!optimizerModelBlocked && isOptimizerChatErrorCode(chatError?.code) && (
+                <Box p={2} pb={0}>
+                  <Alert severity="warning" data-testid={testId('optimizer-chat-error')}>
+                    {t(`agents.optimizer.chatErrors.${chatError?.code}`, {
+                      defaultValue: chatError?.message ?? '',
+                    })}
+                  </Alert>
+                </Box>
+              )}
+              {!optimizerModelBlocked &&
+                optimizationAvailability &&
+                !optimizationAvailability.available && (
+                  <Box p={2} pb={0}>
+                    <Alert severity="warning" data-testid={testId('optimization-unavailable')}>
+                      {optimizationAvailability.reason_code === 'no_successful_execution'
+                        ? t('agents.optimizer.conversationReasonNoExecution')
+                        : (optimizationAvailability.reason ??
+                          t('agents.optimizer.modelAlertTitle'))}
+                    </Alert>
+                  </Box>
+                )}
+              {isDecisionPendingBlock(chatBlocked?.reason) && (
+                <Box p={2} pb={0}>
+                  <Alert severity="info" data-testid={testId('optimization-decision-blocked')}>
+                    {chatBlocked?.reason === CHAT_BLOCKED_REASON_DECISION_PENDING
+                      ? t('agents.optimizer.blockedDecision')
+                      : chatBlocked?.message || t('agents.optimizer.blockedDecision')}
+                  </Alert>
+                </Box>
+              )}
+              <OptimizationSessionBar
+                audit={optimizationAudit}
+                subjectName={optimizationSubjectName}
+                isConversational={optimizationIsConversational}
+                agentTypeName={optimizationSubjectName}
+                liveTestRunning={
+                  pendingLiveTestState === 'running' || liveTestApprovedRequestId != null
+                }
+                testId={testId('optimization-session-bar')}
+              />
+            </>
           )}
 
           {isResuming ? (
@@ -1464,6 +2001,30 @@ export function ConversationDialog({
                         return <ResolvedInterventionBubble key={entry.id} data={entry.data} />
                       }
 
+                      if (entry.kind === 'live_test_resolved') {
+                        // Decided live test = chat history at its original
+                        // position. Collapsed (no spinner — the normal chat
+                        // status indicator is the only processing UI) and
+                        // expandable to the script-run record.
+                        return (
+                          <Box key={entry.id} mb={2}>
+                            <LiveTestApprovalCard
+                              liveTest={entry.card.proposal}
+                              agentTypeName={optimizationSubjectName}
+                              state={entry.card.state}
+                              scriptRun={entry.card.scriptRun}
+                              errorText={entry.card.errorText}
+                              decidedAt={entry.card.decidedAt}
+                              onApprove={() => undefined}
+                              onDeny={() => undefined}
+                              testIdPrefix={testId(
+                                `live-test-resolved-${entry.card.testIdIndex}`,
+                              )}
+                            />
+                          </Box>
+                        )
+                      }
+
                       const cycle = entry.cycle
                       const isActiveCycle = cycle.id === effectiveActiveDelegationCycleId
                       const introAgentType = resolveCycleAgentType(cycle, isActiveCycle)
@@ -1483,7 +2044,8 @@ export function ConversationDialog({
                                 ? t('conversations.sessions.statusThinking')
                                 : null
                       const showLiveStatus = Boolean(
-                        isActiveCycle &&
+                        !workingStatusSuppressed &&
+                          isActiveCycle &&
                           statusLine &&
                           chatStatus &&
                           chatStatus.kind !== 'thinking' &&
@@ -1512,6 +2074,12 @@ export function ConversationDialog({
                                   <Box display="flex" alignItems="center" gap={1} mb={1} data-testid={testId('chat-status-indicator')}>
                                   <CircularProgress size={16} />
                                   <Typography variant="body2">{statusLine}</Typography>
+                                  {resumedTurnActive && (
+                                    <ResumeStateChip
+                                      state="resuming"
+                                      testId={testId('resume-badge')}
+                                    />
+                                  )}
                                 </Box>
                               )}
 
@@ -1544,7 +2112,50 @@ export function ConversationDialog({
                     })
                   )}
 
-                  {terminalStatusKind && terminalStatusKind !== 'finished' && (
+                  {/* Optimization mode: nothing to optimize yet is information,
+                      not a block — the conversation starts from the
+                      operator's description. */}
+                  {optimizationMode && optimizationDetail && !planPresent && (
+                    <Alert severity="info" sx={{ mb: 2 }} data-testid={testId('optimization-empty-state')}>
+                      <Typography variant="body2" fontWeight={700}>
+                        {t('agents.optimizedPlan.talkToOptimizerEmptyTitle')}
+                      </Typography>
+                      <Typography variant="body2">
+                        {t('agents.optimizedPlan.talkToOptimizerPrompt')}
+                      </Typography>
+                    </Alert>
+                  )}
+
+                  {activeIntervention && !interventionActionable && !(optimizationMode && activeIntervention.live_test) && (
+                    <Box
+                      data-testid={testId('intervention-closed')}
+                      sx={{
+                        mb: 1.5,
+                        p: 1.25,
+                        borderRadius: 1,
+                        border: 1,
+                        borderColor: 'divider',
+                        bgcolor: 'action.hover',
+                        opacity: 0.7,
+                      }}
+                    >
+                      <Typography variant="body2" color="text.secondary">
+                        {t('conversations.sessions.intervention.closedReadOnly')}
+                      </Typography>
+                    </Box>
+                  )}
+
+                  {showTerminalCard && (
+                    <ResumeTerminalCard
+                      reason={terminalStatus?.terminalReason ?? null}
+                      referenceId={terminalStatus?.activeResumeId ?? null}
+                      testId={testId}
+                      onAskAgain={handleAskAgain}
+                      onDismiss={dismissTerminalCard}
+                    />
+                  )}
+
+                  {!isUnresumableTurn && terminalStatusKind && terminalStatusKind !== 'finished' && (
                     <Alert
                       severity="warning"
                       sx={{ mt: 1 }}
@@ -1560,12 +2171,28 @@ export function ConversationDialog({
                         <SmartToyIcon />
                       </Avatar>
                       <Box sx={{ maxWidth: { xs: 'calc(100% - 48px)', sm: '70%' } }}>
-                        <Paper sx={{ p: 1.5, width: 'fit-content', maxWidth: '100%', bgcolor: 'background.paper' }}>
+                        <Paper
+                          sx={{
+                            p: 1.5,
+                            width: 'fit-content',
+                            maxWidth: '100%',
+                            bgcolor: resumedTurnActive ? '#F5F3FF' : 'background.paper',
+                            ...(resumedTurnActive
+                              ? { border: '1px solid #DDD6FE' }
+                              : {}),
+                          }}
+                        >
                           <Box display="flex" alignItems="center" gap={1}>
                             <CircularProgress size={16} />
                             <Typography variant="body2">
                               {t('conversations.sessions.statusThinking')}
                             </Typography>
+                            {resumedTurnActive && (
+                              <ResumeStateChip
+                                state="resuming"
+                                testId={testId('resume-badge')}
+                              />
+                            )}
                           </Box>
                         </Paper>
                         <Typography color="text.secondary" display="block" sx={{ fontSize: '0.65rem', mt: 0.25, whiteSpace: 'nowrap' }}>
@@ -1584,12 +2211,28 @@ export function ConversationDialog({
                         <SmartToyIcon />
                       </Avatar>
                       <Box sx={{ maxWidth: { xs: 'calc(100% - 48px)', sm: '70%' } }}>
-                        <Paper sx={{ p: 1.5, width: 'fit-content', maxWidth: '100%', bgcolor: 'background.paper' }}>
+                        <Paper
+                          sx={{
+                            p: 1.5,
+                            width: 'fit-content',
+                            maxWidth: '100%',
+                            bgcolor: resumedTurnActive ? '#F5F3FF' : 'background.paper',
+                            ...(resumedTurnActive
+                              ? { border: '1px solid #DDD6FE' }
+                              : {}),
+                          }}
+                        >
                           <Box display="flex" alignItems="center" gap={1}>
                             <CircularProgress size={16} />
                             <Typography variant="body2">
                               {standaloneDelegationStatusLine}
                             </Typography>
+                            {resumedTurnActive && (
+                              <ResumeStateChip
+                                state="resuming"
+                                testId={testId('resume-badge')}
+                              />
+                            )}
                           </Box>
                         </Paper>
                         <Typography color="text.secondary" display="block" sx={{ fontSize: '0.65rem', mt: 0.25, whiteSpace: 'nowrap' }}>
@@ -1603,66 +2246,170 @@ export function ConversationDialog({
                   )}
 
                   {/* Intervention Waiting Indicator — rendered CONTINUOUSLY
-                      while the persisted/live state is waiting_for_human
-                      (no blank gap between the agent pausing and the
-                      intervene_request dialog), and for a hydrated
-                      pending-intervention flag without a request object. */}
-                  {(chatStatus?.kind === 'waiting_for_human' || pendingIntervention) && !activeIntervention && (
+                      while an actionable pause is live (waiting_for_human
+                      backed by a durable resume record, or a hydrated
+                      pending-intervention flag), so there is no blank gap
+                      between the agent pausing and the intervene_request
+                      dialog. A stale `waiting_for_human` without a live
+                      resume id is NOT a waiting turn and renders nothing. */}
+                  {(waitingForInput || pendingIntervention) && !activeIntervention && !interventionTargetTerminal && (
                     <Box mb={2} data-testid={testId('intervention-pending-indicator')}>
                       <InterventionPendingIndicator />
                     </Box>
                   )}
 
+                  {/* Duplicate approval against an already-terminal turn: the
+                      response is never re-sent, the operator sees why. */}
+                  {nothingToReplay && (
+                    <Alert
+                      severity="info"
+                      sx={{ mb: 2 }}
+                      data-testid={testId('nothing-to-replay')}
+                    >
+                      {t('conversations.sessions.terminalCard.nothingToReplay')}
+                    </Alert>
+                  )}
+
                   {/* Inline Intervention Dialog — live WS request, or the
                       REST-fetched pending request after a page refresh */}
-                  {activeIntervention && (
+                  {interventionActionable && (
                     <Box mb={2} data-testid={testId('intervention-dialog')}>
-                      <InlineInterventionDialog
-                        request={activeIntervention}
-                        isSubmitting={interventionIsSubmitting}
-                        dialogError={interventionDialogError}
-                        onApprove={() => {
-                          respondedSnapshotRef.current = {
-                            request: activeIntervention,
-                            answer: t('conversations.sessions.intervention.approve'),
-                          }
-                          void respondToIntervention(activeIntervention.request_id, {
-                            approval_value: true,
-                          })
-                        }}
-                        onDeny={() => {
-                          respondedSnapshotRef.current = {
-                            request: activeIntervention,
-                            answer: t('conversations.sessions.intervention.deny'),
-                          }
-                          void respondToIntervention(activeIntervention.request_id, {
-                            approval_value: false,
-                          })
-                        }}
-                        onSelectChoice={(choice) => {
-                          respondedSnapshotRef.current = {
-                            request: activeIntervention,
-                            answer: choice,
-                          }
-                          void respondToIntervention(activeIntervention.request_id, {
-                            selected_choice: choice,
-                          })
-                        }}
-                        onSubmitText={(text) => {
-                          respondedSnapshotRef.current = {
-                            request: activeIntervention,
-                            answer: text,
-                          }
-                          void respondToIntervention(activeIntervention.request_id, {
-                            text_value: text,
-                          })
-                        }}
-                        onDismiss={() => {
-                          // Cancel/dismiss — never emit a resolved bubble.
-                          respondedSnapshotRef.current = null
-                          void cancelInterventionRequest(activeIntervention.request_id)
-                        }}
-                      />
+                      {pendingLiveTest && pendingLiveTestState ? (
+                        <LiveTestApprovalCard
+                          liveTest={pendingLiveTest}
+                          agentTypeName={optimizationSubjectName}
+                          state={pendingLiveTestState}
+                          scriptRun={liveTestScriptRun(pendingLiveTest, pendingLiveTestResult)}
+                          errorText={pendingLiveTestResult?.live_test_error ?? null}
+                          isSubmitting={interventionIsSubmitting}
+                          onApprove={() => {
+                            if (guardTerminalIntervention()) return
+                            // No generic resolved bubble: THIS card becomes the
+                            // record of what ran (approved once, not remembered).
+                            respondedSnapshotRef.current = null
+                            setLiveTestApprovedRequestId(
+                              pendingLiveTest.live_test_request_id,
+                            )
+                            void respondToIntervention(activeIntervention.request_id, {
+                              approval_value: true,
+                            })
+                          }}
+                          onDeny={() => {
+                            if (guardTerminalIntervention()) return
+                            respondedSnapshotRef.current = null
+                            void respondToIntervention(activeIntervention.request_id, {
+                              approval_value: false,
+                            })
+                          }}
+                          testIdPrefix={testId('live-test-approval')}
+                        />
+                      ) : optimizationMode ? (
+                        <OptimizerAskCard
+                          reason={activeIntervention.reason}
+                          interventionType={activeIntervention.intervention_type}
+                          choices={activeIntervention.choices}
+                          isSubmitting={interventionIsSubmitting}
+                          dialogError={interventionDialogError}
+                          onSelectChoice={(choice) => {
+                            if (guardTerminalIntervention()) return
+                            respondedSnapshotRef.current = {
+                              request: activeIntervention,
+                              answer: choice,
+                            }
+                            void respondToIntervention(activeIntervention.request_id, {
+                              selected_choice: choice,
+                            })
+                          }}
+                          onSubmitText={(text) => {
+                            if (guardTerminalIntervention()) return
+                            respondedSnapshotRef.current = {
+                              request: activeIntervention,
+                              answer: text,
+                            }
+                            void respondToIntervention(activeIntervention.request_id, {
+                              text_value: text,
+                            })
+                          }}
+                          onCancel={() => {
+                            if (guardTerminalIntervention()) return
+                            respondedSnapshotRef.current = null
+                            void cancelInterventionRequest(activeIntervention.request_id)
+                          }}
+                          onApprove={() => {
+                            if (guardTerminalIntervention()) return
+                            respondedSnapshotRef.current = {
+                              request: activeIntervention,
+                              answer: t('conversations.sessions.intervention.approve'),
+                            }
+                            void respondToIntervention(activeIntervention.request_id, {
+                              approval_value: true,
+                            })
+                          }}
+                          onDeny={() => {
+                            if (guardTerminalIntervention()) return
+                            respondedSnapshotRef.current = {
+                              request: activeIntervention,
+                              answer: t('conversations.sessions.intervention.deny'),
+                            }
+                            void respondToIntervention(activeIntervention.request_id, {
+                              approval_value: false,
+                            })
+                          }}
+                          testIdPrefix={testId('optimizer-ask')}
+                        />
+                      ) : (
+                        <InlineInterventionDialog
+                          request={activeIntervention}
+                          isSubmitting={interventionIsSubmitting}
+                          dialogError={interventionDialogError}
+                          onApprove={() => {
+                            if (guardTerminalIntervention()) return
+                            respondedSnapshotRef.current = {
+                              request: activeIntervention,
+                              answer: t('conversations.sessions.intervention.approve'),
+                            }
+                            void respondToIntervention(activeIntervention.request_id, {
+                              approval_value: true,
+                            })
+                          }}
+                          onDeny={() => {
+                            if (guardTerminalIntervention()) return
+                            respondedSnapshotRef.current = {
+                              request: activeIntervention,
+                              answer: t('conversations.sessions.intervention.deny'),
+                            }
+                            void respondToIntervention(activeIntervention.request_id, {
+                              approval_value: false,
+                            })
+                          }}
+                          onSelectChoice={(choice) => {
+                            if (guardTerminalIntervention()) return
+                            respondedSnapshotRef.current = {
+                              request: activeIntervention,
+                              answer: choice,
+                            }
+                            void respondToIntervention(activeIntervention.request_id, {
+                              selected_choice: choice,
+                            })
+                          }}
+                          onSubmitText={(text) => {
+                            if (guardTerminalIntervention()) return
+                            respondedSnapshotRef.current = {
+                              request: activeIntervention,
+                              answer: text,
+                            }
+                            void respondToIntervention(activeIntervention.request_id, {
+                              text_value: text,
+                            })
+                          }}
+                          onDismiss={() => {
+                            // Cancel/dismiss — never emit a resolved bubble.
+                            if (guardTerminalIntervention()) return
+                            respondedSnapshotRef.current = null
+                            void cancelInterventionRequest(activeIntervention.request_id)
+                          }}
+                        />
+                      )}
                     </Box>
                   )}
                 </Paper>
@@ -1704,16 +2451,30 @@ export function ConversationDialog({
                 <ChatInputBar
                   disabled={
                     assistantModelUnconfigured ||
+                    (optimizationMode && optimizerModelBlocked) ||
                     (convSessionId
-                      ? !!activeIntervention || !connected || !!pendingQuestion || !!pendingInitialMessage
+                      ? interventionActionable ||
+                        !connected ||
+                        !!pendingQuestion ||
+                        !!pendingInitialMessage ||
+                        (optimizationMode &&
+                          (pendingIntervention || isDecisionPendingBlock(chatBlocked?.reason)))
                       : false)
                   }
                   placeholder={
                     assistantModelUnconfigured
                       ? t('assistant.modelNotConfiguredInputDisabled')
-                      : activeIntervention
-                        ? t('conversations.sessions.intervention.inputBlocked')
-                        : t('conversations.sessions.chatPlaceholder')
+                      : optimizationMode && optimizerModelBlocked
+                        ? t('agents.optimizer.inputBlockedModel')
+                        : interventionActionable ||
+                            (optimizationMode &&
+                              (pendingIntervention || isDecisionPendingBlock(chatBlocked?.reason)))
+                          ? t('agents.optimizer.inputBlockedDecision')
+                          : optimizationMode
+                            ? turnStreaming
+                              ? t('agents.optimizer.inputBlockedBusy')
+                              : t('agents.optimizer.inputPlaceholder')
+                            : t('conversations.sessions.chatPlaceholder')
                   }
                   sendLabel={t('conversations.sessions.send')}
                   onSend={handleSendStable}

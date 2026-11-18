@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import React from 'react'
@@ -710,6 +710,74 @@ describe('McpSessionManager — Default session deletion blocking', () => {
       const deleteBlocked = screen.queryByText('mcp.sessions.deleteDefaultBlocked')
       expect(deleteBlocked).not.toBeNull()
     })
+  })
+})
+
+/**
+ * FIX-20261116-061805 — the OAuth token status chip must reflect the
+ * REFRESH token (`oauth_refresh_expires_at`), not the access token
+ * (`oauth_expires_at`). An expired access token is not an error while the
+ * session's refresh token is still valid.
+ */
+describe('McpSessionManager — token status reflects OAuth refresh token', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  const baseOauthSession = {
+    server_id: 'srv-1',
+    description: null,
+    auth_type: 'oauth2',
+    identity_subject: null,
+    identity_binding: null,
+    credential_config: null,
+    is_active: true,
+    is_default: false,
+    created_at: '2026-01-01T00:00:00Z',
+    updated_at: '2026-01-01T00:00:00Z',
+  }
+
+  const sessionRow = (name: string): HTMLElement => {
+    const row = screen.getByText(name).closest('tr')
+    if (!row) throw new Error(`row for ${name} not found`)
+    return row as HTMLElement
+  }
+
+  it('renders a valid (NOT expired) token status when access token expired but refresh token is valid', async () => {
+    const session = {
+      ...baseOauthSession,
+      id: 'sess-refresh-valid',
+      name: 'Refreshable OAuth Session',
+      // Access token already expired — but the refresh token is valid.
+      oauth_expires_at: '2020-01-01T00:00:00Z',
+      oauth_refresh_expires_at: '2099-01-01T00:00:00Z',
+    }
+    mockApiClient.get.mockResolvedValueOnce({ data: [session] })
+    const { McpSessionManager } = await import('../pages/mcp/McpSessionManager')
+    render(<McpSessionManager serverId="srv-1" />, { wrapper })
+    await waitFor(() => screen.getByText('Refreshable OAuth Session'))
+
+    const row = sessionRow('Refreshable OAuth Session')
+    expect(within(row).queryByText('mcp.sessions.tokenExpired')).toBeNull()
+    expect(row.querySelector('.MuiChip-colorError')).toBeNull()
+  })
+
+  it('renders EXPIRED token status when OAuth refresh token is expired even though access token is valid', async () => {
+    const session = {
+      ...baseOauthSession,
+      id: 'sess-refresh-expired',
+      name: 'Unrefreshable OAuth Session',
+      // Access token still valid — but the refresh token is gone.
+      oauth_expires_at: '2099-01-01T00:00:00Z',
+      oauth_refresh_expires_at: '2020-01-01T00:00:00Z',
+    }
+    mockApiClient.get.mockResolvedValueOnce({ data: [session] })
+    const { McpSessionManager } = await import('../pages/mcp/McpSessionManager')
+    render(<McpSessionManager serverId="srv-1" />, { wrapper })
+    await waitFor(() => screen.getByText('Unrefreshable OAuth Session'))
+
+    const row = sessionRow('Unrefreshable OAuth Session')
+    expect(row.querySelector('.MuiChip-colorError')).not.toBeNull()
   })
 })
 

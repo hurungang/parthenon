@@ -271,6 +271,97 @@ describe('useChatSession - intervention messages', () => {
     )
   })
 
+  // ── Resumed-and-continuing transition (resumable-agent-turn-persistence) ──
+
+  it('a responded intervention shows ordinary processing without a resumed chip', async () => {
+    const { useChatSession } = await import('../hooks/useChatSession')
+    const { result } = renderHook(() => useChatSession('test-session-123'))
+
+    const socket = sockets[0]
+
+    act(() => {
+      socket.onmessage?.call(
+        socket as unknown as WebSocket,
+        new MessageEvent('message', {
+          data: JSON.stringify({
+            type: 'intervene_request',
+            request_id: 'req-resumed',
+            intervention_type: 'approval',
+            reason: 'Confirm the create',
+            agent_type: 'TestAgent',
+            delegation_depth: 0,
+            conversation_session_id: 'test-session-123',
+          }),
+        }),
+      )
+    })
+    expect(result.current.interventionRequest).not.toBeNull()
+    expect(result.current.pendingIntervention).toBe(true)
+
+    // The operator answered: the confirmation controls close, the amber
+    // "waiting for your input" indicator clears, and the turn shows the
+    // ordinary thinking bubble (a live in-process approval is NOT a resumed
+    // turn, so no "resumed" chip) until the reply or a terminal status arrives.
+    act(() => {
+      socket.onmessage?.call(
+        socket as unknown as WebSocket,
+        new MessageEvent('message', {
+          data: JSON.stringify({
+            type: 'intervene_status',
+            request_id: 'req-resumed',
+            status: 'responded',
+          }),
+        }),
+      )
+    })
+
+    expect(result.current.interventionRequest).toBeNull()
+    expect(result.current.pendingIntervention).toBe(false)
+    expect(result.current.chatStatus?.kind).toBe('thinking')
+    expect(result.current.chatStatus?.resumeState ?? null).toBeNull()
+    expect(result.current.turnInFlight).toBe(true)
+  })
+
+  it('sendInterventionResponse clears the waiting bar and marks the turn in flight', async () => {
+    const { useChatSession } = await import('../hooks/useChatSession')
+    const { result } = renderHook(() => useChatSession('test-session-123'))
+
+    const socket = sockets[0]
+    act(() => {
+      socket.onmessage?.call(
+        socket as unknown as WebSocket,
+        new MessageEvent('message', {
+          data: JSON.stringify({
+            type: 'intervene_request',
+            request_id: 'req-submit',
+            intervention_type: 'approval',
+            reason: 'Confirm',
+            agent_type: 'TestAgent',
+            delegation_depth: 0,
+            conversation_session_id: 'test-session-123',
+          }),
+        }),
+      )
+    })
+    expect(result.current.interventionRequest).not.toBeNull()
+
+    act(() => {
+      result.current.sendInterventionResponse?.('req-submit', {
+        approval_value: true,
+      })
+    })
+
+    // Confirmation controls are only offered while the pause is answerable.
+    expect(result.current.interventionRequest).toBeNull()
+    // The amber "waiting for your input" bar must disappear immediately (not
+    // linger until the server echoes intervene_status), and the turn is shown
+    // as ordinary processing — no "resumed" chip for a live approval.
+    expect(result.current.pendingIntervention).toBe(false)
+    expect(result.current.chatStatus?.kind).toBe('thinking')
+    expect(result.current.chatStatus?.resumeState ?? null).toBeNull()
+    expect(result.current.turnInFlight).toBe(true)
+  })
+
   // ── interventionRequest initially null ───────────────────────────────────
 
   it('interventionRequest starts as null', async () => {

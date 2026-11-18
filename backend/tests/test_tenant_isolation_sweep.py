@@ -78,6 +78,10 @@ from app.db.models.intervene import InterveneRequest  # noqa: E402
 from app.db.models.llm_mocking import LLMMockRecording, MockInteractionKind  # noqa: E402
 from app.db.models.mcp_hub import McpServer, McpTool  # noqa: E402
 from app.db.models.model_availability import ModelAvailability  # noqa: E402
+from app.db.models.optimization_live_test import (  # noqa: E402
+    OptimizationLiveTestRequest,
+    OptimizationLiveTestStatus,
+)
 from app.db.models.model_guardrail_configuration import ModelGuardrailConfiguration  # noqa: E402
 from app.db.models.model_guardrail_evaluation import (  # noqa: E402
     ModelGuardrailEvaluation,
@@ -408,6 +412,12 @@ _OWN_KWARGS = {
         "intervention_type": "approval",
         "reason": "sweep",
     },
+    OptimizationLiveTestRequest: lambda t, s: {
+        "status": OptimizationLiveTestStatus.pending,
+        "requested_operations": [
+            {"tool_name": f"crm____tool_{s}", "arguments": {"q": s}, "purpose": "sweep"}
+        ],
+    },
     TerminationRequest: lambda t, s: {
         "termination_scope": "node_only",
         "permission_evaluation_outcome": "allowed",
@@ -482,6 +492,15 @@ async def _parent_fks(db, ctx, cls, tenant_id, suffix) -> dict:
         return {
             "agent_session_id": (await parent(AgentJob)).id,
             "agent_type_id": (await parent(AgentType)).id,
+        }
+    if cls is OptimizationLiveTestRequest:
+        # The subject is the conversation's own agent type (no scope column);
+        # the conversation session is the tenant-scoped parent.
+        session = await parent(ConversationSession)
+        agent_type = await parent(AgentType)
+        return {
+            "conversation_session_id": session.id,
+            "target_agent_type_id": agent_type.id,
         }
     if cls is IdentityProviderConfigAudit:
         return {"config_id": (await parent(IdentityProviderConfig)).id}

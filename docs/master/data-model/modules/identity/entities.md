@@ -75,7 +75,7 @@ erDiagram
         enum identity_type
         string realm_name
         datetime token_expires_at
-        datetime refresh_token_expires_at "nullable; drives expiring (≤7d) vs expired"
+        datetime refresh_token_expires_at "nullable; AUTHORITATIVE for health when a refresh token exists (expiring ≤7d vs expired). Access-token expiry is fallback only when no refresh token exists; unknown refresh expiry = healthy"
         datetime last_token_refresh_at
         enum last_token_refresh_outcome "success | failure (nullable)"
         enum token_health_state "healthy | expiring | expired | unknown (computed, nullable)"

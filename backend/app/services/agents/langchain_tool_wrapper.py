@@ -382,7 +382,10 @@ def build_langchain_tools_for_ar_path(
         except Exception:
             return None
 
-    from app.services.agents.langchain_system_tools import LangChainHumanInterveneTool
+    from app.services.agents.langchain_system_tools import (
+        LangChainHumanInterveneTool,
+        LangChainRequestLiveTestTool,
+    )
 
     tools: list[Any] = []
 
@@ -415,6 +418,27 @@ def build_langchain_tools_for_ar_path(
                 ),
             )
             tools.append(tool)
+            continue
+
+        # ── request_live_test: proposes an approval then pauses the turn with
+        # LangGraph interrupt(). Reached only inside an optimization-mode
+        # conversation (the tool is not in any other turn's tool set).
+        if original_name == "request_live_test" or original_name.endswith(
+            "____request_live_test"
+        ) or original_name.endswith("__request_live_test"):
+            tools.append(
+                LangChainRequestLiveTestTool(
+                    comm_hub_client=comm_hub_client,
+                    session_id=session_id,
+                    agent_type_id=agent_type_id,
+                    conv_session_id=conv_session_id,
+                    tool_call_recorder=(
+                        (lambda **kw: _record(**kw))
+                        if tool_call_recorder is not None
+                        else None
+                    ),
+                )
+            )
             continue
 
         # ── Agent delegation tools: route via A2A endpoint ─────────────────────

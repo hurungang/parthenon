@@ -55,7 +55,7 @@ erDiagram
     McpSession ||--o{ TokenHealthCheck : "preflighted as"
 ```
 
-> **Token expiry health tracking:** OAuth-protected sessions carry a computed `token_health_state` (`healthy | expiring ≤7 days | expired | unknown`), refreshed on token refresh and dashboard read. Pre-execution evaluations are audited in `TokenHealthCheck` (`backend/app/db/models/token_health.py`).
+> **Token expiry health tracking:** OAuth-protected sessions carry a computed `token_health_state` (`healthy | expiring ≤7 days | expired | unknown`), refreshed on token refresh and dashboard read. `oauth_refresh_expires_at` is **authoritative** when present; `oauth_expires_at` is only the fallback when no refresh expiry is recorded, so an expired access token that can be refreshed is not `expired`. `requires_reauth = true` always maps to `expired`. Pre-execution evaluations are audited in `TokenHealthCheck` (`backend/app/db/models/token_health.py`).
 
 **Source**: `backend/app/db/models/mcp_hub.py`, `backend/app/db/models/token_health.py`
 

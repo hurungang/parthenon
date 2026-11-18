@@ -39,6 +39,7 @@ import {
 } from './AgentTypeForm'
 import { AgentJobLaunchDialog } from './AgentJobLaunchDialog'
 import { AgentTypeDetailsDialog } from '../../components/agents/AgentTypeDetailsDialog'
+import { AgentOptimizeAction } from '../../components/agents/AgentOptimizeAction'
 import { AgentExecutionDetailsDialog } from '../../components/agents/AgentExecutionDetailsDialog'
 import { ConversationDialog } from '../../components/agents/ConversationDialog'
 import type {
@@ -413,6 +414,16 @@ export function AgentManagementPanelPage() {
                       <PlayArrowIcon fontSize="small" />
                     </IconButton>
                   </Tooltip>
+                  <AgentOptimizeAction
+                    agentTypeId={selectedAgent.id}
+                    agentTypeName={selectedAgent.name}
+                    disabled={!selectedAgent.is_active}
+                    isConversational={selectedAgent.input_type === 'conversation'}
+                    onTriggered={(sessionId) => {
+                      setSelectedSessionId(sessionId)
+                      setExecutionDetailsDialogOpen(true)
+                    }}
+                  />
                   <Tooltip title={t('app.view')}>
                     <IconButton
                       size="small"
@@ -582,12 +593,6 @@ export function AgentManagementPanelPage() {
             setLaunchType(null)
             setSelectedSessionId(sessionId)
             setExecutionDetailsDialogOpen(true)
-          }}
-          onRegeneratePlan={async () => {
-            await apiClient.post(`/agents/types/${launchType.id}/regenerate-plan`)
-            await queryClient.invalidateQueries({ queryKey: ['agents', 'types', launchType.id] })
-            await queryClient.invalidateQueries({ queryKey: ['agents', 'types'] })
-            setDetailsDialogTypeId(launchType.id)
           }}
         />
       )}

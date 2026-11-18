@@ -252,6 +252,65 @@ def test_scripts_router_routes_are_ar_allowlisted():
     )
 
 
+# ── Resumable paused turns (resumable-agent-turn-persistence) ──────────────
+#
+# The durable resume index / checkpoint / claim surface is reached by Agent
+# Runtime **only through the Communication Hub relay**, so every route lives in
+# the CH allowlist and never in the AR allowlist.  This cross-checks the router
+# itself (catches a renamed/moved route whose allowlist entry points nowhere)
+# in the same spirit as the scripts/llm-mock cross-check above.
+
+_TURN_RESUME_ROUTE_TEMPLATES = {
+    ("PUT", "/api/v1/internal/data/conversations/{conv_session_id}/resume"),
+    ("GET", "/api/v1/internal/data/conversations/{conv_session_id}/resume"),
+    (
+        "PUT",
+        "/api/v1/internal/data/conversations/{conv_session_id}/resume/checkpoint",
+    ),
+    (
+        "GET",
+        "/api/v1/internal/data/conversations/{conv_session_id}/resume/checkpoint",
+    ),
+    ("POST", "/api/v1/internal/data/conversations/{conv_session_id}/resume/claim"),
+    ("POST", "/api/v1/internal/data/conversations/{conv_session_id}/resume/release"),
+    ("POST", "/api/v1/internal/data/conversations/{conv_session_id}/resume/complete"),
+}
+
+
+def test_turn_resume_router_routes_are_ch_only_allowlisted():
+    """Every resume/checkpoint route on the CC internal data router is
+    CH-allowlisted and denied for Agent Runtime (AR reaches it via CH only)."""
+    from app.api.v1.internal.session_data import InternalSessionDataRouter
+
+    registered = {
+        (method, path)
+        for method, path in _router_routes(InternalSessionDataRouter, "/api/v1")
+        if "/resume" in path
+    }
+    assert registered, "no resume routes found on InternalSessionDataRouter"
+    assert registered == _TURN_RESUME_ROUTE_TEMPLATES, (
+        "the resume route surface changed — update _CH_ALLOWLIST and this "
+        f"expectation together (registered: {sorted(registered)})"
+    )
+
+    ch_allowlisted = {(_canon(m), _canon(p)) for m, p in deps._CH_ALLOWLIST}
+    ar_allowlisted = {(_canon(m), _canon(p)) for m, p in deps._AR_ALLOWLIST}
+    missing_ch = sorted(
+        (m, p) for m, p in registered if (m, _canon(p)) not in ch_allowlisted
+    )
+    assert not missing_ch, (
+        "CC resume routes NOT in _CH_ALLOWLIST "
+        f"(CH relays these for Agent Runtime): {missing_ch}"
+    )
+    leaked_ar = sorted(
+        (m, p) for m, p in registered if (m, _canon(p)) in ar_allowlisted
+    )
+    assert not leaked_ar, (
+        "Agent Runtime must reach paused-turn state only through the CH relay — "
+        f"these routes must NOT be AR-allowlisted: {leaked_ar}"
+    )
+
+
 def test_system_tool_registry_endpoints_are_ch_allowlisted():
     """Every CC endpoint registered in SystemToolRegistry (routed by CH tool
     routing) must be in _CH_ALLOWLIST."""
@@ -267,3 +326,23 @@ def test_system_tool_registry_endpoints_are_ch_allowlisted():
         "SystemToolRegistry CC endpoints NOT in _CH_ALLOWLIST "
         f"(CH routes these at runtime): {missing} — fix _CH_ALLOWLIST in app/api/deps.py"
     )
+
+
+def test_optimizer_live_test_request_endpoint_is_ch_allowlisted():
+    """The optimization live-test proposal reaches CC through CH
+    (``system____request_live_test`` → CH tool route → CC), so the CC endpoint
+    must be CH-allowlisted."""
+    allowlisted = {(m, _canon(p)) for m, p in deps._CH_ALLOWLIST}
+    assert (
+        "POST",
+        "/api/v1/internal/system-tools/request-live-test",
+    ) in allowlisted
+
+
+def test_live_test_run_is_not_a_cc_internal_endpoint():
+    """``/internal/live-test/run`` is a CC→CH→AR hop, never a CC endpoint: CC
+    must not expose (or allowlist) it under its own internal surface."""
+    for method, path in (*deps._AR_ALLOWLIST, *deps._CH_ALLOWLIST):
+        assert "live-test/run" not in path, (
+            f"{method} {path} — the live-test run is an AR route, not CC's"
+        )

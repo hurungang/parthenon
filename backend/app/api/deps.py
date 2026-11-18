@@ -71,6 +71,24 @@ _CH_ALLOWLIST: set[tuple[str, str]] = {
     # CH forwards AR status transitions and hydrates on connect via these routes.
     ("PUT", "/api/v1/internal/data/conversations/{conv_session_id}/activity"),
     ("GET", "/api/v1/internal/data/conversations/{conv_session_id}/activity"),
+    # Live-turn heartbeat touch (FIX-20261113): CH refreshes the persisted
+    # activity's ``last_updated_at`` on its ~15s conversation heartbeat so a
+    # quiet-but-live turn stays fresh and the reaper's stale bound only expires
+    # genuinely dead turns.
+    (
+        "POST",
+        "/api/v1/internal/data/conversations/{conv_session_id}/activity/touch",
+    ),
+    # Durable paused-turn resume index + opaque checkpoint payload
+    # (resumable-agent-turn-persistence). CH is the ONLY caller — AR reaches CC
+    # exclusively through the CH checkpoint relay, never directly.
+    ("PUT", "/api/v1/internal/data/conversations/{conv_session_id}/resume"),
+    ("GET", "/api/v1/internal/data/conversations/{conv_session_id}/resume"),
+    ("POST", "/api/v1/internal/data/conversations/{conv_session_id}/resume/release"),
+    ("POST", "/api/v1/internal/data/conversations/{conv_session_id}/resume/complete"),
+    ("PUT", "/api/v1/internal/data/conversations/{conv_session_id}/resume/checkpoint"),
+    ("GET", "/api/v1/internal/data/conversations/{conv_session_id}/resume/checkpoint"),
+    ("POST", "/api/v1/internal/data/conversations/{conv_session_id}/resume/claim"),
     ("POST", "/api/v1/internal/data/a2a/request"),
     ("POST", "/api/v1/internal/data/a2a/sessions/{session_link_id}/disconnect"),
     ("POST", "/api/v1/internal/system-tools/save-data"),
@@ -105,6 +123,9 @@ _CH_ALLOWLIST: set[tuple[str, str]] = {
     ("POST", "/api/v1/internal/system-tools/get-script"),
     ("POST", "/api/v1/internal/system-tools/get-scripts"),
     ("POST", "/api/v1/internal/system-tools/get-execution-log"),
+    # Optimizer live-test request (optimization conversation only; the request
+    # is validated + recorded by the ledger handler in a later chunk).
+    ("POST", "/api/v1/internal/system-tools/request-live-test"),
     # Management tools (Control Center Assistant) — CH forwards on the
     # user's behalf; CC is the sole DB owner and re-authorizes per call.
     ("POST", "/api/v1/internal/management-tools/resolve"),

@@ -48,6 +48,14 @@ _TOOL_CALL_PATH_PREFIX = "/internal/tools/"
 # A2A internal paths are called by agent-runtime
 _A2A_PATH_PREFIX = "/internal/a2a/"
 
+# Durable paused-turn relay paths are called by agent-runtime (AR → CH → CC).
+# AR holds no Control Center path of its own, so these are its checkpoint /
+# resume-index courier routes; they stay transport-only (no DB, no signing).
+_AGENT_RUNTIME_RELAY_PATH_PREFIXES = (
+    "/internal/checkpoint/",
+    "/internal/turn-resume/",
+)
+
 # The only service whose certificate is accepted on control plane paths
 _EXPECTED_SERVICE_NAME = "control-center"
 
@@ -186,6 +194,7 @@ class ControlPlaneMiddleware(BaseHTTPMiddleware):
         if (
             request.url.path.startswith(_TOOL_CALL_PATH_PREFIX)
             or request.url.path.startswith(_A2A_PATH_PREFIX)
+            or request.url.path.startswith(_AGENT_RUNTIME_RELAY_PATH_PREFIXES)
         ):
             expected_service = _AGENT_RUNTIME_SERVICE_NAME
         else:

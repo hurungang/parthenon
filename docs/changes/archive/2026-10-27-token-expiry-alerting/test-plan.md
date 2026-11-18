@@ -19,9 +19,10 @@ Key invariants validated at every layer:
 ## Coverage Areas
 
 ### 1. Token Health Classification (backend unit + integration)
-- Classification boundaries for agent identities: `token_expires_at`, `refresh_token_expires_at`.
-- Classification boundaries for MCP sessions: `oauth_expires_at`, `oauth_refresh_expires_at`.
-- States: `healthy`, `expiring` (within 7 days), `expired`, `unknown` (missing timestamps).
+- Classification boundaries for agent identities: `refresh_token_expires_at` is authoritative when a refresh token exists; `token_expires_at` is the fallback when it does not.
+- Classification boundaries for MCP sessions: `oauth_refresh_expires_at` is authoritative when present; `oauth_expires_at` is the fallback; `requires_reauth` forces expired.
+- States: `healthy`, `expiring` (within 7 days), `expired`, `unknown` (no usable timestamp).
+- Regression guard: an expired access token with a valid refresh token is NOT expired on any surface (dashboard, identity list, MCP session list, topology).
 - Interaction with refresh outcome (`last_token_refresh_outcome`) and entity status (active sessions only for MCP).
 - Read-time recomputation overrides stale persisted `token_health_state`.
 - 7-day threshold constant consistency.
@@ -73,12 +74,15 @@ Key invariants validated at every layer:
 ## Critical Scenarios (WHEN/THEN)
 
 **Classification**
-- WHEN an agent identity's `refresh_token_expires_at` is more than 7 days in the future, THEN health state is `healthy`.
+- WHEN an agent identity has a refresh token and its `refresh_token_expires_at` is more than 7 days in the future, THEN health state is `healthy` — even if `token_expires_at` is already in the past.
 - WHEN an identity's refresh token expires in exactly 7 days (boundary), THEN state is `expiring`.
 - WHEN an identity's refresh token expires in 6 days 23 hours, THEN state is `expiring`.
-- WHEN an identity's refresh token expiry is in the past, THEN state is `expired`.
-- WHEN required timestamps are missing, THEN state is `unknown` (never crashes, never misclassified as healthy).
-- WHEN an MCP session's `oauth_expires_at`/`oauth_refresh_expires_at` crosses each boundary, THEN the same healthy/expiring/expired classification applies.
+- WHEN an identity's refresh token expiry is in the past, THEN state is `expired` — even if `token_expires_at` is still in the future.
+- WHEN an identity has NO refresh token, THEN its `token_expires_at` drives the state (fallback), and a past access-token expiry is `expired`.
+- WHEN a refresh token exists but the provider reports no expiry (absent/`0` `refresh_expires_in`), THEN state is `healthy` (no known expiry), never a false `expired`.
+- WHEN required timestamps are missing and there is no refresh token, THEN state is `unknown` (never crashes, never misclassified as healthy).
+- WHEN an MCP session's `oauth_refresh_expires_at` crosses each boundary, THEN the same healthy/expiring/expired classification applies even if `oauth_expires_at` is expired; when no refresh expiry is recorded, `oauth_expires_at` is the fallback.
+- WHEN an MCP session has `requires_reauth = true`, THEN state is `expired`.
 - WHEN an MCP session is inactive, THEN it is excluded from health aggregation.
 - WHEN `token_health_state` is persisted stale but timestamps indicate a different state, THEN read-time recomputation returns the timestamp-derived state.
 
@@ -115,7 +119,9 @@ Key invariants validated at every layer:
 - Expiry exactly at `now` (boundary: expired vs expiring classification; documented behavior asserted consistently for identities and sessions).
 - Timezone/UTC handling: timestamps stored UTC, compared UTC; DST-boundary local times don't shift classification.
 - Very large expiry values (far-future tokens) — no overflow, classified healthy.
-- Identity with `token_expires_at` healthy but refresh token expired — classified by the binding that matters for refresh (assert per spec).
+- Identity with `token_expires_at` healthy but refresh token expired — classified `expired` (the refresh token is the binding that matters for renewal).
+- Identity with `token_expires_at` expired but refresh token healthy — classified `healthy`/`expiring` by the refresh token, never `expired`.
+- No refresh token at all — access-token expiry drives the state (fallback), including the `unknown` state when no timestamp exists.
 - Concurrent refresh + preflight on the same identity — no race producing contradictory audit rows.
 - Deeply nested subagent compositions (3+ levels) — full token set resolved, blocking propagates to the root.
 - Subagent referencing a deleted/missing identity — preflight fails closed rather than proceeding silently.

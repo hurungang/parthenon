@@ -24,11 +24,7 @@ async def generate_workflow_text(*, model_id: str, system_prompt: str, user_prom
     model_layer = ModelBindingLayer()
     try:
         model_config = await model_layer.resolve_model_config(model_id, db)
-        config_dict = {
-            "provider_type": model_config.provider_type.value,
-            "api_base_url": model_config.api_base_url,
-            "api_key": model_layer._resolve_api_key(model_config),
-        }
+        config_dict = model_layer.build_completion_context(model_config)
         response = await model_layer.complete_from_context(
             model_id=model_id,
             model_config_dict=config_dict,

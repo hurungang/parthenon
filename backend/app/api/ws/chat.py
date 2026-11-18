@@ -29,6 +29,13 @@ ws_router = APIRouter(tags=["WebSocket"])
 # assistant surface renders setup guidance) instead of a generic crash string.
 ERROR_CODE_ASSISTANT_MODEL_NOT_CONFIGURED = "assistant_model_not_configured"
 ERROR_CODE_MODEL_BINDING_ERROR = "model_binding_error"
+# Optimization-conversation failures (mapped from the internal 412 / 403
+# structured refusals so the UI can render the exact remedy instead of a
+# generic failure string).
+ERROR_CODE_OPTIMIZER_MODEL_NOT_CONFIGURED = "optimizer_model_not_configured"
+ERROR_CODE_OPTIMIZER_MODEL_NOT_ENABLED = "optimizer_model_not_enabled"
+ERROR_CODE_OPTIMIZATION_OUT_OF_SCOPE = "optimization_out_of_scope"
+ERROR_CODE_OPTIMIZATION_PERMISSION_DENIED = "optimization_permission_denied"
 
 # FIX-20261031-091657: app-level WS keepalive cadence while a turn is in
 # flight — keeps idle proxies from closing the socket and lets the UI keep
@@ -42,6 +49,28 @@ class ConversationTurnTimeoutError(Exception):
 ASSISTANT_MODEL_NOT_CONFIGURED_MESSAGE = (
     "No model is configured for this workspace yet. An administrator can "
     "select one under System Config → Assistant model."
+)
+
+OPTIMIZER_MODEL_NOT_CONFIGURED_MESSAGE = (
+    "Optimization cannot start: no optimizer model is configured for this "
+    "workspace and there is no plan-authoring model to inherit. An "
+    "administrator can select one under System Config → Optimizer Model."
+)
+
+OPTIMIZER_MODEL_NOT_ENABLED_MESSAGE = (
+    "Optimization cannot start: the configured optimizer model is no longer "
+    "available in this workspace's model catalogue. An administrator can "
+    "re-select one under System Config → Optimizer Model."
+)
+
+OPTIMIZATION_PERMISSION_DENIED_MESSAGE = (
+    "You do not have permission to optimize and execute this agent type. "
+    "Nothing was started."
+)
+
+OPTIMIZATION_OUT_OF_SCOPE_MESSAGE = (
+    "That request is outside this optimization conversation: optimization is "
+    "limited to the agent type this conversation belongs to."
 )
 
 
@@ -58,25 +87,105 @@ class ConversationTurnError(Exception):
         self.message = message
 
 
+class ConversationTurnBlocked(Exception):
+    """The new turn was refused because a decision is still pending.
+
+    Not an error: nothing was persisted and no work started. The chat keeps the
+    pending card and the composer disabled, so this surfaces as ``chat_blocked``
+    (the same contract as the in-memory intervention guard) instead of
+    ``chat_error``.
+    """
+
+    def __init__(self, message: str, payload: dict[str, Any] | None = None) -> None:
+        super().__init__(message)
+        self.message = message
+        self.payload = payload or {}
+
+
+def _optimizer_conversation_turn_error(
+    status_code: int, detail: Any
+) -> ConversationTurnError | None:
+    """Map an optimization-mode internal refusal onto a structured turn error.
+
+    Only OPTIMIZATION vocabulary is mapped — a business/assistant refusal keeps
+    its current (generic) handling because the mapper requires an optimizer /
+    optimization marker.
+    """
+    if not isinstance(detail, dict):
+        return None
+    error = str(detail.get("error") or "")
+    reason_code = str(detail.get("reason_code") or "")
+    reason = str(detail.get("reason") or "")
+
+    if status_code == 412 and error == "optimizer_model_unavailable":
+        if reason_code == ERROR_CODE_OPTIMIZER_MODEL_NOT_ENABLED:
+            return ConversationTurnError(
+                ERROR_CODE_OPTIMIZER_MODEL_NOT_ENABLED,
+                reason or OPTIMIZER_MODEL_NOT_ENABLED_MESSAGE,
+            )
+        return ConversationTurnError(
+            ERROR_CODE_OPTIMIZER_MODEL_NOT_CONFIGURED,
+            reason or OPTIMIZER_MODEL_NOT_CONFIGURED_MESSAGE,
+        )
+
+    if status_code == 403 and (
+        error.startswith("optimization") or reason_code.startswith("optimization")
+    ):
+        if "scope" in error or "scope" in reason_code:
+            return ConversationTurnError(
+                ERROR_CODE_OPTIMIZATION_OUT_OF_SCOPE,
+                reason or OPTIMIZATION_OUT_OF_SCOPE_MESSAGE,
+            )
+        return ConversationTurnError(
+            ERROR_CODE_OPTIMIZATION_PERMISSION_DENIED,
+            reason or OPTIMIZATION_PERMISSION_DENIED_MESSAGE,
+        )
+    return None
+
+
 def _conversation_turn_error_from_http_status(exc: httpx.HTTPStatusError) -> ConversationTurnError | None:
     """Map an Agent Runtime 4xx rejection onto a structured turn error.
 
     AR rejects a turn with 400 "Agent model is not configured" BEFORE calling
     the model when the agent type has no ``model_id`` / ``model_config_id`` —
     that becomes the dedicated ``assistant_model_not_configured`` code.
+
+    Optimization conversations fail closed with ``412
+    optimizer_model_unavailable`` (carrying a ``reason_code``) and structured
+    ``403`` refusals — those map to the optimizer ``chat_error`` codes.
     """
     response = exc.response
+    try:
+        raw_detail = (response.json() or {}).get("detail")
+    except Exception:
+        raw_detail = None
+
+    optimizer_error = _optimizer_conversation_turn_error(
+        response.status_code, raw_detail
+    )
+    if optimizer_error is not None:
+        return optimizer_error
+
     if response.status_code != 400:
         return None
-    try:
-        detail = str((response.json() or {}).get("detail") or "")
-    except Exception:
-        detail = ""
+    detail = str(raw_detail or "")
     if "model" in detail.lower() and "not configured" in detail.lower():
         return ConversationTurnError(
             ERROR_CODE_ASSISTANT_MODEL_NOT_CONFIGURED,
             ASSISTANT_MODEL_NOT_CONFIGURED_MESSAGE,
         )
+    return None
+
+
+def _conversation_turn_error_from_cc_error(exc: Exception) -> ConversationTurnError | None:
+    """Map a Communication Hub → Control Center data error onto a turn error.
+
+    ``ControlCenterDataError`` chains the underlying ``HTTPStatusError`` as its
+    cause, so the structured ``detail`` (412 / 403) is still available here.
+    """
+    cause = getattr(exc, "__cause__", None)
+    if isinstance(cause, httpx.HTTPStatusError):
+        return _conversation_turn_error_from_http_status(cause)
     return None
 
 
@@ -218,17 +327,6 @@ async def _send_to_live_socket(
     ws = ActiveSessionTracker.get_ws(session_id) or fallback_ws
     if ws is None:
         return
-    logger.info(
-        "WS->client session=%s type=%s status=%s state=%s role=%s tool=%s final=%s len=%s",
-        session_id,
-        payload.get("type"),
-        payload.get("status"),
-        payload.get("state"),
-        payload.get("sender_role"),
-        payload.get("tool_name"),
-        payload.get("final"),
-        len(payload.get("content") or ""),
-    )
     try:
         await ws.send_json(payload)
     except Exception as exc:
@@ -246,8 +344,14 @@ def _build_chat_status_event(
     tool_name: str | None = None,
     receiver_session_id: str | None = None,
     timestamp: str | None = None,
+    message: str | None = None,
 ) -> dict[str, str]:
-    """Build a normalized websocket status event payload for chat UI."""
+    """Build a normalized websocket status event payload for chat UI.
+
+    ``message`` optionally carries a human-readable, reason-specific detail
+    (e.g. why a paused turn can no longer be resumed) so the UI renders the
+    server's wording instead of a generic terminal label.
+    """
     payload = {"status": status_value}
     if agent_type:
         payload["agent_type"] = agent_type
@@ -255,6 +359,8 @@ def _build_chat_status_event(
         payload["tool_name"] = tool_name
     if receiver_session_id:
         payload["receiver_session_id"] = receiver_session_id
+    if message:
+        payload["message"] = message
     payload["timestamp"] = timestamp or datetime.now(timezone.utc).isoformat()
     return payload
 
@@ -270,6 +376,10 @@ _WIRE_STATUS_TO_ACTIVITY_STATE: dict[str, str] = {
     "waiting_for_human": "waiting_for_human",
     "timeout_or_failed": "timed_out",
     "failed": "failed",
+    # Terminal states Communication Hub itself settles (resume closer, durable
+    # terminal notification) — mapped so the same persistence path applies.
+    "timed_out": "timed_out",
+    "finished": "finished",
 }
 
 _TERMINAL_ACTIVITY_STATES = {"finished", "failed", "timed_out"}
@@ -291,6 +401,8 @@ async def _persist_activity_transition(
     status_value: str,
     agent_type: str | None,
     tool_name: str | None,
+    *,
+    active_resume_id: uuid.UUID | None = None,
 ) -> None:
     """Forward one AR status transition to the CC activity endpoint.
 
@@ -316,6 +428,7 @@ async def _persist_activity_transition(
                 conv_session_id,
                 state,
                 tool_name=tool_name if state == "using_tool" else None,
+                active_resume_id=active_resume_id,
                 detail=detail,
             )
     except Exception as exc:
@@ -327,22 +440,116 @@ async def _persist_activity_transition(
         )
 
 
+async def _persist_terminal_activity(
+    app: Any,
+    conv_session_id: uuid.UUID,
+    terminal_state: str,
+    *,
+    detail: dict[str, Any] | None = None,
+) -> None:
+    """Persist a terminal activity state (``finished`` / ``failed`` / ``timed_out``).
+
+    Best effort: the durable activity is what a reconnecting client hydrates,
+    so it must agree with the live terminal status Communication Hub emitted.
+    ``detail`` carries the reason-keyed terminal projection (reason code +
+    message key) so the hydrated state is exactly what the live socket showed.
+    """
+    if terminal_state not in _TERMINAL_ACTIVITY_STATES:
+        logger.warning(
+            "Refusing to persist non-terminal activity state %r for conversation %s",
+            terminal_state,
+            conv_session_id,
+        )
+        return
+    data_client: ControlCenterDataClient | None = getattr(app.state, "data_client", None)
+    if data_client is None:
+        return
+    try:
+        with _signed_tenant_forwarding():
+            await data_client.upsert_conversation_activity(
+                conv_session_id,
+                terminal_state,
+                detail=detail,
+            )
+    except Exception as exc:
+        logger.warning(
+            "Terminal activity upsert failed for conversation %s (state=%s): %s",
+            conv_session_id,
+            terminal_state,
+            exc,
+        )
+
+
 def _activity_state_message(activity: dict[str, Any] | None) -> dict[str, Any]:
     """Build a normalized ``activity_state`` message from a CC activity record.
 
     An idle session (no live activity row) pushes ``state: null``.
+
+    Hydration carries the durable paused-turn projection: the live resume id,
+    the resume state, the terminal reason and the server-rendered message, so a
+    reconnect renders exactly what the live socket would have shown.
+    ``pending_intervention`` is only set when the activity is backed by a live
+    resume id — "shown as waiting" and "actually answerable" must not drift
+    apart, and a stale waiting row must never offer an unanswerable prompt.
     """
     detail = (
         activity.get("detail")
         if isinstance(activity, dict) and isinstance(activity.get("detail"), dict)
         else {}
     )
+    active_resume_id = (
+        activity.get("active_resume_id") if isinstance(activity, dict) else None
+    )
+    if not isinstance(active_resume_id, str) or not active_resume_id.strip():
+        active_resume_id = None
     pending_intervention = bool(
-        activity
-        and (
-            activity.get("pending_intervene_request_id")
-            or detail.get("pending_intervention")
+        active_resume_id
+        and activity
+        and activity.get("state") == "waiting_for_human"
+        and not activity.get("is_terminal", False)
+    )
+    resume_state = (
+        activity.get("resume_state") if isinstance(activity, dict) else None
+    )
+    if not isinstance(resume_state, str) or not resume_state:
+        # Derive the durable resume state when Control Center does not project
+        # it (older builds): a waiting activity backed by a live record is
+        # answerable, otherwise the turn is being resumed.
+        if pending_intervention:
+            resume_state = "waiting_for_human"
+        elif active_resume_id:
+            resume_state = "resuming"
+        else:
+            resume_state = None
+    terminal_reason_code = (
+        activity.get("terminal_reason_code") if isinstance(activity, dict) else None
+    )
+    if not isinstance(terminal_reason_code, str) or not terminal_reason_code:
+        # Bridge until Control Center projects the reason as a first-class
+        # activity field: Communication Hub records it in the detail it
+        # persists when it settles a durably unresumable turn.
+        detail_reason = detail.get("terminal_reason_code")
+        terminal_reason_code = (
+            detail_reason if isinstance(detail_reason, str) and detail_reason else None
         )
+    if terminal_reason_code and resume_state is None:
+        resume_state = "unresumable"
+    terminal_message_key = (
+        activity.get("terminal_message_key") if isinstance(activity, dict) else None
+    )
+    if not isinstance(terminal_message_key, str) or not terminal_message_key:
+        detail_message_key = detail.get("terminal_message_key")
+        terminal_message_key = (
+            detail_message_key
+            if isinstance(detail_message_key, str) and detail_message_key
+            else None
+        )
+    message = _rendered_activity_message(
+        terminal_reason_code=terminal_reason_code,
+        terminal_message_key=terminal_message_key,
+        write_applied=bool(activity.get("write_applied", False))
+        if isinstance(activity, dict)
+        else False,
     )
     return {
         "type": "activity_state",
@@ -350,11 +557,36 @@ def _activity_state_message(activity: dict[str, Any] | None) -> dict[str, Any]:
         "tool_name": activity.get("tool_name") if isinstance(activity, dict) else None,
         "agent_type": detail.get("agent_type") if detail else None,
         "pending_intervention": pending_intervention,
+        "active_resume_id": active_resume_id,
+        "resume_state": resume_state,
+        "terminal_reason_code": terminal_reason_code,
+        "terminal_message_key": terminal_message_key,
+        "message": message,
         "is_terminal": bool(activity.get("is_terminal", False))
         if isinstance(activity, dict)
         else False,
         "timestamp": datetime.now(timezone.utc).isoformat(),
     }
+
+
+def _rendered_activity_message(
+    *,
+    terminal_reason_code: str | None,
+    terminal_message_key: str | None,
+    write_applied: bool,
+) -> str | None:
+    """Render the terminal message carried by a hydrated activity (or None)."""
+    if not terminal_reason_code and not terminal_message_key:
+        return None
+    # Late import: the resume router owns the reason vocabulary.
+    from app.communication_hub.api.internal.agent_resume import (
+        terminal_message_for_reason,
+    )
+
+    return terminal_message_for_reason(
+        terminal_reason_code or terminal_message_key,
+        write_applied=write_applied,
+    )
 
 
 async def _fetch_conversation_activity(
@@ -406,8 +638,21 @@ async def _thinking_heartbeat_loop(
     session_id: str,
     fallback_ws: WebSocket | None,
     stop: asyncio.Event,
+    *,
+    app: Any | None = None,
+    conv_session_id: uuid.UUID | None = None,
 ) -> None:
-    """Emit a lightweight keepalive status event while a turn is in flight."""
+    """Emit a lightweight keepalive status event while a turn is in flight.
+
+    Each beat also **touches** the persisted conversation activity
+    (FIX-20261113): the persisted ``last_updated_at`` was previously only
+    refreshed by Agent Runtime status events, so a live-but-quiet turn and a
+    dead turn looked identical and the reaper could only use a very long stale
+    bound. Refreshing the row from the heartbeat lets the bound mean "the
+    heartbeat stopped → the turn is dead". The touch never changes the state and
+    the heartbeat stops as soon as the turn ends (including a pause), so a
+    paused turn keeps its own durable timing.
+    """
     while not stop.is_set():
         try:
             await asyncio.wait_for(stop.wait(), timeout=CONVERSATION_HEARTBEAT_INTERVAL_SECONDS)
@@ -422,6 +667,28 @@ async def _thinking_heartbeat_loop(
                 "type": "chat_status",
                 **_build_chat_status_event("thinking_heartbeat"),
             },
+        )
+        await _touch_activity_heartbeat(app, conv_session_id)
+
+
+async def _touch_activity_heartbeat(
+    app: Any | None,
+    conv_session_id: uuid.UUID | None,
+) -> None:
+    """Refresh the persisted activity heartbeat (best effort, never raises)."""
+    if app is None or conv_session_id is None:
+        return
+    data_client: ControlCenterDataClient | None = getattr(app.state, "data_client", None)
+    if data_client is None:
+        return
+    try:
+        with _signed_tenant_forwarding():
+            await data_client.touch_conversation_activity(conv_session_id)
+    except Exception as exc:  # noqa: BLE001 - heartbeat must never break the turn
+        logger.debug(
+            "Activity heartbeat touch failed for conversation %s: %s",
+            conv_session_id,
+            exc,
         )
 
 
@@ -452,10 +719,21 @@ async def run_conversation_turn(
     data_client = getattr(app.state, "data_client", None)
     error_persisted = False
     reply_delivered = False
+    paused_turn: dict[str, Any] | None = None
+
+    async def record_pause(pause: dict[str, Any]) -> None:
+        nonlocal paused_turn
+        paused_turn = pause
 
     stop_heartbeat = asyncio.Event()
     heartbeat_task = asyncio.create_task(
-        _thinking_heartbeat_loop(session_id, websocket, stop_heartbeat)
+        _thinking_heartbeat_loop(
+            session_id,
+            websocket,
+            stop_heartbeat,
+            app=app,
+            conv_session_id=conv_session_id,
+        )
     )
 
     async def send_status_event(status_event: dict[str, str]) -> None:
@@ -517,9 +795,23 @@ async def run_conversation_turn(
                 on_status_event=send_status_event,
                 on_reply=deliver_reply,
                 on_guardrail_usage=deliver_guardrail_usage,
+                on_pause=record_pause,
             ),
             timeout=timeout_seconds,
         )
+
+        if paused_turn is not None:
+            # Durable pause: Agent Runtime persisted the checkpoint and the
+            # resume index and streamed ``waiting_for_human``.  There is no
+            # reply yet — the operator's answer continues the turn — and the
+            # turn must NOT be reported as finished.
+            logger.info(
+                "Conversation turn paused for session %s (resume=%s) — waiting "
+                "for the operator",
+                session_id,
+                paused_turn.get("resume_id"),
+            )
+            return
 
         if not reply_delivered:
             await deliver_reply(agent_reply)
@@ -601,6 +893,28 @@ async def run_conversation_turn(
                     ),
                 )
         raise
+    except ConversationTurnBlocked as blocked_exc:
+        # Decision pending: surface the chat_blocked contract (same shape as the
+        # in-memory intervention guard) and leave the turn untouched.
+        await _send_to_live_socket(
+            session_id,
+            websocket,
+            {
+                "type": "chat_blocked",
+                "reason": blocked_exc.payload.get("reason_code", "decision_pending"),
+                "message": blocked_exc.message,
+                **{
+                    key: blocked_exc.payload.get(key)
+                    for key in (
+                        "intervene_request_id",
+                        "live_test_request_id",
+                        "expires_at",
+                    )
+                    if blocked_exc.payload.get(key) is not None
+                },
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            },
+        )
     except ConversationTurnError as turn_exc:
         logger.warning(
             "Conversation turn blocked for session %s: code=%s",
@@ -1269,6 +1583,7 @@ async def _process_message(
     on_status_event: Callable[[dict[str, str]], Awaitable[None]] | None = None,
     on_reply: Callable[[str], Awaitable[None]] | None = None,
     on_guardrail_usage: Callable[[dict[str, Any]], Awaitable[None]] | None = None,
+    on_pause: Callable[[dict[str, Any]], Awaitable[None]] | None = None,
 ) -> tuple[str, str | None, dict[str, Any] | None, list[dict[str, str]]]:
     """
     Persist user turn, call LLM, persist agent turn, optionally auto-name the session.
@@ -1283,6 +1598,11 @@ async def _process_message(
     can never swallow the ``guardrail_update`` websocket event (the panel
     previously went dark whenever persistence hung after a delivered reply).
 
+    ``on_pause`` is invoked when the delegated turn ended with a durable
+    ``human_intervene`` pause: the pause is already persisted by Agent Runtime
+    (checkpoint + resume index), so there is no reply to deliver and no agent
+    turn to append — the turn continues when the operator answers.
+
     Returns:
         (agent_reply, session_title, guardrail_usage, status_events) — session_title is set only on the first message.
     """
@@ -1293,13 +1613,39 @@ async def _process_message(
 
     guardrail_usage: dict[str, Any] | None = None
     status_events: list[dict[str, str]] = []
+    paused: dict[str, Any] | None = None
+
+    async def _record_pause(pause: dict[str, Any]) -> None:
+        nonlocal paused
+        paused = pause
+        if on_pause is not None:
+            await on_pause(pause)
 
     with _signed_tenant_forwarding():
-        prepared = await data_client.prepare_conversation_turn(conv_session_id, user_message)
+        try:
+            prepared = await data_client.prepare_conversation_turn(conv_session_id, user_message)
+        except Exception as exc:
+            # Optimization conversations fail closed at prepare time (412
+            # optimizer_model_unavailable / structured 403). Surface the typed
+            # code instead of a generic turn failure; business conversations
+            # keep their existing path (the mapper is optimization-only).
+            mapped = _conversation_turn_error_from_cc_error(exc)
+            if mapped is not None:
+                raise mapped
+            raise
 
     no_agent_message = prepared.get("no_agent_message")
     agent_type_id_raw = prepared.get("agent_type_id")
     prepared_messages = prepared.get("messages") or []
+
+    blocked = prepared.get("blocked")
+    if isinstance(blocked, dict):
+        # The server-side gate: a decision is pending, so this message is
+        # refused with no turn persisted and no work started.
+        raise ConversationTurnBlocked(
+            str(blocked.get("message") or "Waiting for your decision."),
+            blocked,
+        )
 
     if no_agent_message:
         agent_reply = str(no_agent_message)
@@ -1317,9 +1663,15 @@ async def _process_message(
                 messages=prepared_messages,
                 app=app,
                 on_status_event=on_status_event,
+                on_pause=_record_pause,
             )
     else:
         agent_reply = "No model is configured for this agent."
+
+    if paused is not None:
+        # No reply, no persistence: the pause is durable and the operator's
+        # answer continues the turn out of band.
+        return "", None, guardrail_usage, status_events
 
     if on_guardrail_usage is not None and guardrail_usage:
         with contextlib.suppress(Exception):
@@ -1347,6 +1699,7 @@ async def _call_llm(
     messages: list[dict[str, str]],
     app: Any,
     on_status_event: Callable[[dict[str, str]], Awaitable[None]] | None = None,
+    on_pause: Callable[[dict[str, Any]], Awaitable[None]] | None = None,
 ) -> tuple[str, dict[str, Any] | None, list[dict[str, str]]]:
     """Execute one conversation turn using the deep agent framework.
 
@@ -1386,6 +1739,7 @@ async def _call_llm(
             agent_type_id=agent_type_id,
             messages=messages,
             on_status_event=on_status_event,
+            on_pause=on_pause,
         )
 
     except ConversationTurnError:
@@ -1439,11 +1793,17 @@ async def _delegate_conversation_turn_to_agent_runtime(
     agent_type_id: uuid.UUID,
     messages: list[dict[str, str]],
     on_status_event: Callable[[dict[str, str]], Awaitable[None]] | None = None,
+    on_pause: Callable[[dict[str, Any]], Awaitable[None]] | None = None,
 ) -> tuple[str, dict[str, Any] | None, list[dict[str, str]]]:
     """Call Agent Runtime to execute one conversation turn.
 
     Communication Hub owns websocket transport but delegates execution logic to
     Agent Runtime so the runtime boundary remains explicit.
+
+    A turn can end with a durable ``human_intervene`` pause instead of a reply:
+    the ``paused`` chunk (streaming) or ``paused=true`` body (non-streaming) is
+    handed to ``on_pause`` and the empty response is returned — the cancellation
+    of the reply/persistence is decided by the caller.
     """
     settings = get_settings()
     ar_base = (settings.agent_runtime_url or "http://localhost:8001").rstrip("/")
@@ -1548,6 +1908,20 @@ async def _delegate_conversation_turn_to_agent_runtime(
                         )
                         break
 
+                    if chunk_type == "paused":
+                        # Durable pause: no reply is produced by this turn.  The
+                        # checkpoint + resume index are already persisted by
+                        # Agent Runtime, and ``waiting_for_human`` was streamed
+                        # as a status event above.
+                        pause_payload = (
+                            chunk.get("pause")
+                            if isinstance(chunk.get("pause"), dict)
+                            else {}
+                        )
+                        if on_pause is not None:
+                            await on_pause(pause_payload)
+                        break
+
                     if chunk_type == "error":
                         # FIX-20261101-111439: AR now forwards guardrail stop
                         # reasons (e.g. ``iteration_limit``) so Control Center
@@ -1570,6 +1944,9 @@ async def _delegate_conversation_turn_to_agent_runtime(
         response = await client.post(endpoint, json=payload, headers=headers)
         response.raise_for_status()
         body = response.json()
+        if body.get("paused") is True and on_pause is not None:
+            pause_payload = body.get("pause") if isinstance(body.get("pause"), dict) else {}
+            await on_pause(pause_payload)
         status_events_raw = body.get("status_events")
         status_events: list[dict[str, str]] = []
         if isinstance(status_events_raw, list):

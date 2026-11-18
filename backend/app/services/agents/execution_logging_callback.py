@@ -10,10 +10,17 @@ LogViewer / WorkingStepsPanel UI to display hierarchical execution timelines.
 Event types emitted:
 - "llm_request"    — on_chat_model_start / on_llm_start
 - "llm_response"   — on_llm_end (includes token usage when available)
-- "tool_call"      — on_tool_start
-- "tool_response"  — on_tool_end
+- "tool_call"      — on_tool_start (structured ``arguments`` when LangChain
+  provides ``inputs``; ``input`` text capped at ``MAX_INPUT_CHARS``)
+- "tool_response"  — on_tool_end (``run_id`` pairing key, output capped at
+  ``MAX_OUTPUT_CHARS``)
 - "tool_error"     — on_tool_error
 - "llm_error"      — on_llm_error / on_chain_error
+
+The tool call/response pair is the REPLAY source for optimization
+verification: Control Center builds a reference transcript (arguments +
+recorded response per tool call) from these entries, and ``execute_script``
+replays it instead of calling live MCP tools.
 """
 from __future__ import annotations
 
@@ -26,6 +33,13 @@ from langchain_core.messages import BaseMessage
 from langchain_core.outputs import LLMResult
 
 logger = logging.getLogger(__name__)
+
+#: Per-entry caps for the captured reference data. The optimizer REPLAYS a
+#: recorded execution (input + tool arguments + tool responses), so these are
+#: deliberately generous compared to a human-readable log line — a truncated
+#: response is still replayable evidence, a missing one is not.
+MAX_INPUT_CHARS = 10_000
+MAX_OUTPUT_CHARS = 50_000
 
 
 class ExecutionLoggingCallback(AsyncCallbackHandler):
@@ -50,6 +64,7 @@ class ExecutionLoggingCallback(AsyncCallbackHandler):
         session_id: str,
         data_client: Any,
         iteration_ref: Optional[list[int]] = None,
+        tool_name_map: Optional[dict[str, str]] = None,
     ) -> None:
         """Initialise the logging callback.
 
@@ -59,13 +74,51 @@ class ExecutionLoggingCallback(AsyncCallbackHandler):
             iteration_ref: Optional mutable list[int] where [0] is the
                 current iteration counter. Passed by reference so the
                 callback always sees the live iteration number.
+            tool_name_map: Optional mapping of provider-sanitized tool names
+                (``server__tool``) to canonical names (``server____tool``).
+                Replay verification matches scripts against the recorded
+                canonical names, so tool events must be logged canonically.
         """
         super().__init__()
         self.session_id = session_id
         self.data_client = data_client
         self.iteration_ref: list[int] = iteration_ref if iteration_ref is not None else [0]
+        self.tool_name_map: dict[str, str] = dict(tool_name_map or {})
+        # Keys in the CC map are OpenAI-sanitized but keep hyphens
+        # (``mcp-demo__searchFlights``); LangChain's tool names replace the
+        # hyphen too (``mcp_demo__searchFlights``). Index a normalized form so
+        # an exact-key miss still resolves to the canonical name.
+        self._normalized_tool_name_map: dict[str, str] = {
+            self._normalize_tool_name(key): value
+            for key, value in self.tool_name_map.items()
+        }
         self._llm_start_time: float = 0.0
         self._tool_start_times: dict[str, float] = {}
+
+    @staticmethod
+    def _normalize_tool_name(name: str) -> str:
+        """Normalize ``-``/``_`` and ``____``/``__`` for map lookups."""
+        return name.replace("-", "_").replace("____", "__")
+
+    def _canonical_tool_name(self, raw_name: str) -> str:
+        """Return the canonical ``server____tool`` name for a model tool name.
+
+        LangChain exposes provider-sanitized names (``mcp_demo__searchFlights``)
+        while scripts and the tool registry use the canonical four-underscore
+        form. Logging the sanitized name made the replay transcript unmatched.
+        """
+        if raw_name in self.tool_name_map:
+            return self.tool_name_map[raw_name]
+        mapped = self._normalized_tool_name_map.get(
+            self._normalize_tool_name(raw_name)
+        )
+        if mapped:
+            return mapped
+        if "____" not in raw_name and "__" in raw_name:
+            server, bare = raw_name.split("__", 1)
+            if server and bare:
+                return f"{server}____{bare}"
+        return raw_name
 
     @property
     def raise_error(self) -> bool:
@@ -167,24 +220,36 @@ class ExecutionLoggingCallback(AsyncCallbackHandler):
         **kwargs: Any,
     ) -> None:
         """Emit tool_call event when a tool is about to be executed."""
-        tool_name = serialized.get("name", "unknown_tool")
+        raw_tool_name = str(serialized.get("name", "unknown_tool"))
+        tool_name = self._canonical_tool_name(raw_tool_name)
         run_id = str(kwargs.get("run_id", ""))
         self._tool_start_times[run_id] = time.monotonic()
+
+        # Structure the arguments when LangChain hands them over: the optimizer
+        # REPLAYS recorded calls, and a name-only record cannot be matched
+        # against a script's ``tools.call(name, arguments)``.
+        raw_inputs = kwargs.get("inputs")
+        arguments = dict(raw_inputs) if isinstance(raw_inputs, dict) else None
 
         # Truncate large inputs in logs — EXCEPT execute_script: the full
         # python_source it receives IS the reviewable artifact (the in-context
         # draft iteration), so keep it untruncated in the execution log.
-        if tool_name == "execute_script":
+        if tool_name.split("____")[-1] == "execute_script":
             logged_input = input_str
+            input_truncated = False
         else:
-            logged_input = input_str[:500] if len(input_str) > 500 else input_str
+            input_truncated = len(input_str) > MAX_INPUT_CHARS
+            logged_input = input_str[:MAX_INPUT_CHARS] if input_truncated else input_str
 
         await self._safe_log(
             event_type="tool_call",
             message=f"[iter={self._current_iter()}] Tool call: {tool_name}",
             data={
                 "tool": tool_name,
+                "tool_raw": raw_tool_name,
                 "input": logged_input,
+                "input_truncated": input_truncated,
+                "arguments": arguments,
                 "iteration": self._current_iter(),
                 "run_id": run_id,
             },
@@ -195,7 +260,12 @@ class ExecutionLoggingCallback(AsyncCallbackHandler):
         output: Any,
         **kwargs: Any,
     ) -> None:
-        """Emit tool_response event when a tool call completes."""
+        """Emit tool_response event when a tool call completes.
+
+        The response is stored (up to ``MAX_OUTPUT_CHARS``) together with the
+        ``run_id`` of the originating call so the optimizer can pair
+        ``tool_call``/``tool_response`` entries into a replayable transcript.
+        """
         run_id = str(kwargs.get("run_id", ""))
         elapsed = 0.0
         if run_id in self._tool_start_times:
@@ -203,13 +273,22 @@ class ExecutionLoggingCallback(AsyncCallbackHandler):
 
         # LangChain may pass a ToolMessage object or a plain string
         output_str = output.content if hasattr(output, "content") else str(output)
-        logged_output = output_str[:500] if len(output_str) > 500 else output_str
+        if isinstance(output_str, str):
+            output_truncated = len(output_str) > MAX_OUTPUT_CHARS
+            logged_output = (
+                output_str[:MAX_OUTPUT_CHARS] if output_truncated else output_str
+            )
+        else:  # pragma: no cover — defensive: non-str content
+            logged_output = str(output_str)
+            output_truncated = False
 
         await self._safe_log(
             event_type="tool_response",
             message=f"[iter={self._current_iter()}] Tool response ({elapsed:.2f}s)",
             data={
                 "output": logged_output,
+                "output_truncated": output_truncated,
+                "run_id": run_id,
                 "elapsed_seconds": round(elapsed, 3),
                 "iteration": self._current_iter(),
             },

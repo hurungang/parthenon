@@ -71,6 +71,7 @@ const settings: TenantSettings = {
   is_onboarded: true,
   your_role: 'tenant_admin',
   is_root: true,
+  conversation_turn_resume_ttl_seconds: 900,
 }
 
 const usage = {
@@ -124,7 +125,25 @@ describe('TenantSettingsPage', () => {
         name: 'Renamed',
         admin_contact_name: 'Ada',
         admin_contact_email: 'ada@acme.test',
+        conversation_turn_resume_ttl_seconds: 900,
       })
+    })
+  })
+
+  it('saves the confirmation resume window (minutes → seconds)', async () => {
+    mocked(updateTenantSettings).mockResolvedValue({ ...settings })
+    renderWith(<TenantSettingsPage />)
+    const field = (await screen.findByLabelText(
+      'tenant.settings.resumeWindow',
+    )) as HTMLInputElement
+    expect(field.value).toBe('15') // 900s default rendered as 15 minutes
+    fireEvent.change(field, { target: { value: '30' } })
+    fireEvent.click(screen.getByText('app.save'))
+    await waitFor(() => {
+      expect(
+        mocked(updateTenantSettings).mock.calls[0][0]
+          .conversation_turn_resume_ttl_seconds,
+      ).toBe(1800)
     })
   })
 
@@ -198,6 +217,7 @@ describe('TenantSettingsPage — Phase 10 alias & usage', () => {
         name: 'New Alias',
         admin_contact_name: 'Ada',
         admin_contact_email: 'ada@acme.test',
+        conversation_turn_resume_ttl_seconds: 900,
       })
     })
     expect(await screen.findByText('tenant.settings.saved')).toBeDefined()

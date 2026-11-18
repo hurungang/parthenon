@@ -23,9 +23,10 @@ from __future__ import annotations
 
 import logging
 import uuid
+from dataclasses import dataclass
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException
 from pydantic import BaseModel
 from sqlalchemy import delete, func, inspect as sa_inspect, select
 from sqlalchemy.orm import selectinload
@@ -134,11 +135,168 @@ class ManagementMetaInvokeRequest(BaseModel):
     agent_type_id: str | None = None
 
 
+# ── Exactly-once applied marker (paused conversational turn) ────────────────
+#
+# A confirmed management-tool write dispatched from a resumed turn carries the
+# paused turn's opaque ``X-Turn-Idempotency-Key``.  This is the single
+# chokepoint that stamps the resume record's applied marker **in the same
+# transaction as the write**, so:
+#   * a crash before commit leaves neither the write nor the marker;
+#   * a crash after commit leaves both, and a retried dispatch returns the
+#     stored summary instead of applying the write a second time;
+#   * a denial/expiry never reaches this path at all, so it can never set
+#     ``write_applied``.
+
+
+@dataclass
+class _AppliedMarker:
+    """Pending applied marker for the paused turn that drove this dispatch."""
+
+    resume_id: uuid.UUID
+    tool_name: str
+    applied_by_user_id: uuid.UUID | None = None
+
+    def summary_for(
+        self, *, verb: str, resource: str, record: Any
+    ) -> dict[str, Any]:
+        """Effect summary stored on the record (state context, never secrets)."""
+        return {
+            "tool": self.tool_name,
+            "verb": verb,
+            "resource": resource,
+            "record_id": str(getattr(record, "id", "") or ""),
+            "name": getattr(record, "name", None) or getattr(record, "slug", None),
+        }
+
+
+async def _prepare_applied_marker(
+    db: AsyncSession,
+    turn_idempotency_key: str | None,
+    tool_name: str,
+    *,
+    user_sub: str | None = None,
+) -> tuple[_AppliedMarker | None, dict[str, Any] | None]:
+    """Resolve the paused turn for a confirmed dispatch.
+
+    Returns ``(marker, duplicate_result)``.  ``duplicate_result`` is set when
+    the turn already recorded its applied write: the caller returns the stored
+    summary instead of re-applying it.  The record is read under a row lock so
+    two concurrent duplicates serialise (the loser sees the committed marker).
+    """
+    if not turn_idempotency_key:
+        return None, None
+
+    from app.services.conversations.turn_resume_store import (
+        ConversationTurnResumeStore,
+    )
+
+    store = ConversationTurnResumeStore()
+    record = await store.lock_for_applied_check(turn_idempotency_key, db)
+    if record is None:
+        logger.warning(
+            "Management tool %s dispatched with unknown paused-turn key %s — "
+            "applying without an applied marker",
+            tool_name,
+            turn_idempotency_key,
+        )
+        return None, None
+    if record.write_applied:
+        logger.info(
+            "Duplicate confirmed dispatch for resume %s (tool=%s) — returning "
+            "the stored applied summary",
+            record.id,
+            tool_name,
+        )
+        return None, {
+            "duplicate_dispatch": True,
+            "write_applied": True,
+            "resume_id": str(record.id),
+            "applied_at": record.applied_at.isoformat() if record.applied_at else None,
+            "applied_effect_summary": record.applied_effect_summary or {},
+        }
+    if record.is_terminal:
+        # A denied / cancelled / expired / superseded pause must never apply a
+        # management change — not even when a stale or duplicated dispatch still
+        # carries its idempotency key.  Refusing here (before the handler runs)
+        # keeps the "denial never writes" guarantee true under any retry; an
+        # *applied* terminal record was already short-circuited above.
+        state = getattr(record.state, "value", record.state)
+        outcome = getattr(record.resume_outcome, "value", record.resume_outcome)
+        logger.warning(
+            "Confirmed dispatch for terminal resume %s (tool=%s, state=%s, "
+            "outcome=%s) refused — nothing is written",
+            record.id,
+            tool_name,
+            state,
+            outcome,
+        )
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "error": "resume_terminal_no_write",
+                "resume_id": str(record.id),
+                "state": state,
+                "resume_outcome": outcome,
+                "write_applied": False,
+            },
+        )
+
+    applied_by_user_id: uuid.UUID | None = record.applied_by_user_id
+    if applied_by_user_id is None and user_sub:
+        try:
+            from app.db.models.identity import Identity
+            from app.db.tenant_scoping import execute_unscoped
+
+            identity_result = await execute_unscoped(
+                db, select(Identity).where(Identity.subject == user_sub)
+            )
+            identity = identity_result.scalar_one_or_none()
+            if identity is not None:
+                applied_by_user_id = identity.id
+        except Exception:  # noqa: BLE001 - identity resolution is best effort
+            logger.debug(
+                "Could not resolve operator identity for resume %s", record.id
+            )
+    return _AppliedMarker(
+        resume_id=record.id,
+        tool_name=tool_name,
+        applied_by_user_id=applied_by_user_id,
+    ), None
+
+
+async def _commit_with_applied_marker(
+    db: AsyncSession,
+    marker: _AppliedMarker | None,
+    *,
+    verb: str,
+    resource: str,
+    record: Any,
+) -> None:
+    """Commit the write together with its applied marker (one transaction)."""
+    if marker is not None:
+        from app.services.conversations.turn_resume_store import (
+            ConversationTurnResumeStore,
+        )
+
+        await ConversationTurnResumeStore().mark_write_applied(
+            marker.resume_id,
+            db,
+            applied_effect_summary=marker.summary_for(
+                verb=verb, resource=resource, record=record
+            ),
+            applied_by_user_id=marker.applied_by_user_id,
+        )
+    await db.commit()
+
+
 @meta_router.post("/invoke_management_tool", response_model=ManagementToolResponse)
 async def invoke_management_tool_meta(
     body: ManagementMetaInvokeRequest,
     tenant_ctx: Annotated[TenantContext, Depends(require_internal_tenant_context)],
     db: Annotated[AsyncSession, Depends(get_db)],
+    turn_idempotency_key: str | None = Header(
+        default=None, alias="X-Turn-Idempotency-Key"
+    ),
 ) -> ManagementToolResponse:
     """Dispatch any registered management tool through the existing dispatch.
 
@@ -147,6 +305,9 @@ async def invoke_management_tool_meta(
     ``/{tool_name}`` endpoint.  No delete verb exists in the registry, so a
     delete-shaped request is declined as an unknown verb/tool; an unknown
     target tool returns a structured 404.
+
+    ``X-Turn-Idempotency-Key`` is accepted for the paused-turn exactly-once
+    path (same contract as the per-tool endpoint).
     """
     from app.services.agents.system_tool_registry import SystemToolRegistry
 
@@ -178,7 +339,14 @@ async def invoke_management_tool_meta(
         conversation_session_id=body.conversation_session_id,
         agent_type_id=body.agent_type_id,
     )
-    result = await _dispatch(db, target, inner, tenant_ctx.tenant_id)
+    marker, duplicate = await _prepare_applied_marker(
+        db, turn_idempotency_key, target, user_sub=body.user_sub
+    )
+    if duplicate is not None:
+        return ManagementToolResponse(result=duplicate)
+    result = await _dispatch(
+        db, target, inner, tenant_ctx.tenant_id, applied_marker=marker
+    )
     return ManagementToolResponse(result=result)
 
 
@@ -436,8 +604,18 @@ async def execute_management_tool(
     body: ManagementToolRequest,
     tenant_ctx: Annotated[TenantContext, Depends(require_internal_tenant_context)],
     db: Annotated[AsyncSession, Depends(get_db)],
+    turn_idempotency_key: str | None = Header(
+        default=None, alias="X-Turn-Idempotency-Key"
+    ),
 ) -> ManagementToolResponse:
-    """Execute a single management tool on behalf of the authenticated user."""
+    """Execute a single management tool on behalf of the authenticated user.
+
+    ``X-Turn-Idempotency-Key`` carries the paused conversational turn's opaque
+    key when this dispatch continues a confirmed turn.  It is accepted here as
+    the exactly-once chokepoint for the applied marker (the resumed turn must
+    apply the confirmed write at most once); calls outside a paused turn carry
+    no key.
+    """
     from app.services.agents.system_tool_registry import SystemToolRegistry
 
     tool = SystemToolRegistry.get(tool_name)
@@ -451,14 +629,36 @@ async def execute_management_tool(
     # Defense-in-depth re-authorization against the user's own scope.
     await _authorize(db, body.user_sub, resource_type, action, tenant_ctx.tenant_id)
 
-    result = await _dispatch(db, tool_name, body, tenant_ctx.tenant_id)
+    if turn_idempotency_key:
+        logger.info(
+            "Management tool %s dispatched under paused-turn key %s",
+            tool_name,
+            turn_idempotency_key,
+        )
+    marker, duplicate = await _prepare_applied_marker(
+        db, turn_idempotency_key, tool_name, user_sub=body.user_sub
+    )
+    if duplicate is not None:
+        return ManagementToolResponse(result=duplicate)
+    result = await _dispatch(
+        db, tool_name, body, tenant_ctx.tenant_id, applied_marker=marker
+    )
     return ManagementToolResponse(result=result)
 
 
 async def _dispatch(
-    db: AsyncSession, tool_name: str, body: ManagementToolRequest, tenant_id: Any
+    db: AsyncSession,
+    tool_name: str,
+    body: ManagementToolRequest,
+    tenant_id: Any,
+    *,
+    applied_marker: _AppliedMarker | None = None,
 ) -> dict[str, Any]:
-    """Route a management tool to its resource-specific handler."""
+    """Route a management tool to its resource-specific handler.
+
+    Write verbs receive the pending applied marker so they can commit it in the
+    same transaction as the write (exactly-once confirmed dispatch).
+    """
     verb, _, resource = tool_name.partition("_")
     resource = _canonical_resource(resource)
     args = body.tool_args or {}
@@ -469,9 +669,13 @@ async def _dispatch(
     if verb == "get":
         return await _get_resource(db, resource, args, tenant_id, user_sub=body.user_sub)
     if verb == "create":
-        return await _create_resource(db, resource, args, tenant_id, body.user_sub)
+        return await _create_resource(
+            db, resource, args, tenant_id, body.user_sub, applied_marker=applied_marker
+        )
     if verb == "update":
-        return await _update_resource(db, resource, args, tenant_id)
+        return await _update_resource(
+            db, resource, args, tenant_id, applied_marker=applied_marker
+        )
     raise HTTPException(status_code=404, detail=f"Unknown management verb: {verb}")
 
 
@@ -974,7 +1178,13 @@ async def _get_resource(
 
 
 async def _create_resource(
-    db: AsyncSession, resource: str, args: dict[str, Any], tenant_id: Any, user_sub: str
+    db: AsyncSession,
+    resource: str,
+    args: dict[str, Any],
+    tenant_id: Any,
+    user_sub: str,
+    *,
+    applied_marker: _AppliedMarker | None = None,
 ) -> dict[str, Any]:
     model, name_field = _import_model(resource)
     serializer = _SERIALIZERS[resource]
@@ -1059,7 +1269,10 @@ async def _create_resource(
     await _post_create_side_effects(db, resource, obj)
     if resolved_sop_steps:
         await _write_sop_steps(db, obj.id, resolved_sop_steps)
-    await db.commit()
+    # Exactly-once: the confirmed write and its applied marker commit together.
+    await _commit_with_applied_marker(
+        db, applied_marker, verb="create", resource=resource, record=obj
+    )
 
     refreshed_stmt = select(model).where(model.id == obj.id)
     for option in _eager_load_options(resource):
@@ -1633,7 +1846,12 @@ async def _post_create_side_effects(db: AsyncSession, resource: str, obj: Any) -
 
 
 async def _update_resource(
-    db: AsyncSession, resource: str, args: dict[str, Any], tenant_id: Any
+    db: AsyncSession,
+    resource: str,
+    args: dict[str, Any],
+    tenant_id: Any,
+    *,
+    applied_marker: _AppliedMarker | None = None,
 ) -> dict[str, Any]:
     model, name_field = _import_model(resource)
     serializer = _SERIALIZERS[resource]
@@ -1681,7 +1899,10 @@ async def _update_resource(
         await _bind_skill_tools(db, obj, data, tenant_id)
     await _post_update_side_effects(db, resource, obj)
     await db.flush()
-    await db.commit()
+    # Exactly-once: the confirmed update and its applied marker commit together.
+    await _commit_with_applied_marker(
+        db, applied_marker, verb="update", resource=resource, record=obj
+    )
     refreshed_stmt = select(model).where(model.id == obj.id)
     for option in _eager_load_options(resource):
         refreshed_stmt = refreshed_stmt.options(option)

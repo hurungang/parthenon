@@ -95,14 +95,14 @@ test.describe('Token expiry — dashboard alerts & remediation', () => {
     await page.goto('/dashboard')
     await page.waitForLoadState('load')
 
-    await expect(page.getByText('Token Health')).toBeVisible()
+    await expect(page.getByText('Refresh Token Health')).toBeVisible()
     const identitiesCard = page
-      .getByText('Expired Agent Identity Tokens')
+      .getByText('Expired Agent Identity Refresh Tokens')
       .locator('xpath=ancestor::*[contains(@class,"MuiCard-root")]')
     await expect(identitiesCard).toContainText('2')
 
     const mcpCard = page
-      .getByText('Expired MCP Session Tokens')
+      .getByText('Expired MCP Session Refresh Tokens')
       .locator('xpath=ancestor::*[contains(@class,"MuiCard-root")]')
     await expect(mcpCard).toContainText('1')
   })
@@ -113,14 +113,14 @@ test.describe('Token expiry — dashboard alerts & remediation', () => {
     await page.waitForLoadState('load')
 
     const identitiesCard = page
-      .getByText('Expired Agent Identity Tokens')
+      .getByText('Expired Agent Identity Refresh Tokens')
       .locator('xpath=ancestor::*[contains(@class,"MuiCard-root")]')
-    await expect(identitiesCard).toContainText('1 expiring within 7 days')
+    await expect(identitiesCard).toContainText('1 refresh tokens expiring within 7 days')
 
     const mcpCard = page
-      .getByText('Expired MCP Session Tokens')
+      .getByText('Expired MCP Session Refresh Tokens')
       .locator('xpath=ancestor::*[contains(@class,"MuiCard-root")]')
-    await expect(mcpCard).toContainText('3 expiring within 7 days')
+    await expect(mcpCard).toContainText('3 refresh tokens expiring within 7 days')
   })
 
   test('expired identity warning click-through lands on the agent identities page', async ({
@@ -131,7 +131,7 @@ test.describe('Token expiry — dashboard alerts & remediation', () => {
     await page.waitForLoadState('load')
 
     await page
-      .getByText('Expired Agent Identity Tokens')
+      .getByText('Expired Agent Identity Refresh Tokens')
       .locator('xpath=ancestor::a[1]')
       .click()
     await expect(page).toHaveURL(/\/agents\/identities$/)
@@ -143,7 +143,7 @@ test.describe('Token expiry — dashboard alerts & remediation', () => {
     await page.waitForLoadState('load')
 
     await page
-      .getByText('Expired MCP Session Tokens')
+      .getByText('Expired MCP Session Refresh Tokens')
       .locator('xpath=ancestor::a[1]')
       .click()
     await expect(page).toHaveURL(/\/mcp$/)
@@ -168,7 +168,7 @@ test.describe('Token expiry — dashboard alerts & remediation', () => {
 
     await page.goto('/dashboard')
     const identitiesCard = page
-      .getByText('Expired Agent Identity Tokens')
+      .getByText('Expired Agent Identity Refresh Tokens')
       .locator('xpath=ancestor::*[contains(@class,"MuiCard-root")]')
     await expect(identitiesCard).toContainText('2')
 
@@ -176,7 +176,7 @@ test.describe('Token expiry — dashboard alerts & remediation', () => {
     await page.reload()
     await expect(identitiesCard).toContainText('0')
     const mcpCard = page
-      .getByText('Expired MCP Session Tokens')
+      .getByText('Expired MCP Session Refresh Tokens')
       .locator('xpath=ancestor::*[contains(@class,"MuiCard-root")]')
     await expect(mcpCard).toContainText('0')
   })

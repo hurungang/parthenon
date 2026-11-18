@@ -1,7 +1,7 @@
 """Command prompts — stored missions for command-driven special agent executions.
 
-The "Optimize & Verify" flow is now a COMMAND-PROMPT-DRIVEN SPECIAL AGENT
-EXECUTION. This module holds:
+The "Optimize & Verify" flow is a DEDICATED, GATED optimization execution (it
+is no longer a side effect of a normal run). This module holds:
 
 - the canonical ``optimize-and-verify`` command mission text (single source of
   truth, seeded into the ``command_prompts`` table), and
@@ -78,15 +78,41 @@ COMMAND_MAX_ITERATIONS = 40
 COMMAND_TOKEN_BUDGET = _env_int("COMMAND_TOKEN_BUDGET", 2_000_000)
 
 
-OPTIMIZE_AND_VERIFY_COMMAND = """You are optimizing an AI agent's workflow WHILE executing its real task.
+OPTIMIZE_AND_VERIFY_COMMAND = """You are optimizing an AI agent's workflow in a DEDICATED optimization run.
 
 Your mission: make sure the agent has a verified, optimized implementation
 plan (sandboxed Python script segments plus LLM bridge steps where semantic
-judgment is required), by assessing what already exists, authoring/repairing
-only what is needed, and verifying every script against REAL tool-call
-executions while accomplishing the user's real task below.
+judgment is required) by assessing what already exists, authoring/repairing
+only what is needed, and verifying that every script has CORRECT SYNTAX and
+invokes the agent's tools CORRECTLY.
+
+This is NOT a normal business run: there is no user task to accomplish here.
+Your only deliverable is the optimized plan — or a bounded `needs_feedback`
+outcome that explains why you could not reach high confidence.
 
 The target agent type id is: {agent_type_id}
+
+## Verification goal (read this before authoring)
+
+A script is VERIFIED when:
+1. its Python source has correct syntax and passes the sandbox check, and
+2. every `tools.call(name, arguments)` uses an exact granted tool name with a
+   valid argument shape, and that call finds a recorded response in the
+   reference transcript (no validation, replay or transport error).
+
+`execute_script` NEVER calls live tools and NEVER changes data. It verifies by
+REPLAYING the recorded reference execution: the exact reference `input` becomes
+the script `context`, and every `tools.call(name, arguments)` is answered from
+the recorded tool responses of that execution (`tool_calls` returned by
+`get_execution_log`). Nothing is fetched live and nothing is written.
+
+A script does NOT need to reproduce the reference execution's tool OUTPUT
+verbatim — verification is against the recorded sample, not live data. A
+differing (or empty) computed value is ACCEPTABLE: do NOT treat it as a
+failure, and NEVER re-attempt a script merely to force an output match. Only
+syntax errors, sandbox violations, wrong/unknown tool names, malformed
+arguments, MISSING recorded tool responses, and genuine replay errors require a
+fix.
 
 ## Step 0 — Understand the current state FIRST (mandatory, before authoring)
 
@@ -95,8 +121,18 @@ in this order BEFORE authoring any script:
 
 1. `get_scripts` — the agent's script definitions (versions, python_source,
    sandbox validation status, lifecycle).
-2. `get_execution_log` — the agent's recent execution logs, INCLUDING past
-   failures. Read the errors: they tell you what is broken.
+2. `get_execution_log` — lists the agent's recent NORMAL executions (newest
+   first) and returns the TEXT LOG of the latest successful (completed) one,
+   plus that run's actual `input`, the agent's typed `input_schema`, and the
+   reference `tool_calls` (each recorded tool name with its arguments and the
+   recorded response). This optimization run (and other optimization
+   side-runs) is EXCLUDED, so the log you get is a real reference execution —
+   not your own in-flight run. Use that log (or pass `session_id` for a
+   specific run); do not page through unbounded history. When you verify with
+   `execute_script`, pass the returned `input` object EXACTLY as its `input`
+   argument: use the agent's real field names and values (e.g. `travel_date`,
+   not `date`). Never invent, rename, or substitute input keys — a script that
+   guesses keys verifies against the wrong context and fails at serving time.
 3. `get_optimized_implementation_plan` — the current optimized plan (if any).
 4. `get_implementation_plan` — the base (high-level) implementation plan
    steps; the only source of truth for WHAT the workflow must do.
@@ -108,12 +144,11 @@ If you have read `get_scripts`, `get_execution_log`, and
 executions and nothing broken, a fresh `ready` optimized plan exists, its
 scripts compile and their sources still match the base plan's intent —
 DO NOT re-author anything. State clearly that you skipped re-authoring
-because the existing optimization is current/healthy and unchanged. Help
-complete the user's real task below, and finish. (Re-)author ONLY when there
-is a real problem: no ready plan, failing scripts, repeated execution
-errors, or a changed base plan.
+because the existing optimization is current/healthy and unchanged, and
+finish. (Re-)author ONLY when there is a real problem: no ready plan, failing
+scripts, repeated execution errors, or a changed base plan.
 
-## Step 2 — Author and verify by EXECUTING (no drafts)
+## Step 2 — Author and verify by REPLAYING the reference run (no drafts)
 
 Author each sandboxed Python script. Each script defines
 `def run(context, tools)` and returns a JSON-able dict whose `result` key is
@@ -169,8 +204,9 @@ or f-string-free building (plain `+` with `str(...)`); return
 
 Author the script and pass its FULL source to `execute_script` via the
 `python_source` argument to test it — do not save drafts first, and do NOT
-re-execute old saved script versions with empty input. Iterate: on failure,
-modify the source and execute again. No defensive layers, no name-aliasing lists, no defensive error
+re-execute old saved script versions with empty input. Iterate: on a real
+syntax/sandbox/tool-invocation failure, modify the source and execute again.
+No defensive layers, no name-aliasing lists, no defensive error
 handling — call the exact tool names given, assume tool results are already
 unwrapped payloads. Only after a successful execution, save it via
 `generate_script` (persist the working source).
@@ -184,54 +220,95 @@ name is a VALIDATION ERROR: `execute_script` / `generate_script` return
 `valid_tool_names` (the exact names you may call) — fix the source to use a
 name from `valid_tool_names` verbatim and iterate.
 
-THIS run is a real agent run: the user's real task (below) is being executed,
-and tool calls issued from scripts run FOR REAL against the live integration
-— there is no stub client. Verification IS the real run:
+Verification happens through REPLAY `execute_script` calls — live tools are
+never invoked and no data is ever changed:
 
-- Call `execute_script` with the FULL python_source and the REAL input of
-  this run. If it runs here, it runs at serving time.
-- On error, fix the source in your context and execute again.
-- Iterate until the scripts achieve the agent's mission on this real task —
-  the run's outcome is the evidence that the composition works.
+- Call `execute_script` with the FULL python_source and the reference `input`
+  object returned by `get_execution_log` (the exact keys and values — never
+  guessed or renamed). If it compiles, its tool calls match the recorded
+  transcript, and it runs end to end, the script is VERIFIED.
+- `execute_script` REPLAYS ONLY the recorded tool responses from the selected
+  execution's `tool_calls`. It NEVER calls a live MCP tool and NEVER changes
+  data, so a verification run is always safe to repeat.
+- A successful replay whose computed result differs from (or is empty
+  compared to) the reference execution is STILL VERIFIED. Do NOT re-attempt it
+  to force an identical result.
+- If your composition needs a tool call that is NOT in the reference
+  transcript, `execute_script` returns `status: "needs_user_input"` with
+  blocker `reference_transcript_incomplete`. STOP immediately: do NOT retry
+  and do NOT invent the call. Record `needs_feedback` naming exactly what the
+  user must do (e.g. "run the agent once with a real search so the reference
+  contains `mcp-demo____searchFlights`").
+- If there is no reference tool data at all, `execute_script` returns
+  `status: "needs_user_input"` with blocker `no_reference_tool_data`. STOP and
+  ask the user to run the agent successfully first — do not loop.
+- On a syntax/sandbox/tool-invocation error, fix the source in your context
+  and execute again — bounded by the per-script attempt budget. A
+  `needs_user_input` result is NOT such an error: it must end the run.
 
-## Step 3 — Persist
+## Step 3 — Persist, or stop with `needs_feedback` (no dead loop)
 
-When the mission is achieved, call `generate_optimized_plan` with the
-agent_type_id, the ordered steps, the `fully_scripted` mark, the output
-mode/template, and the status.
+When you have HIGH CONFIDENCE that the composition is correct and verified,
+call `generate_optimized_plan` with the agent_type_id, the ordered steps, the
+`fully_scripted` mark, the output mode/template, and status `ready`.
+
+When you CANNOT reach high confidence — a script still fails after the
+bounded attempts, the base plan is unclear, or a required tool is unavailable
+— you MUST STOP and call `generate_optimized_plan` with status
+`needs_feedback`, no steps, and the `error` argument set to a concise failure
+reason (the last execute_script/compile error and which step failed). That
+`error` is MANDATORY and will be shown to the user. Stopping early with
+`needs_feedback` is a valid, expected outcome — never keep retrying to avoid it.
+
+**Asking the user is the correct stop.** When verification cannot proceed
+(`status: "needs_user_input"`), persist `needs_feedback` with a specific,
+actionable `error`: what is missing, which tool/scenario is needed, and what
+the user should do. The Optimized Plan tab shows this as "Optimization needs
+your input". Do not keep retrying to avoid asking.
+
+**Once you call `generate_optimized_plan` with a terminal status (`ready` or
+`needs_feedback`), the optimization is COMPLETE.** Do NOT call
+`get_optimized_implementation_plan` (or any other tool) again — re-reading the
+plan cannot change it. Finish with the final answer below. A plan's `error`
+field is a DESCRIPTIVE status, not a tool failure: never retry a tool call
+because a returned plan carries an `error`.
 
 ## Rules (mandatory)
 
 - MINIMIZE STEPS: chain consecutive deterministic work into ONE script; split
   into separate scripts ONLY where an LLM bridge (semantic judgment) is
   required between segments.
-- VERIFY EVERY SCRIPT by executing it against the real integration — a
-  script you have not executed is not verified.
+- VERIFY EVERY SCRIPT by replaying it with `execute_script` (correct syntax +
+  correct tool invocation against the recorded reference transcript) — a
+  script you have not verified is not verified. `execute_script` NEVER calls
+  live tools and NEVER changes data.
 - MANDATORY PRE-AUTHORING READ: you MUST read `get_scripts`, `get_execution_log`,
-  and `get_optimized_implementation_plan` before authoring or repairing any script.
+  `get_optimized_implementation_plan`, and `get_implementation_plan` before
+  authoring or repairing any script.
 - Bounded 3 attempts per script. On final failure, do NOT persist a ready
   plan: call `generate_optimized_plan` with status `needs_feedback`, no
   steps, and the `error` argument set to a concise failure reason (the last
   execute_script/compile error and which step failed) — this reason is
-  MANDATORY and will be shown to the user. Then report the failure in your
-  final answer so the user is prompted for feedback.
+  MANDATORY and will be shown to the user.
 - Use `list_scripts` / `get_script` to reuse or repair previously authored
   scripts for this agent type.
+- Use the latest SUCCESSFUL normal execution returned by `get_execution_log`
+  as the reference; do not fetch an unbounded history of execution logs.
 
 ## Final answer (mandatory)
 
-THIS run executes the user's real task stated above. Your FINAL message must
-BE the user-facing result of that task, in the required output format — a
-ready-to-read business answer. It must NEVER be meta-commentary about the
-optimization work (what you authored, tool-name resolution notes, verification
-outcomes, plan status).
+This is an optimization run, not a business run. Your FINAL message must be a
+short status report for the operator:
 
-- Optimization bookkeeping goes ONLY into the optimized plan record through
-  your tools (`generate_script`, `execute_script`,
-  `generate_optimized_plan`) — never into your final message.
-- On final failure (status `needs_feedback`), the final message is the
-  user-facing error result in the required output format — one clear
-  explanation of what could not be accomplished, not a work report."""
+- on success (`ready`): state that the optimized plan was authored/verified
+  (and, if applicable, that nothing needed re-authoring), plus anything the
+  operator should know about the verification.
+- on `needs_feedback`: state the failure reason clearly and that the plan
+  awaits operator feedback.
+
+Optimization bookkeeping belongs in the plan record through your tools
+(`generate_script`, `execute_script`, `generate_optimized_plan`) — keep the
+final message concise and operator-facing."""
 
 
 async def seed_command_prompts(db: Any) -> None:

@@ -15,21 +15,22 @@ Agent identities and MCP sessions rely on refresh credentials that can expire. P
 - **Tenant Roots** — need tenant-wide health warnings visible on operational surfaces (dashboard, topology)
 
 ## What It Does
-- Shows separate "expired" and "about to expire (within 7 days)" indicators on the dashboard for agent identities and for MCP sessions, with counts
+- Shows separate "expired" and "about to expire (within 7 days)" **refresh-token** indicators on the dashboard for agent identities and for MCP sessions, with counts. Access-token expiry is not an alert while the refresh token is valid, because access tokens are renewed automatically.
 - Makes every dashboard credential warning clickable, navigating to the page where the user can refresh the identity or re-authenticate the MCP session
-- Validates all credentials an execution will use — including those of associated subagents — before the run starts; expired credentials block execution with a clear message naming the identity/session to refresh
+- Validates all refresh-token credentials an execution will use — including those of associated subagents — before the run starts; expired refresh tokens (or unrecoverable refresh failures) block execution with a clear message naming the identity/session to refresh
 - Displays warning/error badges on agent topology containers whose bound identity or MCP session is expiring or expired
-- Clears warnings automatically once the credential is refreshed or re-authenticated
+- Clears warnings automatically once the credential is refreshed or re-authenticated, returning the token-health tile to its green healthy state
+- Prioritises actionable dashboard tiles: anything expired or expiring is sorted to the top with an "Action required" highlight
 
 ## Key Concepts
-- **Token Health States**: valid / expiring within 7 days / expired — applied to agent identities and to each named MCP session
+- **Refresh-Token Health States**: valid / expiring within 7 days / expired — applied to agent identities and to each named MCP session, driven by the refresh token's expiry. An identity with no refresh token falls back to its access-token expiry; an MCP session with no recorded refresh expiry does the same.
 - **Pre-Flight Validation**: credential health check performed before any agent execution begins, covering the agent and all subagents
 - **Warning-to-Remediation Routing**: direct navigation from a dashboard warning to the relevant remediation page
 
 ## Acceptance Criteria
-- Dashboard shows "expired" and "about to expire (within 7 days)" as separate, clearly labeled indicators for agent identities and MCP sessions
+- Dashboard shows "expired" and "about to expire (within 7 days)" as separate, clearly labeled **refresh-token** indicators for agent identities and MCP sessions; the identity list and session list label the status as refresh-token status and show the refresh-token expiry
 - Each dashboard warning is clickable and navigates to the relevant agent identity page or MCP session page for refresh/re-authentication
-- Before an agent executes, all credentials the execution will use — including subagents' — are checked; expired ones block execution with a clear message identifying the affected identity/session; the run proceeds only after refresh/re-auth
+- Before an agent executes, all refresh-token credentials the execution will use — including subagents' — are checked; expired refresh tokens (or unrecoverable refresh failures) block execution with a clear message identifying the affected identity/session; the run proceeds only after refresh/re-auth. A merely expired access token that can be refreshed does not block the run
 - Users never discover a credential failure for the first time at execution time
 - In the agent topology diagram, a container whose identity or MCP session expires within 7 days shows a warning state; an expired one shows an error state
 - Warnings respect tenant isolation: users see only credentials in their own tenant
@@ -44,8 +45,8 @@ Agent identities and MCP sessions rely on refresh credentials that can expire. P
 - Historical credential-expiry analytics or audit reporting
 
 ## Dependencies & Constraints
-- Depends on OIDC-compliant identity providers (Keycloak / Azure EntraID) exposing refresh credential expiry information the Control Center can evaluate
-- Agent identities live in the agent realm as first-class OIDC principals; alerting must align with the existing automatic refresh mechanism
+- Depends on OIDC-compliant identity providers (Keycloak / Azure EntraID) exposing refresh-token expiry information the Control Center can evaluate; a provider that reports no refresh expiry results in no false warning (treated as having no known expiry)
+- Agent identities live in the agent realm as first-class OIDC principals; alerting must align with the existing automatic refresh mechanism — the refresh token, not the short-lived access token, is the credential whose expiry matters
 - MCP session expiry depends on the credential/identity binding of each named session per MCP server
 - Agents never hold sensitive data including identity tokens; all token resolution and refresh stays in the Control Center
 - Strict tenant isolation applies: credential health data and warnings are tenant-scoped end to end

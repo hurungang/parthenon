@@ -12,6 +12,16 @@ Routes (all under /internal/data):
    POST  /sessions/{session_id}/log          — write execution log entry
    POST  /tool-calls                        — record tool executions (batch)
    POST  /conversations/{conv_session_id}/auto-name  — generate and save conversation title
+   PUT   /conversations/{conv_session_id}/activity    — upsert persisted activity state
+   GET   /conversations/{conv_session_id}/activity    — hydrate persisted activity state
+   POST  /conversations/{conv_session_id}/activity/touch — refresh a live working heartbeat
+   PUT   /conversations/{conv_session_id}/resume      — create/reuse the live resume index
+   GET   /conversations/{conv_session_id}/resume      — live resume record (explicit null)
+   PUT   /conversations/{conv_session_id}/resume/checkpoint  — upsert opaque payload
+   GET   /conversations/{conv_session_id}/resume/checkpoint  — load opaque payload
+   POST  /conversations/{conv_session_id}/resume/claim       — acquire/renew turn claim
+   POST  /conversations/{conv_session_id}/resume/release     — release turn claim
+   POST  /conversations/{conv_session_id}/resume/complete    — single-transaction closer
 """
 from __future__ import annotations
 
@@ -23,11 +33,18 @@ from typing import Annotated, Any, Literal
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.api.deps import require_internal_tenant_context, require_service_certificate
 from app.core.tenant_context import TenantContext
+from app.db.models.conversation_turn_resume import (
+    CheckpointPayloadKind,
+    ResumeOutcome,
+    ResumeState,
+)
 from app.db.session import DbSession
+from app.schemas.conversations import ConversationOptimizationBlock
 from app.services.agents.permission_manager import get_shared_permission_manager
 from app.services.agents.tool_naming import build_tool_name, parse_tool_name
 
@@ -170,12 +187,34 @@ class ConversationTurnPrepareRequest(BaseModel):
     user_message: str
 
 
+class ConversationTurnBlockedBlock(BaseModel):
+    """Why a new user turn was refused while a decision is pending.
+
+    ``reason_code`` is ``decision_pending`` (an ask/decide or a live-test
+    approval is awaiting the operator). The chat keeps the composer disabled and
+    re-hydrates the pending card; nothing is retried in the background.
+    """
+
+    reason_code: str = "decision_pending"
+    message: str
+    intervene_request_id: uuid.UUID | None = None
+    live_test_request_id: uuid.UUID | None = None
+    expires_at: datetime | None = None
+
+
 class ConversationTurnPrepareResponse(BaseModel):
     """Prepared execution context for a conversation turn."""
 
     agent_type_id: uuid.UUID | None = None
     messages: list[dict[str, str]] = Field(default_factory=list)
     no_agent_message: str | None = None
+    #: Present only for an optimization conversation (omitted otherwise, so the
+    #: business / assistant prepare contract is unchanged).
+    optimization: ConversationOptimizationBlock | None = None
+    #: Present only when a decision is still pending for this conversation: the
+    #: new user message is refused server-side (no turn persisted, no work,
+    #: no assumption) and the client must re-surface the pending request.
+    blocked: ConversationTurnBlockedBlock | None = None
 
 
 class ConversationTurnAppendRequest(BaseModel):
@@ -202,11 +241,18 @@ class ConversationActivityUpsertRequest(BaseModel):
     tool_name: str | None = Field(default=None, max_length=400)
     target_agent_type_id: uuid.UUID | None = None
     pending_intervene_request_id: uuid.UUID | None = None
+    active_resume_id: uuid.UUID | None = None
     detail: dict[str, Any] | None = None
 
 
 class ConversationActivityResponse(BaseModel):
-    """The persisted current-activity record for a conversation session."""
+    """The persisted current-activity record for a conversation session.
+
+    The durable paused-turn projection (``resume_state``,
+    ``terminal_reason_code``, ``terminal_message_key``, ``write_applied``) is
+    resolved from the session's resume record so Communication Hub hydrates the
+    exact state Control Center owns instead of deriving it from ``detail``.
+    """
 
     conversation_session_id: uuid.UUID
     state: str
@@ -214,11 +260,127 @@ class ConversationActivityResponse(BaseModel):
     tool_name: str | None = None
     target_agent_type_id: uuid.UUID | None = None
     pending_intervene_request_id: uuid.UUID | None = None
+    active_resume_id: uuid.UUID | None = None
+    resume_state: str | None = None
+    resume_outcome: str | None = None
+    resume_expires_at: datetime | None = None
+    terminal_reason_code: str | None = None
+    terminal_message_key: str | None = None
+    write_applied: bool = False
     detail: dict | None = None
     is_terminal: bool = False
     started_at: datetime | None = None
     last_updated_at: datetime | None = None
     finished_at: datetime | None = None
+
+
+# ── Durable paused-turn resume / checkpoint schemas ──────────────────────────
+
+
+class ConversationTurnResumeUpsertRequest(BaseModel):
+    """Request body for PUT /conversations/{conv_session_id}/resume."""
+
+    intervene_request_id: uuid.UUID | None = None
+    turn_id: uuid.UUID | None = None
+    #: Accepted for wire compatibility with Agent Runtime; IGNORED — Control
+    #: Center recomputes the answerable window from tenant policy.
+    expires_at: datetime | None = None
+    resume_key: str | None = Field(default=None, max_length=255)
+    idempotency_key: str | None = Field(default=None, max_length=255)
+
+
+class ConversationTurnResumeResponse(BaseModel):
+    """The resume index read model — never carries the checkpoint payload."""
+
+    resume_id: uuid.UUID
+    conversation_session_id: uuid.UUID
+    resume_key: str
+    #: Opaque per-paused-turn key.  Agent Runtime reads it back from the record
+    #: so confirmed-write tool calls carry a key that is stable for the whole
+    #: paused turn (never derived from user input).
+    idempotency_key: str | None = None
+    state: str
+    resume_outcome: str | None = None
+    expires_at: datetime | None = None
+    write_applied: bool = False
+    is_terminal: bool = False
+    terminal_reason_code: str | None = None
+    terminal_message_key: str | None = None
+    attempt_count: int = 0
+    outcome_turn_id: uuid.UUID | None = None
+    # The live resume id currently backing the paused turn (null when terminal).
+    active_resume_id: uuid.UUID | None = None
+
+
+class ConversationTurnResumeReleaseRequest(BaseModel):
+    """Request body for POST /conversations/{conv_session_id}/resume/release."""
+
+    instance_id: str | None = Field(default=None, max_length=255)
+
+
+class ConversationTurnResumeReleaseResponse(BaseModel):
+    """Result of a best-effort claim release."""
+
+    resume_id: uuid.UUID
+    released: bool
+
+
+class ConversationTurnResumeCompleteRequest(BaseModel):
+    """Request body for POST /conversations/{conv_session_id}/resume/complete.
+
+    The single-transaction closer: appends the outcome turn once, records the
+    terminal state/outcome, consumes the checkpoint, and resolves activity to
+    ``finished``.  A duplicate call returns the stored outcome without a second
+    outcome turn.
+    """
+
+    resume_id: uuid.UUID | None = None
+    outcome: ResumeOutcome
+    write_applied: bool = False
+    applied_effect_summary: dict[str, Any] | None = None
+    applied_by_user_id: uuid.UUID | None = None
+    outcome_turn_id: uuid.UUID | None = None
+    outcome_turn_content: str | None = None
+    consume_checkpoint: bool = True
+
+
+class ConversationTurnCheckpointUpsertRequest(BaseModel):
+    """Request body for PUT /conversations/{conv_session_id}/resume/checkpoint."""
+
+    payload: dict[str, Any]
+    payload_kind: CheckpointPayloadKind = CheckpointPayloadKind.agent_turn_state
+    schema_version: int = Field(default=1, ge=1)
+    #: Accepted for wire compatibility; IGNORED — the payload lives for the
+    #: resume record's answerable window (tenant policy).
+    expires_at: datetime | None = None
+
+
+class ConversationTurnCheckpointResponse(BaseModel):
+    """Checkpoint metadata; ``payload`` is present only on a load."""
+
+    resume_id: uuid.UUID
+    payload_kind: str
+    schema_version: int
+    payload_bytes: int
+    is_consumed: bool = False
+    expires_at: datetime | None = None
+    payload: dict[str, Any] | None = None
+
+
+class ConversationTurnResumeClaimRequest(BaseModel):
+    """Request body for POST /conversations/{conv_session_id}/resume/claim."""
+
+    instance_id: str = Field(..., min_length=1, max_length=255)
+    lease_seconds: int = Field(default=45, ge=1, le=3600)
+
+
+class ConversationTurnResumeClaimResponse(BaseModel):
+    """Claim arbitration result: acquired / already_held / not_found / terminal."""
+
+    status: Literal["acquired", "already_held", "not_found", "terminal"]
+    resume: ConversationTurnResumeResponse | None = None
+    holder_instance_id: str | None = None
+    claim_expires_at: datetime | None = None
 
 
 class RuntimeToolCallRecord(BaseModel):
@@ -232,6 +394,11 @@ class RuntimeToolCallRecord(BaseModel):
     status: Literal["success", "error"]
     duration_ms: int | None = None
     error: str | None = None
+    #: Set ONLY by the approved live-test runner: this call was part of an
+    #: operator-approved, single-use optimization live test. Absent for every
+    #: ordinary run, replay verification and normal conversation turn, so live
+    #: contact is distinguishable from replay work in the raw tool log.
+    optimization_live_test_request_id: uuid.UUID | None = None
 
 
 class RuntimeToolCallIngestRequest(BaseModel):
@@ -945,9 +1112,83 @@ async def disconnect_a2a_session(
     return {"status": "disconnected", "session_link_id": session_link_id}
 
 
+async def _pending_decision_block(
+    db: AsyncSession, conv_session_id: uuid.UUID
+) -> "ConversationTurnBlockedBlock | None":
+    """Return the refusal block when this conversation awaits a decision.
+
+    The durable resume record is the authority (it survives reconnects and
+    instance failover): a live ``waiting_for_human`` record means the operator
+    still owes an answer, so a new user turn must be refused WITHOUT persisting
+    anything and without any background work or assumption.
+
+    Overdue live-test approvals are closed first (lazy expiry) so an expired
+    approval never blocks the conversation.
+    """
+    from app.db.models.conversation_turn_resume import ResumeState
+    from app.services.conversations.turn_resume_store import (
+        ConversationTurnResumeStore,
+    )
+
+    record = await ConversationTurnResumeStore().get_live_for_session(
+        conv_session_id, db
+    )
+    if record is None or record.state is not ResumeState.waiting_for_human:
+        return None
+
+    # A pause is live: only now pay for the live-test expiry check. An overdue
+    # approval is closed here, which settles the pause and unblocks the chat.
+    try:
+        from app.services.agents.optimization_live_test_service import (
+            get_live_test_service,
+        )
+
+        if await get_live_test_service().expire_overdue(
+            db, conversation_session_id=conv_session_id
+        ):
+            await db.flush()
+            record = await ConversationTurnResumeStore().get_live_for_session(
+                conv_session_id, db
+            )
+            if record is None or record.state is not ResumeState.waiting_for_human:
+                return None
+    except Exception:  # noqa: BLE001 — a prepare must never fail on the sweep
+        logger.warning(
+            "Live-test expiry check failed for conversation %s", conv_session_id,
+            exc_info=True,
+        )
+
+    live_test_request_id: uuid.UUID | None = None
+    if record.intervene_request_id is not None:
+        try:
+            from app.services.agents.optimization_live_test_service import (
+                get_live_test_service,
+            )
+
+            live_row = await get_live_test_service().get_for_intervention(
+                db, record.intervene_request_id
+            )
+            if live_row is not None:
+                live_test_request_id = live_row.id
+        except Exception:  # noqa: BLE001 — the block does not depend on this
+            live_test_request_id = None
+
+    return ConversationTurnBlockedBlock(
+        reason_code="decision_pending",
+        message=(
+            "Waiting for your decision on the pending request — answer it (or "
+            "end the conversation) before sending another message."
+        ),
+        intervene_request_id=record.intervene_request_id,
+        live_test_request_id=live_test_request_id,
+        expires_at=record.expires_at,
+    )
+
+
 @InternalSessionDataRouter.post(
     "/conversations/{conv_session_id}/prepare-turn",
     response_model=ConversationTurnPrepareResponse,
+    response_model_exclude_unset=True,
     dependencies=[Depends(require_service_certificate)],
     summary="Persist user turn and return prepared conversation context",
 )
@@ -956,11 +1197,42 @@ async def prepare_conversation_turn(
     body: ConversationTurnPrepareRequest,
     db: DbSession,
 ) -> ConversationTurnPrepareResponse:
-    """Persist the user message and return conversation messages for runtime execution."""
+    """Persist the user message and return conversation messages for runtime execution.
+
+    The conversation's CHANNEL decides the mode: an optimization conversation
+    runs the conversational loop regardless of the agent type's ``input_type``
+    and receives the optimization mission as the system message plus an
+    ``optimization`` guidance block. Business / assistant conversations keep
+    their existing prepare contract (no block, no mode change).
+
+    A conversation that is still waiting for the operator's decision refuses the
+    new message (``blocked``) without persisting a turn, starting work, or
+    assuming anything.
+    """
     from app.api.v1.internal.agent_data import get_agent_context
     from app.db.models.agents import AgentType
     from app.db.models.conversations import ConversationSession, ConversationTurn, TurnRole
+    from app.services.agents.optimization_mode import (
+        OPTIMIZATION_MODE,
+        get_optimization_conversation_availability,
+        resolve_optimization_mode,
+    )
     from app.services.conversations.store import ConversationStore
+
+    # Decision pending: refuse the new turn BEFORE anything is written.
+    blocked = await _pending_decision_block(db, conv_session_id)
+    if blocked is not None:
+        conv_session_for_block = await db.get(ConversationSession, conv_session_id)
+        return ConversationTurnPrepareResponse(
+            agent_type_id=(
+                conv_session_for_block.agent_type_id
+                if conv_session_for_block is not None
+                else None
+            ),
+            messages=[],
+            no_agent_message=None,
+            blocked=blocked,
+        )
 
     store = ConversationStore()
     user_turn = await store.add_turn(conv_session_id, TurnRole.user, body.user_message, db)
@@ -969,8 +1241,14 @@ async def prepare_conversation_turn(
     if conv_session is None:
         await db.commit()
         return ConversationTurnPrepareResponse(
-            no_agent_message=_build_no_agent_message(False, False)
+            agent_type_id=None,
+            messages=[],
+            no_agent_message=_build_no_agent_message(False, False),
         )
+
+    # Channel decides the loop; ``input_type`` is not consulted for this.
+    conv_mode = await resolve_optimization_mode(db, conv_session_id)
+    is_optimization = bool(conv_mode is not None and conv_mode.is_optimization)
 
     # Persistent activity state: the assistant starts "thinking" on the new
     # turn so reconnecting clients hydrate a working indicator immediately.
@@ -995,18 +1273,28 @@ async def prepare_conversation_turn(
     if conv_session.agent_type_id is None:
         await db.commit()
         return ConversationTurnPrepareResponse(
-            no_agent_message=_build_no_agent_message(True, False)
+            agent_type_id=None,
+            messages=[],
+            no_agent_message=_build_no_agent_message(True, False),
         )
 
     agent_type = await db.get(AgentType, conv_session.agent_type_id)
-    if agent_type is None or not agent_type.model_id:
+    # A business conversation needs the agent's runtime model. An optimization
+    # conversation does NOT: it runs on the workspace optimizer model, which is
+    # resolved (and fails closed) by the agent-context call below.
+    if agent_type is None or (not is_optimization and not agent_type.model_id):
         await db.commit()
         return ConversationTurnPrepareResponse(
             agent_type_id=conv_session.agent_type_id,
+            messages=[],
             no_agent_message=_build_no_agent_message(True, True),
         )
 
-    context = await get_agent_context(agent_type_id=agent_type.id, db=db)
+    context = await get_agent_context(
+        agent_type_id=agent_type.id,
+        db=db,
+        conv_session_id=conv_session_id,
+    )
     system_instruction = _compose_conversation_system_instruction(context)
 
     turns_result = await db.execute(
@@ -1024,11 +1312,23 @@ async def prepare_conversation_turn(
         role = "user" if turn.role == TurnRole.user else "assistant"
         messages.append({"role": role, "content": turn.content})
 
+    optimization_block: ConversationOptimizationBlock | None = None
+    if is_optimization:
+        availability = await get_optimization_conversation_availability(db, agent_type)
+        optimization_block = ConversationOptimizationBlock(
+            mode=OPTIMIZATION_MODE,
+            subject_agent_type_id=agent_type.id,
+            available=availability.available,
+            reason_code=availability.reason_code,
+            reason=availability.reason,
+        )
+
     await db.commit()
     return ConversationTurnPrepareResponse(
         agent_type_id=agent_type.id,
         messages=messages,
         no_agent_message=None,
+        **({"optimization": optimization_block} if is_optimization else {}),
     )
 
 
@@ -1239,6 +1539,9 @@ async def record_tool_calls(
                     status=RuntimeToolCallStatus(item.status),
                     duration_ms=item.duration_ms,
                     error=item.error,
+                    optimization_live_test_request_id=(
+                        item.optimization_live_test_request_id
+                    ),
                 )
             )
             recorded += 1
@@ -1298,10 +1601,23 @@ async def auto_name_conversation(
 # ── Conversation activity (persistent agent activity state) ──────────────────
 
 
-def _activity_response(activity: Any, conv_session_id: uuid.UUID) -> ConversationActivityResponse:
+async def _activity_response(
+    activity: Any,
+    conv_session_id: uuid.UUID,
+    db: AsyncSession | None = None,
+) -> ConversationActivityResponse:
     from app.db.models.conversation_activity import ActivityState
+    from app.db.models.conversation_turn_resume import ConversationTurnResume
 
     state = activity.state
+    resume: ConversationTurnResume | None = None
+    if db is not None:
+        resume = await _projected_resume(activity, db)
+    # A stale working row that died mid-flight has no resume record to carry the
+    # terminal reason; the reaper records it in the activity detail instead.
+    detail = activity.detail if isinstance(activity.detail, dict) else {}
+    detail_reason = detail.get("terminal_reason_code")
+    detail_message_key = detail.get("terminal_message_key")
     return ConversationActivityResponse(
         conversation_session_id=conv_session_id,
         state=state.value if isinstance(state, ActivityState) else str(state),
@@ -1309,12 +1625,139 @@ def _activity_response(activity: Any, conv_session_id: uuid.UUID) -> Conversatio
         tool_name=activity.tool_name,
         target_agent_type_id=activity.target_agent_type_id,
         pending_intervene_request_id=activity.pending_intervene_request_id,
+        active_resume_id=activity.active_resume_id,
+        resume_state=(
+            (resume.state.value if isinstance(resume.state, ResumeState) else str(resume.state))
+            if resume is not None
+            else None
+        ),
+        resume_outcome=(
+            (resume.resume_outcome.value if isinstance(resume.resume_outcome, ResumeOutcome) else resume.resume_outcome)
+            if resume is not None and resume.resume_outcome is not None
+            else None
+        ),
+        resume_expires_at=resume.expires_at if resume is not None else None,
+        terminal_reason_code=(
+            detail_reason
+            if isinstance(detail_reason, str) and detail_reason
+            else (resume.terminal_reason_code if resume is not None else None)
+        ),
+        terminal_message_key=(
+            detail_message_key
+            if isinstance(detail_message_key, str) and detail_message_key
+            else (resume.terminal_message_key if resume is not None else None)
+        ),
+        write_applied=bool(resume.write_applied) if resume is not None else False,
         detail=activity.detail,
         is_terminal=activity.is_terminal,
         started_at=activity.started_at,
         last_updated_at=activity.last_updated_at,
         finished_at=activity.finished_at,
     )
+
+
+async def _projected_resume(activity: Any, db: AsyncSession) -> Any:
+    """Resolve the resume record that explains the persisted activity state.
+
+    The live record backing a paused turn wins; otherwise a terminal activity
+    falls back to the session's newest terminal record so hydration can carry
+    the reason code of a turn the Terminal Resolver already closed.
+    """
+    from app.db.models.conversation_turn_resume import ConversationTurnResume
+    from app.services.conversations.turn_resume_store import (
+        ConversationTurnResumeStore,
+    )
+
+    store = ConversationTurnResumeStore()
+    if activity.active_resume_id is not None:
+        record: ConversationTurnResume | None = await store.get(
+            activity.active_resume_id, db
+        )
+        if record is not None:
+            return record
+    if activity.is_terminal:
+        latest = await store.get_latest_for_session(
+            activity.conversation_session_id, db
+        )
+        if latest is not None and latest.is_terminal:
+            return latest
+    return None
+
+
+def _turn_resume_response(record: Any) -> ConversationTurnResumeResponse:
+    """Build the resume read model (state/outcome/terminal reason, never payload)."""
+    state = record.state
+    outcome = record.resume_outcome
+    return ConversationTurnResumeResponse(
+        resume_id=record.id,
+        conversation_session_id=record.conversation_session_id,
+        resume_key=record.resume_key,
+        idempotency_key=record.idempotency_key,
+        state=state.value if isinstance(state, ResumeState) else str(state),
+        resume_outcome=(
+            outcome.value if isinstance(outcome, ResumeOutcome) else outcome
+        ),
+        expires_at=record.expires_at,
+        write_applied=record.write_applied,
+        is_terminal=record.is_terminal,
+        terminal_reason_code=record.terminal_reason_code,
+        terminal_message_key=record.terminal_message_key,
+        attempt_count=record.attempt_count,
+        outcome_turn_id=record.outcome_turn_id,
+        active_resume_id=None if record.is_terminal else record.id,
+    )
+
+
+def _checkpoint_response(record: Any, *, include_payload: bool) -> ConversationTurnCheckpointResponse:
+    kind = record.payload_kind
+    return ConversationTurnCheckpointResponse(
+        resume_id=record.resume_id,
+        payload_kind=kind.value if isinstance(kind, CheckpointPayloadKind) else str(kind),
+        schema_version=record.schema_version,
+        payload_bytes=record.payload_bytes,
+        is_consumed=record.is_consumed,
+        expires_at=record.expires_at,
+        payload=record.payload if include_payload else None,
+    )
+
+
+async def _tenant_scoped_conversation_session(
+    conv_session_id: uuid.UUID,
+    tenant_ctx: TenantContext,
+    db: AsyncSession,
+) -> Any:
+    """Resolve a conversation session, rejecting cross-tenant access.
+
+    The signed internal tenant context decides the tenant (forward-only: no
+    client-supplied tenant is ever accepted).  A session owned by another
+    tenant is rejected with 403 and nothing is persisted.
+    """
+    from app.db.models.conversations import ConversationSession
+
+    conv_session = await db.get(ConversationSession, conv_session_id)
+    if conv_session is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Conversation session {conv_session_id} not found",
+        )
+    session_tenant_id = getattr(conv_session, "tenant_id", None)
+    if (
+        tenant_ctx.tenant_id is not None
+        and session_tenant_id is not None
+        and session_tenant_id != tenant_ctx.tenant_id
+    ):
+        logger.warning(
+            "Cross-tenant conversation access rejected: session=%s session_tenant=%s "
+            "request_tenant=%s",
+            conv_session_id,
+            session_tenant_id,
+            tenant_ctx.tenant_id,
+        )
+        raise HTTPException(
+            status_code=403,
+            detail="Conversation session belongs to a different tenant",
+        )
+    return conv_session
 
 
 @InternalSessionDataRouter.put(
@@ -1326,17 +1769,25 @@ def _activity_response(activity: Any, conv_session_id: uuid.UUID) -> Conversatio
 async def upsert_conversation_activity(
     conv_session_id: uuid.UUID,
     body: ConversationActivityUpsertRequest,
+    tenant_ctx: Annotated[TenantContext, Depends(require_internal_tenant_context)],
     db: DbSession,
 ) -> ConversationActivityResponse:
     """Persist an activity transition from Agent Runtime (relayed via Communication Hub).
 
     Communication Hub calls this endpoint — Agent Runtime never touches the
     database. The conversation session is tenant-scoped by the signed internal
-    tenant context; an unknown session fails with 404.
+    tenant context; an unknown session fails with 404 and a cross-tenant
+    session fails with 403.
+
+    A ``waiting_for_human`` transition requires a live resume record; without
+    one the write is rejected with 409 so the UI can never show "waiting" for a
+    turn that is not actually answerable.
     """
     from app.db.models.conversation_activity import ActivityState
-    from app.db.models.conversations import ConversationSession
-    from app.services.conversations.activity_store import ConversationActivityStore
+    from app.services.conversations.activity_store import (
+        ActivityResumeInvariantError,
+        ConversationActivityStore,
+    )
 
     try:
         state = ActivityState(body.state)
@@ -1346,12 +1797,7 @@ async def upsert_conversation_activity(
             detail=f"Unknown activity state '{body.state}'",
         )
 
-    conv_session = await db.get(ConversationSession, conv_session_id)
-    if conv_session is None:
-        raise HTTPException(
-            status_code=404,
-            detail=f"Conversation session {conv_session_id} not found",
-        )
+    await _tenant_scoped_conversation_session(conv_session_id, tenant_ctx, db)
 
     store = ConversationActivityStore()
     try:
@@ -1364,9 +1810,12 @@ async def upsert_conversation_activity(
             target_agent_type_id=body.target_agent_type_id,
             pending_intervene_request_id=body.pending_intervene_request_id,
             detail=body.detail,
+            active_resume_id=body.active_resume_id,
         )
     except LookupError as exc:
         raise HTTPException(status_code=404, detail=str(exc))
+    except ActivityResumeInvariantError as exc:
+        raise HTTPException(status_code=409, detail=str(exc))
     await db.commit()
     # Re-load server-default / onupdate columns (started_at, last_updated_at)
     # before building the response — after commit the instance is expired and a
@@ -1379,7 +1828,41 @@ async def upsert_conversation_activity(
         conv_session_id,
         state.value,
     )
-    return _activity_response(activity, conv_session_id)
+    return await _activity_response(activity, conv_session_id, db)
+
+
+@InternalSessionDataRouter.post(
+    "/conversations/{conv_session_id}/activity/touch",
+    response_model=ConversationActivityResponse | None,
+    dependencies=[Depends(require_service_certificate)],
+    summary="Refresh the activity heartbeat of a live working turn",
+)
+async def touch_conversation_activity(
+    conv_session_id: uuid.UUID,
+    tenant_ctx: Annotated[TenantContext, Depends(require_internal_tenant_context)],
+    db: DbSession,
+) -> ConversationActivityResponse | None:
+    """Refresh ``last_updated_at`` for a live working activity row.
+
+    Communication Hub calls this from its ~15s conversation heartbeat so a
+    genuinely live turn stays fresh while the model is quiet, which lets the
+    reaper's staleness bound mean "the heartbeat stopped → the turn is dead".
+    No state change: terminal and ``waiting_for_human`` rows are untouched
+    (a paused turn deliberately stops emitting beats, and the reaper's pause
+    semantics come from the durable resume record, not a heartbeat).
+    """
+    from app.services.conversations.activity_store import ConversationActivityStore
+
+    await _tenant_scoped_conversation_session(conv_session_id, tenant_ctx, db)
+
+    store = ConversationActivityStore()
+    activity = await store.touch(conv_session_id, db)
+    if activity is None:
+        return None
+    await db.commit()
+    # Re-load server-default / onupdate columns before building the response.
+    await db.refresh(activity)
+    return await _activity_response(activity, conv_session_id, db)
 
 
 @InternalSessionDataRouter.get(
@@ -1390,6 +1873,7 @@ async def upsert_conversation_activity(
 )
 async def get_conversation_activity(
     conv_session_id: uuid.UUID,
+    tenant_ctx: Annotated[TenantContext, Depends(require_internal_tenant_context)],
     db: DbSession,
 ) -> ConversationActivityResponse | None:
     """Hydrate the current activity for a conversation session.
@@ -1397,21 +1881,372 @@ async def get_conversation_activity(
     Communication Hub calls this on WebSocket connect; an idle session
     (no live activity row) returns an explicit ``null`` body.
     """
-    from app.db.models.conversations import ConversationSession
     from app.services.conversations.activity_store import ConversationActivityStore
 
-    conv_session = await db.get(ConversationSession, conv_session_id)
-    if conv_session is None:
-        raise HTTPException(
-            status_code=404,
-            detail=f"Conversation session {conv_session_id} not found",
-        )
+    await _tenant_scoped_conversation_session(conv_session_id, tenant_ctx, db)
 
     store = ConversationActivityStore()
     activity = await store.get(conv_session_id, db)
     if activity is None:
         return None
-    return _activity_response(activity, conv_session_id)
+    return await _activity_response(activity, conv_session_id, db)
+
+
+# ── Durable paused-turn resume index / checkpoint (CH → CC only) ─────────────
+
+
+@InternalSessionDataRouter.put(
+    "/conversations/{conv_session_id}/resume",
+    response_model=ConversationTurnResumeResponse,
+    dependencies=[Depends(require_service_certificate)],
+    summary="Create or reuse the live resume record for a paused turn",
+)
+async def save_conversation_turn_resume(
+    conv_session_id: uuid.UUID,
+    body: ConversationTurnResumeUpsertRequest,
+    tenant_ctx: Annotated[TenantContext, Depends(require_internal_tenant_context)],
+    db: DbSession,
+) -> ConversationTurnResumeResponse:
+    """Register a pause (create) or reuse the record for the same intervention.
+
+    Any other live record for the session is superseded in the same
+    transaction, so at most one live resume row exists per session.
+
+    Control Center is the authority for the answerable window: ``expires_at``
+    is recomputed as ``now + tenant resume TTL`` (default 15 minutes) and any
+    client-supplied ``expires_at`` from Agent Runtime is ignored, so a tenant's
+    configured policy always wins.
+    """
+    from app.services.conversations.turn_resume_settings import (
+        resolve_resume_expiry,
+    )
+    from app.services.conversations.turn_resume_store import (
+        ConversationTurnResumeStore,
+        TurnResumeConflictError,
+        TurnResumeNotFoundError,
+    )
+
+    conv_session = await _tenant_scoped_conversation_session(
+        conv_session_id, tenant_ctx, db
+    )
+    expires_at = await resolve_resume_expiry(db, tenant_id=conv_session.tenant_id)
+    try:
+        record = await ConversationTurnResumeStore().create_or_reuse(
+            conv_session_id,
+            db,
+            intervene_request_id=body.intervene_request_id,
+            turn_id=body.turn_id,
+            # Deliberately NOT body.expires_at: tenant policy decides.
+            expires_at=expires_at,
+            resume_key=body.resume_key,
+            idempotency_key=body.idempotency_key,
+            tenant_id=conv_session.tenant_id,
+        )
+    except TurnResumeNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    except TurnResumeConflictError as exc:
+        raise HTTPException(status_code=409, detail=str(exc))
+    await db.commit()
+    await db.refresh(record)
+    return _turn_resume_response(record)
+
+
+@InternalSessionDataRouter.get(
+    "/conversations/{conv_session_id}/resume",
+    response_model=ConversationTurnResumeResponse | None,
+    dependencies=[Depends(require_service_certificate)],
+    summary="Return the live resume record (explicit null when idle)",
+)
+async def get_conversation_turn_resume(
+    conv_session_id: uuid.UUID,
+    tenant_ctx: Annotated[TenantContext, Depends(require_internal_tenant_context)],
+    db: DbSession,
+) -> ConversationTurnResumeResponse | None:
+    """Return the session's live resume record, or an explicit ``null``."""
+    from app.services.conversations.turn_resume_store import (
+        ConversationTurnResumeStore,
+    )
+
+    await _tenant_scoped_conversation_session(conv_session_id, tenant_ctx, db)
+    record = await ConversationTurnResumeStore().get_live_for_session(
+        conv_session_id, db
+    )
+    if record is None:
+        return None
+    return _turn_resume_response(record)
+
+
+@InternalSessionDataRouter.post(
+    "/conversations/{conv_session_id}/resume/release",
+    response_model=ConversationTurnResumeReleaseResponse,
+    dependencies=[Depends(require_service_certificate)],
+    summary="Release the turn claim (best effort)",
+)
+async def release_conversation_turn_resume(
+    conv_session_id: uuid.UUID,
+    body: ConversationTurnResumeReleaseRequest,
+    tenant_ctx: Annotated[TenantContext, Depends(require_internal_tenant_context)],
+    db: DbSession,
+) -> ConversationTurnResumeReleaseResponse:
+    """Release the caller's claim on the session's live resume record."""
+    from app.services.conversations.turn_resume_store import (
+        ConversationTurnResumeStore,
+    )
+
+    await _tenant_scoped_conversation_session(conv_session_id, tenant_ctx, db)
+    store = ConversationTurnResumeStore()
+    record = await store.get_live_for_session(conv_session_id, db)
+    if record is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"No live resume record for conversation {conv_session_id}",
+        )
+    released = await store.release(record.id, db, instance_id=body.instance_id)
+    await db.commit()
+    return ConversationTurnResumeReleaseResponse(
+        resume_id=record.id, released=released
+    )
+
+
+@InternalSessionDataRouter.post(
+    "/conversations/{conv_session_id}/resume/complete",
+    response_model=ConversationTurnResumeResponse,
+    dependencies=[Depends(require_service_certificate)],
+    summary="Single-transaction closer: outcome turn + terminal state + activity",
+)
+async def complete_conversation_turn_resume(
+    conv_session_id: uuid.UUID,
+    body: ConversationTurnResumeCompleteRequest,
+    tenant_ctx: Annotated[TenantContext, Depends(require_internal_tenant_context)],
+    db: DbSession,
+) -> ConversationTurnResumeResponse:
+    """Close a paused turn exactly once.
+
+    One transaction: append the outcome turn (guarded by ``outcome_turn_id``),
+    set the terminal state/outcome, consume the checkpoint, and resolve the
+    activity to ``finished``.  A duplicate call returns the stored outcome and
+    appends no second outcome turn.
+    """
+    from app.db.models.conversation_activity import ActivityState
+    from app.db.models.conversations import TurnRole
+    from app.services.conversations.activity_store import ConversationActivityStore
+    from app.services.conversations.store import ConversationStore
+    from app.services.conversations.turn_checkpoint_store import (
+        ConversationTurnCheckpointStore,
+    )
+    from app.services.conversations.turn_resume_store import (
+        ConversationTurnResumeStore,
+        TurnResumeTransitionError,
+    )
+
+    await _tenant_scoped_conversation_session(conv_session_id, tenant_ctx, db)
+    store = ConversationTurnResumeStore()
+
+    record = None
+    if body.resume_id is not None:
+        record = await store.get(body.resume_id, db)
+        if record is not None and record.conversation_session_id != conv_session_id:
+            record = None
+    if record is None:
+        record = await store.get_live_for_session(conv_session_id, db)
+    if record is None:
+        latest = await store.get_latest_for_session(conv_session_id, db)
+        if latest is not None and latest.is_terminal:
+            return _turn_resume_response(latest)
+        raise HTTPException(
+            status_code=404,
+            detail=f"No resume record for conversation {conv_session_id}",
+        )
+
+    if record.is_terminal:
+        # Duplicate close: report the stored outcome, append nothing.
+        if body.consume_checkpoint:
+            await ConversationTurnCheckpointStore().mark_consumed(record.id, db)
+            await db.commit()
+        return _turn_resume_response(record)
+
+    outcome_turn_id = body.outcome_turn_id
+    if record.outcome_turn_id is None and outcome_turn_id is None:
+        if body.outcome_turn_content:
+            outcome_turn = await ConversationStore().add_turn(
+                conv_session_id,
+                TurnRole.agent,
+                body.outcome_turn_content,
+                db,
+            )
+            outcome_turn_id = outcome_turn.id
+    if outcome_turn_id is None:
+        outcome_turn_id = record.outcome_turn_id
+
+    try:
+        record = await store.resolve(
+            record.id,
+            db,
+            body.outcome,
+            write_applied=body.write_applied,
+            applied_by_user_id=body.applied_by_user_id,
+            applied_effect_summary=body.applied_effect_summary,
+            outcome_turn_id=outcome_turn_id,
+        )
+    except TurnResumeTransitionError as exc:
+        raise HTTPException(status_code=409, detail=str(exc))
+
+    if body.consume_checkpoint:
+        await ConversationTurnCheckpointStore().mark_consumed(record.id, db)
+    await ConversationActivityStore().resolve_terminal(
+        conv_session_id, db, state=ActivityState.finished
+    )
+    await db.commit()
+    await db.refresh(record)
+    return _turn_resume_response(record)
+
+
+@InternalSessionDataRouter.put(
+    "/conversations/{conv_session_id}/resume/checkpoint",
+    response_model=ConversationTurnCheckpointResponse,
+    dependencies=[Depends(require_service_certificate)],
+    summary="Upsert the opaque checkpoint payload for the live resume record",
+)
+async def save_conversation_turn_checkpoint(
+    conv_session_id: uuid.UUID,
+    body: ConversationTurnCheckpointUpsertRequest,
+    tenant_ctx: Annotated[TenantContext, Depends(require_internal_tenant_context)],
+    db: DbSession,
+) -> ConversationTurnCheckpointResponse:
+    """Persist the opaque paused-turn payload (size-capped, one row per resume).
+
+    The payload's expiry follows the resume record's answerable window (tenant
+    policy): a tenant that allows a longer window than the platform default
+    must not have its saved state purged early, and a client-supplied
+    ``expires_at`` is ignored.
+    """
+    from app.services.conversations.turn_checkpoint_store import (
+        CheckpointPayloadError,
+        CheckpointTooLargeError,
+        ConversationTurnCheckpointStore,
+    )
+    from app.services.conversations.turn_resume_settings import (
+        resolve_resume_expiry,
+    )
+    from app.services.conversations.turn_resume_store import (
+        ConversationTurnResumeStore,
+    )
+
+    conv_session = await _tenant_scoped_conversation_session(
+        conv_session_id, tenant_ctx, db
+    )
+    live = await ConversationTurnResumeStore().get_live_for_session(
+        conv_session_id, db
+    )
+    if live is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"No live resume record for conversation {conv_session_id}",
+        )
+    expires_at = live.expires_at or await resolve_resume_expiry(
+        db, tenant_id=conv_session.tenant_id
+    )
+
+    try:
+        checkpoint = await ConversationTurnCheckpointStore().upsert_payload(
+            live.id,
+            db,
+            payload=body.payload,
+            payload_kind=body.payload_kind,
+            schema_version=body.schema_version,
+            # Deliberately NOT body.expires_at: tenant policy decides.
+            expires_at=expires_at,
+        )
+    except CheckpointTooLargeError as exc:
+        raise HTTPException(status_code=413, detail=str(exc))
+    except CheckpointPayloadError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+    await db.commit()
+    await db.refresh(checkpoint)
+    return _checkpoint_response(checkpoint, include_payload=False)
+
+
+@InternalSessionDataRouter.get(
+    "/conversations/{conv_session_id}/resume/checkpoint",
+    response_model=ConversationTurnCheckpointResponse | None,
+    dependencies=[Depends(require_service_certificate)],
+    summary="Load the opaque checkpoint payload (null when absent/consumed/expired)",
+)
+async def get_conversation_turn_checkpoint(
+    conv_session_id: uuid.UUID,
+    tenant_ctx: Annotated[TenantContext, Depends(require_internal_tenant_context)],
+    db: DbSession,
+) -> ConversationTurnCheckpointResponse | None:
+    """Return the loadable payload for the live resume record, or ``null``."""
+    from app.services.conversations.turn_checkpoint_store import (
+        ConversationTurnCheckpointStore,
+    )
+    from app.services.conversations.turn_resume_store import (
+        ConversationTurnResumeStore,
+    )
+
+    await _tenant_scoped_conversation_session(conv_session_id, tenant_ctx, db)
+    live = await ConversationTurnResumeStore().get_live_for_session(
+        conv_session_id, db
+    )
+    if live is None:
+        return None
+    checkpoint = await ConversationTurnCheckpointStore().load_payload(live.id, db)
+    if checkpoint is None:
+        return None
+    return _checkpoint_response(checkpoint, include_payload=True)
+
+
+@InternalSessionDataRouter.post(
+    "/conversations/{conv_session_id}/resume/claim",
+    response_model=ConversationTurnResumeClaimResponse,
+    dependencies=[Depends(require_service_certificate)],
+    summary="Acquire or renew the turn claim (acquired/already_held/not_found/terminal)",
+)
+async def claim_conversation_turn_resume(
+    conv_session_id: uuid.UUID,
+    body: ConversationTurnResumeClaimRequest,
+    tenant_ctx: Annotated[TenantContext, Depends(require_internal_tenant_context)],
+    db: DbSession,
+) -> ConversationTurnResumeClaimResponse:
+    """Claim the paused turn so one instance continues it at a time."""
+    from app.services.conversations.turn_resume_store import (
+        ClaimStatus,
+        ConversationTurnResumeStore,
+    )
+
+    await _tenant_scoped_conversation_session(conv_session_id, tenant_ctx, db)
+    store = ConversationTurnResumeStore()
+    record = await store.get_live_for_session(conv_session_id, db)
+    if record is None:
+        latest = await store.get_latest_for_session(conv_session_id, db)
+        if latest is not None and latest.is_terminal:
+            return ConversationTurnResumeClaimResponse(
+                status=ClaimStatus.terminal.value,
+                resume=_turn_resume_response(latest),
+                holder_instance_id=latest.claimed_by_instance_id,
+                claim_expires_at=latest.claim_expires_at,
+            )
+        return ConversationTurnResumeClaimResponse(
+            status=ClaimStatus.not_found.value
+        )
+
+    result = await store.claim(
+        record.id,
+        db,
+        instance_id=body.instance_id,
+        lease_seconds=body.lease_seconds,
+    )
+    await db.commit()
+    resume_response = (
+        _turn_resume_response(result.resume) if result.resume is not None else None
+    )
+    return ConversationTurnResumeClaimResponse(
+        status=result.status.value,
+        resume=resume_response,
+        holder_instance_id=result.holder_instance_id,
+        claim_expires_at=result.claim_expires_at,
+    )
 
 
 # ── Internal intervention respond (CH cert auth, no JWT needed) ──────────────
@@ -1440,8 +2275,17 @@ class InternalInterveneRespondRequest(BaseModel):
 )
 async def internal_intervene_respond(
     body: InternalInterveneRespondRequest,
+    tenant_ctx: Annotated[TenantContext, Depends(require_internal_tenant_context)],
     db: DbSession,
 ) -> InterveneResponseRead:
+    """Submit an intervention response (internal, service-cert auth).
+
+    ``tenant_ctx`` is the VERIFIED signed tenant context (or the root tenant in
+    single-tenant mode). It is threaded explicitly into the resume dispatch:
+    this path is a bypassed ``/api/v1/internal/*`` route, so no tenant
+    contextvar is bound here and relying on it dispatched the resume
+    headerless (CH→CC relay 401 → the turn died as ``unresumable``).
+    """
     req = await db.get(InterveneRequest, body.request_id)
     if req is None:
         raise HTTPException(status_code=404, detail="Request not found")
@@ -1475,6 +2319,39 @@ async def internal_intervene_respond(
     if operator_user_id is None:
         raise HTTPException(status_code=400, detail="Cannot determine operator user for intervention response")
 
+    # Same transaction as the stored response: advance the durable resume record
+    # (answering user, `resuming`, attempt) — or, for a terminal record / an
+    # elapsed answer window, settle it without dispatching anything.
+    from app.services.conversations.turn_resolution import (
+        REASON_EXPIRED,
+        advance_answered_intervention,
+        dispatch_answered_conversation_turn,
+        execute_approved_live_test,
+        prepare_live_test_decision,
+        push_outcome_message,
+    )
+
+    # Live-test approval: apply the decision to the ledger BEFORE the response
+    # and the resume advance, so the expiry check wins (nothing is recorded for
+    # an expired approval). No linked ledger row → handled=False.
+    live_decision = await prepare_live_test_decision(
+        db, req, approved=body.approval_value
+    )
+    if live_decision.expired:
+        await db.commit()
+        if req.conversation_session_id is not None:
+            await push_outcome_message(req.conversation_session_id, REASON_EXPIRED)
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "error": "live_test_expired",
+                "reason": (
+                    "This live-test approval expired before it was answered. "
+                    "Nothing ran — verification stays replay-only."
+                ),
+            },
+        )
+
     response = await _internal_intervene_store.submit_response(
         db=db,
         request_id=body.request_id,
@@ -1482,6 +2359,10 @@ async def internal_intervene_respond(
         approval_value=body.approval_value,
         selected_choice=body.selected_choice,
         text_value=body.text_value,
+    )
+
+    advance = await advance_answered_intervention(
+        db, req, operator_user_id=operator_user_id
     )
     response_data = InterveneResponseRead.model_validate(response)
     await db.commit()
@@ -1493,14 +2374,29 @@ async def internal_intervene_respond(
         response_value["selected_choice"] = body.selected_choice
     if body.text_value is not None:
         response_value["text_value"] = body.text_value
+    if live_decision.handled:
+        response_value.update(live_decision.resume_payload)
+
+    if live_decision.should_execute and live_decision.request_id is not None and advance.dispatch:
+        # The approved SCRIPT, once end to end, before the resume.
+        payload = await execute_approved_live_test(
+            db,
+            live_decision.request_id,
+            tenant_context=tenant_ctx,
+        )
+        response_value.update(payload)
 
     if req.agent_session_id is not None:
         agent_session_id = req.agent_session_id
-        await _resume_agent_session(agent_session_id, response_value)
+        await _resume_agent_session(
+            agent_session_id, response_value, tenant_context=tenant_ctx
+        )
     elif req.conversation_session_id is not None:
-        # FIX-20261031-133253: conversation-scoped request (conversational
-        # assistant) — resume the paused conversational turn via the
-        # conversation session id (AR conversational HITL registry).
-        await _resume_agent_session(req.conversation_session_id, response_value)
+        # Conversation-scoped request (conversational assistant): dispatch the
+        # durable resume with the resume identity so a duplicate answer can
+        # never start a second resume.
+        await dispatch_answered_conversation_turn(
+            db, req, advance, response_value, tenant_context=tenant_ctx
+        )
 
     return response_data

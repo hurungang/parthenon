@@ -98,6 +98,8 @@ const NAMES = {
   skillToolIds: { 'skill-1': ['tool-1'] },
   identityTokenHealth: {},
   sopComposedSkillIds: {},
+  sopDelegatedAgentTypeIds: {},
+  agentTypeNames: {},
 }
 
 const LABELS = {
@@ -129,6 +131,7 @@ const LABELS = {
     equippedWith: 'agents.plan.edgeEquipped',
     grants: 'agents.plan.edgeGrants',
     composed: 'agents.plan.edgeComposed',
+    delegates: 'agents.plan.edgeDelegates',
   },
   zones: {
     config: { title: 'agents.plan.zoneConfigTitle', subtitle: 'agents.plan.zoneConfigSubtitle' },
@@ -326,6 +329,52 @@ describe('buildPanelTopology', () => {
     // the SOP).
     expect(edges.some((e) => e.source === 'agent' && e.target === 'skill_skill-2')).toBe(false)
     expect(edges.some((e) => e.source === 'role' && e.target === 'skill_skill-2')).toBe(false)
+  })
+
+  it('renders SOP agent-delegation steps as delegated agent type nodes beneath the SOP', () => {
+    // Regression: the preview used to show only a SOP's composed skills — the
+    // agent it delegates to (agent_delegation step target) was invisible.
+    const names = {
+      ...NAMES,
+      agentTypeNames: { 'at-1': 'billing-agent' },
+      sopDelegatedAgentTypeIds: { 'sop-1': ['at-1'] },
+    }
+    const { nodes, edges } = buildPanelTopology('research-agent', FULL_DRAFT, names, LABELS)
+
+    const delegated = findNode(nodes, 'agent_type_at-1')
+    expect(delegated).toBeDefined()
+    expect(delegated?.type).toBe('agent_type')
+    expect(delegated?.zone).toBe('capabilities')
+    expect(delegated?.group).toBe('sops')
+    expect(delegated?.childOf).toBe('sop_sop-1')
+    expect(delegated?.label).toBe('billing-agent')
+    expect(delegated?.usage).toBeUndefined()
+
+    // Delegation edge: SOP → agent type, in the SOP's own accent colour.
+    const sopColor = findNode(nodes, 'sop_sop-1')?.accentColor
+    const delegationEdges = edges.filter((e) => e.source === 'sop_sop-1' && e.target === 'agent_type_at-1')
+    expect(delegationEdges).toHaveLength(1)
+    expect(delegationEdges[0]?.color).toBe(sopColor)
+    expect(delegationEdges[0]?.label).toBe('agents.plan.edgeDelegates')
+
+    // Delegated agents are NOT directly equipped capabilities: no agent
+    // "equipped with" edge and no role "grants" edge, and no tool routing.
+    expect(edges.some((e) => e.source === 'agent' && e.target === 'agent_type_at-1')).toBe(false)
+    expect(edges.some((e) => e.source === 'role' && e.target === 'agent_type_at-1')).toBe(false)
+    expect(edges.some((e) => e.source === 'agent_type_at-1')).toBe(false)
+  })
+
+  it('renders a pending delegated agent node while the agent types list is in flight', () => {
+    const names = {
+      ...NAMES,
+      sopDelegatedAgentTypeIds: { 'sop-1': ['at-unknown'] },
+    }
+    const pending: PanelTopologyPending = { ...ALL_PENDING, sopDetails: false, tools: false }
+    const { nodes } = buildPanelTopology('research-agent', FULL_DRAFT, names, LABELS, pending)
+
+    const delegated = findNode(nodes, 'agent_type_at-unknown')
+    expect(delegated?.label).toBe(LABELS.loading)
+    expect(delegated?.pending).toBe(true)
   })
 
   it('reuses the existing skill node when a SOP composes an already-bound skill (no duplicates)', () => {
@@ -558,6 +607,8 @@ const EMPTY_NAMES = {
   skillToolIds: {},
   identityTokenHealth: {},
   sopComposedSkillIds: {},
+  sopDelegatedAgentTypeIds: {},
+  agentTypeNames: {},
 }
 
 const ALL_PENDING: PanelTopologyPending = {
@@ -568,6 +619,7 @@ const ALL_PENDING: PanelTopologyPending = {
   skills: true,
   sops: true,
   sopDetails: true,
+  agentTypes: true,
   tools: true,
 }
 
@@ -796,6 +848,68 @@ describe('PanelTopologyCanvas', () => {
     expect(
       mockTopologyNodes.filter((n) => (n as { id: string }).id === 'skill_skill-1'),
     ).toHaveLength(1)
+  })
+
+  it('renders the agent a SOP delegates to once the agent types list resolves', async () => {
+    // Regression: agent_delegation steps were read only by the details step
+    // list — the topology used to show the SOP's skills but never the agent
+    // it hands off to.
+    const sopDetail = {
+      id: 'sop-1',
+      name: 'research-sop',
+      description: null,
+      instructions: null,
+      is_active: true,
+      created_at: '2026-06-01T00:00:00Z',
+      updated_at: '2026-06-01T00:00:00Z',
+      steps: [
+        {
+          id: 'step-1',
+          sop_id: 'sop-1',
+          order: 1,
+          step_type: 'agent_delegation',
+          skill_id: null,
+          target_agent_type_id: 'at-1',
+          step_config: null,
+          name: 'hand off',
+          description: null,
+          created_at: '2026-06-01T00:00:00Z',
+        },
+      ],
+    }
+    let resolveTypes: (value: { data: unknown }) => void = () => {}
+    mockApiGet.mockImplementation((url: string) => {
+      if (url === '/sops/sop-1') return Promise.resolve({ data: sopDetail })
+      if (url === '/agents/types') {
+        return new Promise((resolve) => {
+          resolveTypes = resolve
+        })
+      }
+      return Promise.resolve({ data: [] })
+    })
+
+    renderCanvas(FULL_DRAFT)
+
+    // SOP detail is in place but the agent types list is still in flight →
+    // the delegated node renders as a pending child of the SOP (never a raw id).
+    await waitFor(() => {
+      expect(mockTopologyNodes.find((n) => (n as { id: string }).id === 'agent_type_at-1')).toMatchObject({
+        pending: true,
+      })
+    })
+    const pendingNode = mockTopologyNodes.find((n) => (n as { id: string }).id === 'agent_type_at-1') as
+      | { childOf?: string; type?: string }
+      | undefined
+    expect(pendingNode?.type).toBe('agent_type')
+    expect(pendingNode?.childOf).toBe('sop_sop-1')
+
+    resolveTypes({ data: [{ id: 'at-1', name: 'billing-agent' }] })
+    await waitFor(() => {
+      expect(mockTopologyNodes.find((n) => (n as { id: string }).id === 'agent_type_at-1')).toMatchObject({
+        label: 'billing-agent',
+      })
+    })
+    expect(mockTopologyEdges.some((e) => (e as { target: string }).target === 'agent_type_at-1')).toBe(true)
   })
 
   it('keeps the topology free of SOP composition for drafts without bound SOPs', async () => {

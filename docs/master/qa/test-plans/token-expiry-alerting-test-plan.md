@@ -7,8 +7,9 @@ Covers token expiry alerting across Control Center, Communication Hub (gateway p
 ## Coverage Areas
 
 ### 1. Token Health Classification (Backend)
-- Classification boundaries for agent identities (`token_expires_at`, `refresh_token_expires_at`) and MCP sessions (`oauth_expires_at`, `oauth_refresh_expires_at`)
-- States: `healthy`, `expiring` (within 7 days), `expired`, `unknown` (missing timestamps)
+- Classification boundaries for agent identities (`refresh_token_expires_at` authoritative when a refresh token exists; `token_expires_at` fallback) and MCP sessions (`oauth_refresh_expires_at` authoritative when present; `oauth_expires_at` fallback; `requires_reauth` → expired)
+- States: `healthy`, `expiring` (within 7 days), `expired`, `unknown` (no usable timestamp). An expired access token with a valid refresh token is NOT expired.
+- Regression: no surface (dashboard cards, identity list, MCP session list, topology) reports a refreshable credential as expired; identity/session labels explicitly identify refresh-token status and expiry.
 - Read-time recomputation overrides stale persisted state
 - Inactive MCP sessions excluded from aggregation
 
@@ -78,7 +79,7 @@ Covers token expiry alerting across Control Center, Communication Hub (gateway p
 
 ### 9. E2E Flows (Mocked + Real-Backend Considerations)
 - Dashboard alerts → click-through remediation → warnings cleared
-- Execution BLOCKED with named identity (including subagent); expiring warns and proceeds
+- Execution BLOCKED with named identity (including subagent) when a refresh token is expired or its refresh failed; expiring refresh tokens warn and proceed; a refreshable expired access token does not block
 - Topology warning/error badges
 
 **Test files:**
@@ -97,8 +98,8 @@ Covers token expiry alerting across Control Center, Communication Hub (gateway p
 - [backend/tests/services/test_token_health_service.py](../../../../backend/tests/services/test_token_health_service.py)
 
 ## Acceptance Criteria
-- Dashboard shows separate expired/expiring indicators for agent identities and MCP sessions with click-through remediation
-- Expired tokens block execution with named identity/session; expiring tokens warn but proceed
+- Dashboard shows separate expired/expiring **refresh-token** indicators for agent identities and MCP sessions with click-through remediation; identity and session lists label the refresh-token status
+- Expired refresh tokens (or unrecoverable refresh failures) block execution with named identity/session; expiring refresh tokens warn but proceed; refreshable expired access tokens do not block
 - No token failure discoverable only at execution time
 - Topology shows warning/error badges appropriately
 - All preflight evaluations create `TokenHealthCheck` audit rows

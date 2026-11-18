@@ -2,13 +2,14 @@
 import uuid
 import logging
 from datetime import datetime
+from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_claims, require_permission
-from app.core.resource_types import RT_AGENT_TRAILS
+from app.core.resource_types import RT_AGENT, RT_AGENT_TRAILS
+from app.db.models.agents import AgentInputType, AgentType
 from app.db.models.conversations import ConversationSession, ConversationStatus
 from app.db.models.identity import Identity
 from app.db.session import DbSession
@@ -23,6 +24,18 @@ from app.schemas.intervene import (
     InterveneResponseRead,
     InterveneResponseSubmit,
 )
+from app.schemas.optimizer import (
+    LiveTestDecisionRead,
+    LiveTestOperationRead,
+    LiveTestRequestRead,
+    OptimizationAuditRead,
+    OptimizationAvailabilityRead,
+    OptimizationConversationCreate,
+    OptimizationConversationDetailRead,
+    OptimizationConversationRead,
+    OptimizationSubjectRead,
+    OptimizerModelStateRead,
+)
 from app.services.agents.intervene_service import InterveneRequestStore
 from app.services.conversations.manager import ConversationSessionManager
 from app.services.conversations.store import ConversationStore
@@ -30,72 +43,6 @@ from app.services.conversations.store import ConversationStore
 logger = logging.getLogger(__name__)
 
 ConversationRouter = APIRouter(prefix="/conversations", tags=["Conversations"])
-
-#: Terminal assistant message delivered when a suspended conversational turn
-#: cannot be resumed (e.g. a service restart orphaned the pending HITL state).
-_INTERRUPTION_NOTICE = (
-    "This conversation was interrupted by a service restart and the pending "
-    "action was lost. Please resend your request."
-)
-
-
-async def _deliver_interruption_notice(
-    session_id: uuid.UUID,
-    db: AsyncSession,
-    intervene_req,  # InterveneRequest ORM row
-) -> None:
-    """Persist a terminal assistant turn and push it to the live chat socket.
-
-    Best-effort: persistence failure is logged (the intervention response was
-    already committed); a missing live WebSocket is fine — the client re-fetches
-    the turns on reconnect.
-    """
-    from app.db.models.conversations import TurnRole, TurnType
-
-    try:
-        await _store.add_turn(
-            session_id=session_id,
-            role=TurnRole.agent,
-            content=_INTERRUPTION_NOTICE,
-            db=db,
-            turn_type=TurnType.message,
-            intervene_request_id=getattr(intervene_req, "id", None),
-        )
-        await db.commit()
-        logger.info(
-            "Persisted interruption notice turn for conversation session %s",
-            session_id,
-        )
-    except Exception:
-        logger.warning(
-            "Failed to persist interruption notice for conversation session %s",
-            session_id,
-            exc_info=True,
-        )
-
-    # Best-effort live push via the Communication Hub so an open chat
-    # unblocks immediately instead of waiting for a reconnect re-fetch.
-    try:
-        from app.services.control_center.comm_hub_client import (
-            CommunicationHubClient,
-        )
-        client = CommunicationHubClient()
-        await client.dispatch_message(
-            session_id=session_id,
-            message_type="chat_message",
-            content={
-                "type": "chat_message",
-                "sender_role": "agent",
-                "content": _INTERRUPTION_NOTICE,
-            },
-        )
-    except Exception:
-        logger.info(
-            "No live dispatch of interruption notice for conversation "
-            "session %s (client will re-fetch on reconnect)",
-            session_id,
-            exc_info=True,
-        )
 
 _store = ConversationStore()
 _manager = ConversationSessionManager()
@@ -116,6 +63,331 @@ def _get_requesting_user_id(request: Request) -> uuid.UUID | None:
     claims = get_current_claims(request)
     user_id_str: str | None = claims.get("platform_user_id")
     return uuid.UUID(user_id_str) if user_id_str else None
+
+
+# ── Optimization conversation helpers ─────────────────────────────────────────
+
+
+def _optimization_subject_read(agent_type: AgentType) -> OptimizationSubjectRead:
+    """The conversation's subject (the agent type being optimized)."""
+    return OptimizationSubjectRead(
+        agent_type_id=agent_type.id,
+        name=agent_type.name,
+        input_type=(
+            agent_type.input_type.value
+            if hasattr(agent_type.input_type, "value")
+            else str(agent_type.input_type)
+        ),
+        is_conversational=agent_type.input_type == AgentInputType.conversation,
+    )
+
+
+def _availability_read(
+    availability: Any,
+) -> OptimizationAvailabilityRead:
+    """Map the computed availability onto its API projection."""
+    model = availability.optimizer_model
+    return OptimizationAvailabilityRead(
+        available=availability.available,
+        reason_code=availability.reason_code,
+        reason=availability.reason,
+        can_start_work=availability.can_start_work,
+        plan_present=availability.plan_present,
+        optimized_plan_status=availability.optimized_plan_status,
+        successful_executions=availability.successful_executions,
+        optimizer_model=OptimizerModelStateRead(
+            model_id=model.model_id,
+            effective_model_id=model.effective_model_id,
+            source=model.source,
+            configured=model.configured,
+            enabled=model.enabled,
+            reason_code=model.reason_code,
+        ),
+    )
+
+
+async def _operator_can_execute(db: Any, request: Request) -> bool:
+    """Whether the caller holds ``agent::execute`` (the Optimize grant).
+
+    This is availability INFORMATION (``can_start_work``), never the gate: a
+    missing grant is reported on the conversation surface instead of hiding it.
+    """
+    from fastapi import HTTPException
+
+    from app.api.deps import authorize_identity
+    from app.core.tenant_context import optional_tenant_context
+
+    tenant_context = optional_tenant_context(request)
+    try:
+        await authorize_identity(
+            db,
+            get_current_claims(request),
+            RT_AGENT,
+            "execute",
+            tenant_id=tenant_context.tenant_id if tenant_context else None,
+        )
+        return True
+    except HTTPException:
+        return False
+    except Exception:  # noqa: BLE001 - availability must never fail the request
+        logger.warning("Optimization availability permission check failed", exc_info=True)
+        return False
+
+
+async def _computed_availability(
+    db: Any, request: Request, agent_type: AgentType
+) -> OptimizationAvailabilityRead:
+    from app.services.agents.optimization_mode import (
+        get_optimization_conversation_availability,
+    )
+
+    availability = await get_optimization_conversation_availability(
+        db,
+        agent_type,
+        can_start_work=await _operator_can_execute(db, request),
+    )
+    return _availability_read(availability)
+
+
+async def _session_audit(db: Any, session_id: uuid.UUID) -> OptimizationAuditRead:
+    """Replay-vs-live projection from the raw runtime tool log.
+
+    Delegates to the ledger service (single source of truth): replay evidence is
+    an ``execute_script`` call; a live operation is a call carrying the ledger
+    pointer (set only by an approved, single-use live test).
+    """
+    from app.services.agents.optimization_live_test_service import (
+        get_live_test_service,
+    )
+
+    audit = await get_live_test_service().session_audit(db, session_id)
+    return OptimizationAuditRead(
+        replay_verifications=int(audit["replay_verifications"]),
+        live_operations=int(audit["live_operations"]),
+        last_live_at=audit["last_live_at"],
+        replay_only=bool(audit["replay_only"]),
+    )
+
+
+async def _load_optimization_session(
+    db: Any, session_id: uuid.UUID, request: Request
+) -> tuple[ConversationSession, AgentType]:
+    """Load the conversation for an optimization read, enforcing the guards.
+
+    404 unknown session, 403 not the owner, 422 not an optimization
+    conversation (a business/assistant conversation can never become one).
+    """
+    from app.services.agents.optimization_mode import OPTIMIZATION_CHANNEL
+
+    conv_session = await db.get(ConversationSession, session_id)
+    if conv_session is None:
+        raise HTTPException(status_code=404, detail="Conversation session not found")
+
+    user_id = _get_requesting_user_id(request)
+    if (
+        user_id
+        and conv_session.triggered_by_user_id
+        and user_id != conv_session.triggered_by_user_id
+    ):
+        raise HTTPException(
+            status_code=403,
+            detail="Not authorized to view this conversation",
+        )
+
+    if (conv_session.channel or "") != OPTIMIZATION_CHANNEL:
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "error": "not_optimization_conversation",
+                "reason": (
+                    "This conversation is not an optimization conversation; "
+                    "optimization mode only applies to sessions created with "
+                    "channel='optimization'."
+                ),
+            },
+        )
+
+    if conv_session.agent_type_id is None:
+        raise HTTPException(status_code=404, detail="Agent type not found")
+    agent_type = await db.get(AgentType, conv_session.agent_type_id)
+    if agent_type is None:
+        raise HTTPException(status_code=404, detail="Agent type not found")
+    return conv_session, agent_type
+
+
+@ConversationRouter.post(
+    "/optimization",
+    response_model=OptimizationConversationRead,
+    status_code=201,
+)
+async def create_optimization_conversation(
+    body: OptimizationConversationCreate,
+    request: Request,
+    db: DbSession,
+    _: dict = Depends(require_permission(RT_AGENT, "read")),
+) -> OptimizationConversationRead:
+    """Open an optimization conversation on the subject agent type.
+
+    The body carries ONLY the subject (no scope / optimizer / second agent
+    type). Typed and conversational agent types are both accepted: the channel
+    — not ``input_type`` — decides that these turns run the conversational
+    loop.
+
+    Creation writes exactly one ``ConversationSession`` (subject, channel,
+    operator, status). No optimization work starts; availability is computed
+    and returned, never stored, and a missing precondition does NOT fail the
+    open — the conversation is where the operator learns what is missing.
+    """
+    agent_type = await db.get(AgentType, body.agent_type_id)
+    if agent_type is None:
+        raise HTTPException(status_code=404, detail="Agent type not found")
+
+    user_id = _get_requesting_user_id(request)
+    try:
+        conv_session = await _manager.create_optimization(
+            agent_type_id=agent_type.id,
+            triggered_by_user_id=user_id,
+            db=db,
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=422,
+            detail={"error": "optimization_unavailable", "reason": str(exc)},
+        ) from exc
+
+    availability = await _computed_availability(db, request, agent_type)
+    return OptimizationConversationRead(
+        conversation=ConversationSessionRead.model_validate(conv_session),
+        subject=_optimization_subject_read(agent_type),
+        availability=availability,
+    )
+
+
+@ConversationRouter.get(
+    "/{session_id}/optimization",
+    response_model=OptimizationConversationDetailRead,
+)
+async def get_optimization_conversation(
+    session_id: uuid.UUID,
+    request: Request,
+    db: DbSession,
+    _: dict = Depends(require_permission(RT_AGENT, "read")),
+) -> OptimizationConversationDetailRead:
+    """Subject + availability + replay-vs-live audit for an optimization session.
+
+    Used on open, resume and reconnect. The subject is always the session's own
+    ``agent_type_id`` — no other agent type can be named here.
+    """
+    conv_session, agent_type = await _load_optimization_session(
+        db, session_id, request
+    )
+    availability = await _computed_availability(db, request, agent_type)
+    audit = await _session_audit(db, session_id)
+    return OptimizationConversationDetailRead(
+        conversation=ConversationSessionRead.model_validate(conv_session),
+        subject=_optimization_subject_read(agent_type),
+        availability=availability,
+        audit=audit,
+    )
+
+
+@ConversationRouter.get(
+    "/{session_id}/live-test-requests",
+    response_model=list[LiveTestRequestRead],
+)
+async def list_live_test_requests(
+    session_id: uuid.UUID,
+    request: Request,
+    db: DbSession,
+    _: dict = Depends(require_permission(RT_AGENT, "read")),
+) -> list[LiveTestRequestRead]:
+    """Return the session's live-test ledger, newest first.
+
+    Read-only projection: the request list, its domain status, the execution
+    evidence and the decision attribution (read from the linked
+    ``InterveneResponse`` — never duplicated on the ledger row).
+    """
+    await _load_optimization_session(db, session_id, request)
+
+    from app.db.models.intervene import InterveneResponse
+    from app.db.models.optimization_live_test import OptimizationLiveTestRequest
+    from app.services.agents.optimization_live_test_service import (
+        get_live_test_service,
+    )
+
+    rows = (
+        await db.execute(
+            select(OptimizationLiveTestRequest)
+            .where(
+                OptimizationLiveTestRequest.conversation_session_id == session_id
+            )
+            .order_by(OptimizationLiveTestRequest.created_at.desc())
+        )
+    ).scalars().all()
+    if not rows:
+        return []
+
+    script_labels = await get_live_test_service().script_labels(
+        db, [row.script_version_id for row in rows if row.script_version_id]
+    )
+
+    intervene_ids = [row.intervene_request_id for row in rows if row.intervene_request_id]
+    responses: dict[uuid.UUID, Any] = {}
+    if intervene_ids:
+        response_rows = (
+            await db.execute(
+                select(InterveneResponse).where(
+                    InterveneResponse.request_id.in_(intervene_ids)
+                )
+            )
+        ).scalars().all()
+        for response in response_rows:
+            responses[response.request_id] = response
+
+    result: list[LiveTestRequestRead] = []
+    for row in rows:
+        response = responses.get(row.intervene_request_id) if row.intervene_request_id else None
+        operations = [
+            LiveTestOperationRead(
+                tool_name=str(operation.get("tool_name") or ""),
+                arguments=operation.get("arguments")
+                if isinstance(operation.get("arguments"), dict)
+                else {},
+                purpose=operation.get("purpose"),
+            )
+            for operation in (row.requested_operations or [])
+            if isinstance(operation, dict)
+        ]
+        result.append(
+            LiveTestRequestRead(
+                id=row.id,
+                status=(
+                    row.status.value
+                    if hasattr(row.status, "value")
+                    else str(row.status)
+                ),
+                target_agent_type_id=row.target_agent_type_id,
+                script_version_id=row.script_version_id,
+                script_name=script_labels.get(row.script_version_id, (None, None))[0],
+                script_version_label=script_labels.get(row.script_version_id, (None, None))[1],
+                requested_operations=operations,
+                executed_operations=row.executed_operations,
+                expires_at=row.expires_at,
+                execution_started_at=row.execution_started_at,
+                execution_finished_at=row.execution_finished_at,
+                decision=(
+                    LiveTestDecisionRead(
+                        approval_value=response.approval_value,
+                        operator_user_id=response.operator_user_id,
+                        responded_at=response.responded_at,
+                    )
+                    if response is not None
+                    else None
+                ),
+                created_at=row.created_at,
+            )
+        )
+    return result
 
 
 @ConversationRouter.post("", response_model=ConversationSessionRead, status_code=201)
@@ -190,6 +462,22 @@ async def end_conversation_session(
     )
 
     await terminate_in_flight_conversation_execution(session_id)
+
+    # Ending the conversation closes any pending live-test approval: nothing
+    # runs, and the session never re-surfaces a dead decision.
+    try:
+        from app.services.agents.optimization_live_test_service import (
+            get_live_test_service,
+        )
+
+        if await get_live_test_service().cancel_for_session(db, session_id):
+            await db.commit()
+    except Exception:  # noqa: BLE001 — end must still succeed
+        logger.warning(
+            "Failed to cancel pending live-test requests for conversation %s",
+            session_id,
+            exc_info=True,
+        )
     return session
 
 
@@ -321,6 +609,42 @@ async def respond_to_conversation_intervention(
             detail=f"Cannot respond: request status is {intervene_req.status.value}",
         )
 
+    # Same transaction as the stored answer: advance the durable resume record
+    # (answering user, `resuming`, attempt).  A terminal record returns its
+    # stored outcome and an elapsed window closes as `unresumable/expired` —
+    # neither may start a resume.
+    from app.services.conversations.turn_resolution import (
+        REASON_EXPIRED,
+        advance_answered_intervention,
+        dispatch_answered_conversation_turn,
+        execute_approved_live_test,
+        prepare_live_test_decision,
+        push_outcome_message,
+    )
+
+    # Live-test approval: apply the decision to the ledger FIRST (single
+    # mechanism, two payload shapes). No linked ledger row → handled=False and
+    # the ordinary ask/decide path below runs untouched.
+    live_decision = await prepare_live_test_decision(
+        db, intervene_req, approved=body.approval_value
+    )
+    if live_decision.expired:
+        # The answer arrived after the approval window closed: the ledger and
+        # the paused turn are already settled as expired, so nothing is run and
+        # no resume is dispatched.
+        await db.commit()
+        await push_outcome_message(session_id, REASON_EXPIRED)
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "error": "live_test_expired",
+                "reason": (
+                    "This live-test approval expired before it was answered. "
+                    "Nothing ran — verification stays replay-only."
+                ),
+            },
+        )
+
     try:
         orm_response = await _intervene_store.submit_response(
             db=db,
@@ -333,8 +657,11 @@ async def respond_to_conversation_intervention(
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
-    # Build response value for Agent Runtime resume
-    agent_session_id = intervene_req.agent_session_id
+    advance = await advance_answered_intervention(
+        db, intervene_req, operator_user_id=identity.id
+    )
+
+    # Build response value for the durable resume dispatch.
     response_value: dict = {}
     if body.approval_value is not None:
         response_value["approval_value"] = body.approval_value
@@ -342,36 +669,51 @@ async def respond_to_conversation_intervention(
         response_value["selected_choice"] = body.selected_choice
     if body.text_value is not None:
         response_value["text_value"] = body.text_value
+    # The paused live-test tool returns the stored/consumed outcome.
+    if live_decision.handled:
+        response_value.update(live_decision.resume_payload)
 
     # Convert to Pydantic model before commit
     response_data = InterveneResponseRead.model_validate(orm_response)
     await db.commit()
 
-    # Resume the agent session
-    resume_status: str | None = "resumed"
-    if agent_session_id is not None:
-        try:
-            from app.api.v1.intervene import _resume_agent_session
-            logger.info(
-                "Resuming agent session %s with response_value=%s",
-                agent_session_id,
-                response_value,
-            )
-            resume_status = await _resume_agent_session(agent_session_id, response_value)
-        except Exception:
-            resume_status = None
-            logger.warning(
-                "Failed to resume agent session %s after conversation intervention response",
-                agent_session_id,
-                exc_info=True,
-            )
+    if live_decision.should_execute and live_decision.request_id is not None and advance.dispatch:
+        # Exactly the approved operations, once each, BEFORE the resume — so the
+        # paused tool returns what actually ran. A duplicate answer never gets
+        # here (the resume record is already terminal), and the ledger's
+        # single-shot transition makes a second execution impossible.
+        from app.core.tenant_context import optional_tenant_context
 
-    if agent_session_id is None or resume_status != "resumed":
-        # FIX (conversational resume orphan): the suspended conversational
-        # turn could not be resumed (registry miss after a service restart,
-        # or a resume failure). Deliver a terminal assistant turn so the
-        # user's chat unblocks instead of staying in "thinking" forever.
-        await _deliver_interruption_notice(session_id, db, intervene_req)
+        payload = await execute_approved_live_test(
+            db,
+            live_decision.request_id,
+            tenant_context=optional_tenant_context(request),
+        )
+        response_value.update(payload)
+
+    if advance.dispatch or advance.expired:
+        # Multi-tenancy: thread the REQUEST-resolved tenant into the resume
+        # dispatch (never the module contextvar — internal answer paths do not
+        # bind it). Without it the CH→CC claim/checkpoint relay is headerless
+        # and fails closed 401, killing a still-valid pause.
+        from app.core.tenant_context import optional_tenant_context
+
+        # Dispatches the one resume, or delivers the already-persisted
+        # `unresumable/expired` outcome (never both).
+        await dispatch_answered_conversation_turn(
+            db,
+            intervene_req,
+            advance,
+            response_value,
+            tenant_context=optional_tenant_context(request),
+        )
+    else:
+        logger.info(
+            "Answered intervention %s is already terminal (%s) — returning the "
+            "stored outcome without re-dispatching",
+            request_id,
+            advance.reason_code,
+        )
 
     return response_data
 

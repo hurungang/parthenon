@@ -158,6 +158,11 @@ class ToolCallRequest(BaseModel):
     # Inline verification path (CC optimize-and-verify): full python_source
     # forwarded verbatim to AR — executed there directly, no registry lookup.
     python_source: str | None = None
+    # Paused conversational turn idempotency key (from the durable resume
+    # record). Forwarded to CC as ``X-Turn-Idempotency-Key`` so the confirmed
+    # management write commits its applied marker in the same transaction.
+    # Absent outside a paused turn.
+    idempotency_key: str | None = None
 
 
 class ToolCallResponse(BaseModel):
@@ -196,6 +201,12 @@ async def route_tool_call(
         body.user_jwt = get_user_jwt(body.session_id)
         if body.user_jwt:
             logger.debug("Populated user_jwt from session cache for session %s", body.session_id[:8])
+    # Paused-turn idempotency key: AR sends it as a header (and in the body for
+    # compatibility). CH is transport-only here — it forwards the value it
+    # received to CC and never invents one.
+    if not body.idempotency_key:
+        inbound_headers = getattr(request, "headers", None) or {}
+        body.idempotency_key = inbound_headers.get("X-Turn-Idempotency-Key") or None
     route_type = "system" if _is_system_tool(body.tool_name) else "mcp"
     if body.tool_name.startswith(DECISION_TOOL_PREFIX):
         route_type = "decision"
@@ -700,6 +711,11 @@ async def _route_to_system_tool(body: ToolCallRequest, request: Request) -> Tool
         # Tenant headers are attached by the internal_httpx_client egress
         # hook (forwards the CC-signed set bound by ControlPlaneMiddleware;
         # single-tenant → headerless, unchanged).
+        if body.idempotency_key:
+            # Paused-turn key: lets CC commit the applied marker with the
+            # confirmed write (exactly-once management dispatch). Never signed
+            # here — CH only forwards what AR supplied.
+            headers["X-Turn-Idempotency-Key"] = body.idempotency_key
 
         async with internal_httpx_client(**cc_client_kwargs) as client:
             response = await client.post(endpoint, json=payload, headers=headers)

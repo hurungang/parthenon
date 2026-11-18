@@ -41,6 +41,13 @@ from app.db.models.conversation_activity import (  # noqa: F401
     ActivityState,
     ConversationActivity,
 )
+from app.db.models.conversation_turn_resume import (  # noqa: F401
+    CheckpointPayloadKind,
+    ConversationTurnCheckpoint,
+    ConversationTurnResume,
+    ResumeOutcome,
+    ResumeState,
+)
 from app.db.models.results import (  # noqa: F401
     DecisionExecutionResult,
     DecisionExecutionStatus,
@@ -128,6 +135,10 @@ from app.db.models.tool_calls import (  # noqa: F401
     RuntimeToolCallRouteType,
     RuntimeToolCallSessionKind,
     RuntimeToolCallStatus,
+)
+from app.db.models.optimization_live_test import (  # noqa: F401
+    OptimizationLiveTestRequest,
+    OptimizationLiveTestStatus,
 )
 from app.db.models.termination_request import TerminationRequest  # noqa: F401
 from app.db.models.termination_cascade_outcome import TerminationCascadeOutcome  # noqa: F401

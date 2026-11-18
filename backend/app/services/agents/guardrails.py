@@ -16,6 +16,10 @@ class GuardrailStopReason:
     EXECUTION_TIMEOUT_EXCEEDED = "execution_timeout_exceeded"
     TOKEN_BUDGET_EXCEEDED_NON_CONVERSATIONAL = "token_budget_exceeded_non_conversational"
     TOKEN_GUARDRAIL_FALLBACK_APPLIED = "token_guardrail_fallback_applied"
+    # A run made the same tool call (same tool + same arguments) repeatedly
+    # without progress — a degenerate read-loop (e.g. an optimization run
+    # re-reading the same plan after it already persisted a terminal status).
+    REPEATED_TOOL_CALL = "repeated_tool_call"
 
 
 class GuardrailInfoReason:

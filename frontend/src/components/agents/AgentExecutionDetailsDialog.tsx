@@ -20,6 +20,12 @@ interface AgentExecutionDetailsDialogProps {
   open: boolean
   onClose: () => void
   sessionId: string
+  /**
+   * Called once when the polled session reaches a terminal status, so the
+   * surface that launched the run can refresh its own scope (e.g. the agent
+   * dialog's plan/session views after an optimization finishes).
+   */
+  onSessionCompleted?: (sessionId: string) => void
 }
 
 // ── Tab definition ─────────────────────────────────────────────────────────────
@@ -46,6 +52,7 @@ export function AgentExecutionDetailsDialog({
   open,
   onClose,
   sessionId,
+  onSessionCompleted,
 }: AgentExecutionDetailsDialogProps) {
   const { t } = useTranslation()
   
@@ -72,6 +79,12 @@ export function AgentExecutionDetailsDialog({
   const prevLogCountRef = useRef(0)
   const inlineDialogShownRef = useRef<string | null>(null)
   const autoDialogShownRef = useRef<string | null>(null)
+  const completedNotifiedRef = useRef<string | null>(null)
+  // Keep the latest callback without restarting the 3s poll interval.
+  const onSessionCompletedRef = useRef(onSessionCompleted)
+  useEffect(() => {
+    onSessionCompletedRef.current = onSessionCompleted
+  }, [onSessionCompleted])
 
   // ── Callback declarations ─────────────────────────────────────────────────
   const handleViewSubAgentExecution = useCallback((sid: string) => {
@@ -151,6 +164,7 @@ export function AgentExecutionDetailsDialog({
       setAutoDialogRequest(null)
       resetTypedOutput()
       autoDialogShownRef.current = null
+      completedNotifiedRef.current = null
       Promise.all([
         fetchLogEntries(),
         fetchSession(),
@@ -171,6 +185,10 @@ export function AgentExecutionDetailsDialog({
           if (TERMINAL_STATUSES.includes(data.status)) {
             setSession(data)
             void fetchLogEntries()
+            if (completedNotifiedRef.current !== sessionId) {
+              completedNotifiedRef.current = sessionId
+              onSessionCompletedRef.current?.(sessionId)
+            }
           }
         })
         .catch(() => {})
@@ -334,7 +352,7 @@ export function AgentExecutionDetailsDialog({
   )
 
   const handleTerminateSession = useCallback(
-    async (sessionId: string, _requestId: string) => {
+    async (sessionId: string) => {
       await interveneApi.terminateSession(sessionId, 'Operator terminated from sub-agent execution dialog')
       handleAutoDialogClose()
       setInlineDialogDismissed(true)

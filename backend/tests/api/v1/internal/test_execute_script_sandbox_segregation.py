@@ -49,3 +49,18 @@ def test_cc_execute_script_never_targets_the_ar_cert_only_tool_call_path():
     source = _source()
     assert "/internal/tools/call" not in source
     assert "script____inline" not in source
+
+
+def test_cc_execute_script_is_replay_only():
+    """Optimization verification must NEVER invoke a live MCP tool.
+
+    The CC handler must forward the recorded reference transcript together
+    with the hard ``replay_required`` switch — a live run would let a script
+    "pass" verification and then mutate data / fail at serving time.
+    """
+    source = _source()
+    assert "reference_tool_responses=" in source
+    assert "replay_required=True" in source
+    assert "_build_reference_transcript" in source
+    # No live-tool path is reachable from the optimization tool.
+    assert "CommHubToolClient" not in source

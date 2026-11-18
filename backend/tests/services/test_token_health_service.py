@@ -88,6 +88,12 @@ class TestIdentityClassification:
         assert state == TokenHealthState.healthy
 
     def test_expired_access_token(self):
+        """An expired ACCESS token backed by a valid refresh token is not an error.
+
+        Approved semantics (2A): the refresh token is authoritative — with a
+        refresh token expiring in 1 day the identity is ``expiring``, not
+        ``expired``.
+        """
         state = classify_identity_health(
             token_expires_at=NOW - timedelta(minutes=1),
             refresh_token_expires_at=NOW + timedelta(days=1),
@@ -95,7 +101,7 @@ class TestIdentityClassification:
             last_token_refresh_outcome=TokenRefreshOutcome.success,
             now=NOW,
         )
-        assert state == TokenHealthState.expired
+        assert state == TokenHealthState.expiring
 
     def test_expired_refresh_token(self):
         state = classify_identity_health(
@@ -135,6 +141,113 @@ class TestSessionClassification:
             oauth_refresh_expires_at=NOW + timedelta(days=90),
             now=NOW,
         ) == TokenHealthState.healthy
+
+
+# ── Refresh-token-driven classification (FIX-20261116-061805) ─────────────────
+#
+# Approved semantics (option 2A):
+#   1. When a refresh token exists, health is driven ONLY by the refresh
+#      token's expiry — an expired/expiring ACCESS token is not an error.
+#   2. When no refresh token exists, fall back to the access-token expiry.
+#   3. ``refresh_failed`` identity status / failed last refresh stays ``expired``.
+#   4. An MCP session with ``requires_reauth`` is ``expired``.
+
+
+class TestRefreshTokenDrivenIdentityClassification:
+    """Identity status must reflect the refresh token, not the access token."""
+
+    def test_expired_access_token_with_valid_refresh_token_is_healthy(self):
+        state = classify_identity_health(
+            token_expires_at=NOW - timedelta(hours=1),
+            refresh_token_expires_at=NOW + timedelta(days=30),
+            token_status=AgentTokenStatus.active,
+            last_token_refresh_outcome=TokenRefreshOutcome.success,
+            now=NOW,
+        )
+        assert state == TokenHealthState.healthy
+
+    def test_access_token_expiring_within_window_and_far_future_refresh_is_healthy(self):
+        state = classify_identity_health(
+            token_expires_at=NOW + timedelta(days=3),
+            refresh_token_expires_at=NOW + timedelta(days=90),
+            token_status=AgentTokenStatus.active,
+            last_token_refresh_outcome=TokenRefreshOutcome.success,
+            now=NOW,
+        )
+        assert state == TokenHealthState.healthy
+
+    def test_far_future_access_token_with_refresh_token_expiring_is_expiring(self):
+        """The ONLY expiring signal is the refresh token → expiring."""
+        state = classify_identity_health(
+            token_expires_at=NOW + timedelta(days=60),
+            refresh_token_expires_at=NOW + timedelta(days=3),
+            token_status=AgentTokenStatus.active,
+            last_token_refresh_outcome=TokenRefreshOutcome.success,
+            now=NOW,
+        )
+        assert state == TokenHealthState.expiring
+
+    def test_far_future_access_token_with_expired_refresh_token_is_expired(self):
+        state = classify_identity_health(
+            token_expires_at=NOW + timedelta(days=60),
+            refresh_token_expires_at=NOW - timedelta(minutes=5),
+            token_status=AgentTokenStatus.active,
+            last_token_refresh_outcome=TokenRefreshOutcome.success,
+            now=NOW,
+        )
+        assert state == TokenHealthState.expired
+
+    def test_no_refresh_token_expired_access_token_falls_back_to_expired(self):
+        state = classify_identity_health(
+            token_expires_at=NOW - timedelta(minutes=5),
+            refresh_token_expires_at=None,
+            token_status=AgentTokenStatus.active,
+            last_token_refresh_outcome=None,
+            now=NOW,
+        )
+        assert state == TokenHealthState.expired
+
+
+class TestRefreshTokenDrivenSessionClassification:
+    """MCP session status must reflect the refresh token, not the access token."""
+
+    def test_expired_access_token_with_valid_refresh_token_is_healthy(self):
+        assert classify_session_health(
+            oauth_expires_at=NOW - timedelta(hours=1),
+            oauth_refresh_expires_at=NOW + timedelta(days=30),
+            now=NOW,
+        ) == TokenHealthState.healthy
+
+    def test_access_token_expiring_within_window_and_far_future_refresh_is_healthy(self):
+        assert classify_session_health(
+            oauth_expires_at=NOW + timedelta(hours=3),
+            oauth_refresh_expires_at=NOW + timedelta(days=60),
+            now=NOW,
+        ) == TokenHealthState.healthy
+
+    def test_far_future_access_token_with_refresh_token_expiring_is_expiring(self):
+        assert classify_session_health(
+            oauth_expires_at=NOW + timedelta(days=60),
+            oauth_refresh_expires_at=NOW + timedelta(days=2),
+            now=NOW,
+        ) == TokenHealthState.expiring
+
+
+class TestSessionRequiresReauthClassification:
+    """An MCP session flagged ``requires_reauth`` is unrecoverable → expired."""
+
+    def test_session_with_requires_reauth_is_expired(self):
+        session = McpSession(
+            id=uuid.uuid4(),
+            server_id=uuid.uuid4(),
+            name="reauth-session",
+            auth_type=McpSessionAuthType.oauth2,
+            is_active=True,
+            oauth_expires_at=NOW + timedelta(days=30),
+            oauth_refresh_expires_at=NOW + timedelta(days=60),
+            requires_reauth=True,
+        )
+        assert compute_session_state(session, now=NOW) == TokenHealthState.expired
 
     def test_expiring_boundary_exactly_7_days(self):
         assert classify_session_health(

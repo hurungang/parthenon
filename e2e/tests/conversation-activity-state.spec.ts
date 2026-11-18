@@ -153,19 +153,27 @@ test.describe('Conversational Activity State (Mocked)', () => {
     await emit(page, { type: 'chat_status', status: 'using_tool', tool_name: 'cc____list_agents' })
     await expect(page.getByText(/Using tool cc____list_agents/i)).toBeVisible({ timeout: 5000 })
 
-    // waiting for human — indicator shown continuously
+    // waiting for human — indicator shown continuously. The durable resume
+    // vocabulary also labels the chip "Waiting for your input" (Phase 6), so
+    // scope the assertion to the first match instead of strict-mode failing.
     await emit(page, {
       type: 'chat_status',
       status: 'waiting_for_human',
       agent_type: 'assistant',
       pending_intervention: true,
     })
-    await expect(page.getByText(/Waiting for your input/i)).toBeVisible({ timeout: 5000 })
+    await expect(page.getByText(/Waiting for your input/i).first()).toBeVisible({
+      timeout: 5000,
+    })
 
-    // terminal — spinner cleared, terminal message shown
-    await emit(page, { type: 'chat_status', status: 'finished' })
-    await expect(page.getByText(/Turn completed/i)).toBeVisible({ timeout: 5000 })
+    // terminal — spinner cleared, the durable resume vocabulary shows the
+    // resolved state (a silently finished turn renders no warning banner)
+    await emit(page, { type: 'chat_status', status: 'finished', resume_state: 'resolved' })
+    await expect(page.getByTestId('chat-resume-state-chip')).toContainText(/Resolved/i, {
+      timeout: 5000,
+    })
     await expect(page.getByText(/Thinking…/i)).toHaveCount(0)
+    await expect(page.getByTestId('chat-chat-status-terminal')).toHaveCount(0)
   })
 
   test('reload hydration restores the persisted waiting status', async ({ page }) => {
@@ -183,7 +191,9 @@ test.describe('Conversational Activity State (Mocked)', () => {
       pending_intervention: true,
       is_terminal: false,
     })
-    await expect(page.getByText(/Waiting for your input/i)).toBeVisible({ timeout: 5000 })
+    await expect(page.getByText(/Waiting for your input/i).first()).toBeVisible({
+      timeout: 5000,
+    })
   })
 })
 

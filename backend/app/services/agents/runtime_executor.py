@@ -24,12 +24,15 @@ import re
 import time
 import uuid
 from copy import deepcopy
+from dataclasses import dataclass
+from datetime import datetime, timedelta, timezone
 from typing import Any, Awaitable, Callable, TYPE_CHECKING
 
 from opentelemetry import trace
 from sqlalchemy.ext.asyncio import AsyncSession
 
 if TYPE_CHECKING:
+    from app.agent_runtime.checkpoint_transport import CheckpointTransportClient
     from app.agent_runtime.comm_hub_client import CommHubToolClient
     from app.agent_runtime.data_client import ControlCenterDataClient
 
@@ -57,6 +60,38 @@ tracer = trace.get_tracer(__name__)
 class HumanInterveneRequired(Exception):
     """Raised from the task loop when the agent calls human_intervene,
     signalling that execution should be paused rather than completed."""
+
+
+@dataclass(frozen=True)
+class ConversationTurnPause:
+    """A conversational turn that paused on ``human_intervene``.
+
+    Returned to the transport layer (``api/conversation.py``) through
+    :meth:`AgentRuntimeExecutor.pop_conversation_pause` so the NDJSON stream
+    can end with a ``paused`` chunk instead of a ``final`` reply.
+    """
+
+    resume_id: str | None = None
+    resume_key: str | None = None
+    intervene_request_id: str | None = None
+    intervention_type: str | None = None
+    reason: str | None = None
+    idempotency_key: str | None = None
+    expires_at: str | None = None
+    durable: bool = True
+
+    def as_dict(self) -> dict[str, Any]:
+        return {
+            "resume_id": self.resume_id,
+            "resume_key": self.resume_key,
+            "intervene_request_id": self.intervene_request_id,
+            "intervention_type": self.intervention_type,
+            "reason": self.reason,
+            "idempotency_key": self.idempotency_key,
+            "expires_at": self.expires_at,
+            "durable": self.durable,
+        }
+
 
 try:
     import langchain  # noqa: F401
@@ -156,6 +191,22 @@ def _command_tool_schemas(command: str | None) -> list[dict[str, Any]]:
         if schema is not None:
             schemas.append(schema)
     return schemas
+
+
+def _raw_output_for_failed_validation(payload: Any) -> str:
+    """Return the raw-output fallback for a typed result that failed validation.
+
+    A plain-text result is wrapped as ``{"value": text}`` for schema
+    validation. Keep the text itself so the Result tab can render the real
+    message (e.g. an optimization summary) instead of a Python dict repr.
+    """
+    if (
+        isinstance(payload, dict)
+        and list(payload.keys()) == ["value"]
+        and isinstance(payload["value"], str)
+    ):
+        return payload["value"]
+    return str(payload)
 
 
 def _canonicalize_tool_name_for_log(
@@ -597,17 +648,51 @@ class AgentRuntimeExecutor:
     For conversational agents: the loop is driven externally via WebSocket messages.
     """
 
-    def __init__(self, data_client: Any = None) -> None:
+    def __init__(
+        self,
+        data_client: Any = None,
+        checkpoint_transport: "CheckpointTransportClient | None" = None,
+    ) -> None:
         """Initialize executor with optional data client.
-        
+
         Args:
             data_client: ControlCenterDataClient instance with properly configured certificate.
                         If None, will attempt to use app.state.data_client in runtime.
+            checkpoint_transport: Optional AR → CH checkpoint courier override
+                        (tests inject a fake; production builds the real client).
         """
         self._permission_manager = AgentPermissionManager()
         self._session_service = AgentSessionService()
         self._runtime_loader = AgentRuntimeLoader()
         self._data_client = data_client
+        self._checkpoint_transport = checkpoint_transport
+        #: Set when the last conversational turn paused on human_intervene.
+        self._last_conversation_pause: ConversationTurnPause | None = None
+
+    # ── Conversational pause result ──────────────────────────────────────────
+
+    def pop_conversation_pause(self) -> ConversationTurnPause | None:
+        """Return and clear the pause result of the last conversational turn."""
+        pause = self._last_conversation_pause
+        self._last_conversation_pause = None
+        return pause
+
+    def get_checkpoint_transport(
+        self,
+        cert_path: str | None = None,
+        key_path: str | None = None,
+    ) -> "CheckpointTransportClient":
+        """Return the AR → CH checkpoint courier for this turn."""
+        from app.agent_runtime.checkpoint_transport import CheckpointTransportClient
+
+        if self._checkpoint_transport is not None:
+            if cert_path and key_path and hasattr(self._checkpoint_transport, "set_certificate"):
+                self._checkpoint_transport.set_certificate(cert_path, key_path)
+            return self._checkpoint_transport
+        _transport = CheckpointTransportClient()
+        if cert_path and key_path:
+            _transport.set_certificate(cert_path, key_path)
+        return _transport
 
     async def _append_invocable_script_tools(
         self,
@@ -1605,9 +1690,13 @@ class AgentRuntimeExecutor:
                         validation_errors = validation_result.get("errors", [])
 
                         # Step 2: Persist the typed output (even if validation failed)
-                        raw_output = (
-                            str(payload) if not is_valid else None
-                        )
+                        # A plain-text result is wrapped as {"value": text} for
+                        # validation. Preserve the text itself as the raw
+                        # fallback so the Result tab can render the real message
+                        # (e.g. an optimization summary), not a dict repr.
+                        raw_output: str | None = None
+                        if not is_valid:
+                            raw_output = _raw_output_for_failed_validation(payload)
                         typed_response = await data_client.persist_typed_output(
                             data_type_id=data_type_id,
                             agent_type_id=uuid.UUID(job_data["agent_type_id"]),
@@ -2160,11 +2249,17 @@ class AgentRuntimeExecutor:
                 session_id=str(session_id),
                 data_client=data_client,
                 execution_mode=execution_mode,
+                # Command (optimization) runs get a repeated-identical-call guard:
+                # a terminal plan read must never dead-loop until the timeout.
+                repeat_guard_enabled=bool(command),
             ),
             ExecutionLoggingCallback(
                 session_id=str(session_id),
                 data_client=data_client,
                 iteration_ref=iteration_ref,
+                # Replay transcripts are matched by canonical tool names; log
+                # the canonical name, not the provider-sanitized one.
+                tool_name_map=tool_name_map,
             ),
         ]
 
@@ -2948,12 +3043,108 @@ class AgentRuntimeExecutor:
         cert_path: str | None = None,
         key_path: str | None = None,
         status_event_callback: Callable[[dict[str, str]], Awaitable[None]] | None = None,
+        turn_idempotency_key: str | None = None,
     ) -> tuple[str, dict[str, Any], list[dict[str, str]]]:
         """Execute one conversation turn using the same LangGraph/create_agent framework
         as non-conversational agents. Only input/output differ:
           - Input: full conversation message history (not a single user prompt)
           - Output: last assistant message text (not structured output_data)
+
+        A pause on ``human_intervene`` returns immediately with
+        :attr:`_last_conversation_pause` set (see
+        :meth:`pop_conversation_pause`) — the turn is never awaited in-process.
         """
+        return await self._run_conversation_turn(
+            agent_type_id=agent_type_id,
+            agent_context=agent_context,
+            model_config=model_config,
+            messages=messages,
+            conv_session_id=conv_session_id,
+            cert_path=cert_path,
+            key_path=key_path,
+            status_event_callback=status_event_callback,
+            turn_idempotency_key=turn_idempotency_key,
+            resume_payload=None,
+            resume_value=None,
+        )
+
+    async def resume_conversation_turn_from_context(
+        self,
+        agent_type_id: uuid.UUID,
+        agent_context: dict[str, Any],
+        model_config: dict[str, Any],
+        conv_session_id: uuid.UUID,
+        response_value: dict[str, Any],
+        checkpoint_payload: dict[str, Any],
+        *,
+        cert_path: str | None = None,
+        key_path: str | None = None,
+        status_event_callback: Callable[[dict[str, str]], Awaitable[None]] | None = None,
+        turn_idempotency_key: str | None = None,
+    ) -> tuple[str, dict[str, Any], list[dict[str, str]]]:
+        """Continue a paused conversational turn from its durable checkpoint.
+
+        The graph is rebuilt from the persisted payload (same checkpointer, same
+        ``thread_id``, same tool set) and resumed with the operator's
+        ``Command(resume=response_value)``.  If the resumed turn pauses again,
+        the new pause is persisted and reported through
+        :meth:`pop_conversation_pause`.
+        """
+        system_instruction = self._compose_resume_system_instruction(agent_context)
+        messages: list[dict[str, Any]] = []
+        if system_instruction:
+            messages.append({"role": "system", "content": system_instruction})
+        return await self._run_conversation_turn(
+            agent_type_id=agent_type_id,
+            agent_context=agent_context,
+            model_config=model_config,
+            messages=messages,
+            conv_session_id=conv_session_id,
+            cert_path=cert_path,
+            key_path=key_path,
+            status_event_callback=status_event_callback,
+            turn_idempotency_key=turn_idempotency_key,
+            resume_payload=checkpoint_payload,
+            resume_value=response_value or {},
+        )
+
+    @staticmethod
+    def _compose_resume_system_instruction(agent_context: dict[str, Any]) -> str | None:
+        """Rebuild the conversational system prompt from the agent context.
+
+        Mirrors Control Center's prepare-turn composition (agent instruction +
+        SOP content + MCP session context) so a resumed turn runs under the
+        same prompt the paused turn started with.  Nothing here is persisted
+        in the checkpoint — the context is re-fetched from CC.
+        """
+        parts = [
+            str(value).strip()
+            for value in (
+                agent_context.get("system_instruction"),
+                agent_context.get("sop_content"),
+                agent_context.get("mcp_session_context"),
+            )
+            if value
+        ]
+        merged = "\n\n".join(part for part in parts if part)
+        return merged or None
+
+    async def _run_conversation_turn(
+        self,
+        *,
+        agent_type_id: uuid.UUID,
+        agent_context: dict[str, Any],
+        model_config: dict[str, Any],
+        messages: list[dict[str, Any]],
+        conv_session_id: uuid.UUID,
+        cert_path: str | None,
+        key_path: str | None,
+        status_event_callback: Callable[[dict[str, str]], Awaitable[None]] | None,
+        turn_idempotency_key: str | None,
+        resume_payload: dict[str, Any] | None,
+        resume_value: dict[str, Any] | None,
+    ) -> tuple[str, dict[str, Any], list[dict[str, str]]]:
+        """Shared entry: run with execution-log suppression active."""
         # Conversational turns do NOT ship execution-log entries to CC
         # (execution_log_entries FK targets AgentJob sessions only). The
         # suppression flag is the single choke point in the executor's
@@ -2970,6 +3161,9 @@ class AgentRuntimeExecutor:
                 cert_path=cert_path,
                 key_path=key_path,
                 status_event_callback=status_event_callback,
+                turn_idempotency_key=turn_idempotency_key,
+                resume_payload=resume_payload,
+                resume_value=resume_value,
             )
         finally:
             self._suppress_execution_log_shipping = _prev_suppress
@@ -2984,8 +3178,12 @@ class AgentRuntimeExecutor:
         cert_path: str | None = None,
         key_path: str | None = None,
         status_event_callback: Callable[[dict[str, str]], Awaitable[None]] | None = None,
+        turn_idempotency_key: str | None = None,
+        resume_payload: dict[str, Any] | None = None,
+        resume_value: dict[str, Any] | None = None,
     ) -> tuple[str, dict[str, Any], list[dict[str, str]]]:
         """Inner body of execute_conversation_turn_from_context (suppression active)."""
+        self._last_conversation_pause = None
         # 1. Extract tool context
         allowed_tools = self._permission_manager.get_allowed_tools_from_context(
             agent_context.get("allowed_tools", [])
@@ -3060,12 +3258,20 @@ class AgentRuntimeExecutor:
 
         # 7. Build LangChain callbacks (GuardrailCallback — same as non-conv path)
         from app.services.agents.guardrail_callback import GuardrailCallback
+        # Optimization conversations are replay-only and ask-instead-of-assume:
+        # the repeated-identical-tool-call guard is enabled so a replay gap can
+        # never loop on the same failing attempt (the turn stops instead). Every
+        # other conversation keeps the pre-existing behaviour.
+        _is_optimization_turn = isinstance(
+            agent_context.get("optimization"), dict
+        ) and bool(agent_context.get("optimization"))
         lc_callbacks: list[Any] = [
             GuardrailCallback(
                 guardrail_state=guardrail_state,
                 session_id=str(conv_session_id),
                 data_client=None,  # No agent_job for conversation turns; skip execution logging
                 execution_mode="conversation",
+                repeat_guard_enabled=_is_optimization_turn,
             ),
         ]
 
@@ -3097,19 +3303,39 @@ class AgentRuntimeExecutor:
             except Exception:
                 pass
 
-        # 10. Create agent (same create_agent as non-conv; no response_format for conv)
+        # 10. Create the agent with the DURABLE checkpointer (thread_id = the
+        # conversation session id).  The paused-turn state lives in Control
+        # Center, reached only through Communication Hub — AR keeps no store.
         from langchain.agents import create_agent
-        from langgraph.checkpoint.memory import MemorySaver
         from langgraph.errors import GraphInterrupt
+        from langgraph.types import Command
 
-        _checkpointer = MemorySaver()
+        from app.agent_runtime.durable_checkpointer import DurableCheckpointSaver
+
+        _checkpoint_transport = self.get_checkpoint_transport(cert_path, key_path)
+        _saver = DurableCheckpointSaver(
+            _checkpoint_transport,
+            conv_session_id,
+            agent_type_id=agent_type_id,
+            turn_idempotency_key=turn_idempotency_key,
+            payload=resume_payload,
+        )
+        # The turn idempotency key rides the CommHub client so every tool call
+        # made for this paused turn (including a replayed human_intervene task
+        # and the confirmed management write) carries the same opaque key.
+        if turn_idempotency_key:
+            try:
+                comm_hub_client.set_turn_idempotency_key(turn_idempotency_key)
+            except AttributeError:
+                pass
+
         _recursion_limit = max(1, guardrail_state.max_iterations) * 3 + 1
         _agent = create_agent(
             model=_llm,
             tools=lc_tools,
             system_prompt=system_instruction or None,
             response_format=None,  # Conversational: plain text response, no typed output
-            checkpointer=_checkpointer,
+            checkpointer=_saver,
         )
         _config: dict[str, Any] = {
             "configurable": {"thread_id": str(conv_session_id)},
@@ -3120,67 +3346,37 @@ class AgentRuntimeExecutor:
         # 11. Filter system messages — passed via system_prompt above
         input_messages = [m for m in messages if m.get("role") != "system"]
 
-        # 12. Invoke agent — bounded by ``conversation_llm_timeout_seconds``
-        # (FIX-20261031-091657): a hanging provider call previously left the
-        # turn awaiting forever; the timeout converts into the existing
-        # ``timeout_or_failed`` status event plus a persisted error message.
+        # 12. Invoke the agent — a fresh turn passes the message history, a
+        # resume passes Command(resume=<operator response>) against the
+        # checkpoint loaded above.  Bounded by ``conversation_llm_timeout_seconds``
+        # (FIX-20261031-091657) with an activity-aware watchdog for long-but-
+        # healthy tool chains.
         from app.core.config import get_settings as _get_settings
 
         _turn_timeout = float(
             max(5, int(getattr(_get_settings(), "conversation_llm_timeout_seconds", 120)))
         )
+        _activity_window = float(
+            max(30, int(getattr(_get_settings(), "conversation_activity_window_seconds", 90)))
+        )
+        _invoke_input: Any = (
+            Command(resume=resume_value)
+            if resume_value is not None
+            else {"messages": input_messages}
+        )
+
+        _result: Any = None
+        _graph_interrupts: list[Any] | None = None
         try:
-            # FIX-20261031-091657: the strict conversation_llm_timeout_seconds
-            # bound on a hanging provider call is preserved — the invocation
-            # gets _turn_timeout. FIX-20261031-133253: while a conversational
-            # human_intervene is PENDING (tool legitimately awaiting the
-            # operator inside this invocation), the wait is re-armed up to
-            # conversation_intervention_timeout_seconds total.
-            _intervention_window = float(
-                max(
-                    30,
-                    int(
-                        getattr(
-                            _get_settings(),
-                            "conversation_intervention_timeout_seconds",
-                            240,
-                        )
-                    ),
-                )
-            )
-            # Idle tolerance for the watchdog: if no status event has fired
-            # within this window (and no intervention is pending), the turn
-            # is considered hung and cancelled.
-            _activity_window = float(
-                max(30, int(getattr(_get_settings(), "conversation_activity_window_seconds", 90)))
-            )
             _invoke_task: asyncio.Task = asyncio.ensure_future(
-                _agent.ainvoke(
-                    {"messages": input_messages},
-                    config=_config,
-                )
+                _agent.ainvoke(_invoke_input, config=_config)
             )
-            _intervention_wait_started = time.monotonic()
-            from app.agent_runtime import conversation_resume as _conv_resume
-
             # Watchdog loop: each wait is bounded by the per-invoke LLM
-            # timeout, but a healthy turn is extended when either (a) a
-            # human_intervene is pending, or (b) status events (tool calls)
-            # have streamed by SINCE THIS WAIT BEGAN and none went idle for
-            # longer than the activity window — the turn is visibly making
-            # progress. A silently hung LLM call emits nothing, so it is
-            # still cancelled after the first bound (hang protection kept).
-            def _watchdog_should_extend() -> bool:
-                _pending_now = _conv_resume.is_pending(conv_session_id)
-                _elapsed_pause = time.monotonic() - _intervention_wait_started
-                if _pending_now and _elapsed_pause < _intervention_window:
-                    return True
-                _idle_for = time.monotonic() - _last_activity["at"]
-                return (
-                    _last_activity["at"] > _wait_activity_baseline
-                    and _idle_for < _activity_window
-                )
-
+            # timeout, but a healthy turn is extended when status events (tool
+            # calls) have streamed by SINCE THIS WAIT BEGAN and none went idle
+            # for longer than the activity window — the turn is visibly making
+            # progress.  A silently hung LLM call emits nothing, so it is still
+            # cancelled after the first bound (hang protection kept).
             _wait_activity_baseline = _last_activity["at"]
             while True:
                 try:
@@ -3190,23 +3386,23 @@ class AgentRuntimeExecutor:
                     )
                     break
                 except asyncio.TimeoutError:
-                    if _watchdog_should_extend():
+                    _idle_for = time.monotonic() - _last_activity["at"]
+                    if (
+                        _last_activity["at"] > _wait_activity_baseline
+                        and _idle_for < _activity_window
+                    ):
                         logger.info(
-                            "Conversation turn %s still active (pending=%s, "
-                            "idle=%.0fs) — extending wait",
+                            "Conversation turn %s still active (idle=%.0fs) — extending wait",
                             conv_session_id,
-                            _conv_resume.is_pending(conv_session_id),
-                            time.monotonic() - _last_activity["at"],
+                            _idle_for,
                         )
                         continue
                     _invoke_task.cancel()
                     raise
         except asyncio.TimeoutError:
-            from datetime import datetime as _dt, timezone as _tz
-
             _timeout_event = {
                 "status": "timeout_or_failed",
-                "timestamp": _dt.now(_tz.utc).isoformat(),
+                "timestamp": datetime.now(timezone.utc).isoformat(),
             }
             await emit_status_event(_timeout_event)
             logger.warning(
@@ -3214,251 +3410,104 @@ class AgentRuntimeExecutor:
                 _turn_timeout, conv_session_id,
                 getattr(_get_settings(), "conversation_llm_timeout_seconds", 120),
             )
+            await _saver.aclose()
             return (
                 "Your request timed out because the assistant took too long to "
                 "respond. Please try again.",
                 build_conversation_guardrail_usage(),
                 status_events,
             )
-        except GraphInterrupt:
-            # FIX-20261031-133253: the assistant itself called
-            # ``human_intervene`` (e.g. the mandatory confirmation before a
-            # create/update). Previously the interrupt was swallowed with a
-            # canned message — approval could never resume the turn. Now:
-            # emit ``waiting_for_human``, wait for the AR /internal/resume
-            # call (bounded so the CH turn watchdog still applies), then
-            # resume the SAME graph via Command(resume=response_value).
-            from langgraph.types import Command
-
-            from app.agent_runtime import conversation_resume
-            from app.core.config import get_settings as _get_settings
-
-            _intervention_timeout = float(
-                max(
-                    30,
-                    int(
-                        getattr(
-                            _get_settings(),
-                            "conversation_intervention_timeout_seconds",
-                            240,
-                        )
-                    ),
-                )
-            )
-            # Persistent-activity enrichment: carry an intervention marker so
-            # CC can stamp the persisted record as paused-for-human. CC
-            # resolves the concrete pending_intervene_request_id server-side;
-            # AR deliberately does not know the request id (no DB access).
-            await emit_status_event(
-                {"status": "waiting_for_human", "pending_intervention": "true"}
-            )
-            logger.info(
-                "Conversation turn %s paused on human_intervene — waiting up "
-                "to %.0fs for operator response",
-                conv_session_id, _intervention_timeout,
-            )
-            response_value = await conversation_resume.wait_for_resume(
-                conv_session_id, timeout_seconds=_intervention_timeout
-            )
-            if response_value is None:
-                await emit_status_event({"status": "timeout_or_failed"})
-                return (
-                    "The confirmation request timed out without a response, "
-                    "so I did NOT execute the operation. Please ask again to "
-                    "restart it.",
-                    build_conversation_guardrail_usage(),
-                    status_events,
-                )
-            try:
-                logger.info(
-                    "Conversation turn %s resuming deep-agent loop after "
-                    "operator response (approval=%s)",
-                    conv_session_id, response_value.get("approval_value"),
-                )
-                _resume_task: asyncio.Task = asyncio.ensure_future(
-                    _agent.ainvoke(
-                        Command(resume=response_value),
-                        config=_config,
-                    )
-                )
-                # Surface processing state immediately after the operator
-                # responds — otherwise the chat shows no activity indicator
-                # until the next tool call fires.
-                await emit_status_event({"status": "thinking"})
-                # Same activity-aware watchdog as the initial invoke: the
-                # post-resume remainder (management tool + final answer) may
-                # legitimately exceed the per-wait LLM bound; only a turn
-                # that has gone idle since the resume began (or re-paused)
-                # is cancelled.
-                _resume_activity_baseline = _last_activity["at"]
-                while True:
-                    try:
-                        _result = await asyncio.wait_for(
-                            asyncio.shield(_resume_task),
-                            timeout=_turn_timeout,
-                        )
-                        break
-                    except asyncio.TimeoutError:
-                        _still_pending = (
-                            conversation_resume.is_pending(conv_session_id)
-                        )
-                        _idle_for = time.monotonic() - _last_activity["at"]
-                        if _still_pending or (
-                            _last_activity["at"] > _resume_activity_baseline
-                            and _idle_for < _activity_window
-                        ):
-                            logger.info(
-                                "Conversation turn %s still active after "
-                                "resume (pending=%s, idle=%.0fs) — extending wait",
-                                conv_session_id, _still_pending, _idle_for,
-                            )
-                            continue
-                        _resume_task.cancel()
-                        raise
-            except asyncio.TimeoutError:
-                await emit_status_event({"status": "timeout_or_failed"})
-                return (
-                    "Your request timed out while resuming after the "
-                    "confirmation. The operation may not have completed.",
-                    build_conversation_guardrail_usage(),
-                    status_events,
-                )
-            except GuardrailStop as exc:
-                logger.warning(
-                    "Conversation guardrail stop (LangGraph, post-resume): "
-                    "session=%s reason=%s",
-                    conv_session_id, exc.reason,
-                )
-                return exc.message, build_conversation_guardrail_usage(), status_events
-            except Exception:
-                logger.exception(
-                    "Conversation turn %s failed to resume after operator "
-                    "response — falling through to result extraction",
-                    conv_session_id,
-                )
+        except GraphInterrupt as _gi:
+            # LangGraph 1.1+ normally RETURNS the interrupt list in the result
+            # (``__interrupt__``); this branch keeps compatibility with older
+            # versions that raise instead.  Either way a pause is persisted and
+            # the turn returns — nothing waits on an in-process future.
+            _graph_interrupts = self._interrupts_from_graph_interrupt(_gi)
         except GuardrailStop as exc:
             logger.warning(
                 "Conversation guardrail stop (LangGraph): session=%s reason=%s",
                 conv_session_id, exc.reason,
             )
+            await _saver.aclose()
             return exc.message, build_conversation_guardrail_usage(), status_events
 
-        # 13. LangGraph 1.1.10: detect interrupt from return value
+        # 13. Detect a pause on ``human_intervene`` and make it durable.
         _pending_interrupts: list[Any] = (
             _result.get("__interrupt__", []) if isinstance(_result, dict) else []
         )
-        if _pending_interrupts:
-            # FIX-20261031-133253: the assistant called ``human_intervene``
-            # (confirmation-before-write). Previously swallowed — now wait
-            # for the operator response (AR /internal/resume resolves the
-            # in-process registry) and resume the SAME graph via
-            # Command(resume=response_value).
-            from langgraph.types import Command
-
-            from app.agent_runtime import conversation_resume
-            from app.core.config import get_settings as _get_settings
-
-            _intervention_timeout = float(
-                max(
-                    30,
-                    int(
-                        getattr(
-                            _get_settings(),
-                            "conversation_intervention_timeout_seconds",
-                            240,
-                        )
-                    ),
-                )
+        _interrupts: list[Any] = _pending_interrupts or (_graph_interrupts or [])
+        if _interrupts:
+            _pause_outcome, _pause_detail = await self._handle_conversational_pause(
+                saver=_saver,
+                transport=_checkpoint_transport,
+                agent=_agent,
+                config=_config,
+                conv_session_id=conv_session_id,
+                interrupts=_interrupts,
+                emit_status_event=emit_status_event,
+                turn_idempotency_key=turn_idempotency_key,
+                last_activity=_last_activity,
+                activity_window=_activity_window,
+                turn_timeout=_turn_timeout,
             )
-            # Persistent-activity enrichment (same marker as the
-            # interrupt-path pause above).
-            await emit_status_event(
-                {"status": "waiting_for_human", "pending_intervention": "true"}
-            )
-            logger.info(
-                "Conversation turn %s paused on human_intervene (return-based "
-                "interrupt) — waiting up to %.0fs for operator response",
-                conv_session_id, _intervention_timeout,
-            )
-            response_value = await conversation_resume.wait_for_resume(
-                conv_session_id, timeout_seconds=_intervention_timeout
-            )
-            if response_value is None:
-                await emit_status_event({"status": "timeout_or_failed"})
+            if _pause_outcome == "paused":
+                await _saver.aclose()
+                # Empty response text — the transport layer emits a ``paused``
+                # chunk instead of a ``final`` reply for this turn.
+                return "", build_conversation_guardrail_usage(), status_events
+            if _pause_outcome == "persistence_failed":
+                await _saver.aclose()
                 return (
-                    "The confirmation request timed out without a response, "
-                    "so I did NOT execute the operation. Please ask again to "
-                    "restart it.",
+                    "I could not save the confirmation request, so I did NOT "
+                    "execute the operation. Please ask again.",
                     build_conversation_guardrail_usage(),
                     status_events,
                 )
-            try:
-                logger.info(
-                    "Conversation turn %s resuming deep-agent loop after "
-                    "operator response (approval=%s)",
-                    conv_session_id, response_value.get("approval_value"),
+            if _pause_outcome in ("legacy_timeout", "legacy_error"):
+                await _saver.aclose()
+                return (
+                    "The confirmation request could not be completed, so I did "
+                    "NOT execute the operation. Please ask again to restart it.",
+                    build_conversation_guardrail_usage(),
+                    status_events,
                 )
-                _resume_task: asyncio.Task = asyncio.ensure_future(
-                    _agent.ainvoke(
-                        Command(resume=response_value),
-                        config=_config,
+            if _pause_outcome == "legacy_guardrail":
+                await _saver.aclose()
+                return str(_pause_detail), build_conversation_guardrail_usage(), status_events
+            # legacy_resumed: the in-process fallback completed the turn.
+            _result = _pause_detail
+            # A resumed turn can pause again — handle that pause the same way.
+            _pending_after: list[Any] = (
+                _result.get("__interrupt__", []) if isinstance(_result, dict) else []
+            )
+            if _pending_after:
+                _pause_outcome, _pause_detail = await self._handle_conversational_pause(
+                    saver=_saver,
+                    transport=_checkpoint_transport,
+                    agent=_agent,
+                    config=_config,
+                    conv_session_id=conv_session_id,
+                    interrupts=_pending_after,
+                    emit_status_event=emit_status_event,
+                    turn_idempotency_key=turn_idempotency_key,
+                    last_activity=_last_activity,
+                    activity_window=_activity_window,
+                    turn_timeout=_turn_timeout,
+                )
+                if _pause_outcome == "paused":
+                    await _saver.aclose()
+                    return "", build_conversation_guardrail_usage(), status_events
+                if _pause_outcome != "legacy_resumed":
+                    await _saver.aclose()
+                    return (
+                        "The confirmation request could not be completed, so I "
+                        "did NOT execute the operation. Please ask again.",
+                        build_conversation_guardrail_usage(),
+                        status_events,
                     )
-                )
-                # Surface processing state immediately after the operator
-                # responds — otherwise the chat shows no activity indicator
-                # until the next tool call fires.
-                await emit_status_event({"status": "thinking"})
-                # Same activity-aware watchdog as the initial invoke: the
-                # post-resume remainder (management tool + final answer) may
-                # legitimately exceed the per-wait LLM bound; only a turn
-                # that has gone idle since the resume began (or re-paused)
-                # is cancelled.
-                _resume_activity_baseline = _last_activity["at"]
-                while True:
-                    try:
-                        _result = await asyncio.wait_for(
-                            asyncio.shield(_resume_task),
-                            timeout=_turn_timeout,
-                        )
-                        break
-                    except asyncio.TimeoutError:
-                        _still_pending = (
-                            conversation_resume.is_pending(conv_session_id)
-                        )
-                        _idle_for = time.monotonic() - _last_activity["at"]
-                        if _still_pending or (
-                            _last_activity["at"] > _resume_activity_baseline
-                            and _idle_for < _activity_window
-                        ):
-                            logger.info(
-                                "Conversation turn %s still active after "
-                                "resume (pending=%s, idle=%.0fs) — extending wait",
-                                conv_session_id, _still_pending, _idle_for,
-                            )
-                            continue
-                        _resume_task.cancel()
-                        raise
-            except asyncio.TimeoutError:
-                await emit_status_event({"status": "timeout_or_failed"})
-                return (
-                    "Your request timed out while resuming after the "
-                    "confirmation. The operation may not have completed.",
-                    build_conversation_guardrail_usage(),
-                    status_events,
-                )
-            except GuardrailStop as exc:
-                logger.warning(
-                    "Conversation guardrail stop (LangGraph, post-resume): "
-                    "session=%s reason=%s",
-                    conv_session_id, exc.reason,
-                )
-                return exc.message, build_conversation_guardrail_usage(), status_events
-            except Exception:
-                logger.exception(
-                    "Conversation turn %s failed to resume after operator "
-                    "response — falling through to result extraction",
-                    conv_session_id,
-                )
+                _result = _pause_detail
+
+        await _saver.aclose()
 
         # 14. Extract response text from last AI message
         _final_messages: list[Any] = _result.get("messages", []) if isinstance(_result, dict) else []
@@ -3481,6 +3530,250 @@ class AgentRuntimeExecutor:
             response_text = "I processed your message but received an empty response."
 
         return response_text, build_conversation_guardrail_usage(), status_events
+
+    # ── Conversational pause (durable checkpoint + resume index) ─────────────
+
+    @staticmethod
+    def _interrupt_value(interrupts: list[Any]) -> dict[str, Any]:
+        """Return the pause payload carried by the first LangGraph interrupt."""
+        if not interrupts:
+            return {}
+        first = interrupts[0]
+        value = getattr(first, "value", first)
+        return value if isinstance(value, dict) else {}
+
+    @staticmethod
+    def _interrupts_from_graph_interrupt(exc: BaseException) -> list[Any]:
+        """Extract interrupts from a raised ``GraphInterrupt`` (legacy path)."""
+        args = getattr(exc, "args", ())
+        if not args:
+            return []
+        first = args[0]
+        if isinstance(first, (list, tuple)):
+            return list(first)
+        return [first]
+
+    async def _handle_conversational_pause(
+        self,
+        *,
+        saver: Any,
+        transport: Any,
+        agent: Any,
+        config: dict[str, Any],
+        conv_session_id: uuid.UUID,
+        interrupts: list[Any],
+        emit_status_event: Callable[[dict[str, str]], Awaitable[None]],
+        turn_idempotency_key: str | None,
+        last_activity: dict[str, float],
+        activity_window: float,
+        turn_timeout: float,
+    ) -> tuple[str, Any]:
+        """Persist a pause, then either report it or preserve legacy behaviour.
+
+        Returns ``(outcome, detail)`` where ``outcome`` is one of:
+
+        * ``paused`` — checkpoint flushed and resume index refreshed; the turn
+          returns immediately and the transport emits a ``paused`` chunk.
+        * ``persistence_failed`` — the relay refused/failed the write; the turn
+          ends terminally instead of pretending to wait.
+        * ``legacy_resumed`` — the relay is not deployed (Phase-4 CH absent);
+          the pre-existing in-process pause/resume ran and produced ``detail``.
+        * ``legacy_timeout`` / ``legacy_guardrail`` / ``legacy_error`` —
+          the fallback's terminal outcomes.
+        """
+        from app.agent_runtime.checkpoint_transport import (
+            CheckpointTransportError,
+            CheckpointTransportUnavailableError,
+        )
+        from app.agent_runtime.durable_checkpointer import CheckpointUnavailableError
+        from app.core.config import get_settings as _get_settings
+
+        _settings = _get_settings()
+        _intervention_timeout = float(
+            max(
+                30,
+                int(getattr(_settings, "conversation_intervention_timeout_seconds", 240)),
+            )
+        )
+        _resume_ttl = float(
+            max(
+                30,
+                int(getattr(_settings, "conversation_turn_resume_ttl_seconds", 900)),
+            )
+        )
+        expires_at = datetime.now(timezone.utc) + timedelta(
+            seconds=_resume_ttl
+        )
+        pause_info = self._interrupt_value(interrupts)
+        request_id_raw = pause_info.get("request_id")
+        request_id: uuid.UUID | None = None
+        if request_id_raw:
+            try:
+                request_id = uuid.UUID(str(request_id_raw))
+            except (ValueError, TypeError):
+                request_id = None
+
+        try:
+            # The pause point checkpoint must reach Control Center BEFORE the
+            # turn reports waiting: "shown as waiting" must never mean "not
+            # actually answerable".
+            await saver.flush(expires_at=expires_at)
+            record: Any = None
+            if request_id is not None:
+                # Refreshing with the intervention id is idempotent — it reuses
+                # the resume record the tool registration created.
+                record = await transport.save_resume_index(
+                    conv_session_id,
+                    intervene_request_id=request_id,
+                    expires_at=expires_at,
+                    idempotency_key=turn_idempotency_key,
+                )
+            else:
+                record = await transport.get_resume_index(conv_session_id)
+        except CheckpointTransportUnavailableError as exc:
+            # Degraded mode: the CH checkpoint relay is not deployed (the
+            # pre-Phase-4 rollout window).  Preserve the existing conversational
+            # UX — pause in-process and resume when the operator answers.
+            logger.warning(
+                "Durable checkpoint relay unavailable for conversation %s (%s) — "
+                "falling back to the in-process pause path",
+                conv_session_id,
+                exc,
+            )
+            return await self._legacy_in_process_pause(
+                agent=agent,
+                config=config,
+                conv_session_id=conv_session_id,
+                timeout_seconds=_intervention_timeout,
+                emit_status_event=emit_status_event,
+                last_activity=last_activity,
+                activity_window=activity_window,
+                turn_timeout=turn_timeout,
+            )
+        except (CheckpointTransportError, CheckpointUnavailableError) as exc:
+            logger.error(
+                "Conversation %s pause could not be persisted — failing the turn "
+                "closed: %s",
+                conv_session_id,
+                exc,
+            )
+            await emit_status_event(
+                {"status": "timeout_or_failed", "reason": "pause_not_persisted"}
+            )
+            return "persistence_failed", None
+
+        # Persistent-activity enrichment: carry an intervention marker so CC
+        # stamps the persisted activity as paused-for-human. CC resolves the
+        # concrete pending_intervene_request_id server-side.
+        await emit_status_event(
+            {"status": "waiting_for_human", "pending_intervention": "true"}
+        )
+        _resolved_key = (
+            getattr(record, "idempotency_key", None)
+            if record is not None
+            else None
+        ) or turn_idempotency_key
+        pause = ConversationTurnPause(
+            resume_id=str(record.resume_id) if record is not None else None,
+            resume_key=getattr(record, "resume_key", None),
+            intervene_request_id=str(request_id) if request_id is not None else None,
+            intervention_type=pause_info.get("intervention_type"),
+            reason=pause_info.get("reason"),
+            idempotency_key=_resolved_key,
+            expires_at=expires_at.isoformat(),
+            durable=True,
+        )
+        self._last_conversation_pause = pause
+        logger.info(
+            "Conversation turn %s paused on human_intervene — checkpoint + resume "
+            "index persisted (resume=%s, expires=%s)",
+            conv_session_id,
+            pause.resume_id,
+            pause.expires_at,
+        )
+        return "paused", pause
+
+    async def _legacy_in_process_pause(
+        self,
+        *,
+        agent: Any,
+        config: dict[str, Any],
+        conv_session_id: uuid.UUID,
+        timeout_seconds: float,
+        emit_status_event: Callable[[dict[str, str]], Awaitable[None]],
+        last_activity: dict[str, float],
+        activity_window: float,
+        turn_timeout: float,
+    ) -> tuple[str, Any]:
+        """Deprecated in-process pause/resume (durable relay unavailable only).
+
+        Kept so a deployment running this AR build against a Communication Hub
+        that does not yet serve the checkpoint relay keeps today's behaviour:
+        emit waiting, wait for the operator via the legacy registry, then
+        resume the same graph in-process.  Nothing in the durable path uses it.
+        """
+        from langgraph.types import Command
+
+        from app.agent_runtime import conversation_resume
+
+        await emit_status_event(
+            {"status": "waiting_for_human", "pending_intervention": "true"}
+        )
+        response_value = await conversation_resume.wait_for_resume(
+            conv_session_id, timeout_seconds=timeout_seconds
+        )
+        if response_value is None:
+            await emit_status_event({"status": "timeout_or_failed"})
+            return "legacy_timeout", None
+        try:
+            logger.info(
+                "Conversation turn %s resuming in-process after operator response "
+                "(approval=%s)",
+                conv_session_id,
+                response_value.get("approval_value"),
+            )
+            _resume_task: asyncio.Task = asyncio.ensure_future(
+                agent.ainvoke(Command(resume=response_value), config=config)
+            )
+            await emit_status_event({"status": "thinking"})
+            _resume_activity_baseline = last_activity["at"]
+            while True:
+                try:
+                    _result = await asyncio.wait_for(
+                        asyncio.shield(_resume_task), timeout=turn_timeout
+                    )
+                    break
+                except asyncio.TimeoutError:
+                    _idle_for = time.monotonic() - last_activity["at"]
+                    if (
+                        last_activity["at"] > _resume_activity_baseline
+                        and _idle_for < activity_window
+                    ):
+                        logger.info(
+                            "Conversation turn %s still active after in-process "
+                            "resume (idle=%.0fs) — extending wait",
+                            conv_session_id,
+                            _idle_for,
+                        )
+                        continue
+                    _resume_task.cancel()
+                    raise
+        except asyncio.TimeoutError:
+            await emit_status_event({"status": "timeout_or_failed"})
+            return "legacy_timeout", None
+        except GuardrailStop as exc:
+            logger.warning(
+                "Conversation guardrail stop (in-process resume): session=%s reason=%s",
+                conv_session_id, exc.reason,
+            )
+            return "legacy_guardrail", exc.message
+        except Exception:
+            logger.exception(
+                "Conversation turn %s failed to resume after operator response",
+                conv_session_id,
+            )
+            return "legacy_error", None
+        return "legacy_resumed", _result
 
     # _save_result_for_conversation removed — conversation agents use CommHub tool routing.
 

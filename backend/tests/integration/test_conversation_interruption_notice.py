@@ -1,15 +1,23 @@
-"""FIX (conversational resume orphan) — CC unblocks the chat when AR reports
-``not_awaiting`` (or the resume call fails).
+"""Terminal outcome delivery for paused conversational turns (task 5.3).
 
-When the suspended conversational turn was orphaned by a service restart, AR
-returns ``status="not_awaiting"``.  CC must persist a terminal assistant turn
-with an actionable interruption message and push it to the live chat via the
-Communication Hub, so the user's chat never stays stuck in "thinking".
+Replaces the legacy fixed "interrupted by a service restart" notice with a
+reason-keyed, actionable outcome:
+
+* a durably unresumable turn (no durable resume state / unresumable dispatch)
+  persists **exactly one** outcome turn naming what happened and the next step,
+  sets the terminal activity state, and pushes it to the live chat;
+* an elapsed answer window closes as ``unresumable/expired`` with **no**
+  dispatch and its own distinct text;
+* a transport failure (Communication Hub unreachable) leaves the pause
+  answerable — the Terminal Resolver owns the eventual outcome, so no outcome
+  turn is fabricated here;
+* a successfully resumed turn never receives an outcome notice.
 """
 from __future__ import annotations
 
 import os
 import uuid
+from datetime import datetime, timedelta, timezone
 from typing import AsyncGenerator
 from unittest.mock import AsyncMock, patch
 
@@ -25,6 +33,12 @@ os.environ.setdefault("SECRET_KEY", "test-secret-key")
 os.environ.setdefault("ENVIRONMENT", "test")
 
 from app.db.models.agents import AgentInputType, AgentOutputType, AgentType
+from app.db.models.conversation_activity import ActivityState
+from app.db.models.conversation_turn_resume import (
+    ConversationTurnResume,
+    ResumeOutcome,
+    ResumeState,
+)
 from app.db.models.conversations import (
     ConversationSession, ConversationStatus, ConversationTurn, TurnRole, TurnType,
 )
@@ -34,6 +48,12 @@ from app.db.models.intervene import (
 )
 from app.db.session import Base, get_db
 from app.main import create_app
+from app.services.conversations.activity_store import ConversationActivityStore
+from app.services.conversations.turn_resolution import (
+    REASON_CHECKPOINT_UNAVAILABLE,
+    REASON_EXPIRED,
+    outcome_message_for_reason,
+)
 from sqlalchemy.dialects.postgresql import UUID as _PG_UUID
 
 _INTEGRATION_URL = "sqlite+aiosqlite:///:memory:"
@@ -56,11 +76,6 @@ def _sqlite_tolerant_uuid_result_processor(self, dialect, coltype):
 
 
 _PG_UUID.result_processor = _sqlite_tolerant_uuid_result_processor
-
-_EXPECTED_MESSAGE = (
-    "This conversation was interrupted by a service restart and the pending "
-    "action was lost. Please resend your request."
-)
 
 
 @pytest_asyncio.fixture(scope="module")
@@ -156,6 +171,7 @@ async def async_client(test_engine) -> AsyncGenerator[AsyncClient, None]:
 async def _seed_pending_intervention(
     db: AsyncSession, agent_type_id: uuid.UUID,
     agent_session_id: uuid.UUID | None = None,
+    expires_at: datetime | None = None,
 ) -> tuple[ConversationSession, InterveneRequest]:
     conv = ConversationSession(
         agent_type_id=agent_type_id, triggered_by_user_id=None,
@@ -170,14 +186,47 @@ async def _seed_pending_intervention(
         intervention_type=InterventionType.approval, reason="Approve?",
         conversation_session_id=conv.id, delegation_depth=0,
     )
+    if expires_at is not None:
+        req.expires_at = expires_at
+        resume = (
+            await db.execute(
+                select(ConversationTurnResume).where(
+                    ConversationTurnResume.intervene_request_id == req.id
+                )
+            )
+        ).scalar_one_or_none()
+        if resume is not None:
+            resume.expires_at = expires_at
     await db.commit()
     return conv, req
 
 
-class TestInterruptionNotice:
+async def _agent_message_turns(
+    db: AsyncSession, session_id: uuid.UUID
+) -> list[ConversationTurn]:
+    stmt = select(ConversationTurn).where(
+        ConversationTurn.session_id == session_id,
+        ConversationTurn.role == TurnRole.agent,
+        ConversationTurn.turn_type == TurnType.message,
+    )
+    return list((await db.execute(stmt)).scalars().all())
+
+
+async def _resume_of(db: AsyncSession, request_id: uuid.UUID) -> ConversationTurnResume:
+    row = (
+        await db.execute(
+            select(ConversationTurnResume).where(
+                ConversationTurnResume.intervene_request_id == request_id
+            )
+        )
+    ).scalar_one()
+    return row
+
+
+class TestTerminalOutcomeDelivery:
 
     @pytest.mark.asyncio
-    async def test_not_awaiting_persists_agent_turn_and_pushes_live(
+    async def test_unresumable_dispatch_persists_one_reason_keyed_turn(
         self, db_session, async_client, shared_identity, shared_agent_type,
     ) -> None:
         conv, req = await _seed_pending_intervention(db_session, shared_agent_type.id)
@@ -206,40 +255,86 @@ class TestInterruptionNotice:
 
         assert response.status_code == 200, response.text
 
-        # Terminal assistant turn persisted with the actionable message.
-        stmt = select(ConversationTurn).where(
-            ConversationTurn.session_id == conv.id,
-            ConversationTurn.role == TurnRole.agent,
-            ConversationTurn.turn_type == TurnType.message,
-        )
-        turns = (await db_session.execute(stmt)).scalars().all()
+        expected = outcome_message_for_reason(REASON_CHECKPOINT_UNAVAILABLE)
+        turns = await _agent_message_turns(db_session, conv.id)
         assert len(turns) == 1
-        assert turns[0].content == _EXPECTED_MESSAGE
+        assert turns[0].content == expected
+        assert "Nothing was applied" in turns[0].content
         assert str(turns[0].intervene_request_id) == str(req.id)
 
-        # Live push best-effort via CH dispatch with the chat_message payload.
+        resume = await _resume_of(db_session, req.id)
+        assert resume.state is ResumeState.unresumable
+        assert resume.resume_outcome is ResumeOutcome.resume_failed
+        assert resume.terminal_reason_code == REASON_CHECKPOINT_UNAVAILABLE
+        assert resume.outcome_turn_id == turns[0].id
+        assert resume.write_applied is False
+
+        activity = await ConversationActivityStore().get(conv.id, db_session)
+        assert activity is not None
+        assert activity.is_terminal is True
+        assert activity.state is ActivityState.failed
+
         fake_hub.return_value.dispatch_message.assert_awaited_once()
         kwargs = fake_hub.return_value.dispatch_message.await_args.kwargs
         assert kwargs["message_type"] == "chat_message"
         assert kwargs["content"]["sender_role"] == "agent"
-        assert kwargs["content"]["content"] == _EXPECTED_MESSAGE
+        assert kwargs["content"]["content"] == expected
 
     @pytest.mark.asyncio
-    async def test_resume_failure_also_persists_notice(
+    async def test_expired_window_marks_expired_and_never_dispatches(
         self, db_session, async_client, shared_identity, shared_agent_type,
     ) -> None:
+        conv, req = await _seed_pending_intervention(
+            db_session,
+            shared_agent_type.id,
+            expires_at=datetime.now(timezone.utc) - timedelta(minutes=5),
+        )
+
+        resume_mock = AsyncMock(return_value="resumed")
+        with patch("app.api.v1.intervene._resume_agent_session", new=resume_mock):
+            with patch(
+                "app.api.v1.conversations._get_requesting_user_id", return_value=None
+            ):
+                response = await async_client.post(
+                    f"/api/v1/conversations/{conv.id}/interventions/{req.id}/respond",
+                    json={"request_id": str(req.id), "approval_value": True},
+                )
+
+        assert response.status_code == 200, response.text
+        resume_mock.assert_not_awaited()
+
+        resume = await _resume_of(db_session, req.id)
+        assert resume.state is ResumeState.unresumable
+        assert resume.terminal_reason_code == REASON_EXPIRED
+        assert resume.write_applied is False
+
+        turns = await _agent_message_turns(db_session, conv.id)
+        assert len(turns) == 1
+        assert turns[0].content == outcome_message_for_reason(REASON_EXPIRED)
+        # Distinct wording from the lost-pause-point case.
+        assert turns[0].content != outcome_message_for_reason(
+            REASON_CHECKPOINT_UNAVAILABLE
+        )
+
+        activity = await ConversationActivityStore().get(conv.id, db_session)
+        assert activity is not None
+        assert activity.state is ActivityState.timed_out
+
+    @pytest.mark.asyncio
+    async def test_transport_failure_keeps_turn_resumable(
+        self, db_session, async_client, shared_identity, shared_agent_type,
+    ) -> None:
+        """CH unreachable → dispatch status None.  The pause stays answerable and
+        no outcome turn is fabricated (the Terminal Resolver owns it)."""
         conv, req = await _seed_pending_intervention(db_session, shared_agent_type.id)
 
         with patch(
             "app.api.v1.intervene._resume_agent_session",
-            new=AsyncMock(return_value=None),  # resume call failed
+            new=AsyncMock(return_value=None),
         ):
-            with patch(
-                "app.services.control_center.comm_hub_client.CommunicationHubClient",
-            ):
+            with patch("app.services.control_center.comm_hub_client.CommunicationHubClient"):
                 with patch(
-                    "app.api.v1.conversations._get_requesting_user_id",
-                    return_value=None,
+                    "app.api.v1.conversations._get_requesting_user_id", return_value=None
                 ):
                     response = await async_client.post(
                         f"/api/v1/conversations/{conv.id}/interventions/{req.id}/respond",
@@ -247,18 +342,17 @@ class TestInterruptionNotice:
                     )
 
         assert response.status_code == 200, response.text
-        stmt = select(ConversationTurn).where(
-            ConversationTurn.session_id == conv.id,
-            ConversationTurn.role == TurnRole.agent,
-        )
-        turns = (await db_session.execute(stmt)).scalars().all()
-        assert any(t.content == _EXPECTED_MESSAGE for t in turns)
+        assert await _agent_message_turns(db_session, conv.id) == []
+
+        resume = await _resume_of(db_session, req.id)
+        assert resume.is_terminal is False
+        assert resume.state is ResumeState.resuming
 
     @pytest.mark.asyncio
     async def test_resumed_status_does_not_add_notice(
         self, db_session, async_client, shared_identity, shared_agent_type,
     ) -> None:
-        """Normal resume path must NOT inject the interruption notice."""
+        """A successfully resumed turn must never receive an outcome notice."""
         conv, req = await _seed_pending_intervention(
             db_session, shared_agent_type.id, agent_session_id=uuid.uuid4()
         )
@@ -277,9 +371,36 @@ class TestInterruptionNotice:
                 )
 
         assert response.status_code == 200, response.text
-        stmt = select(ConversationTurn).where(
-            ConversationTurn.session_id == conv.id,
-            ConversationTurn.role == TurnRole.agent,
+        assert await _agent_message_turns(db_session, conv.id) == []
+
+    @pytest.mark.asyncio
+    async def test_repeated_unresumable_responses_keep_one_outcome_turn(
+        self, db_session, async_client, shared_identity, shared_agent_type,
+    ) -> None:
+        """The outcome turn is guarded by ``outcome_turn_id``: a second attempt
+        against the same answered turn appends nothing."""
+        from app.services.conversations.turn_resolution import (
+            resolve_unresumable_turn,
         )
-        turns = (await db_session.execute(stmt)).scalars().all()
-        assert turns == []
+
+        conv, req = await _seed_pending_intervention(db_session, shared_agent_type.id)
+        first = await resolve_unresumable_turn(
+            db_session,
+            conv.id,
+            reason_code=REASON_CHECKPOINT_UNAVAILABLE,
+            intervene_request_id=req.id,
+        )
+        await db_session.commit()
+        second = await resolve_unresumable_turn(
+            db_session,
+            conv.id,
+            reason_code=REASON_CHECKPOINT_UNAVAILABLE,
+            intervene_request_id=req.id,
+        )
+        await db_session.commit()
+
+        assert first is not None and second is not None
+        assert first.outcome_turn_id == second.outcome_turn_id
+        assert second.write_applied is False
+        turns = await _agent_message_turns(db_session, conv.id)
+        assert len(turns) == 1

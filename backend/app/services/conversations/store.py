@@ -252,4 +252,64 @@ class ConversationStore:
             .offset((page - 1) * page_size)
         )
         result = await db.execute(items_query)
-        return list(result.scalars().all()), total
+        items = list(result.scalars().all())
+        await self._attach_resume_projection(db, items)
+        return items, total
+
+    async def _attach_resume_projection(
+        self,
+        db: AsyncSession,
+        sessions: list[ConversationSession],
+    ) -> None:
+        """Attach the durable resume projection to each page item (one query).
+
+        The resume index guarantees at most one *live* record per session; a
+        session whose pause already settled is badged from its newest terminal
+        record.  A session that never paused carries no projection at all.
+        """
+        from app.db.models.conversation_turn_resume import ConversationTurnResume
+
+        for session in sessions:
+            session.resume_state = None
+            session.resume_outcome = None
+            session.resume_expires_at = None
+        session_ids = [session.id for session in sessions]
+        if not session_ids:
+            return
+
+        rows = (
+            await db.execute(
+                select(ConversationTurnResume)
+                .where(ConversationTurnResume.conversation_session_id.in_(session_ids))
+                .order_by(
+                    ConversationTurnResume.conversation_session_id,
+                    ConversationTurnResume.created_at.desc(),
+                )
+            )
+        ).scalars().all()
+
+        chosen: dict[Any, Any] = {}
+        for record in rows:
+            current = chosen.get(record.conversation_session_id)
+            if current is None:
+                chosen[record.conversation_session_id] = record
+            elif current.is_terminal and not record.is_terminal:
+                # A live record always wins over an older terminal one.
+                chosen[record.conversation_session_id] = record
+
+        by_id = {session.id: session for session in sessions}
+        for conversation_session_id, record in chosen.items():
+            session = by_id.get(conversation_session_id)
+            if session is None:
+                continue
+            state = record.state
+            outcome = record.resume_outcome
+            session.resume_state = (
+                state.value if hasattr(state, "value") else str(state)
+            )
+            session.resume_outcome = (
+                outcome.value
+                if outcome is not None and hasattr(outcome, "value")
+                else (str(outcome) if outcome is not None else None)
+            )
+            session.resume_expires_at = record.expires_at

@@ -2,7 +2,7 @@
 
 ## Overview
 
-The Token Refresh Service is a background service that keeps agent access tokens valid without requiring administrator intervention. It monitors token expiry in the Token Store and proactively refreshes access tokens against the `ai_agents` realm using stored refresh tokens, before the access token expires. If a refresh token has itself expired, the service marks the identity as requiring re-authentication and surfaces the status in the management UI.
+The Token Refresh Service is a background service that keeps agent access tokens valid without requiring administrator intervention. It monitors refresh-token expiry in the Token Store and proactively refreshes access tokens against the `ai_agents` realm using stored refresh tokens, before the access token expires. If a refresh token has itself expired, the credential is classified as expired and that status is surfaced in the management UI.
 
 ## Component Architecture
 
@@ -30,7 +30,7 @@ flowchart LR
 
 ## Responsibilities
 
-- **Expiry monitoring** — Polls token expiry metadata at a configured cadence; flags tokens that are expiring soon
+- **Expiry monitoring** — Polls refresh-token expiry metadata at a configured cadence; flags credentials whose refresh token is expiring soon
 - **Proactive refresh** — Issues OAuth 2.0 refresh token grants against the `ai_agents` realm before the access token expires
 - **Token Store update** — Writes the new encrypted access token back to the Token Store; the expiry timestamp is updated accordingly
 - **Failure handling** — Refresh failures are split by recoverability. A
@@ -39,15 +39,7 @@ flowchart LR
   expired or revoked) sets `requires_reauth` + `last_refresh_error` on the
   affected MCP session and stops refreshing it until the user re-authenticates
   in place. For agent identity tokens the identity status becomes `expired`.
-- **Status surfacing** — Token status (`valid` / `expiring_soon` / `expired`) is surfaced in the Identity Management UI, enabling admins to act before sessions fail
-
-## Token Lifecycle States
-
-| State | Meaning | Action |
-|---|---|---|
-| **valid** | Access token is current; no action needed | Refresh Service monitors expiry |
-| **expiring_soon** | Access token is within the refresh window | Refresh Service issues refresh grant |
-| **expired** | Refresh token is expired or revoked | Admin must re-authenticate via OAuth sign-in |
+- **Status surfacing** — **Refresh-token** status (`healthy` / `expiring-within-7-days` / `expired`) is surfaced in the Identity Management UI, enabling admins to act before sessions fail. An access token that has expired but can be renewed is not shown as an error.
 
 ## MCP Session Re-Auth State (`requires_reauth`)
 
@@ -89,13 +81,15 @@ invisible to the user.
 
 ## Expiry Classification (Token Health Service)
 
-The **Token Health Service** (Control Center) is the single owner of token expiry state. It computes an expiry classification per identity token and per MCP session directly from the token metadata the Token Store already holds — Control Center remains the only database-connected service, and no new deployable is introduced.
+The **refresh token** is the credential whose expiry determines health, because the Refresh Service renews access tokens automatically. The **Token Health Service** (Control Center) is the single owner of token expiry state. It computes an expiry classification per identity token and per MCP session directly from the token metadata the Token Store already holds — Control Center remains the only database-connected service, and no new deployable is introduced.
 
 | State | Meaning | Downstream effect |
 |---|---|---|
-| `healthy` | Token valid, outside the 7-day window | Execution preflight proceeds |
-| `expiring-within-7-days` | Token valid today but expiring soon | Execution proceeds **with a warning**; surfaced on dashboard + topology |
-| `expired` | Token (or refresh token) no longer usable | Execution **blocked** at the Communication Hub preflight gate |
+| `healthy` | Refresh token valid, outside the 7-day window (or no known expiry) | Execution preflight proceeds |
+| `expiring-within-7-days` | Refresh token valid today but expiring soon | Execution proceeds **with a warning**; surfaced on dashboard + topology |
+| `expired` | Refresh token no longer usable, or last refresh failed unrecoverably | Execution **blocked** at the Communication Hub preflight gate. An expired access token alone is not `expired` while refresh remains possible |
+
+For MCP sessions, `requires_reauth = true` always maps to `expired`. When a session has no recorded refresh-token expiry, `oauth_expires_at` is the fallback. For identities with no refresh token, `token_expires_at` is the fallback. When a provider reports **no refresh-token expiry**, the credential is treated as having no known expiry (`healthy`, not falsely expired). An `expiring-within-7-days` credential warrants an admin refresh or re-authentication before the refresh token lapses.
 
 ```mermaid
 flowchart LR

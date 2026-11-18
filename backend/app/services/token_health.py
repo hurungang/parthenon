@@ -60,19 +60,35 @@ def classify_identity_health(
     refresh_token_expires_at: datetime | None,
     token_status: AgentTokenStatus | str | None,
     last_token_refresh_outcome: TokenRefreshOutcome | str | None,
+    has_refresh_token: bool | None = None,
     now: datetime | None = None,
 ) -> TokenHealthState:
     """Classify an agent identity's token health.
 
+    The refresh token is authoritative: while a refresh token exists the
+    access token is renewed automatically, so an expired access token is NOT
+    an error. Only the refresh token's own expiry drives the state. When no
+    refresh token exists, the access-token expiry is used as the fallback
+    (no renewal mechanism → a hard failure is imminent).
+
     Rules (evaluated in order):
-    - No access-token expiry recorded → ``unknown``.
     - ``token_status`` is ``refresh_failed`` or the last refresh failed →
-      the access token can no longer be renewed → ``expired``.
-    - Access token past expiry → ``expired``.
-    - Refresh token past expiry (cannot renew) → ``expired``.
-    - Access token or refresh token expiring within
-      :data:`TOKEN_EXPIRING_WINDOW` → ``expiring``.
-    - Otherwise → ``healthy``.
+      the credential can no longer be renewed → ``expired``.
+    - Refresh token present:
+      - no known refresh expiry → ``healthy`` (nothing to warn about);
+      - past expiry → ``expired``;
+      - expiry within :data:`TOKEN_EXPIRING_WINDOW` → ``expiring``;
+      - otherwise → ``healthy``.
+    - No refresh token (fallback to the access token):
+      - no access-token expiry recorded → ``unknown``;
+      - past expiry → ``expired``;
+      - expiry within :data:`TOKEN_EXPIRING_WINDOW` → ``expiring``;
+      - otherwise → ``healthy``.
+
+    ``has_refresh_token`` may be passed explicitly when the caller knows
+    whether a refresh token is stored (the token itself is encrypted and its
+    expiry may be unknown). When ``None`` it is inferred from
+    ``refresh_token_expires_at``.
     """
     now = _aware(now) or _now_utc()
     status = AgentTokenStatus(token_status) if isinstance(token_status, str) else token_status
@@ -85,19 +101,28 @@ def classify_identity_health(
     token_expires_at = _aware(token_expires_at)
     refresh_token_expires_at = _aware(refresh_token_expires_at)
 
-    if token_expires_at is None:
-        return TokenHealthState.unknown
     if status == AgentTokenStatus.refresh_failed or outcome == TokenRefreshOutcome.failure:
         return TokenHealthState.expired
+
+    if has_refresh_token is None:
+        has_refresh_token = refresh_token_expires_at is not None
+
+    if has_refresh_token:
+        if refresh_token_expires_at is None:
+            # Refresh token exists but its expiry is unknown — nothing to warn about.
+            return TokenHealthState.healthy
+        if refresh_token_expires_at <= now:
+            return TokenHealthState.expired
+        if refresh_token_expires_at <= now + TOKEN_EXPIRING_WINDOW:
+            return TokenHealthState.expiring
+        return TokenHealthState.healthy
+
+    # No refresh token — fall back to the access-token expiry.
+    if token_expires_at is None:
+        return TokenHealthState.unknown
     if token_expires_at <= now:
         return TokenHealthState.expired
-    if refresh_token_expires_at is not None and refresh_token_expires_at <= now:
-        return TokenHealthState.expired
-
-    access_threshold = now + TOKEN_EXPIRING_WINDOW
-    if token_expires_at <= access_threshold:
-        return TokenHealthState.expiring
-    if refresh_token_expires_at is not None and refresh_token_expires_at <= access_threshold:
+    if token_expires_at <= now + TOKEN_EXPIRING_WINDOW:
         return TokenHealthState.expiring
     return TokenHealthState.healthy
 
@@ -106,23 +131,41 @@ def classify_session_health(
     *,
     oauth_expires_at: datetime | None,
     oauth_refresh_expires_at: datetime | None,
+    requires_reauth: bool = False,
+    has_refresh_token: bool | None = None,
     now: datetime | None = None,
 ) -> TokenHealthState:
-    """Classify an MCP session's OAuth token health (same rules as identities)."""
+    """Classify an MCP session's OAuth token health (same rules as identities).
+
+    An unrecoverable refresh failure flagged by ``requires_reauth`` is always
+    ``expired`` — the session must be re-authenticated. Otherwise the refresh
+    token is authoritative when it exists; the access token is only the
+    fallback when there is no refresh token.
+    """
     now = _aware(now) or _now_utc()
     oauth_expires_at = _aware(oauth_expires_at)
     oauth_refresh_expires_at = _aware(oauth_refresh_expires_at)
+
+    if requires_reauth:
+        return TokenHealthState.expired
+
+    if has_refresh_token is None:
+        has_refresh_token = oauth_refresh_expires_at is not None
+
+    if has_refresh_token:
+        if oauth_refresh_expires_at is None:
+            return TokenHealthState.healthy
+        if oauth_refresh_expires_at <= now:
+            return TokenHealthState.expired
+        if oauth_refresh_expires_at <= now + TOKEN_EXPIRING_WINDOW:
+            return TokenHealthState.expiring
+        return TokenHealthState.healthy
+
     if oauth_expires_at is None:
         return TokenHealthState.unknown
     if oauth_expires_at <= now:
         return TokenHealthState.expired
-    if oauth_refresh_expires_at is not None and oauth_refresh_expires_at <= now:
-        return TokenHealthState.expired
-
-    threshold = now + TOKEN_EXPIRING_WINDOW
-    if oauth_expires_at <= threshold:
-        return TokenHealthState.expiring
-    if oauth_refresh_expires_at is not None and oauth_refresh_expires_at <= threshold:
+    if oauth_expires_at <= now + TOKEN_EXPIRING_WINDOW:
         return TokenHealthState.expiring
     return TokenHealthState.healthy
 
@@ -134,6 +177,13 @@ def compute_identity_state(identity: AgentIdentity, now: datetime | None = None)
         refresh_token_expires_at=identity.refresh_token_expires_at,
         token_status=identity.token_status,
         last_token_refresh_outcome=identity.last_token_refresh_outcome,
+        has_refresh_token=(
+            identity.refresh_token is not None
+            or identity.encrypted_refresh_token is not None
+            # A recorded refresh-token expiry proves a refresh token was issued
+            # even when only the expiry column is populated (legacy/test rows).
+            or identity.refresh_token_expires_at is not None
+        ),
         now=now,
     )
 
@@ -143,6 +193,7 @@ def compute_session_state(session: McpSession, now: datetime | None = None) -> T
     return classify_session_health(
         oauth_expires_at=session.oauth_expires_at,
         oauth_refresh_expires_at=session.oauth_refresh_expires_at,
+        requires_reauth=session.requires_reauth,
         now=now,
     )
 

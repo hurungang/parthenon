@@ -374,3 +374,70 @@ async def test_snapshot_failure_does_not_block_execution():
     # Should not raise despite the client error
     await cb.on_chat_model_start(serialized={}, messages=[[]])
 
+
+# ── Repeated identical tool-call guard (command/optimization runs) ────────────
+
+
+@pytest.mark.asyncio
+async def test_repeat_guard_disabled_by_default():
+    """A normal task run tolerates repeated identical calls."""
+    from app.services.agents.guardrail_callback import GuardrailCallback
+
+    state = _make_state()
+    cb = GuardrailCallback(guardrail_state=state, session_id="sess-1")
+    for _ in range(5):
+        # Should not raise — the guard is opt-in for command runs.
+        await cb.on_tool_start(
+            serialized={"name": "get_optimized_implementation_plan"},
+            input_str="{'agent_type_id': 'abc'}",
+        )
+
+
+@pytest.mark.asyncio
+async def test_repeat_guard_stops_identical_consecutive_calls():
+    """Three identical consecutive calls raise a canonical guardrail stop."""
+    from app.services.agents.guardrail_callback import (
+        GuardrailCallback,
+        GuardrailStop,
+    )
+    from app.services.agents.guardrails import (
+        GuardrailStop as CanonicalGuardrailStop,
+    )
+
+    state = _make_state()
+    cb = GuardrailCallback(
+        guardrail_state=state, session_id="sess-loop", repeat_guard_enabled=True
+    )
+    serialized = {"name": "get_optimized_implementation_plan"}
+    args = "{'agent_type_id': 'abc'}"
+
+    await cb.on_tool_start(serialized=serialized, input_str=args)
+    await cb.on_tool_start(serialized=serialized, input_str=args)
+    with pytest.raises(GuardrailStop) as exc_info:
+        await cb.on_tool_start(serialized=serialized, input_str=args)
+
+    assert exc_info.value.reason == "repeated_tool_call"
+    assert exc_info.value.details["repeat_count"] == 3
+    assert exc_info.value.details["tool_name"] == "get_optimized_implementation_plan"
+    # Must be catchable by the runtime's canonical `except GuardrailStop`.
+    assert isinstance(exc_info.value, CanonicalGuardrailStop)
+
+
+@pytest.mark.asyncio
+async def test_repeat_guard_resets_on_different_args_or_tool():
+    """Different args or tool break the consecutive-identical run."""
+    from app.services.agents.guardrail_callback import GuardrailCallback
+
+    state = _make_state()
+    cb = GuardrailCallback(
+        guardrail_state=state, session_id="sess-1", repeat_guard_enabled=True
+    )
+    serialized = {"name": "get_optimized_implementation_plan"}
+
+    for index in range(5):
+        await cb.on_tool_start(serialized=serialized, input_str=f"{{'i': {index}}}")
+    # Alternating tools/args never reaches the threshold.
+    for _ in range(5):
+        await cb.on_tool_start(serialized=serialized, input_str="{'a': 1}")
+        await cb.on_tool_start(serialized={"name": "get_scripts"}, input_str="{'a': 1}")
+

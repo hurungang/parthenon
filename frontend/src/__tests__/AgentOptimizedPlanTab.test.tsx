@@ -99,16 +99,17 @@ describe('AgentOptimizedPlanTab', () => {
     expect(screen.getByTestId('optimized-plan-status').textContent).toBe('ready')
   })
 
-  it('renders a View script link only on script-backed steps and calls onViewScript', async () => {
+  it('renders a View script button only on script-backed steps and calls onViewScript', async () => {
     const onViewScript = vi.fn()
     render(
       <AgentOptimizedPlanTab agentTypeId="at-1" onError={vi.fn()} onViewScript={onViewScript} />,
       { wrapper },
     )
 
-    const link = await screen.findByTestId('view-script-link-0')
-    expect(screen.queryByTestId('view-script-link-1')).toBeNull()
-    fireEvent.click(link)
+    const button = await screen.findByTestId('view-script-1')
+    expect(button.tagName).toBe('BUTTON')
+    expect(screen.queryByTestId('view-script-2')).toBeNull()
+    fireEvent.click(button)
     expect(onViewScript).toHaveBeenCalledOnce()
     // The step is passed so the direct script dialog can show its source.
     expect(onViewScript).toHaveBeenCalledWith(
@@ -116,38 +117,15 @@ describe('AgentOptimizedPlanTab', () => {
     )
   })
 
-  it('renders accumulated feedback comments', async () => {
+  it('no longer renders the manual feedback form', async () => {
     render(
       <AgentOptimizedPlanTab agentTypeId="at-1" onError={vi.fn()} onViewScript={vi.fn()} />,
       { wrapper },
     )
 
-    expect(await screen.findByText('Make the output a table.')).toBeDefined()
-  })
-
-  it('submits feedback via the feedback endpoint and refreshes the plan', async () => {
-    render(
-      <AgentOptimizedPlanTab agentTypeId="at-1" onError={vi.fn()} onViewScript={vi.fn()} />,
-      { wrapper },
-    )
-
-    const input = (await screen.findByTestId(
-      'optimized-plan-feedback-input',
-    )) as HTMLElement
-    const textarea = input.querySelector('textarea') as HTMLTextAreaElement
-    fireEvent.change(textarea, { target: { value: 'Make the output a table.' } })
-    fireEvent.click(screen.getByTestId('optimized-plan-feedback-submit'))
-
-    await waitFor(() => {
-      expect(mockApiPost).toHaveBeenCalledWith(
-        '/agents/types/at-1/optimize-plan/feedback',
-        { feedback: 'Make the output a table.' },
-      )
-    })
-    // Plan re-fetched after the feedback mutation succeeds.
-    await waitFor(() => {
-      expect(mockApiGet.mock.calls.length).toBeGreaterThanOrEqual(2)
-    })
+    expect(await screen.findByTestId('optimized-plan-status')).toBeDefined()
+    expect(screen.queryByTestId('optimized-plan-feedback-input')).toBeNull()
+    expect(screen.queryByTestId('optimized-plan-feedback-submit')).toBeNull()
   })
 
   it('shows the empty state when no optimized plan exists (404)', async () => {
@@ -183,11 +161,12 @@ describe('AgentOptimizedPlanTab', () => {
     })
     // The failure info is surfaced...
     expect(screen.getByText(/verification failed after 3 attempt/)).toBeDefined()
-    // ...and the user is prompted to steer via feedback.
+    // ...and the user is prompted to continue in the conversation.
     expect(screen.getByTestId('needs-feedback-prompt')).toBeDefined()
-    expect(
-      screen.getByText('agents.optimizedPlan.needsFeedbackPrompt'),
-    ).toBeDefined()
+    expect(screen.getByText('agents.optimizedPlan.needsInputTitle')).toBeDefined()
+    expect(screen.getByTestId('continue-in-conversation')).toBeDefined()
+    // The removed manual feedback form is gone.
+    expect(screen.queryByTestId('optimized-plan-feedback-input')).toBeNull()
   })
 
   it('retire invalidates the whole agent-type query scope so Run Agent re-gates', async () => {
@@ -238,6 +217,92 @@ describe('AgentOptimizedPlanTab', () => {
     // user-facing verification log section and raw-log dialog are gone.
     expect(screen.queryByTestId('view-optimize-log-button')).toBeNull()
     expect(screen.queryByTestId('optimize-log-dialog')).toBeNull()
+  })
+
+  // ── requires_fix: self-healing human-in-the-loop surface ────────────────────
+
+  const REQUIRES_FIX_PLAN: OptimizedPlanView = {
+    ...PLAN,
+    status: 'requires_fix',
+    feedback_comments: [
+      {
+        created_at: '2026-10-22T00:00:00+00:00',
+        raw_feedback: 'Script failed: the CRM tool returned a schema mismatch.',
+        summary: 'Script failed: the CRM tool returned a schema mismatch.',
+        source: 'execution_derived',
+        source_execution_id: 'sess-failed-1',
+        source_fallback_event_id: 'fb-1',
+      },
+      {
+        created_at: '2026-10-21T00:00:00+00:00',
+        raw_feedback: 'Make the output a table.',
+        summary: 'Make the output a table.',
+        source: 'manual',
+      },
+    ],
+  }
+
+  it('renders the requires_fix status and a concise re-optimize entry (no feedback dump)', async () => {
+    mockApiGet.mockResolvedValue({ data: REQUIRES_FIX_PLAN })
+
+    render(
+      <AgentOptimizedPlanTab
+        agentTypeId="at-1"
+        agentTypeName="Test Agent"
+        onError={vi.fn()}
+        onViewScript={vi.fn()}
+      />,
+      { wrapper },
+    )
+
+    await waitFor(() => {
+      expect(screen.getByTestId('optimized-plan-status').textContent).toBe('requires_fix')
+    })
+
+    // Prominent alert with the human-readable explanation.
+    expect(screen.getByTestId('requires-fix-alert')).toBeDefined()
+    expect(screen.getByText('agents.optimizedPlan.requiresFixTitle')).toBeDefined()
+    expect(screen.getByText('agents.optimizedPlan.requiresFixReason')).toBeDefined()
+
+    // The alert points at the conversation; the auto-feedback dump is gone.
+    expect(screen.getByTestId('reoptimize-from-alert')).toBeDefined()
+    expect(screen.queryByTestId('requires-fix-feedback-0')).toBeNull()
+    expect(screen.queryByTestId('feedback-source-0')).toBeNull()
+  })
+
+  it('re-optimize from the alert opens the optimizer conversation (no one-shot confirmation)', async () => {
+    mockApiGet.mockResolvedValue({ data: REQUIRES_FIX_PLAN })
+
+    render(
+      <AgentOptimizedPlanTab
+        agentTypeId="at-1"
+        agentTypeName="Test Agent"
+        onError={vi.fn()}
+        onViewScript={vi.fn()}
+      />,
+      { wrapper },
+    )
+
+    const reoptimize = await screen.findByTestId('reoptimize-from-alert')
+    fireEvent.click(reoptimize)
+
+    // The old pre-start confirmation dialog and its one-shot run are gone.
+    expect(screen.queryByText('agents.optimize.reoptimizeTitle')).toBeNull()
+    expect(mockApiPost).not.toHaveBeenCalledWith('/agents/sessions/optimize', {
+      agent_type_id: 'at-1',
+    })
+  })
+
+  it('does not offer re-optimize for a ready plan', async () => {
+    render(
+      <AgentOptimizedPlanTab agentTypeId="at-1" onError={vi.fn()} onViewScript={vi.fn()} />,
+      { wrapper },
+    )
+
+    expect(await screen.findByTestId('optimized-plan-status')).toBeDefined()
+    expect(screen.queryByTestId('reoptimize-optimized-plan')).toBeNull()
+    expect(screen.queryByTestId('reoptimize-from-alert')).toBeNull()
+    expect(screen.queryByTestId('requires-fix-alert')).toBeNull()
   })
 
   it('shows a "nothing to retire" state and disables retire when the plan is already retired', async () => {

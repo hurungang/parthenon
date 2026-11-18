@@ -192,6 +192,9 @@ class AgentRuntimeClient:
         session_id: uuid.UUID,
         response_value: dict | None = None,
         tenant_context: TenantContext | None = None,
+        *,
+        resume_id: uuid.UUID | None = None,
+        request_id: uuid.UUID | None = None,
     ) -> dict[str, Any]:
         """POST a resume request to Agent Runtime via Communication Hub after human intervention.
 
@@ -207,11 +210,17 @@ class AgentRuntimeClient:
         tenant context headers are attached; when it is None, no tenant
         headers are added.
 
+        ``resume_id`` (the durable resume record) and ``request_id`` (the
+        answered intervention) identify the turn so Communication Hub can
+        de-duplicate a repeated answer: only the first dispatch starts a resume.
+
         Args:
             session_id:     UUID of the session to resume.
             response_value: Optional dict with the human's response
                             (e.g. ``{"approval_value": True}``).
             tenant_context: Resolved tenant context (None in single-tenant mode).
+            resume_id:      Durable resume record that owns this paused turn.
+            request_id:     Answered intervention request.
 
         Returns:
             Response dict with ``session_id`` and ``status``.
@@ -223,6 +232,10 @@ class AgentRuntimeClient:
         body: dict[str, Any] = {}
         if response_value:
             body["response_value"] = response_value
+        if resume_id is not None:
+            body["resume_id"] = str(resume_id)
+        if request_id is not None:
+            body["request_id"] = str(request_id)
 
         headers = tenant_context_headers(tenant_context)
 

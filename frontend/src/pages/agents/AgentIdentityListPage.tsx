@@ -48,12 +48,13 @@ function statusColor(
   return 'default'
 }
 
-function tokenStatusColor(
-  expiresAt: string,
-): 'success' | 'error' {
-  const diff = new Date(expiresAt).getTime() - Date.now()
-  if (diff <= 0) return 'error'
-  return 'success'
+/** Token health window shared with the dashboard (7 days). */
+const TOKEN_EXPIRING_WINDOW_MS = 7 * 24 * 60 * 60 * 1000
+
+interface IdentityTokenStatus {
+  label: string
+  color: 'success' | 'warning' | 'error'
+  tooltip: string
 }
 
 /**
@@ -202,6 +203,63 @@ export function AgentIdentityListPage() {
     setDialogOpen(false)
   }
 
+  /**
+   * Token status chip reflects the REFRESH token (authoritative when present).
+   * An expired access token is not an error while the credential can still be
+   * refreshed by Control Center. Without a refresh token the access-token
+   * expiry is used as the fallback.
+   */
+  const getIdentityTokenStatus = (
+    identity: AgentIdentity,
+  ): IdentityTokenStatus | null => {
+    const now = Date.now()
+    const formatExpiry = (value: string) => new Date(value).toLocaleString()
+
+    // Unrecoverable refresh failure — re-authentication required.
+    if (identity.token_status === 'refresh_failed') {
+      return {
+        label: t('agents.identities.tokenExpired'),
+        color: 'error',
+        tooltip: t('agents.identities.reauthenticate'),
+      }
+    }
+
+    if (identity.has_refresh_token) {
+      if (!identity.refresh_token_expires_at) {
+        return {
+          label: t('agents.identities.tokenActive'),
+          color: 'success',
+          tooltip: t('agents.identities.refreshTokenNoExpiry'),
+        }
+      }
+      const expiresAt = new Date(identity.refresh_token_expires_at).getTime()
+      const tooltip = t('agents.identities.refreshTokenExpiresTooltip', {
+        date: formatExpiry(identity.refresh_token_expires_at),
+      })
+      if (expiresAt <= now) {
+        return { label: t('agents.identities.tokenExpired'), color: 'error', tooltip }
+      }
+      if (expiresAt - now <= TOKEN_EXPIRING_WINDOW_MS) {
+        return { label: t('agents.identities.tokenExpiringSoon'), color: 'warning', tooltip }
+      }
+      return { label: t('agents.identities.tokenActive'), color: 'success', tooltip }
+    }
+
+    // No refresh token — fall back to the access-token expiry.
+    if (!identity.token_expires_at) return null
+    const accessExpiresAt = new Date(identity.token_expires_at).getTime()
+    const tooltip = t('agents.identities.accessTokenExpiresTooltip', {
+      date: formatExpiry(identity.token_expires_at),
+    })
+    if (accessExpiresAt <= now) {
+      return { label: t('agents.identities.tokenExpired'), color: 'error', tooltip }
+    }
+    if (accessExpiresAt - now <= TOKEN_EXPIRING_WINDOW_MS) {
+      return { label: t('agents.identities.tokenExpiringSoon'), color: 'warning', tooltip }
+    }
+    return { label: t('agents.identities.tokenActive'), color: 'success', tooltip }
+  }
+
   return (
     <Box>
       <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
@@ -228,15 +286,17 @@ export function AgentIdentityListPage() {
                 <TableCell>{t('agents.identities.realmName')}</TableCell>
                 <TableCell>{t('agents.identities.realmUsername')}</TableCell>
                 <TableCell>{t('app.status')}</TableCell>
-                <TableCell>{t('agents.identities.tokenStatus')}</TableCell>
+                <TableCell>
+                  <Tooltip title={t('agents.identities.refreshTokenStatusTooltip')}>
+                    <span>{t('agents.identities.refreshTokenStatus')}</span>
+                  </Tooltip>
+                </TableCell>
                 <TableCell>{t('app.actions')}</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
               {(identities ?? []).map((identity) => {
-                const isTokenExpired =
-                  identity.token_expires_at == null ||
-                  new Date(identity.token_expires_at) <= new Date()
+                const tokenStatus = getIdentityTokenStatus(identity)
                 const isRefreshing = refreshingId === identity.id
                 const isReathing = reauthingId === identity.id
                 return (
@@ -262,12 +322,14 @@ export function AgentIdentityListPage() {
                       />
                     </TableCell>
                     <TableCell>
-                      {identity.token_expires_at ? (
-                        <Chip
-                          size="small"
-                          color={tokenStatusColor(identity.token_expires_at)}
-                          label={isTokenExpired ? t('agents.identities.tokenExpired') : t('agents.identities.tokenActive')}
-                        />
+                      {tokenStatus ? (
+                        <Tooltip title={tokenStatus.tooltip}>
+                          <Chip
+                            size="small"
+                            color={tokenStatus.color}
+                            label={tokenStatus.label}
+                          />
+                        </Tooltip>
                       ) : (
                         <Typography variant="caption" color="text.secondary">
                           {t('agents.identities.noToken')}

@@ -214,7 +214,9 @@ class TestGetRequest:
 
         assert result is not None
         assert result.id == request_id
-        db.execute.assert_awaited_once()
+        # The request read plus the (additive) optimization live-test
+        # projection query — the projection is optional and never fatal.
+        assert db.execute.await_count >= 1
 
     @pytest.mark.asyncio
     async def test_get_nonexistent_request(self, store):

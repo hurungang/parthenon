@@ -42,7 +42,7 @@ Agent identity management in Parthenon is centralized in the Control Center as a
 
 ## Token Health States
 
-Each agent identity exposes a visible credential health state: **valid**, **expiring within 7 days**, or **expired**. Identity pages serve as the remediation target for dashboard token-expiry warnings — an administrator clicking a dashboard warning lands here to refresh/re-authenticate the identity. Warnings clear automatically once the identity credential is refreshed. (See [Token Expiry Alerting](token-expiry-alerting.md).)
+Each agent identity exposes a visible **refresh-token** health state: **valid**, **expiring within 7 days**, or **expired**, and the identity list shows the refresh-token expiry explicitly. Access tokens renew automatically, so an expired access token alone is not an alert; an identity with no refresh token falls back to its access-token expiry. Identity pages serve as the remediation target for dashboard token-expiry warnings — an administrator clicking a dashboard warning lands here to refresh/re-authenticate the identity. Warnings clear automatically once the refresh token is refreshed. (See [Token Expiry Alerting](token-expiry-alerting.md).)
 
 ## Out of Scope
 - Technical implementation details, code, or architecture diagrams

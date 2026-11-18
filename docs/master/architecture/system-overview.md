@@ -276,7 +276,7 @@ flowchart LR
 
 ## Token Expiry Alerting
 
-Control Center owns token expiry state end to end via the **Token Health Service** — the sole DB reader of token metadata — classifying agent identity tokens and MCP sessions as `expired` / `expiring-within-7-days` / `healthy`. A **preflight gate** in the Communication Hub Agent Gateway validates every token an execution (including subagents) will use before it starts: expired **blocks** (422, re-auth message), expiring-soon **warns** without blocking. The dashboard shows token health cards, and the topology view is enriched client-side with warning/error badges via the dashboard token-health endpoint. Agents never receive tokens; the Gateway Lifecycle Handler in Control Center is unchanged.
+Control Center owns token expiry state end to end via the **Token Health Service** — the sole DB reader of token metadata — classifying agent identity and MCP session **refresh tokens** as `expired` / `expiring-within-7-days` / `healthy`. Access-token expiry is not an alert state while the refresh token remains valid (access tokens renew automatically); entities with no refresh token fall back to access-token expiry, and MCP `requires_reauth` always maps to `expired`. A **preflight gate** in the Communication Hub Agent Gateway validates every refresh-token credential an execution (including subagents) will use before it starts: expired refresh tokens **block** (422, re-auth message), expiring-soon **warns** without blocking. The dashboard shows token health cards, and the topology view is enriched client-side with warning/error badges via the dashboard token-health endpoint. Agents never receive tokens; the Gateway Lifecycle Handler in Control Center is unchanged.
 
 ```mermaid
 flowchart LR

@@ -134,7 +134,7 @@ The Control Center is the authoritative security and identity hub for agent exec
 | `TokenRefreshError` | exception | Raised when token refresh fails after all retry attempts | `backend/app/services/token_refresh.py` |
 | `check_token_expiration` | function (extended) | Return `True` if token is expired or expires within 5 minutes; extended to evaluate refresh-token expiry window | `backend/app/services/token_refresh.py` |
 | `refresh_oauth_token` | function (extended) | Call OAuth provider refresh endpoint; implements exponential backoff; now persists health state and refresh outcome | `backend/app/services/token_refresh.py` |
-| `store_refreshed_token` | function (extended) | Persist new access token (AES-256 encrypted) to `agent_identity` table; captures `refresh_token_expires_at` | `backend/app/services/token_refresh.py` |
+| `store_refreshed_token` | function (extended) | Persist new access token (AES-256 encrypted) to `agent_identity` table; captures the provider-reported `refresh_token_expires_at` and persists health. `AgentIdentityService` OAuth exchange/manual refresh and the background sweep (`backend/app/services/agents/token_refresh_service.py`) do the same via `_parse_refresh_token_expires_at` / `_mark_refresh_success`. | `backend/app/services/token_refresh.py` |
 | `log_refresh_attempt` | function | Write refresh attempt outcome to `token_refresh_log` audit table | `backend/app/services/token_refresh.py` |
 
 ### Permission Resolution Service (`backend/app/services/permission_resolution.py`)
@@ -154,7 +154,7 @@ The Control Center is the authoritative security and identity hub for agent exec
 
 | Symbol | Type | Description | File |
 |--------|------|-------------|------|
-| `TokenHealthService` | class (new) | Computes/persists health classification for identities and sessions; 7-day constant | `backend/app/services/token_health.py` |
+| `TokenHealthService` | class (new) | Computes/persists health classification for identities and sessions; 7-day constant. **Refresh-token expiry is authoritative** when a refresh token exists; access-token expiry is only the fallback when it does not (or when an MCP session has no recorded refresh expiry). `refresh_failed`/failure outcome and MCP `requires_reauth` force `expired`; an unknown refresh expiry is `healthy`. | `backend/app/services/token_health.py` |
 
 ### API Endpoints
 

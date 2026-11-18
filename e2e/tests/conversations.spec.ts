@@ -39,6 +39,11 @@ test.describe('Conversation History', () => {
     await page.route('**/api/v1/conversations', (route) =>
       route.fulfill({ status: 200, body: JSON.stringify(MOCK_SESSIONS) })
     )
+    // The history page now paginates (`?limit=&offset=`); a bare glob does not
+    // match a URL carrying a query string, so cover both shapes.
+    await page.route(/\/api\/v1\/conversations(\?.*)?$/, (route) =>
+      route.fulfill({ status: 200, body: JSON.stringify(MOCK_SESSIONS) })
+    )
     // Component fetches /conversations/:id for session detail (not /turns)
     await page.route('**/api/v1/conversations/sess-*', (route) =>
       route.fulfill({ status: 200, body: JSON.stringify({ ...MOCK_SESSIONS[0], turns: MOCK_TURNS }) })
@@ -70,7 +75,7 @@ test.describe('Conversation History', () => {
   test('shows turn count for sessions', async ({ page }) => {
     await page.goto('/conversations')
     await page.waitForLoadState('load')
-    await expect(page.getByText('5')).toBeVisible()
+    await expect(page.getByRole('cell', { name: '5', exact: true })).toBeVisible()
   })
 
   test('clicking a conversation expand button shows its turns', async ({ page }) => {

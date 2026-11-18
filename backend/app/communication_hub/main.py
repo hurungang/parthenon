@@ -141,6 +141,12 @@ def _register_routers(app: FastAPI) -> None:
     from app.communication_hub.api.internal.agent_execute import router as agent_execute_router
     from app.communication_hub.api.internal.agent_terminate import router as agent_terminate_router
     from app.communication_hub.api.internal.agent_resume import router as agent_resume_router
+    from app.communication_hub.api.internal.live_test_forwarding import (
+        router as live_test_forwarding_router,
+    )
+    from app.communication_hub.api.internal.turn_checkpoint import (
+        router as turn_checkpoint_router,
+    )
     from app.communication_hub.api.a2a import router as a2a_router  # Phase 1.1
     from app.communication_hub.api.mcp_tools import mcp_router  # API Key MCP Hub
     from app.communication_hub.mcp.router import register_mcp_protocol_server  # MCP protocol server
@@ -151,9 +157,11 @@ def _register_routers(app: FastAPI) -> None:
     app.include_router(dispatch_router)  # POST /internal/dispatch
     app.include_router(tool_routing_router)  # POST /internal/tools/call
     app.include_router(script_forwarding_router)  # POST /internal/script-tools/forward
+    app.include_router(live_test_forwarding_router)  # POST /internal/live-test/run
     app.include_router(agent_execute_router)  # POST /internal/agent/execute
     app.include_router(agent_terminate_router)  # POST /internal/agent/terminate/{session_id}
     app.include_router(agent_resume_router)  # POST /internal/agent/resume/{session_id}
+    app.include_router(turn_checkpoint_router)  # /internal/checkpoint/*, /internal/turn-resume/*
     app.include_router(a2a_router)  # POST /internal/a2a/request, /internal/a2a/disconnect/{session_link_id}
 
     # MCP protocol server — opt-in via CH_MCP_PROTOCOL_SERVER_ENABLED

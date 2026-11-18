@@ -139,12 +139,21 @@ class TenantSettingsRead(BaseModel):
     your_role: str
     # True when the caller holds the immutable root (owner) membership
     is_root: bool = False
+    # Answerable window for a paused conversational turn (seconds). A pause has
+    # to be answered within this horizon; tenants may override the platform
+    # default (900 = 15 minutes). Always resolved/clamped (minimum 30).
+    conversation_turn_resume_ttl_seconds: int = 900
 
 
 class TenantSettingsUpdate(BaseModel):
     name: Optional[str] = Field(default=None, min_length=1, max_length=200)
     admin_contact_name: Optional[str] = Field(default=None, max_length=200)
     admin_contact_email: Optional[str] = Field(default=None, max_length=320)
+    # Tenant answerable-window override (seconds). Below the platform minimum
+    # (30s) is rejected, never silently clamped.
+    conversation_turn_resume_ttl_seconds: Optional[int] = Field(
+        default=None, ge=30
+    )
 
 
 class OnboardingStatusRead(BaseModel):
@@ -210,6 +219,36 @@ async def _load_tenant(request: Request, db: DbSession) -> Tenant:
     return tenant
 
 
+async def _settings_read(
+    db: AsyncSession,
+    tenant: Tenant,
+    membership: TenantUserMembership,
+) -> TenantSettingsRead:
+    """Build the tenant settings read model (incl. the resolved resume TTL).
+
+    The answerable window is projected as the EFFECTIVE value: the tenant's
+    override when set, otherwise the platform default — so a caller always sees
+    the window a new pause would actually get.
+    """
+    from app.services.conversations.turn_resume_settings import (
+        resolve_resume_ttl_seconds,
+    )
+
+    return TenantSettingsRead(
+        tenant_id=str(tenant.id),
+        slug=tenant.slug,
+        name=tenant.name,
+        admin_contact_name=tenant.admin_contact_name,
+        admin_contact_email=tenant.admin_contact_email,
+        is_onboarded=bool(tenant.is_onboarded),
+        your_role=membership.tenant_role.value,
+        is_root=bool(membership.is_root),
+        conversation_turn_resume_ttl_seconds=await resolve_resume_ttl_seconds(
+            db, tenant.id
+        ),
+    )
+
+
 # ── Settings ─────────────────────────────────────────────────────────────────
 
 
@@ -222,16 +261,7 @@ async def get_tenant_settings(
 ) -> TenantSettingsRead:
     """The caller's own tenant metadata (never another tenant's)."""
     tenant = await _load_tenant(request, db)
-    return TenantSettingsRead(
-        tenant_id=str(tenant.id),
-        slug=tenant.slug,
-        name=tenant.name,
-        admin_contact_name=tenant.admin_contact_name,
-        admin_contact_email=tenant.admin_contact_email,
-        is_onboarded=bool(tenant.is_onboarded),
-        your_role=membership.tenant_role.value,
-        is_root=bool(membership.is_root),
-    )
+    return await _settings_read(db, tenant, membership)
 
 
 @TenantRouter.patch("/settings", response_model=TenantSettingsRead)
@@ -242,13 +272,17 @@ async def update_tenant_settings(
     membership: TenantUserMembership = Depends(require_tenant_manager),
     _: dict = Depends(require_permission(RT_TENANT_SETTINGS, "manage")),
 ) -> TenantSettingsRead:
-    """Update the caller's own tenant name (alias) / admin contact.
+    """Update the caller's own tenant name (alias) / admin contact / policy.
 
     The alias (``Tenant.name``) may be changed ONLY by the tenant root
     (owner membership); other tenant admins receive a clear rejection.
     The slug (unique address) is immutable — it is not part of the
     request schema and no endpoint accepts it.  Alias changes are
     audited as ``tenant_updated``.
+
+    ``conversation_turn_resume_ttl_seconds`` is tenant policy, not tenant
+    metadata: it is persisted to the ``tenant_settings`` store and governs the
+    answerable window of every paused conversational turn (default 900s).
     """
     tenant = await _load_tenant(request, db)
     alias_changed = False
@@ -287,6 +321,14 @@ async def update_tenant_settings(
         tenant.admin_contact_name = body.admin_contact_name.strip() or None
     if body.admin_contact_email is not None:
         tenant.admin_contact_email = body.admin_contact_email.strip() or None
+    if body.conversation_turn_resume_ttl_seconds is not None:
+        from app.services.conversations.turn_resume_settings import (
+            set_resume_ttl_seconds,
+        )
+
+        await set_resume_ttl_seconds(
+            db, tenant.id, body.conversation_turn_resume_ttl_seconds
+        )
     if alias_changed:
         from app.db.models.tenant_audit_event import (
             TenantAuditActorType,
@@ -309,16 +351,7 @@ async def update_tenant_settings(
         )
     await db.commit()
     await db.refresh(tenant)
-    return TenantSettingsRead(
-        tenant_id=str(tenant.id),
-        slug=tenant.slug,
-        name=tenant.name,
-        admin_contact_name=tenant.admin_contact_name,
-        admin_contact_email=tenant.admin_contact_email,
-        is_onboarded=bool(tenant.is_onboarded),
-        your_role=membership.tenant_role.value,
-        is_root=bool(membership.is_root),
-    )
+    return await _settings_read(db, tenant, membership)
 
 
 # ── License & usage (Phase 10) ───────────────────────────────────────────────
@@ -691,13 +724,4 @@ async def accept_invitation(
     await db.commit()
     await db.refresh(membership)
 
-    return TenantSettingsRead(
-        tenant_id=str(tenant.id),
-        slug=tenant.slug,
-        name=tenant.name,
-        admin_contact_name=tenant.admin_contact_name,
-        admin_contact_email=tenant.admin_contact_email,
-        is_onboarded=bool(tenant.is_onboarded),
-        your_role=membership.tenant_role.value,
-        is_root=bool(membership.is_root),
-    )
+    return await _settings_read(db, tenant, membership)

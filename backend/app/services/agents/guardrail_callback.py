@@ -21,16 +21,37 @@ from langchain_core.callbacks import AsyncCallbackHandler
 from langchain_core.messages import BaseMessage
 from langchain_core.outputs import LLMResult
 
+from app.services.agents.guardrails import (
+    GuardrailStop as _CanonicalGuardrailStop,
+    GuardrailStopReason,
+)
+
 logger = logging.getLogger(__name__)
 
+#: Consecutive identical tool calls (same tool + same arguments) tolerated
+#: before the run is stopped. Prevents degenerate read-loops — e.g. an
+#: optimization run re-reading the same terminal plan over and over.
+MAX_IDENTICAL_TOOL_CALLS = 3
 
-class GuardrailStop(Exception):
-    """Raised by GuardrailCallback when an execution limit is exceeded."""
 
-    def __init__(self, reason: str, details: dict[str, Any] | None = None) -> None:
-        super().__init__(reason)
-        self.reason = reason
-        self.details = details or {}
+class GuardrailStop(_CanonicalGuardrailStop):
+    """Raised by GuardrailCallback when an execution limit is exceeded.
+
+    Subclasses the canonical guardrail exception so the runtime's
+    ``except GuardrailStop`` handles callback-raised stops identically.
+    """
+
+    def __init__(
+        self,
+        reason: str,
+        details: dict[str, Any] | None = None,
+        message: str | None = None,
+    ) -> None:
+        super().__init__(
+            reason=reason,
+            message=message or reason,
+            details=details or {},
+        )
 
 
 class GuardrailCallback(AsyncCallbackHandler):
@@ -64,6 +85,7 @@ class GuardrailCallback(AsyncCallbackHandler):
         session_id: str,
         data_client: Any = None,
         execution_mode: str = "task",
+        repeat_guard_enabled: bool = False,
     ) -> None:
         """Initialise the guardrail callback.
 
@@ -84,6 +106,9 @@ class GuardrailCallback(AsyncCallbackHandler):
         self.session_id = session_id
         self.data_client = data_client
         self.execution_mode = execution_mode
+        self.repeat_guard_enabled = repeat_guard_enabled
+        self._last_tool_signature: str | None = None
+        self._identical_tool_calls = 0
 
     @property
     def raise_error(self) -> bool:
@@ -149,8 +174,10 @@ class GuardrailCallback(AsyncCallbackHandler):
         input_str: str,
         **kwargs: Any,
     ) -> None:
-        """Check delegation depth before tool execution."""
+        """Check delegation depth and repeated-call loops before tool execution."""
         self._check_delegation_depth()
+        if self.repeat_guard_enabled:
+            self._check_repeated_tool_call(serialized, input_str)
 
     # ── Private helpers ───────────────────────────────────────────────────────
 
@@ -258,6 +285,42 @@ class GuardrailCallback(AsyncCallbackHandler):
                 details={
                     "elapsed_seconds": elapsed,
                     "timeout_seconds": timeout,
+                    "session_id": self.session_id,
+                },
+            )
+
+    def _check_repeated_tool_call(
+        self, serialized: Dict[str, Any], input_str: str
+    ) -> None:
+        """Raise when the same tool + arguments repeat consecutively.
+
+        A run that keeps re-reading the same value (e.g. a terminal optimized
+        plan) is not making progress; stop it instead of burning iterations
+        until the wall-clock/iteration guardrail fires.
+        """
+        tool_name = ""
+        if isinstance(serialized, dict):
+            tool_name = str(serialized.get("name") or "")
+        signature = f"{tool_name}|{input_str}"
+        if signature == self._last_tool_signature:
+            self._identical_tool_calls += 1
+        else:
+            self._last_tool_signature = signature
+            self._identical_tool_calls = 1
+
+        if self._identical_tool_calls >= MAX_IDENTICAL_TOOL_CALLS:
+            msg = (
+                f"Repeated identical tool call detected: "
+                f"{tool_name or 'unknown_tool'} ({self._identical_tool_calls}x) "
+                f"— session={self.session_id}"
+            )
+            logger.warning("GuardrailCallback: %s", msg)
+            raise GuardrailStop(
+                reason=GuardrailStopReason.REPEATED_TOOL_CALL,
+                message=msg,
+                details={
+                    "tool_name": tool_name or "unknown_tool",
+                    "repeat_count": self._identical_tool_calls,
                     "session_id": self.session_id,
                 },
             )

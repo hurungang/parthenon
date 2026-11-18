@@ -90,10 +90,19 @@ The Dashboard Metrics feature replaces the original placeholder dashboard — wh
 
 The dashboard surfaces credential-expiry warnings alongside operational metrics:
 
-- Separate "expired" and "about to expire (within 7 days)" indicators are shown for (a) agent identities and (b) MCP sessions
+- Separate "expired" and "about to expire (within 7 days)" **refresh-token** indicators are shown for (a) agent identities and (b) MCP sessions. Access tokens renew automatically, so access-token expiry alone does not raise a warning; identities without a refresh token fall back to their access-token expiry
 - Each warning is clickable and navigates directly to the page where the user can refresh the identity or re-authenticate the MCP session
 - Indicators are permission-checked consistent with existing card behaviour: inaccessible domains show the standard "Permission Denied" placeholder
 - Warnings disappear automatically once the underlying credential is refreshed/re-authenticated
+- A token-health indicator turns green when nothing is expired or expiring within 7 days; it escalates to warning (something expiring) or error (something expired)
+
+### Action-First Tile Ordering
+
+Dashboard tiles are ranked by severity rather than fixed placement:
+
+- Tiles that require action (expired credentials, pending interventions, pending access requests, guardrail/posture breaches, failed executions, failed notifications, credentials expiring soon) are sorted to the top of their group and carry an **"Action required"** badge with a highlighted background and border.
+- Actionable sections are also raised above informational sections, so the most urgent area of the dashboard is seen first.
+- Informational tiles keep the existing neutral styling, and the relative order of tiles with the same severity is stable.
 
 See [Token Expiry Alerting](token-expiry-alerting.md).
 

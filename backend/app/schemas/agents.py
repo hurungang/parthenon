@@ -15,6 +15,7 @@ from app.db.models.agents import (
     AgentJobStatus,
     AgentOutputType,
     AgentPlanStatus,
+    AgentTokenStatus,
     GuardrailConversationalContinuationPolicy,
     GuardrailConversationalTokenVisibilityMode,
     GuardrailTokenEnforcementMode,
@@ -131,6 +132,8 @@ class PlanStepRead(BaseModel):
     model_config = {"from_attributes": True}
 
     order: int
+    #: Optional parent step ``order`` — flat steps render as a tree when set.
+    parent_order: int | None = None
     type: str
     name: str
     description: str | None = None
@@ -338,6 +341,8 @@ class AgentIdentityRead(BaseModel):
     status: AgentIdentityStatus
     token_expires_at: datetime | None
     has_refresh_token: bool = False  # True when an encrypted refresh token is stored
+    refresh_token_expires_at: datetime | None = None
+    token_status: AgentTokenStatus | None = None
     created_at: datetime
     updated_at: datetime
 
@@ -355,6 +360,8 @@ class AgentIdentityRead(BaseModel):
                 "status": v.status,
                 "token_expires_at": v.token_expires_at,
                 "has_refresh_token": v.refresh_token is not None,
+                "refresh_token_expires_at": v.refresh_token_expires_at,
+                "token_status": v.token_status,
                 "created_at": v.created_at,
                 "updated_at": v.updated_at,
             }
@@ -403,11 +410,48 @@ class AssistantModelConfigUpdate(BaseModel):
 class AgentJobCreate(BaseModel):
     agent_type_id: uuid.UUID
     input_data: dict[str, Any] | None = None
-    # Opt-in flag: when true, the launch becomes the optimization opportunity —
-    # the execution runs as the "optimize-and-verify" command (the agent authors
-    # and verifies scripts against real tool-call executions while accomplishing
-    # the user's real task) and persists the verified optimized plan for reuse.
-    optimize: bool = False
+
+
+class AgentOptimizeRequest(BaseModel):
+    """Trigger a dedicated optimization execution for an agent type.
+
+    Optimization is its own action — it never reuses a normal run's task input.
+    """
+
+    agent_type_id: uuid.UUID
+
+
+class OptimizationGateRead(BaseModel):
+    """Composed plan/optimize preconditions for the Optimize + Generate-plan actions.
+
+    ``can_optimize`` / ``successful_executions`` / ``reason`` keep their original
+    meaning; the remaining fields are additive so the UI can explain WHICH
+    precondition is unmet (conversational → authoring model → executions).
+    """
+
+    can_optimize: bool
+    successful_executions: int
+    reason: str | None = None
+    #: Base-plan generation precondition: authoring model configured AND the
+    #: agent is not conversational (the execution count does not apply).
+    can_generate_plan: bool = False
+    #: Derived authoring-model state ("not configured / re-select" is false).
+    workflow_model_configured: bool = False
+    #: Raw stored authoring model id — echoed even when no longer available.
+    workflow_model_id: str | None = None
+    is_conversational: bool = False
+    reason_code: str | None = None
+    #: Optimization-CONVERSATION entry (a mode of the agent itself): available
+    #: for typed and conversational subjects, with a reason when work cannot
+    #: start. Independent of the one-shot ``can_optimize`` precondition.
+    optimization_conversation_available: bool = False
+    optimization_conversation_reason_code: str | None = None
+    #: Derived optimizer-model state: an explicit workspace selection or the
+    #: inherited plan-authoring model (never the agent's runtime model).
+    optimizer_model_configured: bool = False
+    optimizer_model_id: str | None = None
+    optimizer_model_source: str | None = None
+    optimizer_model_reason_code: str | None = None
 
 
 class AgentJobStatusRead(BaseModel):

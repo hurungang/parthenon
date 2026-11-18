@@ -49,6 +49,9 @@ interface McpSessionManagerProps {
 
 const AUTH_TYPES: McpSessionAuthType[] = ['api_key', 'bearer_token', 'basic_auth', 'oauth2', 'none', 'passthrough']
 
+/** Token health window shared with the dashboard (7 days). */
+const TOKEN_EXPIRING_WINDOW_MS = 7 * 24 * 60 * 60 * 1000
+
 const AUTH_TYPE_LABELS: Record<McpSessionAuthType, string> = {
   api_key: 'mcp.sessions.authTypeApiKey',
   bearer_token: 'mcp.sessions.authTypeBearerToken',
@@ -381,33 +384,55 @@ export function McpSessionManager({ serverId }: McpSessionManagerProps) {
     }
   }
 
-  const getTokenStatus = (session: McpSession): { label: string; color: 'success' | 'warning' | 'error'; icon: React.ReactElement | undefined } => {
+  const getTokenStatus = (session: McpSession): { label: string; color: 'success' | 'warning' | 'error'; icon: React.ReactElement | undefined; tooltip: string } => {
     if (session.auth_type !== 'oauth2') {
-      return { label: 'N/A', color: 'success', icon: undefined }
+      return { label: 'N/A', color: 'success', icon: undefined, tooltip: '' }
     }
 
     // Unrecoverable refresh failure — the session must be re-authenticated.
     if (session.requires_reauth) {
-      return { label: t('mcp.sessions.needsReauth'), color: 'error', icon: <WarningIcon fontSize="small" /> }
+      return {
+        label: t('mcp.sessions.needsReauth'),
+        color: 'error',
+        icon: <WarningIcon fontSize="small" />,
+        tooltip: session.last_refresh_error ?? '',
+      }
     }
 
-    if (!session.oauth_expires_at) {
-      return { label: t('mcp.sessions.tokenStatusUnknown'), color: 'warning', icon: <WarningIcon fontSize="small" /> }
+    // The refresh token is authoritative; fall back to the access token when
+    // the session has no refresh-token expiry recorded.
+    const expiry = session.oauth_refresh_expires_at ?? session.oauth_expires_at
+    if (!expiry) {
+      return {
+        label: t('mcp.sessions.tokenStatusUnknown'),
+        color: 'warning',
+        icon: <WarningIcon fontSize="small" />,
+        tooltip: '',
+      }
     }
 
     const now = new Date()
-    const expiresAt = new Date(session.oauth_expires_at)
-    const hoursUntilExpiry = (expiresAt.getTime() - now.getTime()) / (1000 * 60 * 60)
+    const expiresAt = new Date(expiry)
+    const msUntilExpiry = expiresAt.getTime() - now.getTime()
+    const isRefreshExpiry = !!session.oauth_refresh_expires_at
+    const tooltip = t(
+      isRefreshExpiry
+        ? 'mcp.sessions.refreshTokenExpiresTooltip'
+        : 'mcp.sessions.accessTokenExpiresTooltip',
+      { date: expiresAt.toLocaleString() },
+    )
+    const hoursUntilExpiry = msUntilExpiry / (1000 * 60 * 60)
+    const daysUntilExpiry = hoursUntilExpiry / 24
 
-    if (hoursUntilExpiry < 0) {
-      return { label: t('mcp.sessions.tokenExpired'), color: 'error', icon: <WarningIcon fontSize="small" /> }
-    } else if (hoursUntilExpiry < 1) {
-      return { label: t('mcp.sessions.tokenExpiringSoon'), color: 'warning', icon: <WarningIcon fontSize="small" /> }
+    if (msUntilExpiry < 0) {
+      return { label: t('mcp.sessions.tokenExpired'), color: 'error', icon: <WarningIcon fontSize="small" />, tooltip }
+    } else if (msUntilExpiry <= TOKEN_EXPIRING_WINDOW_MS) {
+      return { label: t('mcp.sessions.tokenExpiringSoon'), color: 'warning', icon: <WarningIcon fontSize="small" />, tooltip }
     } else {
-      const expiryText = hoursUntilExpiry < 24
+      const expiryText = daysUntilExpiry < 1
         ? `${Math.floor(hoursUntilExpiry)}h`
-        : `${Math.floor(hoursUntilExpiry / 24)}d`
-      return { label: t('mcp.sessions.tokenValid', { time: expiryText }), color: 'success', icon: <CheckCircleIcon fontSize="small" /> }
+        : `${Math.floor(daysUntilExpiry)}d`
+      return { label: t('mcp.sessions.tokenValid', { time: expiryText }), color: 'success', icon: <CheckCircleIcon fontSize="small" />, tooltip }
     }
   }
 
@@ -453,7 +478,11 @@ export function McpSessionManager({ serverId }: McpSessionManagerProps) {
                 <TableCell sx={{ width: 40 }}></TableCell>
                 <TableCell>{t('app.name')}</TableCell>
                 <TableCell>{t('mcp.sessions.authType')}</TableCell>
-                <TableCell>{t('mcp.sessions.tokenStatus')}</TableCell>
+                <TableCell>
+                  <Tooltip title={t('mcp.sessions.refreshTokenStatusTooltip')}>
+                    <span>{t('mcp.sessions.refreshTokenStatus')}</span>
+                  </Tooltip>
+                </TableCell>
                 <TableCell>{t('app.status')}</TableCell>
                 <TableCell>{t('app.actions')}</TableCell>
               </TableRow>
@@ -506,7 +535,7 @@ export function McpSessionManager({ serverId }: McpSessionManagerProps) {
                     <TableCell>
                       {s.auth_type === 'oauth2' ? (
                         <Tooltip
-                          title={s.requires_reauth && s.last_refresh_error ? s.last_refresh_error : ''}
+                          title={tokenStatus.tooltip}
                           placement="top"
                         >
                           <Chip

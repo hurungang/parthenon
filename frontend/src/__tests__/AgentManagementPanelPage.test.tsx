@@ -83,6 +83,12 @@ vi.mock('../components/common/ConfirmDialog', () => ({
   }) => (open ? <button data-testid="confirm-delete" onClick={onConfirm}>{message}</button> : null),
 }))
 
+// Stub the heavy execution-details surface opened after an Optimize run starts.
+vi.mock('../components/agents/AgentExecutionDetailsDialog', () => ({
+  AgentExecutionDetailsDialog: ({ open, sessionId }: { open: boolean; sessionId: string }) =>
+    open ? <div data-testid="execution-details-dialog">{sessionId}</div> : null,
+}))
+
 // Stub the heavy controlled form but keep the real values contract + defaults.
 // NOTE: the page imports the NAMED export `AgentTypeForm`, so stub that export.
 vi.mock('../pages/agents/AgentTypeForm', async () => {
@@ -388,11 +394,218 @@ describe('AgentManagementPanelPage', () => {
     expect(screen.getByText('agents.panel.unsavedChip')).toBeDefined()
   })
 
+  // ── Separate Optimize action (preconditioned, gated) ────────────────────────
+
+  it('renders a separate Optimize action next to Run, disabled with the localized reason when gated', async () => {
+    mockAgentTypes = [makeAgent()]
+    mockSelected = makeAgent()
+    mockApiGet.mockImplementation(async (url: string) => {
+      if (url === '/agents/types/at-1/optimization-gate') {
+        return {
+          data: {
+            can_optimize: false,
+            can_generate_plan: true,
+            workflow_model_configured: true,
+            workflow_model_id: 'gpt-4o',
+            is_conversational: false,
+            successful_executions: 0,
+            reason_code: 'no_successful_execution',
+            reason: 'This agent has no successful execution yet.',
+          },
+        }
+      }
+      return { data: [] }
+    })
+
+    const { AgentManagementPanelPage } = await import(
+      '../pages/agents/AgentManagementPanelPage'
+    )
+    render(<AgentManagementPanelPage />, { wrapper })
+
+    await act(async () => {
+      fireEvent.click(screen.getAllByText('research-agent')[0])
+    })
+
+    // Run stays available and independent of the gate.
+    expect(screen.getByRole('button', { name: 'agents.types.runAgent' })).toBeDefined()
+
+    const optimize = await screen.findByTestId('optimize-agent-action')
+    await waitFor(() => {
+      expect((optimize as HTMLButtonElement).disabled).toBe(true)
+    })
+
+    // The disabled action explains itself with the localized reason_code copy
+    // (tooltip is reachable through the wrapper span because disabled buttons
+    // eat hover).
+    fireEvent.mouseOver(optimize.closest('span') as HTMLElement)
+    expect(
+      await screen.findByText('agents.optimize.gateReasons.no_successful_execution'),
+    ).toBeDefined()
+
+    // Clicking a gated action never opens the optimize dialog.
+    fireEvent.click(optimize)
+    expect(screen.queryByText('agents.optimize.intro')).toBeNull()
+
+    // The gate is read from the dedicated endpoint for the selected agent.
+    expect(mockApiGet).toHaveBeenCalledWith('/agents/types/at-1/optimization-gate')
+  })
+
+  it('falls back to the backend reason for a legacy gate payload without reason_code', async () => {
+    mockAgentTypes = [makeAgent()]
+    mockSelected = makeAgent()
+    mockApiGet.mockImplementation(async (url: string) => {
+      if (url === '/agents/types/at-1/optimization-gate') {
+        return {
+          data: {
+            can_optimize: false,
+            successful_executions: 0,
+            reason: 'Legacy backend reason.',
+          },
+        }
+      }
+      return { data: [] }
+    })
+
+    const { AgentManagementPanelPage } = await import(
+      '../pages/agents/AgentManagementPanelPage'
+    )
+    render(<AgentManagementPanelPage />, { wrapper })
+
+    await act(async () => {
+      fireEvent.click(screen.getAllByText('research-agent')[0])
+    })
+
+    const optimize = await screen.findByTestId('optimize-agent-action')
+    await waitFor(() => {
+      expect((optimize as HTMLButtonElement).disabled).toBe(true)
+    })
+    fireEvent.mouseOver(optimize.closest('span') as HTMLElement)
+    expect(await screen.findByText('Legacy backend reason.')).toBeDefined()
+  })
+
+  it('renders no Optimize action for a conversational selected agent', async () => {
+    const conversational = makeAgent({ input_type: 'conversation' })
+    mockAgentTypes = [conversational]
+    mockSelected = conversational
+
+    const { AgentManagementPanelPage } = await import(
+      '../pages/agents/AgentManagementPanelPage'
+    )
+    render(<AgentManagementPanelPage />, { wrapper })
+
+    await act(async () => {
+      fireEvent.click(screen.getAllByText('research-agent')[0])
+    })
+    await waitFor(() => expect(screen.getByTestId('panel-topology-canvas')).toBeDefined())
+
+    // Conversational agents have no plan/optimization affordance at all.
+    expect(screen.queryByTestId('optimize-agent-action')).toBeNull()
+  })
+
+  it('disables Optimize with the authoring-model reason and keeps Run available', async () => {
+    mockAgentTypes = [makeAgent()]
+    mockSelected = makeAgent()
+    mockApiGet.mockImplementation(async (url: string) => {
+      if (url === '/agents/types/at-1/optimization-gate') {
+        return {
+          data: {
+            can_optimize: false,
+            can_generate_plan: false,
+            workflow_model_configured: false,
+            workflow_model_id: null,
+            is_conversational: false,
+            successful_executions: 3,
+            reason_code: 'authoring_model_not_configured',
+            reason: 'No authoring model configured.',
+          },
+        }
+      }
+      return { data: [] }
+    })
+
+    const { AgentManagementPanelPage } = await import(
+      '../pages/agents/AgentManagementPanelPage'
+    )
+    render(<AgentManagementPanelPage />, { wrapper })
+
+    await act(async () => {
+      fireEvent.click(screen.getAllByText('research-agent')[0])
+    })
+
+    const optimize = await screen.findByTestId('optimize-agent-action')
+    await waitFor(() => {
+      expect((optimize as HTMLButtonElement).disabled).toBe(true)
+    })
+    fireEvent.mouseOver(optimize.closest('span') as HTMLElement)
+    expect(
+      await screen.findByText('agents.optimize.gateReasons.authoring_model_not_configured'),
+    ).toBeDefined()
+
+    // Execution remains possible while optimization is blocked on config.
+    expect(screen.getByRole('button', { name: 'agents.types.runAgent' })).toBeDefined()
+    fireEvent.click(optimize)
+    expect(screen.queryByText('agents.optimize.intro')).toBeNull()
+  })
+
+  it('enables Optimize after a successful execution and triggers the optimization run', async () => {
+    mockAgentTypes = [makeAgent()]
+    mockSelected = makeAgent()
+    mockApiGet.mockImplementation(async (url: string) => {
+      if (url === '/agents/types/at-1/optimization-gate') {
+        return {
+          data: {
+            can_optimize: true,
+            can_generate_plan: true,
+            workflow_model_configured: true,
+            workflow_model_id: 'gpt-4o',
+            is_conversational: false,
+            successful_executions: 1,
+            reason: null,
+            reason_code: null,
+          },
+        }
+      }
+      return { data: [] }
+    })
+    mockApiPost.mockResolvedValue({ data: { id: 'sess-opt-panel', status: 'queued' } })
+
+    const { AgentManagementPanelPage } = await import(
+      '../pages/agents/AgentManagementPanelPage'
+    )
+    render(<AgentManagementPanelPage />, { wrapper })
+
+    await act(async () => {
+      fireEvent.click(screen.getAllByText('research-agent')[0])
+    })
+
+    const optimize = await screen.findByTestId('optimize-agent-action')
+    await waitFor(() => {
+      expect((optimize as HTMLButtonElement).disabled).toBe(false)
+    })
+
+    fireEvent.click(optimize)
+
+    // No pre-start confirmation dialog (separate from the Run launch dialog):
+    // the optimization run starts directly.
+    expect(screen.queryByText('agents.optimize.intro')).toBeNull()
+    expect(screen.queryByTestId('optimize-confirm')).toBeNull()
+    expect(screen.queryByText('agents.sessions.launch')).toBeNull()
+
+    await waitFor(() => {
+      expect(mockApiPost).toHaveBeenCalledWith('/agents/sessions/optimize', {
+        agent_type_id: 'at-1',
+      })
+    })
+    // The optimization session is surfaced in the execution details dialog.
+    await waitFor(() => {
+      expect(screen.getByTestId('execution-details-dialog').textContent).toBe('sess-opt-panel')
+    })
+  })
+
   it('deletes an agent after confirmation; selection clears so the name is reusable', async () => {
     mockAgentTypes = [makeAgent()]
     mockSelected = makeAgent()
     mockDelete.mockResolvedValue(undefined)
-
     const { AgentManagementPanelPage } = await import(
       '../pages/agents/AgentManagementPanelPage'
     )

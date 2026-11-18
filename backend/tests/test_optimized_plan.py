@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import json
 import uuid
+from datetime import UTC, datetime, timedelta
 from typing import Any, AsyncGenerator
 
 import pytest
@@ -27,12 +28,15 @@ from app.api.deps import require_permission, require_service_certificate
 from app.core.resource_types import RT_AGENT
 from app.db.models.agents import (
     AgentInputType,
+    AgentJob,
+    AgentJobStatus,
     AgentOutputType,
     AgentPlan,
     AgentPlanStatus,
     AgentType,
 )
 from app.db.models.optimized_plan import OptimizedImplementationPlan, OptimizedPlanStatus
+from app.db.models.session_logs import ExecutionLogEntry
 from app.db.session import get_db
 from app.main import create_app
 from app.services.agents.command_prompts import (
@@ -185,21 +189,90 @@ async def agent_type_plan(test_engine) -> tuple[uuid.UUID, uuid.UUID]:
 
 
 @pytest_asyncio.fixture
+async def reference_execution(
+    test_engine, agent_type_plan
+) -> dict[str, Any]:
+    """Seed a completed NORMAL execution with recorded tool data.
+
+    Optimization verification is REPLAY-ONLY: ``execute_script`` needs a real
+    execution's input plus its recorded tool calls/responses — it never calls
+    live MCP tools. The transcript here uses the LLM path pair
+    (``tool_call``/``tool_response`` matched by ``run_id``).
+    """
+    agent_type_id, _ = agent_type_plan
+    job_id = uuid.uuid4()
+    started = datetime.now(UTC) - timedelta(minutes=5)
+    SessionLocal = async_sessionmaker(
+        bind=test_engine, class_=AsyncSession, expire_on_commit=False
+    )
+    async with SessionLocal() as session:
+        session.add(
+            AgentJob(
+                id=job_id,
+                agent_type_id=agent_type_id,
+                status=AgentJobStatus.completed,
+                input_data={"x": 41},
+                created_at=started,
+                started_at=started,
+                completed_at=started + timedelta(seconds=30),
+            )
+        )
+        await session.flush()
+        session.add(
+            ExecutionLogEntry(
+                session_id=job_id,
+                timestamp=started + timedelta(seconds=1),
+                log_level="INFO",
+                event_type="tool_call",
+                message="Tool call: supabase____get_project",
+                data={
+                    "tool": "supabase____get_project",
+                    "arguments": {"id": "p-1"},
+                    "input": '{"id": "p-1"}',
+                    "input_truncated": False,
+                    "run_id": "run-1",
+                },
+            )
+        )
+        session.add(
+            ExecutionLogEntry(
+                session_id=job_id,
+                timestamp=started + timedelta(seconds=2),
+                log_level="INFO",
+                event_type="tool_response",
+                message="Tool response (0.10s)",
+                data={
+                    "output": '{"name": "Ada", "id": "p-1"}',
+                    "output_truncated": False,
+                    "run_id": "run-1",
+                },
+            )
+        )
+        await session.commit()
+    return {"session_id": job_id, "agent_type_id": agent_type_id}
+
+
+@pytest_asyncio.fixture
 async def ar_boundary(monkeypatch):
     """Stub the CC→CH→AR egress at the ``CommunicationHubClient`` seam.
 
-    Emulates Agent Runtime's ``/internal/script-tools/execute`` inline path:
-    the submitted ``python_source`` runs in the REAL sandbox with a
-    session-bound tool client, returning the AR ``{"result", "error"}``
-    contract. Captures the payload for boundary assertions.
+    Emulates Agent Runtime's ``/internal/script-tools/execute`` endpoint
+    faithfully: a ``replay_required`` request runs the submitted
+    ``python_source`` in the REAL sandbox with AR's ``ReplayToolClient``
+    (recorded responses only); a non-replay request runs with a live-style
+    fake client. Optimization must NEVER take the live path —
+    ``captured["live_runs"]`` counts it.
     """
     import asyncio
     from types import SimpleNamespace
 
+    from app.agent_runtime.api.script_tools import ReplayToolClient
     from app.agent_runtime.scripts.sandbox import SandboxCaps, run_sandboxed_python
     from app.services.control_center import comm_hub_client
 
-    class _FakeArToolClient:
+    class _FakeArLiveToolClient:
+        """Live session-bound client double (must stay unused by optimization)."""
+
         def __init__(self) -> None:
             self.calls: list[dict[str, Any]] = []
 
@@ -218,18 +291,30 @@ async def ar_boundary(monkeypatch):
             )
             return {"name": "Ada"}
 
-    tool_client = _FakeArToolClient()
-    captured: dict[str, Any] = {}
+    live_client = _FakeArLiveToolClient()
+    captured: dict[str, Any] = {"live_runs": 0, "replay_runs": 0}
+    replay_clients: list[ReplayToolClient] = []
 
     async def fake_forward_sandboxed_script(
         self, *, python_source: str, session_id: str, agent_type_id: str,
         input_context: dict[str, Any] | None = None,
         tenant_context: Any = None,
+        reference_tool_responses: list[dict[str, Any]] | None = None,
+        replay_required: bool = False,
     ) -> dict[str, Any]:
         captured["python_source"] = python_source
         captured["session_id"] = session_id
         captured["agent_type_id"] = agent_type_id
         captured["input_context"] = input_context
+        captured["reference_tool_responses"] = reference_tool_responses
+        captured["replay_required"] = replay_required
+        if replay_required:
+            captured["replay_runs"] += 1
+            tool_client: Any = ReplayToolClient(reference_tool_responses or [])
+            replay_clients.append(tool_client)
+        else:
+            captured["live_runs"] += 1
+            tool_client = live_client
         try:
             loop = asyncio.get_running_loop()
             output = await asyncio.to_thread(
@@ -253,7 +338,11 @@ async def ar_boundary(monkeypatch):
         "forward_sandboxed_script",
         fake_forward_sandboxed_script,
     )
-    return SimpleNamespace(captured=captured, tool_client=tool_client)
+    return SimpleNamespace(
+        captured=captured,
+        live_client=live_client,
+        replay_clients=replay_clients,
+    )
 
 
 pytestmark = pytest.mark.usefixtures("ar_boundary")
@@ -277,6 +366,83 @@ class TestOptimizationSystemTools:
         )
         assert result["agent_type_id"] == str(agent_type_id)
         assert result["steps"] and result["steps"][0]["name"] == "Fetch contact"
+        assert result["auto_generated"] is False
+
+    async def test_get_implementation_plan_auto_generates_when_missing(
+        self, internal_client, db_session, monkeypatch
+    ):
+        """Optimization must not dead-end when the agent has no base plan.
+
+        The read tool generates the base plan with the authoring model first.
+        """
+        from app.services.agents.plan_generation_service import PlanGenerationService
+
+        agent_type_id = uuid.uuid4()
+        db_session.add(
+            AgentType(
+                id=agent_type_id,
+                name=f"autoplan-{agent_type_id.hex[:8]}",
+                input_type=AgentInputType.none,
+                output_type=AgentOutputType.markdown,
+            )
+        )
+        await db_session.commit()
+
+        async def _fake_generate(self, agent_type, db, **kwargs):
+            plan = AgentPlan(
+                id=uuid.uuid4(),
+                agent_type_id=agent_type.id,
+                generation_status=AgentPlanStatus.success,
+                plan_steps=[
+                    {"order": 1, "type": "tool_call", "name": "Auto step"}
+                ],
+            )
+            db.add(plan)
+            await db.flush()
+            return plan
+
+        monkeypatch.setattr(PlanGenerationService, "generate_plan", _fake_generate)
+
+        result = await _call(
+            internal_client,
+            "get-implementation-plan",
+            {"agent_type_id": str(agent_type_id)},
+        )
+
+        assert result["auto_generated"] is True
+        assert result["steps"][0]["name"] == "Auto step"
+
+    async def test_get_implementation_plan_reports_unavailable_base_plan(
+        self, internal_client, db_session, monkeypatch
+    ):
+        """If the base plan cannot be generated, the optimizer is told to ask."""
+        from app.services.agents.plan_generation_service import PlanGenerationService
+
+        agent_type_id = uuid.uuid4()
+        db_session.add(
+            AgentType(
+                id=agent_type_id,
+                name=f"autoplan-fail-{agent_type_id.hex[:8]}",
+                input_type=AgentInputType.none,
+                output_type=AgentOutputType.markdown,
+            )
+        )
+        await db_session.commit()
+
+        async def _fail(self, agent_type, db, **kwargs):
+            raise RuntimeError("authoring model offline")
+
+        monkeypatch.setattr(PlanGenerationService, "generate_plan", _fail)
+
+        result = await _call(
+            internal_client,
+            "get-implementation-plan",
+            {"agent_type_id": str(agent_type_id)},
+        )
+
+        assert result["status"] == "needs_user_input"
+        assert result["blockers"] == ["base_plan_unavailable"]
+        assert "authoring model offline" in result["error"]
 
     async def test_generate_script_valid_source_returns_draft_version(
         self, internal_client, agent_type_plan
@@ -312,7 +478,7 @@ class TestOptimizationSystemTools:
         assert result["version_id"]  # still persisted as a failed draft
 
     async def test_execute_script_is_the_verification_primitive(
-        self, internal_client, agent_type_plan
+        self, internal_client, agent_type_plan, reference_execution
     ):
         agent_type_id, _ = agent_type_plan
         generated = await _call(
@@ -334,7 +500,7 @@ class TestOptimizationSystemTools:
         assert result["output"]["value"] == 41
 
     async def test_execute_script_reports_sandbox_error(
-        self, internal_client, agent_type_plan
+        self, internal_client, agent_type_plan, reference_execution
     ):
         agent_type_id, _ = agent_type_plan
         # A source that compiles but fails at runtime in the sandbox.
@@ -350,7 +516,7 @@ class TestOptimizationSystemTools:
         assert result.get("error")
 
     async def test_execute_script_inline_source_no_save_required(
-        self, internal_client, agent_type_plan
+        self, internal_client, agent_type_plan, reference_execution
     ):
         """execute_script accepts FULL inline python_source — no save required."""
         agent_type_id, _ = agent_type_plan
@@ -366,8 +532,55 @@ class TestOptimizationSystemTools:
         assert result["output"]["result"] == "hello"
         assert result["output"]["value"] == 41
 
+    async def test_execute_script_rejects_input_missing_required_typed_keys(
+        self, internal_client, agent_type_plan, db_session, reference_execution
+    ):
+        """A guessed/renamed input context is rejected before execution.
+
+        Guards the flight-search class of bug: the optimizer authored a script
+        against ``date`` while the agent's typed input requires
+        ``travel_date``. Verification must fail on the missing required key
+        instead of persisting a plan that cannot serve real input.
+        """
+        agent_type_id, _ = agent_type_plan
+        agent_type = await db_session.get(AgentType, agent_type_id)
+        agent_type.input_type = AgentInputType.typed
+        agent_type.input_schema = {
+            "type": "object",
+            "properties": {
+                "origin": {"type": "string"},
+                "destination": {"type": "string"},
+                "travel_date": {"type": "string"},
+            },
+            "required": ["origin", "destination", "travel_date"],
+        }
+        await db_session.commit()
+
+        result = await _call(
+            internal_client,
+            "execute-script",
+            {
+                "agent_type_id": str(agent_type_id),
+                "python_source": _GOOD_SOURCE,
+                "input": {
+                    "origin": "MEL",
+                    "destination": "SYD",
+                    "date": "2026-11-15",
+                },
+            },
+        )
+
+        assert result["status"] == "validation_error"
+        assert result["missing_input_keys"] == ["travel_date"]
+        assert set(result["valid_input_keys"]) == {
+            "origin",
+            "destination",
+            "travel_date",
+        }
+        assert "travel_date" in result["error"]
+
     async def test_execute_script_inline_compile_error_is_structured(
-        self, internal_client, agent_type_plan
+        self, internal_client, agent_type_plan, reference_execution
     ):
         """A sandbox compile failure on inline source returns a structured error."""
         agent_type_id, _ = agent_type_plan
@@ -382,7 +595,7 @@ class TestOptimizationSystemTools:
         assert "Sandbox" in result["error"]  # structured sandbox rejection
 
     async def test_execute_script_inline_does_not_persist(
-        self, internal_client, agent_type_plan, db_session
+        self, internal_client, agent_type_plan, db_session, reference_execution
     ):
         """Executing inline source must NOT create any script definition/version."""
         from sqlalchemy import select
@@ -402,7 +615,7 @@ class TestOptimizationSystemTools:
         assert result.scalars().all() == []
 
     async def test_save_only_after_successful_execution(
-        self, internal_client, agent_type_plan, db_session
+        self, internal_client, agent_type_plan, db_session, reference_execution
     ):
         """Save-on-success flow: execute inline OK → generate_script persists
         the working source (no draft-first flow)."""
@@ -424,18 +637,20 @@ class TestOptimizationSystemTools:
         assert saved["status"] == "draft"
         assert saved["version_id"]
 
-        # Round-trip: the saved version executes too.
+        # Round-trip: the saved version replays too. The replay uses the
+        # REFERENCE execution's input ({"x": 41}), never a re-typed context.
         rerun = await _call(
             internal_client, "execute-script",
             {"script_version_id": saved["version_id"], "input": {"x": 7}},
         )
-        assert rerun["output"]["value"] == 7
+        assert rerun["output"]["value"] == 41
 
     async def test_execute_script_routes_inline_source_through_ar_boundary(
-        self, internal_client, agent_type_plan, ar_boundary
+        self, internal_client, agent_type_plan, ar_boundary, reference_execution
     ):
         """The inline source reaches Agent Runtime verbatim with the session
-        identity — CC does NOT execute it locally (segregation)."""
+        identity — CC does NOT execute it locally (segregation), and the run is
+        flagged replay-only (no live tool invocation)."""
         agent_type_id, _ = agent_type_plan
         source = (
             "def run(context, tools):\n"
@@ -453,14 +668,21 @@ class TestOptimizationSystemTools:
         assert result["output"]["result"] == "hello"
         # The FULL source was forwarded — not re-executed in CC.
         assert ar_boundary.captured["python_source"] == source
+        # Replay-only: the reference input + recorded transcript were sent and
+        # the live client was NEVER used.
         assert ar_boundary.captured["input_context"] == {"x": 41}
+        assert ar_boundary.captured["replay_required"] is True
+        assert ar_boundary.captured["reference_tool_responses"]
+        assert ar_boundary.captured["live_runs"] == 0
+        assert result["replayed"] is True
 
     async def test_execute_script_tools_facade_is_not_none(
-        self, internal_client, agent_type_plan, ar_boundary
+        self, internal_client, agent_type_plan, ar_boundary, reference_execution
     ):
         """A script that calls MCP tools verifies: the sandbox's ``tools``
-        facade is non-None and the tool call executes (live-defect
-        regression: the facade was None → TypeError 'NoneType' not callable)."""
+        facade is non-None and the tool call is answered from the recorded
+        reference transcript (live-defect regression: the facade was None →
+        TypeError 'NoneType' not callable)."""
         agent_type_id, _ = agent_type_plan
         result = await _call(
             internal_client, "execute-script",
@@ -475,10 +697,67 @@ class TestOptimizationSystemTools:
         )
         assert "error" not in result, result
         assert result["output"] == {"project": "Ada"}
-        assert ar_boundary.tool_client.calls[0]["tool_name"] == "supabase____get_project"
+        # The response came from the REPLAY client, never the live one.
+        assert ar_boundary.live_client.calls == []
+        replay_calls = ar_boundary.replay_clients[-1].calls
+        assert replay_calls[0]["tool_name"] == "supabase____get_project"
+        assert replay_calls[0]["arguments"] == {"id": "p-1"}
+
+    async def test_execute_script_no_reference_data_asks_user(
+        self, internal_client, agent_type_plan, ar_boundary
+    ):
+        """Without a recorded reference execution nothing may run.
+
+        Replay-only verification: with no reference tool data ``execute_script``
+        returns a TERMINAL ``needs_user_input`` (so the optimizer stops and asks
+        the user instead of looping) and never forwards the source to AR.
+        """
+        agent_type_id, _ = agent_type_plan
+        result = await _call(
+            internal_client, "execute-script",
+            {
+                "agent_type_id": str(agent_type_id),
+                "python_source": _GOOD_SOURCE,
+                "input": {"x": 41},
+            },
+        )
+        assert result["status"] == "needs_user_input"
+        assert result["blockers"] == ["no_reference_tool_data"]
+        assert "reference execution recorded no tool calls" in result["error"]
+        assert result["tool_calls"] == []
+        assert ar_boundary.captured == {"live_runs": 0, "replay_runs": 0}
+
+    async def test_execute_script_replay_miss_asks_user(
+        self, internal_client, agent_type_plan, ar_boundary, reference_execution
+    ):
+        """A tool call absent from the reference transcript is terminal.
+
+        It must surface as ``needs_user_input`` (blocker
+        ``reference_transcript_incomplete``) — NOT a retryable error, and never
+        a live fallback. The reference recorded only
+        ``supabase____get_project``; this script calls another tool.
+        """
+        agent_type_id, _ = agent_type_plan
+        source = (
+            "def run(context, tools):\n"
+            "    return {'r': tools.call('supabase____list_projects', {})}\n"
+        )
+        result = await _call(
+            internal_client, "execute-script",
+            {
+                "agent_type_id": str(agent_type_id),
+                "python_source": source,
+                "input": {"x": 41},
+            },
+        )
+        assert result["status"] == "needs_user_input"
+        assert result["blockers"] == ["reference_transcript_incomplete"]
+        assert "No recorded response" in result["error"]
+        assert result["recorded_tools"] == ["supabase____get_project"]
+        assert ar_boundary.captured["live_runs"] == 0
 
     async def test_execute_script_surfaces_ar_structured_error(
-        self, internal_client, agent_type_plan, monkeypatch
+        self, internal_client, agent_type_plan, monkeypatch, reference_execution
     ):
         """AR's structured sandbox error becomes the tool's error response."""
         from app.services.control_center import comm_hub_client
@@ -816,103 +1095,405 @@ async def _query_plans(test_engine, agent_type_id):
         return result.scalars().all()
 
 
-class TestLaunchOptimizeInjection:
-    async def test_optimize_launch_injects_command_markers_and_mission(
-        self, public_client, agent_type_plan, monkeypatch
+def _plan_session_factory(test_engine):
+    return async_sessionmaker(
+        bind=test_engine, class_=AsyncSession, expire_on_commit=False
+    )
+
+
+async def _seed_optimized_plan(
+    test_engine,
+    agent_type_id: uuid.UUID,
+    *,
+    status: OptimizedPlanStatus = OptimizedPlanStatus.ready,
+    feedback_comments: list[dict[str, Any]] | None = None,
+    error: str | None = None,
+    generated_at=None,
+) -> uuid.UUID:
+    """Create one optimized plan row (with its base AgentPlan) for a type."""
+    from sqlalchemy import select
+
+    from app.db.models.agents import (
+        AgentInputType,
+        AgentOutputType,
+        AgentPlan,
+        AgentPlanStatus,
+        AgentType,
+    )
+
+    async with _plan_session_factory(test_engine)() as session:
+        agent_type = await session.get(AgentType, agent_type_id)
+        if agent_type is None:
+            agent_type = AgentType(
+                id=agent_type_id,
+                name=f"requires-fix-{agent_type_id.hex[:8]}",
+                input_type=AgentInputType.none,
+                output_type=AgentOutputType.markdown,
+            )
+            session.add(agent_type)
+            await session.flush()
+        base = (
+            await session.execute(
+                select(AgentPlan).where(AgentPlan.agent_type_id == agent_type_id)
+            )
+        ).scalar_one_or_none()
+        if base is None:
+            base = AgentPlan(
+                agent_type_id=agent_type_id,
+                generation_status=AgentPlanStatus.success,
+                plan_steps=[{"order": 1, "type": "tool_call", "name": "s"}],
+            )
+            session.add(base)
+            await session.flush()
+        plan = OptimizedImplementationPlan(
+            agent_type_id=agent_type_id,
+            agent_plan_id=base.id,
+            plan_steps=[{"order": 1, "name": "s1"}],
+            fully_scripted=False,
+            status=status,
+            error=error,
+            feedback_comments=feedback_comments,
+            generated_at=generated_at,
+        )
+        session.add(plan)
+        await session.commit()
+        return plan.id
+
+
+class TestMarkRequiresFix:
+    """Execution-side state: a later fallback flags the live plan."""
+
+    async def test_sets_status_and_appends_execution_derived_feedback(
+        self, test_engine, agent_type_plan
     ):
-        """`optimize: true` on the launch turns the execution into the
-        optimize-and-verify command: the ``__command`` markers are injected and
-        the prompt is the command mission + the user's real task."""
         agent_type_id, _ = agent_type_plan
-        from app.api.v1 import agents as agents_module
+        execution_id = uuid.uuid4()
+        fallback_event_id = uuid.uuid4()
+        plan_id = await _seed_optimized_plan(
+            test_engine,
+            agent_type_id,
+            feedback_comments=[
+                {"created_at": "2026-01-01T00:00:00+00:00",
+                 "raw_feedback": "older manual note",
+                 "summary": "older manual note",
+                 "source": "manual"},
+            ],
+        )
 
-        captured: dict = {}
+        async with _plan_session_factory(test_engine)() as session:
+            service = OptimizedPlanService()
+            flagged = await service.mark_requires_fix(
+                session,
+                agent_type_id,
+                feedback_summary="Execution fell back to the LLM path (execution_error): boom",
+                raw_feedback="boom\nsecond line",
+                source_execution_id=execution_id,
+                source_fallback_event_id=fallback_event_id,
+            )
+            await session.commit()
+            assert flagged is not None
+            assert flagged.id == plan_id
 
-        async def fake_launch(**kwargs):
-            captured.update(kwargs)
-            return {
-                "session_id": str(uuid.uuid4()),
-                "triggered": True,
-                "trigger_error": None,
+        async with _plan_session_factory(test_engine)() as session:
+            plan = await session.get(OptimizedImplementationPlan, plan_id)
+            assert plan.status == OptimizedPlanStatus.requires_fix
+            comments = plan.feedback_comments
+            # Prior feedback preserved verbatim.
+            assert comments[0]["source"] == "manual"
+            assert len(comments) == 2
+            entry = comments[-1]
+            assert entry["source"] == "execution_derived"
+            assert entry["summary"].startswith(
+                "Execution fell back to the LLM path (execution_error)"
+            )
+            assert entry["raw_feedback"] == "boom\nsecond line"
+            assert entry["source_execution_id"] == str(execution_id)
+            assert entry["source_fallback_event_id"] == str(fallback_event_id)
+            assert entry["created_at"]
+
+    async def test_empty_execution_id_is_omitted_from_entry(
+        self, test_engine, agent_type_plan
+    ):
+        agent_type_id, _ = agent_type_plan
+        plan_id = await _seed_optimized_plan(test_engine, agent_type_id)
+
+        async with _plan_session_factory(test_engine)() as session:
+            await OptimizedPlanService().mark_requires_fix(
+                session,
+                agent_type_id,
+                feedback_summary="fell back",
+                raw_feedback="fell back",
+            )
+            await session.commit()
+
+        async with _plan_session_factory(test_engine)() as session:
+            plan = await session.get(OptimizedImplementationPlan, plan_id)
+            entry = plan.feedback_comments[-1]
+            assert "source_execution_id" not in entry
+            assert "source_fallback_event_id" not in entry
+
+    async def test_never_touches_error_field(self, test_engine, agent_type_plan):
+        """``error`` is authoring-side (needs_feedback) — the fallback reason
+        lives in the execution-derived feedback entry."""
+        agent_type_id, _ = agent_type_plan
+        plan_id = await _seed_optimized_plan(
+            test_engine, agent_type_id, error="old authoring error"
+        )
+
+        async with _plan_session_factory(test_engine)() as session:
+            await OptimizedPlanService().mark_requires_fix(
+                session,
+                agent_type_id,
+                feedback_summary="fell back",
+                raw_feedback="detail",
+            )
+            await session.commit()
+
+        async with _plan_session_factory(test_engine)() as session:
+            plan = await session.get(OptimizedImplementationPlan, plan_id)
+            assert plan.status == OptimizedPlanStatus.requires_fix
+            assert plan.error == "old authoring error"
+
+    async def test_no_live_plan_is_a_noop(self, test_engine, agent_type_plan):
+        agent_type_id, _ = agent_type_plan
+        async with _plan_session_factory(test_engine)() as session:
+            result = await OptimizedPlanService().mark_requires_fix(
+                session,
+                agent_type_id,
+                feedback_summary="fell back",
+                raw_feedback="detail",
+            )
+            await session.commit()
+        assert result is None
+        assert await _query_plans(test_engine, agent_type_id) == []
+
+    async def test_retired_plan_is_not_flagged(self, test_engine, agent_type_plan):
+        """A late-arriving fallback must never resurrect a retired plan."""
+        agent_type_id, _ = agent_type_plan
+        plan_id = await _seed_optimized_plan(
+            test_engine,
+            agent_type_id,
+            status=OptimizedPlanStatus.retired,
+            feedback_comments=None,
+        )
+
+        async with _plan_session_factory(test_engine)() as session:
+            result = await OptimizedPlanService().mark_requires_fix(
+                session,
+                agent_type_id,
+                feedback_summary="fell back",
+                raw_feedback="detail",
+            )
+            await session.commit()
+        assert result is None
+
+        async with _plan_session_factory(test_engine)() as session:
+            plan = await session.get(OptimizedImplementationPlan, plan_id)
+            assert plan.status == OptimizedPlanStatus.retired
+            assert not plan.feedback_comments
+
+    async def test_latest_live_plan_is_the_target_when_multiple_exist(
+        self, test_engine, agent_type_plan
+    ):
+        agent_type_id, _ = agent_type_plan
+        await _seed_optimized_plan(
+            test_engine, agent_type_id, status=OptimizedPlanStatus.retired
+        )
+        latest_id = await _seed_optimized_plan(
+            test_engine, agent_type_id, status=OptimizedPlanStatus.ready
+        )
+
+        async with _plan_session_factory(test_engine)() as session:
+            flagged = await OptimizedPlanService().mark_requires_fix(
+                session,
+                agent_type_id,
+                feedback_summary="fell back",
+                raw_feedback="detail",
+            )
+            await session.commit()
+        assert flagged is not None and flagged.id == latest_id
+
+    async def test_repeated_fallback_keeps_requires_fix_and_appends(
+        self, test_engine, agent_type_plan
+    ):
+        """Multiple fallbacks on the same plan: no crash, still
+        ``requires_fix``, feedback accumulates (never silently re-served)."""
+        agent_type_id, _ = agent_type_plan
+        plan_id = await _seed_optimized_plan(test_engine, agent_type_id)
+
+        async with _plan_session_factory(test_engine)() as session:
+            service = OptimizedPlanService()
+            for index in range(2):
+                await service.mark_requires_fix(
+                    session,
+                    agent_type_id,
+                    feedback_summary=f"fallback-{index}",
+                    raw_feedback=f"detail-{index}",
+                    source_execution_id=uuid.uuid4(),
+                )
+            await session.commit()
+
+        async with _plan_session_factory(test_engine)() as session:
+            plan = await session.get(OptimizedImplementationPlan, plan_id)
+            assert plan.status == OptimizedPlanStatus.requires_fix
+            assert len(plan.feedback_comments) == 2
+            assert {c["source"] for c in plan.feedback_comments} == {
+                "execution_derived"
             }
 
-        monkeypatch.setattr(agents_module._lifecycle_handler, "launch", fake_launch)
+    async def test_requires_fix_plan_is_never_served(self, test_engine, agent_type_plan):
+        """Serving predicate stays ``status == ready`` — a flagged plan is not
+        silently re-served."""
+        from datetime import datetime, timezone
 
-        async def fake_get_session(session_id, db):
-            from datetime import datetime, UTC
+        from app.services.script_registry import ScriptRegistryService
 
-            return {
-                "id": str(session_id),
-                "agent_type_id": str(agent_type_id),
-                "status": "queued",
-                "started_at": None,
-                "completed_at": None,
-                "error_message": "",
-                "created_at": datetime.now(UTC).isoformat(),
-            }
+        agent_type_id, _ = agent_type_plan
+        await _seed_optimized_plan(
+            test_engine,
+            agent_type_id,
+            status=OptimizedPlanStatus.requires_fix,
+            generated_at=datetime.now(timezone.utc),
+        )
+        async with _plan_session_factory(test_engine)() as session:
+            served = await ScriptRegistryService().get_fresh_optimized_plan(
+                session, agent_type_id=agent_type_id
+            )
+        assert served is None
 
-        monkeypatch.setattr(agents_module._session_service, "get_session", fake_get_session)
+    async def test_plan_id_of_another_agent_type_is_a_noop(
+        self, test_engine, agent_type_plan
+    ):
+        agent_type_id, _ = agent_type_plan
+        other_plan_id = await _seed_optimized_plan(test_engine, uuid.uuid4())
+
+        async with _plan_session_factory(test_engine)() as session:
+            result = await OptimizedPlanService().mark_requires_fix(
+                session,
+                agent_type_id,
+                feedback_summary="fell back",
+                raw_feedback="detail",
+                plan_id=other_plan_id,
+            )
+            await session.commit()
+        assert result is None
+
+
+class TestAuthoringStatusContract:
+    """``requires_fix`` is execution-side only — the authoring tool advertises
+    only ``ready | failed | needs_feedback`` (it is set exclusively by the
+    fallback reaction)."""
+
+    def test_generate_optimized_plan_schema_excludes_requires_fix(self):
+        from app.services.agents.system_tool_registry import SystemToolRegistry
+
+        tool = SystemToolRegistry.get("generate_optimized_plan")
+        assert tool is not None
+        status_desc = tool.parameters["properties"]["status"]["description"]
+        assert "ready" in status_desc
+        assert "failed" in status_desc
+        assert "needs_feedback" in status_desc
+        assert "requires_fix" not in status_desc
+
+    def test_mission_carries_authoring_failure_reason_in_error(self):
+        """The mission mandates ``needs_feedback`` + a non-empty ``error``."""
+        mission = " ".join(OPTIMIZE_AND_VERIFY_COMMAND.split())
+        assert "status `needs_feedback`" in mission
+        assert "`error` argument set to a concise failure reason" in mission
+
+
+class TestFeedbackSourceShape:
+    """Feedback entries carry a ``source`` discriminator (manual vs derived)."""
+
+    async def test_add_feedback_tags_manual_source(
+        self, test_engine, agent_type_plan, monkeypatch
+    ):
+        agent_type_id, _ = agent_type_plan
+        plan_id = await _seed_optimized_plan(
+            test_engine,
+            agent_type_id,
+            # Legacy entry predating the ``source`` field.
+            feedback_comments=[{"raw_feedback": "legacy note"}],
+        )
+
+        async def fake_summarize(self, agent_type, db, raw_feedback):
+            return "requested change"
+
+        monkeypatch.setattr(
+            OptimizedPlanService, "_summarize_feedback", fake_summarize
+        )
+
+        async with _plan_session_factory(test_engine)() as session:
+            agent_type = await session.get(AgentType, agent_type_id)
+            plan = await OptimizedPlanService().add_feedback(
+                agent_type, session, "please use the other endpoint"
+            )
+            await session.commit()
+            comments = plan.feedback_comments
+
+        assert len(comments) == 2
+        # Legacy entries stay untouched (readers default a missing source).
+        assert "source" not in comments[0]
+        entry = comments[-1]
+        assert entry["source"] == "manual"
+        assert entry["summary"] == "requested change"
+        assert entry["raw_feedback"] == "please use the other endpoint"
+        assert entry["created_at"]
+
+        async with _plan_session_factory(test_engine)() as session:
+            reloaded = await session.get(OptimizedImplementationPlan, plan_id)
+            assert reloaded.feedback_comments[-1]["source"] == "manual"
+
+    async def test_feedback_endpoint_returns_manual_source(
+        self, public_client, agent_type_plan, test_engine, monkeypatch
+    ):
+        agent_type_id, _ = agent_type_plan
+        await _seed_optimized_plan(test_engine, agent_type_id)
+
+        async def fake_summarize(self, agent_type, db, raw_feedback):
+            return "requested change"
+
+        monkeypatch.setattr(
+            OptimizedPlanService, "_summarize_feedback", fake_summarize
+        )
 
         resp = await public_client.post(
-            "/api/v1/agents/sessions",
-            json={
-                "agent_type_id": str(agent_type_id),
-                "input_data": {"message": "compile the quarterly report"},
-                "optimize": True,
-            },
+            f"/api/v1/agents/types/{agent_type_id}/optimize-plan/feedback",
+            json={"feedback": "make it faster"},
         )
-        assert resp.status_code in (200, 202), resp.text
+        assert resp.status_code == 200, resp.text
+        comments = resp.json()["feedback_comments"]
+        assert len(comments) == 1
+        assert comments[0]["source"] == "manual"
+        assert comments[0]["summary"] == "requested change"
 
-        input_data = captured["input_data"]
-        assert input_data["__command"] == "optimize-and-verify"
-        assert input_data["__command_agent_type_id"] == str(agent_type_id)
-        assert "Real task for this run" in input_data["message"]
-        # The user's real task is preserved in the mission prompt.
-        assert "compile the quarterly report" in input_data["message"]
-
-    async def test_optimize_false_launches_unchanged(
-        self, public_client, agent_type_plan, monkeypatch
+    async def test_optimized_plan_payload_exposes_status_and_feedback_source(
+        self, public_client, agent_type_plan, test_engine
     ):
-        """Without the opt-in flag the launch input_data passes through untouched."""
         agent_type_id, _ = agent_type_plan
-        from app.api.v1 import agents as agents_module
-
-        captured: dict = {}
-
-        async def fake_launch(**kwargs):
-            captured.update(kwargs)
-            return {
-                "session_id": str(uuid.uuid4()),
-                "triggered": True,
-                "trigger_error": None,
-            }
-
-        monkeypatch.setattr(agents_module._lifecycle_handler, "launch", fake_launch)
-
-        async def fake_get_session(session_id, db):
-            from datetime import datetime, UTC
-
-            return {
-                "id": str(session_id),
-                "agent_type_id": str(agent_type_id),
-                "status": "queued",
-                "started_at": None,
-                "completed_at": None,
-                "error_message": "",
-                "created_at": datetime.now(UTC).isoformat(),
-            }
-
-        monkeypatch.setattr(agents_module._session_service, "get_session", fake_get_session)
-
-        resp = await public_client.post(
-            "/api/v1/agents/sessions",
-            json={
-                "agent_type_id": str(agent_type_id),
-                "input_data": {"message": "just run normally"},
-            },
+        await _seed_optimized_plan(
+            test_engine,
+            agent_type_id,
+            status=OptimizedPlanStatus.requires_fix,
+            feedback_comments=[
+                {
+                    "created_at": "2026-01-01T00:00:00+00:00",
+                    "raw_feedback": "boom",
+                    "summary": "Execution fell back to the LLM path",
+                    "source": "execution_derived",
+                    "source_execution_id": str(uuid.uuid4()),
+                }
+            ],
         )
-        assert resp.status_code in (200, 202), resp.text
-        assert "__command" not in (captured["input_data"] or {})
+
+        resp = await public_client.get(
+            f"/api/v1/agents/types/{agent_type_id}/optimized-plan"
+        )
+        assert resp.status_code == 200, resp.text
+        body = resp.json()
+        assert body["status"] == "requires_fix"
+        assert body["feedback_comments"][0]["source"] == "execution_derived"
+        assert body["feedback_comments"][0]["summary"]
 
 
 class TestRetireOptimizedPlanEndpoint:
@@ -1114,7 +1695,7 @@ class TestScriptToolNameAuthoringValidation:
         return agent_type_id
 
     async def test_execute_script_rejects_wrong_tool_name_with_valid_names(
-        self, internal_client, agent_type_with_tools
+        self, internal_client, agent_type_with_tools, reference_execution
     ):
         agent_type_id = agent_type_with_tools
         result = await _call(
@@ -1136,7 +1717,7 @@ class TestScriptToolNameAuthoringValidation:
         )
 
     async def test_execute_script_accepts_exact_tool_name(
-        self, internal_client, agent_type_with_tools
+        self, internal_client, agent_type_with_tools, reference_execution
     ):
         agent_type_id = agent_type_with_tools
         result = await _call(
@@ -1336,3 +1917,282 @@ class TestOptimizedPlanMarkFailed:
             row = await session.get(OptimizedImplementationPlan, optimized_id)
             assert row.status == OptimizedPlanStatus.failed
             assert row.error == "trigger failed"
+
+
+# ── Replay-only verification (reference transcript + replay client) ──────────
+
+
+def _transcript_session_factory(test_engine):
+    return async_sessionmaker(
+        bind=test_engine, class_=AsyncSession, expire_on_commit=False
+    )
+
+
+async def _seed_transcript_job(
+    test_engine,
+    agent_type_id: uuid.UUID,
+    *,
+    entries: list[dict[str, Any]],
+    input_data: dict[str, Any] | None = None,
+    command: bool = False,
+) -> uuid.UUID:
+    """Seed one completed job plus raw execution-log entries (in order)."""
+    job_id = uuid.uuid4()
+    started = datetime.now(UTC) - timedelta(minutes=4)
+    payload: dict[str, Any] = dict(input_data or {"x": 41})
+    if command:
+        payload["__command"] = "optimize-and-verify"
+    async with _transcript_session_factory(test_engine)() as session:
+        session.add(
+            AgentJob(
+                id=job_id,
+                agent_type_id=agent_type_id,
+                status=AgentJobStatus.completed,
+                input_data=payload,
+                created_at=started,
+                started_at=started,
+                completed_at=started + timedelta(seconds=30),
+            )
+        )
+        await session.flush()
+        for index, entry in enumerate(entries):
+            session.add(
+                ExecutionLogEntry(
+                    session_id=job_id,
+                    timestamp=started + timedelta(seconds=index + 1),
+                    log_level="INFO",
+                    event_type=entry["event_type"],
+                    message=entry.get("message", entry["event_type"]),
+                    data=entry.get("data", {}),
+                )
+            )
+        await session.commit()
+    return job_id
+
+
+class TestBuildReferenceTranscript:
+    """The replay transcript: exactly what ``execute_script`` is allowed to run."""
+
+    async def test_prefers_script_tool_call_events(
+        self, test_engine, agent_type_plan
+    ):
+        """``script_tool_call`` events carry the full recorded result + args."""
+        from app.api.v1.internal.optimization_tools import _build_reference_transcript
+
+        agent_type_id, _ = agent_type_plan
+        job_id = await _seed_transcript_job(
+            test_engine,
+            agent_type_id,
+            input_data={"origin": "MEL", "__conv_session_id": "internal"},
+            entries=[
+                {"event_type": "script_run_started", "data": {}},
+                {
+                    "event_type": "script_tool_call",
+                    "message": "Script tool call: demo____searchFlights",
+                    "data": {
+                        "tool": "demo____searchFlights",
+                        "arguments": {"origin": "MEL"},
+                        "result": {"results": [{"flight_id": "FL-1"}]},
+                        "result_preview": '{"results": [...',
+                        "result_truncated": False,
+                        "error": None,
+                    },
+                },
+                # An LLM-path pair in the same run must NOT be used when the
+                # script recorded its own calls.
+                {
+                    "event_type": "tool_call",
+                    "data": {
+                        "tool": "other____tool",
+                        "arguments": {},
+                        "run_id": "run-9",
+                    },
+                },
+                {
+                    "event_type": "tool_response",
+                    "data": {"output": "1", "run_id": "run-9"},
+                },
+            ],
+        )
+
+        async with _transcript_session_factory(test_engine)() as session:
+            transcript = await _build_reference_transcript(session, agent_type_id)
+
+        assert transcript["session_id"] == str(job_id)
+        # Internal routing keys are stripped; the real input is the context.
+        assert transcript["input"] == {"origin": "MEL"}
+        assert transcript["tool_calls"] == [
+            {
+                "tool": "demo____searchFlights",
+                "arguments": {"origin": "MEL"},
+                "response": {"results": [{"flight_id": "FL-1"}]},
+            }
+        ]
+        assert transcript["truncated"] is False
+
+    async def test_pairs_llm_tool_calls_with_responses_by_run_id(
+        self, test_engine, agent_type_plan
+    ):
+        """LLM-path runs: call/response pairs match on ``run_id`` in call order."""
+        from app.api.v1.internal.optimization_tools import _build_reference_transcript
+
+        agent_type_id, _ = agent_type_plan
+        await _seed_transcript_job(
+            test_engine,
+            agent_type_id,
+            input_data={"project_id": "p-1"},
+            entries=[
+                {
+                    "event_type": "tool_call",
+                    "data": {
+                        "tool": "supabase____list_projects",
+                        "arguments": {"limit": 1},
+                        "run_id": "run-a",
+                    },
+                },
+                {
+                    "event_type": "tool_call",
+                    "data": {
+                        "tool": "supabase____get_project",
+                        "arguments": {"id": "p-1"},
+                        # No structured arguments → parsed from the text input.
+                        "input": '{"id": "p-1"}',
+                        "run_id": "run-b",
+                    },
+                },
+                # Responses arrive out of order — replay must keep CALL order.
+                {
+                    "event_type": "tool_response",
+                    "data": {"output": '{"name": "Ada"}', "run_id": "run-b"},
+                },
+                {
+                    "event_type": "tool_response",
+                    "data": {"output": '[{"id": "p-1"}]', "run_id": "run-a"},
+                },
+            ],
+        )
+
+        async with _transcript_session_factory(test_engine)() as session:
+            transcript = await _build_reference_transcript(session, agent_type_id)
+
+        assert transcript["tool_calls"] == [
+            {
+                "tool": "supabase____list_projects",
+                "arguments": {"limit": 1},
+                "response": [{"id": "p-1"}],
+            },
+            {
+                "tool": "supabase____get_project",
+                "arguments": {"id": "p-1"},
+                "response": {"name": "Ada"},
+            },
+        ]
+
+    async def test_command_runs_and_current_session_are_never_references(
+        self, test_engine, agent_type_plan
+    ):
+        from app.api.v1.internal.optimization_tools import _build_reference_transcript
+
+        agent_type_id, _ = agent_type_plan
+        command_job = await _seed_transcript_job(
+            test_engine,
+            agent_type_id,
+            command=True,
+            entries=[
+                {
+                    "event_type": "script_tool_call",
+                    "data": {"tool": "x____y", "arguments": {}, "result": 1},
+                }
+            ],
+        )
+
+        async with _transcript_session_factory(test_engine)() as session:
+            transcript = await _build_reference_transcript(
+                session, agent_type_id, current_session_id=command_job
+            )
+
+        assert transcript["session_id"] is None
+        assert transcript["tool_calls"] == []
+
+    async def test_empty_history_yields_no_tool_calls(self, test_engine, agent_type_plan):
+        from app.api.v1.internal.optimization_tools import _build_reference_transcript
+
+        agent_type_id, _ = agent_type_plan
+        async with _transcript_session_factory(test_engine)() as session:
+            transcript = await _build_reference_transcript(session, agent_type_id)
+
+        assert transcript == {
+            "session_id": None,
+            "input": None,
+            "input_schema": None,
+            "tool_calls": [],
+            "truncated": False,
+        }
+
+
+class TestReplayToolClient:
+    """AR's replay client: recorded responses only, typed miss when absent."""
+
+    async def test_exact_arguments_preferred_then_name_fallback(self):
+        from app.agent_runtime.api.script_tools import ReplayToolClient
+
+        client = ReplayToolClient(
+            [
+                {"tool": "crm____get", "arguments": {"id": 2}, "response": {"n": 2}},
+                {"tool": "crm____get", "arguments": {"id": 1}, "response": {"n": 1}},
+            ]
+        )
+
+        # Exact arguments win even when out of order.
+        assert await client.call_tool("crm____get", {"id": 1}) == {"n": 1}
+        # No exact match left → the next unconsumed entry for that tool.
+        assert await client.call_tool("crm____get", {"id": 99}) == {"n": 2}
+        assert [call["arguments"] for call in client.calls] == [{"id": 1}, {"id": 99}]
+
+    async def test_miss_raises_typed_error_naming_the_tool(self):
+        from app.agent_runtime.api.script_tools import ReplayToolClient
+        from app.agent_runtime.scripts.sandbox import SandboxViolationError
+
+        client = ReplayToolClient(
+            [{"tool": "crm____get", "arguments": {}, "response": {"ok": True}}]
+        )
+
+        with pytest.raises(SandboxViolationError) as exc_info:
+            await client.call_tool("crm____create", {})
+
+        assert "No recorded response for tool 'crm____create'" in str(exc_info.value)
+        assert "never calls live tools" in str(exc_info.value)
+        # The recorded tool names are surfaced so the optimizer can repair.
+        assert "crm____get" in str(exc_info.value)
+
+    async def test_exhausted_transcript_cannot_be_reused(self):
+        from app.agent_runtime.api.script_tools import ReplayToolClient
+        from app.agent_runtime.scripts.sandbox import SandboxViolationError
+
+        client = ReplayToolClient(
+            [{"tool": "crm____get", "arguments": {"id": 1}, "response": {"n": 1}}]
+        )
+        assert await client.call_tool("crm____get", {"id": 1}) == {"n": 1}
+        with pytest.raises(SandboxViolationError):
+            await client.call_tool("crm____get", {"id": 1})
+
+
+class TestReplayOnlyMission:
+    def test_mission_mandates_replay_not_live_tools(self):
+        """Verification is a REPLAY of recorded input + tool responses."""
+        normalized = " ".join(OPTIMIZE_AND_VERIFY_COMMAND.split())
+        assert "NEVER calls live tools and NEVER changes data" in normalized
+        assert "REPLAYING" in normalized
+        assert "`execute_script` REPLAYS ONLY the recorded tool responses" in normalized
+        assert "tool_calls" in normalized
+        # A missing recorded tool call is never invented — bounded stop that
+        # asks the user (terminal needs_user_input, not a retry loop).
+        assert "do NOT invent the call" in normalized
+        assert "needs_user_input" in normalized
+        assert "Asking the user is the correct stop" in normalized
+        assert "needs_feedback" in normalized
+
+    def test_mission_keeps_reference_input_instruction(self):
+        normalized = " ".join(OPTIMIZE_AND_VERIFY_COMMAND.split())
+        assert "pass the returned `input` object EXACTLY" in normalized
+        assert "Never invent, rename, or substitute input keys" in normalized

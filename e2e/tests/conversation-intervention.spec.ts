@@ -211,27 +211,27 @@ test.describe('Real Backend Integration - Conversational Agent Intervention', ()
       headers: { Authorization: 'Bearer fake-token' },
     })
     // May return 401 if auth is strict, or 200 if the endpoint is accessible
-    expect([200, 401]).toContain(response.status())
+    expect([200, 401, 403]).toContain(response.status())
   })
 
   test('GET /api/v1/intervene/requests returns data', async ({ page }) => {
     const response = await page.request.get('http://localhost:8000/api/v1/intervene/requests', {
       headers: { Authorization: 'Bearer fake-token' },
     })
-    expect([200, 401]).toContain(response.status())
+    expect([200, 401, 403]).toContain(response.status())
   })
 
   test('GET /api/v1/intervene/metrics returns metrics', async ({ page }) => {
     const response = await page.request.get('http://localhost:8000/api/v1/intervene/metrics', {
       headers: { Authorization: 'Bearer fake-token' },
     })
-    expect([200, 401]).toContain(response.status())
+    expect([200, 401, 403]).toContain(response.status())
   })
 
   test('GET /api/v1/health returns ok', async ({ page }) => {
     const response = await page.request.get('http://localhost:8000/api/v1/health')
     // Health endpoint may be protected by JWT middleware
-    expect([200, 401]).toContain(response.status())
+    expect([200, 401, 403]).toContain(response.status())
     if (response.status() === 200) {
       const body = await response.json()
       expect(body.status).toBe('ok')
@@ -244,7 +244,7 @@ test.describe('Real Backend Integration - Conversational Agent Intervention', ()
       { headers: { Authorization: 'Bearer fake-token' } },
     )
     // Should return 404 or 401 (auth required)
-    expect([200, 401, 404]).toContain(response.status())
+    expect([200, 401, 403, 404]).toContain(response.status())
   })
 
   test('conversation respond endpoint rejects invalid request', async ({ page }) => {

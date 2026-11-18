@@ -74,6 +74,13 @@ class ConversationActivity(Base):
         ForeignKey("intervene_requests.id", ondelete="SET NULL"),
         nullable=True,
     )
+    # The durable resume record backing the state shown. `waiting_for_human` is
+    # only valid while this points at a live (non-terminal) resume row.
+    active_resume_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("conversation_turn_resumes.id", ondelete="SET NULL"),
+        nullable=True,
+    )
     tool_name: Mapped[str | None] = mapped_column(String(400), nullable=True)
     target_agent_type_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
@@ -98,6 +105,9 @@ class ConversationActivity(Base):
     conversation_session: Mapped["ConversationSession"] = relationship(
         "ConversationSession", back_populates="activity"
     )
+    active_resume: Mapped["ConversationTurnResume | None"] = relationship(
+        "ConversationTurnResume"
+    )
 
     def __repr__(self) -> str:
         return (
@@ -107,4 +117,5 @@ class ConversationActivity(Base):
 
 
 # Resolve forward references
+from app.db.models.conversation_turn_resume import ConversationTurnResume  # noqa: E402, F401
 from app.db.models.conversations import ConversationSession  # noqa: E402, F401

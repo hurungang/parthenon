@@ -15,7 +15,7 @@ import logging
 import urllib.parse
 import uuid
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
 
 import httpx
@@ -27,9 +27,56 @@ from sqlalchemy.orm import selectinload
 from app.core.config import get_settings
 from app.core.credential_vault import get_vault
 from app.core.ssl_context import get_ssl_context
-from app.db.models.agents import AgentIdentity, AgentIdentityStatus, AgentIdentityType, AgentRole, AgentRoleIdentity, AgentType
+from app.db.models.agent_security import TokenRefreshOutcome
+from app.db.models.agents import (
+    AgentIdentity,
+    AgentIdentityStatus,
+    AgentIdentityType,
+    AgentRole,
+    AgentRoleIdentity,
+    AgentTokenStatus,
+    AgentType,
+)
 
 logger = logging.getLogger(__name__)
+
+
+def _now_utc() -> datetime:
+    return datetime.now(timezone.utc)
+
+
+def _parse_refresh_token_expires_at(token_data: dict[str, Any]) -> datetime | None:
+    """Derive the refresh token's own expiry from a provider token response.
+
+    Returns ``None`` when the provider reports no (or a zero) ``refresh_expires_in``
+    — "no known refresh expiry" — so callers leave an existing known expiry intact.
+    """
+    refresh_expires_in = token_data.get("refresh_expires_in")
+    if not refresh_expires_in:
+        return None
+    try:
+        seconds = int(refresh_expires_in)
+    except (TypeError, ValueError):
+        logger.warning(
+            "Invalid refresh_expires_in in token response: %s", refresh_expires_in
+        )
+        return None
+    if seconds <= 0:
+        return None
+    return _now_utc() + timedelta(seconds=seconds)
+
+
+def _mark_refresh_success(identity: AgentIdentity) -> None:
+    """Flag a successful token issuance/refresh and persist the health state.
+
+    ``persist_identity_health_state`` is imported lazily to avoid a module
+    import cycle between the identity service and the token health service.
+    """
+    from app.services.token_health import persist_identity_health_state
+
+    identity.token_status = AgentTokenStatus.active
+    identity.last_token_refresh_at = _now_utc()
+    persist_identity_health_state(identity, refresh_outcome=TokenRefreshOutcome.success)
 
 
 @dataclass
@@ -393,6 +440,7 @@ class AgentIdentityService:
         access_token_plain: str = token_data["access_token"]
         refresh_token_plain: str | None = token_data.get("refresh_token")
         expires_in: int = int(token_data.get("expires_in", 300))
+        refresh_token_expires_at = _parse_refresh_token_expires_at(token_data)
 
         identity.access_token = vault.encrypt(access_token_plain)
         if refresh_token_plain:
@@ -401,6 +449,9 @@ class AgentIdentityService:
             datetime.now(timezone.utc).timestamp() + expires_in, tz=timezone.utc
         )
         identity.status = AgentIdentityStatus.active
+        if refresh_token_expires_at is not None:
+            identity.refresh_token_expires_at = refresh_token_expires_at
+        _mark_refresh_success(identity)
 
         await db.flush()
         await db.refresh(identity)
@@ -465,6 +516,7 @@ class AgentIdentityService:
         access_token_plain: str = token_data["access_token"]
         refresh_token_plain: str | None = token_data.get("refresh_token")
         expires_in: int = int(token_data.get("expires_in", 300))
+        refresh_token_expires_at = _parse_refresh_token_expires_at(token_data)
 
         # Extract realm from issuer URL (format: http://host:port/realms/{realm_name})
         realm_parts = oauth_config.issuer_url.split("/realms/")
@@ -508,6 +560,9 @@ class AgentIdentityService:
                 identity.refresh_token = vault.encrypt(refresh_token_plain)
             identity.token_expires_at = token_expires_at
             identity.status = AgentIdentityStatus.active
+            if refresh_token_expires_at is not None:
+                identity.refresh_token_expires_at = refresh_token_expires_at
+            _mark_refresh_success(identity)
             await db.flush()
             await db.refresh(identity)
             logger.info(
@@ -527,7 +582,9 @@ class AgentIdentityService:
                 access_token=vault.encrypt(access_token_plain),
                 refresh_token=vault.encrypt(refresh_token_plain) if refresh_token_plain else None,
                 token_expires_at=token_expires_at,
+                refresh_token_expires_at=refresh_token_expires_at,
             )
+            _mark_refresh_success(identity)
             db.add(identity)
             await db.flush()
             await db.refresh(identity)
@@ -654,6 +711,13 @@ class AgentIdentityService:
             # Clear the refresh token so the UI will switch to re-auth button
             identity.refresh_token = None
             identity.status = AgentIdentityStatus.suspended
+            identity.token_status = AgentTokenStatus.refresh_failed
+            # Persist the unrecoverable health state (lazy import avoids a cycle).
+            from app.services.token_health import persist_identity_health_state
+
+            persist_identity_health_state(
+                identity, refresh_outcome=TokenRefreshOutcome.failure
+            )
             await db.flush()
             await db.commit()
             await db.refresh(identity)
@@ -665,6 +729,7 @@ class AgentIdentityService:
         access_token_plain: str = token_data["access_token"]
         new_refresh_token_plain: str | None = token_data.get("refresh_token")
         expires_in: int = int(token_data.get("expires_in", 300))
+        refresh_token_expires_at = _parse_refresh_token_expires_at(token_data)
 
         logger.info(
             "Token refresh response for identity %s: has_new_refresh_token=%s",
@@ -693,6 +758,9 @@ class AgentIdentityService:
             datetime.now(timezone.utc).timestamp() + expires_in, tz=timezone.utc
         )
         identity.status = AgentIdentityStatus.active
+        if refresh_token_expires_at is not None:
+            identity.refresh_token_expires_at = refresh_token_expires_at
+        _mark_refresh_success(identity)
 
         await db.flush()
         await db.commit()

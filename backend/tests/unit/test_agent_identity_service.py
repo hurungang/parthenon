@@ -37,7 +37,13 @@ def _make_identity(
     identity.realm_username = realm_username
     identity.access_token = None
     identity.refresh_token = None
+    identity.encrypted_refresh_token = None
     identity.token_expires_at = None
+    identity.refresh_token_expires_at = None
+    identity.token_status = None
+    identity.last_token_refresh_at = None
+    identity.last_token_refresh_outcome = None
+    identity.token_health_state = None
     identity.status = status
     return identity
 

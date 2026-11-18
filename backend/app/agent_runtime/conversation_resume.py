@@ -1,28 +1,25 @@
 """FIX-20261031-133253 — in-process registry for conversational-turn HITL resume.
 
-Root cause: the Control Center Assistant (a conversational agent) could
-REGISTER a human_intervene request (CH → CC persist + WS dispatch), but the
-conversational turn path in ``runtime_executor._execute_conversation_turn``
-caught ``GraphInterrupt`` and swallowed it with a canned
-"I need more information" message — the deep-agent loop was gone, so an
-approval could never resume it and the confirmation-before-write contract
-was unenforceable.
+.. deprecated:: resumable-agent-turn-persistence
+   Paused conversational turns are now durably resumable: the pause point is a
+   Control Center–owned LangGraph checkpoint loaded by
+   :mod:`app.agent_runtime.durable_checkpointer`, and resume is
+   ``Command(resume=…)`` after a claim (see
+   :mod:`app.agent_runtime.turn_resume_service`).  Nothing in the durable path
+   awaits an in-process future.
 
-Design (mirrors the task-agent resume shape, but in-process):
+   This module survives only as a compatibility shim: the Agent Runtime
+   executor uses it **solely** when the Communication Hub checkpoint relay is
+   not deployed (the pre-Phase-4 rollout window), and the legacy
+   ``/internal/resume`` route consults it only for such an in-process pause.
+   New code must not depend on it.
 
-- When the conversational graph raises ``GraphInterrupt`` (the
-  ``LangChainHumanInterveneTool`` called ``interrupt()``), the executor
-  registers a pending resume future here, emits ``waiting_for_human``,
-  and awaits resolution (bounded by
-  ``conversation_intervention_timeout_seconds``).
-- The InterveneRequest round-trip is unchanged (CC persists the response
-  and calls AR ``POST /internal/resume``); the AR resume endpoint checks
-  this registry FIRST and resolves the future with ``response_value``
-  instead of relaunching a job execution.
-- The executor then re-invokes the SAME agent graph with
-  ``Command(resume=response_value)`` on the turn's in-memory checkpointer,
-  so the ``interrupt()`` call inside the tool returns the operator's
-  response and the loop continues.
+Original design notes (kept for context):
+
+- When the conversational graph raised ``GraphInterrupt`` the executor
+  registered a pending future here and awaited the operator response.
+- The AR ``/internal/resume`` route resolved the future instead of relaunching
+  a job execution.
 """
 from __future__ import annotations
 

@@ -118,7 +118,7 @@ function renderJsonValue(value: unknown, depth: number, path: string): string {
 
 function syntaxHighlightJson(json: string): string {
   return json.replace(
-    /("(\\u[a-zA-Z0-9]{4}|\\[^u]|[^"\\])*"(\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d*)?(?:[eE][+\-]?\d+)?)/g,
+    /("(\\u[a-zA-Z0-9]{4}|\\[^u]|[^"\\])*"(\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d*)?(?:[eE][+-]?\d+)?)/g,
     (match) => {
       let cls = 'ojt-hl-num'
       if (/^"/.test(match)) {
@@ -163,6 +163,39 @@ function extractResultText(value: unknown): string | null {
     return parts.length > 0 ? parts.join('\n\n') : null
   }
   return null
+}
+
+/**
+ * The runtime stores a plain-text result that failed typed validation as a
+ * Python-dict string (`{'value': '…'}`). Unwrap it so the Result tab shows the
+ * actual message (e.g. an optimization summary) instead of the repr.
+ */
+function normalizeRawOutput(raw: string | null): string | null {
+  if (!raw) return null
+  const match = raw.trim().match(/^\{\s*['"]value['"]\s*:\s*([\s\S]*)\}$/)
+  if (!match) return raw
+  let inner = match[1].trim()
+  if (
+    inner.length >= 2 &&
+    ((inner.startsWith("'") && inner.endsWith("'")) ||
+      (inner.startsWith('"') && inner.endsWith('"')))
+  ) {
+    inner = inner.slice(1, -1)
+    inner = inner
+      .replace(/\\n/g, '\n')
+      .replace(/\\t/g, '\t')
+      .replace(/\\r/g, '\r')
+      .replace(/\\'/g, "'")
+      .replace(/\\"/g, '"')
+      .replace(/\\\\/g, '\\')
+    return inner
+  }
+  return raw
+}
+
+/** Markdown-ish text (headings, bullets, bold, inline code) → formatted. */
+function looksLikeMarkdown(text: string): boolean {
+  return /(^|\n)\s{0,3}(#{1,6}\s|[-*+]\s|\d+\.\s)|\*\*[^*]+\*\*|`[^`]+`/.test(text)
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
@@ -233,8 +266,19 @@ export function OutputTypeResultTab({
     return renderJsonValue(outputSchema, 0, 'schema')
   }, [outputSchema])
 
+  // ── Validation-error fallback (also when field_values is null) ──
+  const showValidationError =
+    validationStatus === 'validation_error' ||
+    outputData?.['validation_status'] === 'validation_error'
+  const effectiveRawOutput = normalizeRawOutput(
+    rawOutput ?? (outputData?.['raw_output'] as string | undefined) ?? null,
+  )
+
   // ── No data ──
-  if (!outputData) {
+  // Only empty when there is neither structured data nor a raw fallback. An
+  // optimization run stores its final message as raw output (validation
+  // fails against the business schema), so it must still render.
+  if (!outputData && !effectiveRawOutput) {
     return (
       <Box sx={{ textAlign: 'center', py: 6, color: 'text.secondary' }}>
         <Typography variant="body2">
@@ -253,9 +297,6 @@ export function OutputTypeResultTab({
     )
   }
 
-  // ── Show validation error ──
-  const showValidationError = validationStatus === 'validation_error' || outputData?.['validation_status'] === 'validation_error'
-  const effectiveRawOutput = rawOutput ?? (outputData?.['raw_output'] as string | undefined) ?? null
   const fieldErrors = outputData?.['validation_errors'] as Array<{ field: string; message: string }> | undefined
 
   return (
@@ -340,7 +381,7 @@ export function OutputTypeResultTab({
       )}
 
       {/* ── Typed Output (schema-based structured view) ── */}
-      {outputType === 'typed' && effectiveSchema && (
+      {outputType === 'typed' && effectiveSchema && outputData && (
         <Box>
           <Typography
             variant="caption"
@@ -366,7 +407,7 @@ export function OutputTypeResultTab({
       )}
 
       {/* ── Typed JSON Output (fallback when no schema) ── */}
-      {outputType === 'typed' && !effectiveSchema && (
+      {outputType === 'typed' && !effectiveSchema && outputData && (
         <Box>
           <Typography
             variant="caption"
@@ -515,34 +556,60 @@ export function OutputTypeResultTab({
       )}
 
       {/* ── Raw output fallback for validation errors ── */}
-      {showValidationError && effectiveRawOutput && (
+      {effectiveRawOutput && (showValidationError || !outputData) && (
         <Box sx={{ mt: 2.5, pt: 1.5, borderTop: 1, borderColor: 'divider' }}>
           <Typography
             variant="caption"
             sx={{ fontSize: 13, fontWeight: 600, color: 'text.secondary', textTransform: 'uppercase', letterSpacing: 0.4, mb: 1, display: 'block' }}
           >
-            {t('executionLog.result.rawFallback', { defaultValue: 'Raw Output (Fallback)' })}
+            {looksLikeMarkdown(effectiveRawOutput)
+              ? t('executionLog.result.finalResult', { defaultValue: 'Final Result' })
+              : t('executionLog.result.rawFallback', { defaultValue: 'Raw Output (Fallback)' })}
           </Typography>
-          <Box
-            component="pre"
-            sx={{
-              bgcolor: '#FAFBFC',
-              border: 1,
-              borderColor: 'divider',
-              borderRadius: 1,
-              p: 2.5,
-              fontFamily: 'monospace',
-              fontSize: 12,
-              lineHeight: 1.5,
-              color: 'text.primary',
-              overflowX: 'auto',
-              whiteSpace: 'pre-wrap',
-              m: 0,
-              wordBreak: 'break-word',
-            }}
-          >
-            {effectiveRawOutput}
-          </Box>
+          {looksLikeMarkdown(effectiveRawOutput) ? (
+            // Optimization runs (and other command runs) return a markdown
+            // summary; show it formatted instead of as a repr blob.
+            <Box
+              data-testid="raw-output-markdown"
+              sx={{
+                border: 1,
+                borderColor: 'divider',
+                borderRadius: 1,
+                p: 2.5,
+                bgcolor: 'background.paper',
+                '& h1, & h2, & h3': { fontSize: 16, fontWeight: 700, mt: 1.5, mb: 1 },
+                '& p': { fontSize: 14, lineHeight: 1.65, mb: 1 },
+                '& ul, & ol': { pl: 3, mb: 1 },
+                '& li': { fontSize: 14, lineHeight: 1.6, mb: 0.5 },
+                '& strong': { fontWeight: 700 },
+                '& code': { bgcolor: '#F1F5F9', px: 0.75, borderRadius: 0.5, fontSize: 13, fontFamily: 'monospace' },
+                '& pre': { bgcolor: '#1E293B', color: '#E2E8F0', p: 2, borderRadius: 1, overflowX: 'auto', fontSize: 13 },
+              }}
+            >
+              <MarkdownRenderer content={effectiveRawOutput} />
+            </Box>
+          ) : (
+            <Box
+              component="pre"
+              sx={{
+                bgcolor: '#FAFBFC',
+                border: 1,
+                borderColor: 'divider',
+                borderRadius: 1,
+                p: 2.5,
+                fontFamily: 'monospace',
+                fontSize: 12,
+                lineHeight: 1.5,
+                color: 'text.primary',
+                overflowX: 'auto',
+                whiteSpace: 'pre-wrap',
+                m: 0,
+                wordBreak: 'break-word',
+              }}
+            >
+              {effectiveRawOutput}
+            </Box>
+          )}
         </Box>
       )}
     </Box>

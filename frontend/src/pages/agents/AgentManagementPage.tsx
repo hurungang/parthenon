@@ -28,7 +28,6 @@ import DeleteIcon from '@mui/icons-material/Delete'
 import EditIcon from '@mui/icons-material/Edit'
 import RefreshIcon from '@mui/icons-material/Refresh'
 import PlayArrowIcon from '@mui/icons-material/PlayArrow'
-import VisibilityIcon from '@mui/icons-material/Visibility'
 import { useAgentTypes, useDeleteAgentType } from '../../hooks/useAgentTypes'
 import PermissionDeniedAlert from '../../components/permissions/PermissionDeniedAlert'
 import QuotaBlockedAlert from '../../components/tenant/QuotaBlockedAlert'
@@ -43,12 +42,48 @@ import {
 import { AgentJobLaunchDialog } from './AgentJobLaunchDialog'
 import { AgentTypeDetailsDialog } from '../../components/agents/AgentTypeDetailsDialog'
 import { AgentExecutionDetailsDialog } from '../../components/agents/AgentExecutionDetailsDialog'
+import { AgentOptimizeAction } from '../../components/agents/AgentOptimizeAction'
 import { ConversationDialog } from '../../components/agents/ConversationDialog'
 import type { AgentIdentity, AgentRole, AgentType } from '../../types'
 import { usePagination } from '../../hooks/usePagination'
 
 const SLUG_PATTERN = /^[a-z0-9-]+$/
 const TOKEN_BUDGET_UNIT = 1000
+
+/**
+ * Responsive table column visibility. Secondary columns collapse on smaller
+ * viewports so the list stays readable without horizontal scrolling.
+ *
+ * xs  → Name + Actions (status shown as a dot next to the name)
+ * sm  → + Input Type, Status
+ * md  → + Output Type
+ * lg  → + Model, Role
+ * xl  → + Identity
+ */
+const COLUMN_VISIBILITY = {
+  status: { display: { xs: 'none', sm: 'table-cell' } },
+  inputType: { display: { xs: 'none', sm: 'table-cell' } },
+  outputType: { display: { xs: 'none', md: 'table-cell' } },
+  model: { display: { xs: 'none', lg: 'table-cell' } },
+  role: { display: { xs: 'none', lg: 'table-cell' } },
+  identity: { display: { xs: 'none', xl: 'table-cell' } },
+} as const
+
+/**
+ * Fixed column widths keep the table inside its container (no horizontal
+ * scrollbar); flexible content truncates with an ellipsis instead.
+ */
+const COLUMN_WIDTH = {
+  actions: { width: { xs: 160, sm: 176 } },
+  status: { width: { sm: 104 } },
+  inputType: { width: { sm: 112 } },
+  outputType: { width: { md: 120 } },
+  model: { width: { lg: 190 } },
+  role: { width: { lg: 180 } },
+  identity: { width: { xl: 190 } },
+} as const
+
+const TRUNCATED_CELL = { minWidth: 0 } as const
 
 function rawTokenBudgetToK(value: number | null | undefined): string {
   if (value == null || !Number.isFinite(value)) {
@@ -221,7 +256,7 @@ export function AgentManagementPage() {
       }
       setDialogOpen(false)
       await queryClient.invalidateQueries({ queryKey: ['agents', 'types'] })
-      // Open agent details dialog on Agent Preview tab
+      // Open agent details dialog on the Agent Topology tab
       setDetailsDialogInitialTab(1)
       setDetailsDialogTypeId(savedAgentType.id)
     } catch (err) {
@@ -288,18 +323,34 @@ export function AgentManagementPage() {
 
       {!isLoading && !error && (
         <TableContainer component={Paper} sx={{ mb: 3 }}>
-          <Table>
+          <Table
+            sx={{
+              tableLayout: 'fixed',
+              '& .MuiTableCell-root': { px: { xs: 1, sm: 2 } },
+            }}
+          >
             <TableHead>
               <TableRow>
                 <TableCell>{t('app.name')}</TableCell>
-                <TableCell>{t('agents.types.inputType')}</TableCell>
-                <TableCell>{t('agents.types.outputType')}</TableCell>
-                <TableCell>{t('agents.types.outputDataType')}</TableCell>
-                <TableCell>{t('agents.llmModel')}</TableCell>
-                <TableCell>{t('app.status')}</TableCell>
-                <TableCell>{t('agents.types.role')}</TableCell>
-                <TableCell>{t('agents.types.identity')}</TableCell>
-                <TableCell>{t('app.actions')}</TableCell>
+                <TableCell sx={{ ...COLUMN_VISIBILITY.inputType, ...COLUMN_WIDTH.inputType }}>
+                  {t('agents.types.inputType')}
+                </TableCell>
+                <TableCell sx={{ ...COLUMN_VISIBILITY.outputType, ...COLUMN_WIDTH.outputType }}>
+                  {t('agents.types.outputType')}
+                </TableCell>
+                <TableCell sx={{ ...COLUMN_VISIBILITY.model, ...COLUMN_WIDTH.model }}>
+                  {t('agents.llmModel')}
+                </TableCell>
+                <TableCell sx={{ ...COLUMN_VISIBILITY.status, ...COLUMN_WIDTH.status }}>
+                  {t('app.status')}
+                </TableCell>
+                <TableCell sx={{ ...COLUMN_VISIBILITY.role, ...COLUMN_WIDTH.role }}>
+                  {t('agents.types.role')}
+                </TableCell>
+                <TableCell sx={{ ...COLUMN_VISIBILITY.identity, ...COLUMN_WIDTH.identity }}>
+                  {t('agents.types.identity')}
+                </TableCell>
+                <TableCell sx={COLUMN_WIDTH.actions}>{t('app.actions')}</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
@@ -311,53 +362,77 @@ export function AgentManagementPage() {
                   sx={{ cursor: 'pointer' }}
                 >
                   <TableCell>
-                    <Box display="flex" alignItems="center" gap={1}>
-                      <Typography variant="body2">{at.name}</Typography>
+                    <Box display="flex" alignItems="center" gap={1} minWidth={0}>
+                      <Tooltip title={at.is_active ? t('app.active') : t('app.inactive')}>
+                        <Box
+                          component="span"
+                          aria-label={at.is_active ? t('app.active') : t('app.inactive')}
+                          sx={{
+                            display: { xs: 'inline-block', sm: 'none' },
+                            width: 8,
+                            height: 8,
+                            borderRadius: '50%',
+                            flexShrink: 0,
+                            bgcolor: at.is_active ? 'success.main' : 'grey.400',
+                          }}
+                        />
+                      </Tooltip>
+                      <Typography
+                        variant="body2"
+                        noWrap
+                        title={at.name}
+                        sx={{ minWidth: 0 }}
+                      >
+                        {at.name}
+                      </Typography>
                       {at.is_system && (
                         <Chip
                           label={t('agents.types.systemBadge')}
                           size="small"
                           color="secondary"
                           variant="outlined"
+                          sx={{ flexShrink: 0 }}
                         />
                       )}
                     </Box>
                   </TableCell>
-                  <TableCell>
+                  <TableCell sx={COLUMN_VISIBILITY.inputType}>
                     <Chip label={at.input_type} size="small" variant="outlined" />
                   </TableCell>
-                  <TableCell>
+                  <TableCell sx={COLUMN_VISIBILITY.outputType}>
                     <Chip
                       label={at.input_type === 'conversation' ? 'conversation' : at.output_type}
                       size="small"
                       variant="outlined"
                     />
                   </TableCell>
-                  <TableCell>
-                    {at.output_data_type_name
-                      ? <Chip label={at.output_data_type_name} size="small" variant="outlined" color="info" />
-                      : '—'}
+                  <TableCell sx={COLUMN_VISIBILITY.model}>
+                    <Typography variant="body2" noWrap sx={TRUNCATED_CELL}>
+                      {at.model_id ?? '—'}
+                    </Typography>
                   </TableCell>
-                  <TableCell>{at.model_id ?? '—'}</TableCell>
-                  <TableCell>
+                  <TableCell sx={COLUMN_VISIBILITY.status}>
                     <Chip
                       label={at.is_active ? t('app.active') : t('app.inactive')}
                       color={at.is_active ? 'success' : 'default'}
                       size="small"
                     />
                   </TableCell>
-                  <TableCell>
-                    <Typography variant="body2">
+                  <TableCell sx={COLUMN_VISIBILITY.role}>
+                    <Typography variant="body2" noWrap sx={TRUNCATED_CELL}>
                       {at.role_id ? (roleMap.get(at.role_id) ?? '—') : '—'}
                     </Typography>
                   </TableCell>
-                  <TableCell>
-                    <Typography variant="body2">
+                  <TableCell sx={COLUMN_VISIBILITY.identity}>
+                    <Typography variant="body2" noWrap sx={TRUNCATED_CELL}>
                       {at.identity_id ? (identityMap.get(at.identity_id) ?? '—') : '—'}
                     </Typography>
                   </TableCell>
-                  <TableCell onClick={(e) => e.stopPropagation()}>
-                    <Box display="flex" gap={0.5}>
+                  <TableCell
+                    onClick={(e) => e.stopPropagation()}
+                    sx={{ ...COLUMN_WIDTH.actions, whiteSpace: 'nowrap' }}
+                  >
+                    <Box display="flex" gap={{ xs: 0.25, sm: 0.5 }}>
                       <Tooltip title={at.input_type === 'conversation' ? t('agents.types.startChat') : t('agents.types.runAgent')}>
                         <IconButton
                           size="small"
@@ -368,16 +443,16 @@ export function AgentManagementPage() {
                           <PlayArrowIcon fontSize="small" />
                         </IconButton>
                       </Tooltip>
-                      <Tooltip title={t('app.view')}>
-                        <IconButton
-                          size="small"
-                          color="secondary"
-                          aria-label={t('app.view')}
-                          onClick={() => setDetailsDialogTypeId(at.id)}
-                        >
-                          <VisibilityIcon fontSize="small" />
-                        </IconButton>
-                      </Tooltip>
+                      <AgentOptimizeAction
+                        agentTypeId={at.id}
+                        agentTypeName={at.name}
+                        disabled={!at.is_active}
+                        isConversational={at.input_type === 'conversation'}
+                        onTriggered={(sessionId) => {
+                          setSelectedSessionId(sessionId)
+                          setExecutionDetailsDialogOpen(true)
+                        }}
+                      />
                       <Tooltip title={at.is_system ? t('agents.types.systemProtected') : t('app.edit')}>
                         <span>
                           <IconButton
@@ -425,6 +500,10 @@ export function AgentManagementPage() {
         onRowsPerPageChange={pag.onRowsPerPageChange}
         rowsPerPageOptions={pag.rowsPerPageOptions}
         labelRowsPerPage={t('app.rowsPerPage')}
+        sx={{
+          '.MuiTablePagination-toolbar': { px: { xs: 0, sm: 2 } },
+          '.MuiTablePagination-selectLabel': { display: { xs: 'none', sm: 'inline' } },
+        }}
       />
 
       {/* Agent Type Details Dialog */}
@@ -505,15 +584,6 @@ export function AgentManagementPage() {
             setLaunchType(null)
             setSelectedSessionId(sessionId)
             setExecutionDetailsDialogOpen(true)
-          }}
-          onRegeneratePlan={async () => {
-            await apiClient.post(`/agents/types/${launchType.id}/regenerate-plan`)
-            await queryClient.invalidateQueries({ queryKey: ['agents', 'types', launchType.id] })
-            await queryClient.invalidateQueries({ queryKey: ['agents', 'types'] })
-            setLaunchOpen(false)
-            setLaunchType(null)
-            setDetailsDialogTypeId(launchType.id)
-            setDetailsDialogInitialTab(1)
           }}
         />
       )}

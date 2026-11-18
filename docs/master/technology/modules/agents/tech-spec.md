@@ -233,7 +233,7 @@ Unified composition page at `/agents/panel` (route registered in `AppRouter`; si
 | `AgentRoleAssignment` | Pydantic model | `{role_ids: UUID[]}` for bulk identity→role assignment | `backend/app/schemas/agents.py` |
 | `AgentIdentityCreate` | Pydantic model | `realm_name`, `realm_username`, `identity_type`, `status` | `backend/app/schemas/agents.py` |
 | `AgentIdentityUpdate` | Pydantic model | All fields optional | `backend/app/schemas/agents.py` |
-| `AgentIdentityRead` | Pydantic model | Includes `token_expires_at`; never exposes raw token values | `backend/app/schemas/agents.py` |
+| `AgentIdentityRead` | Pydantic model | Includes `token_expires_at`, `refresh_token_expires_at`, `token_status`, and derived `has_refresh_token`; never exposes raw token values. The refresh-token expiry lets the UI render refresh-token status without access-token assumptions. | `backend/app/schemas/agents.py` |
 | `AgentIdentityOAuthAuthorizeResponse` | Pydantic model | `{authorization_url: str}` returned by the authorize endpoint | `backend/app/schemas/agents.py` |
 | `AgentJobCreate` | Pydantic model | Input for enqueuing a session (API path: `/agents/sessions`) | `backend/app/schemas/agents.py` |
 | `AgentJobStatusRead` | Pydantic model | Subset fields for status polling; filter params: `status`, `since`; includes `agent_type_name`, `triggered_by_user_name` | `backend/app/schemas/agents.py` |
@@ -477,7 +477,7 @@ Unified composition page at `/agents/panel` (route registered in `AppRouter`; si
 | Symbol | Kind | Description | File |
 |--------|------|-------------|------|
 | `AgentRole` | interface | `id`, `name`, `description`, `sop_ids`, `skill_ids`; no `allowed_identity_types` | `frontend/src/types/index.ts` |
-| `AgentIdentity` | interface | `id`, `name`, `identity_type`, `realm_name`, `realm_username`, `auth_provider`, `status`, `token_expires_at` | `frontend/src/types/index.ts` |
+| `AgentIdentity` | interface | `id`, `name`, `identity_type`, `realm_name`, `realm_username`, `auth_provider`, `status`, `token_expires_at`, `refresh_token_expires_at`, `token_status`, `has_refresh_token` | `frontend/src/types/index.ts` |
 | `AgentIdentityType` | type alias | `'realm_user'` | `frontend/src/types/index.ts` |
 | `AgentIdentityStatus` | type alias | `'active' \| 'suspended' \| 'deprovisioned'` | `frontend/src/types/index.ts` |
 | `AgentJob` | interface | `id`, `agent_type_id`, `input_data`, `status`, `output_data`, `error_message`, `conversation_history`; includes `agent_type_name`, `triggered_by_user_name` | `frontend/src/types/index.ts` |

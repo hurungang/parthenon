@@ -142,8 +142,7 @@ describe('Dashboard token-health cards', () => {
     })
   })
 
-  it('clears warnings after remediation (data refetch shows refreshed state)', async () => {
-    // First fetch: expired identity; after refetch: healthy.
+  it('clears warnings after remediation (data refetch shows refreshed state)', async () => {    // First fetch: expired identity; after refetch: healthy.
     mockGet.mockImplementation((url: string) => {
       if (url === '/dashboard/token-health') {
         const payload =
@@ -198,5 +197,41 @@ describe('Dashboard token-health cards', () => {
         .closest('.MuiCard-root')!
       expect(identitiesCard).toHaveTextContent('0')
     })
+  })
+
+  // FIX-20261116-214714 — a healthy token payload must render GREEN tiles and
+  // must not offer remediation (no "Action required" badge).
+  it('renders green token tiles and no action badge when nothing is expired or expiring', async () => {
+    mockApis({
+      identities: { expired_count: 0, expiring_count: 0, healthy_count: 6, unknown_count: 0, items: [] },
+      mcp_sessions: { expired_count: 0, expiring_count: 0, healthy_count: 7, unknown_count: 0, items: [] },
+      permission_flags: { identities: false, mcp_sessions: false },
+    })
+    renderPage()
+    await waitFor(() => {
+      expect(mockGet).toHaveBeenCalledWith('/dashboard/token-health')
+    })
+
+    const identitiesCard = await waitFor(() => {
+      const el = screen
+        .getByText('dashboard.tokenHealthIdentities')
+        .closest('.MuiCard-root') as HTMLElement | null
+      expect(el).not.toBeNull()
+      return el as HTMLElement
+    })
+    const mcpCard = screen
+      .getByText('dashboard.tokenHealthMcpSessions')
+      .closest('.MuiCard-root') as HTMLElement
+
+    expect(mcpCard).not.toBeNull()
+
+    // Everything in the mocked summary is zero → no tile needs action.
+    await waitFor(() => {
+      expect(identitiesCard.getAttribute('data-status-tone')).toBe('success')
+      expect(mcpCard.getAttribute('data-status-tone')).toBe('success')
+    })
+    expect(identitiesCard.getAttribute('data-action-required')).toBe('false')
+    expect(mcpCard.getAttribute('data-action-required')).toBe('false')
+    expect(screen.queryByText('dashboard.actionRequired')).toBeNull()
   })
 })

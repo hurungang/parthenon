@@ -175,6 +175,47 @@ function agentTypeWithPlan() {
 const respond = (body: unknown, status = 200) => (route: Route) =>
   route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(body) })
 
+/** Optimized plan flagged by a later fallback (record_fallback → requires_fix). */
+const REQUIRES_FIX_PLAN = {
+  id: 'oplan-1',
+  agent_type_id: AGENT_TYPE.id,
+  agent_plan_id: 'plan-1',
+  status: 'requires_fix',
+  fully_scripted: false,
+  error: null,
+  steps: [
+    {
+      order: 1,
+      type: 'tool_call',
+      name: 'Query on-call tool',
+      description: 'Fetch the on-call schedule',
+      python_source: null,
+      scriptable: true,
+    },
+  ],
+  steps_count: 1,
+  scripts_authored: 1,
+  feedback_comments: [
+    {
+      created_at: '2026-01-05T00:00:00Z',
+      raw_feedback: 'Fallback: tool schema mismatch (missing id key).',
+      summary: 'Fallback: tool schema mismatch (missing id key).',
+      source: 'execution_derived',
+      source_execution_id: 'exec-9',
+      source_fallback_event_id: 'fb-9',
+    },
+    {
+      created_at: '2026-01-06T00:00:00Z',
+      raw_feedback: 'Keep the summary short.',
+      summary: 'Keep the summary short.',
+      source: 'manual',
+      source_execution_id: null,
+      source_fallback_event_id: null,
+    },
+  ],
+  generated_at: '2026-01-04T00:00:00Z',
+}
+
 async function mockAgentTypeApi(page: Page, agentType: unknown = AGENT_TYPE) {
   // Register broad patterns first — Playwright resolves handlers
   // last-registered-first, so the specific detail mock keeps priority.
@@ -362,6 +403,46 @@ test.describe('Agent Type Scripts tab — agent-owned script governance', () => 
     await expect(dialog.getByText(/Permission Denied/i)).toBeVisible()
     await expect(dialog.getByText(/agent::scripts/)).toBeVisible()
     expect(errors.filter((e) => !e.includes('ResizeObserver'))).toEqual([])
+  })
+
+  test('requires-fix alert and auto-recorded feedback surface in the Optimized Plan tab', async ({
+    page,
+  }) => {
+    // Successful execution recorded → Optimize available; the plan was flagged
+    // requires_fix by a later fallback, with execution-derived feedback.
+    await page.route(/\/api\/v1\/agents\/types\/[^/]+\/optimization-gate$/, respond({
+      can_optimize: true,
+      successful_executions: 2,
+      reason: null,
+    }))
+    await page.route(/\/api\/v1\/agents\/types\/[^/]+\/optimized-plan(\?.*)?$/, respond(REQUIRES_FIX_PLAN))
+    await mockScriptsApi(page)
+
+    // Open the agent type detail dialog (Optimized Plan tab).
+    await page.goto('/agents')
+    await page.waitForLoadState('load')
+    if (page.url().includes('/login')) test.skip()
+    await page.getByText(AGENT_TYPE.name, { exact: true }).first().click()
+    const dialog = page
+      .getByRole('dialog')
+      .filter({ has: page.getByRole('tab', { name: 'Optimized Plan' }) })
+    await expect(dialog).toBeVisible()
+    await dialog.getByRole('tab', { name: 'Optimized Plan' }).click()
+
+    // The problem is surfaced where the operator reviews the plan — no reload.
+    await expect(dialog.getByTestId('optimized-plan-status')).toHaveText('requires_fix')
+    const alert = dialog.getByTestId('requires-fix-alert')
+    await expect(alert).toBeVisible()
+    await expect(alert.getByText('This optimized plan requires a fix')).toBeVisible()
+    // The auto-recorded (execution_derived) feedback from the failed execution.
+    await expect(dialog.getByTestId('requires-fix-feedback-0')).toHaveText(
+      'Fallback: tool schema mismatch (missing id key).',
+    )
+    // Feedback entries are badged by their source.
+    await expect(dialog.getByTestId('feedback-source-0')).toHaveText('auto-recorded')
+    await expect(dialog.getByTestId('feedback-source-1')).toHaveText('manual')
+    // The operator can re-optimize straight from the alert.
+    await expect(alert.getByTestId('reoptimize-from-alert')).toBeVisible()
   })
 
   test('no standalone /admin/scripts route or nav entry exists (A3/N8)', async ({ page }) => {

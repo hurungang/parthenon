@@ -208,7 +208,7 @@ async def _create_optimize_session(
     db: AsyncSession, tenant_id: uuid.UUID, agent_type_id: uuid.UUID
 ) -> uuid.UUID:
     """Create an AgentJob whose input_data carries the optimize-and-verify
-    ``__command`` marker (simulating the launch-dialog opt-in)."""
+    ``__command`` marker (simulating the dedicated optimize trigger)."""
     from app.db.models.agents import AgentJob
     from app.services.agents.command_prompts import OPTIMIZE_AND_VERIFY_SLUG
 
@@ -221,6 +221,36 @@ async def _create_optimize_session(
     db.add(job)
     await db.commit()
     return job.id
+
+
+async def _configure_authoring_model(
+    db: AsyncSession, tenant_id: uuid.UUID
+) -> None:
+    """Give the workspace a usable authoring model.
+
+    A ``__command`` run executes on the workspace AUTHORING model (not the
+    agent's runtime model), so the context build fails closed without one.
+    """
+    from app.db.models.agents import ModelConfig, ModelProvider
+    from app.services.agents.workflow_generation_settings import (
+        WORKFLOW_GENERATION_MODEL_KEY,
+    )
+    from app.services.tenancy.tenant_settings_service import set_value
+
+    model_id = "inherent-authoring-model"
+    db.add(
+        ModelConfig(
+            id=uuid.uuid4(),
+            tenant_id=tenant_id,
+            display_name=f"inherent-authoring-{uuid.uuid4().hex[:6]}",
+            provider_type=ModelProvider.openai,
+            api_base_url="http://localhost:9999/v1",
+            enabled_models=[model_id],
+        )
+    )
+    await db.flush()
+    await set_value(db, tenant_id, WORKFLOW_GENERATION_MODEL_KEY, model_id)
+    await db.commit()
 
 
 @pytest.mark.asyncio
@@ -246,6 +276,14 @@ async def test_optimize_and_verify_run_gets_full_inherent_set(isolated_db) -> No
     isolated_db.add(agent_type)
     await isolated_db.commit()
 
+    # The ``__command`` run resolves the AUTHORING model for the session
+    # tenant — no request context here, so the root tenant is the workspace.
+    root = (
+        await isolated_db.execute(
+            select(Tenant).where(Tenant.is_system_tenant.is_(True))
+        )
+    ).scalar_one()
+    await _configure_authoring_model(isolated_db, root.id)
     session_id = await _create_optimize_session(
         isolated_db, tenant.id, agent_type.id
     )

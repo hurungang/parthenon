@@ -9,6 +9,10 @@ Covers:
 - generate_plan upsert: first save creates row, second save updates (no duplicate)
 - generate_plan no role: empty graph handled without crash
 - _resolve_graph SOP filtering: by system instruction, default fallback, keep-all
+- authoring-model policy: _invoke_llm authors with the workspace authoring model
+  (never ``AgentType.model_id``, never a first-available ModelConfig); an
+  unusable authoring model propagates ``AuthoringModelNotConfigured`` and
+  writes NOTHING; a failed attempt preserves the last successful plan.
 """
 from __future__ import annotations
 
@@ -19,8 +23,14 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from app.db.models.agents import AgentPlanStatus, AgentType
+from app.db.models.agents import AgentPlanStatus, AgentType, ModelProvider
 from app.services.agents.plan_generation_service import PlanGenerationService
+from app.services.agents.workflow_generation_settings import (
+    REASON_AUTHORING_MODEL_NOT_CONFIGURED,
+    REASON_AUTHORING_MODEL_NOT_ENABLED,
+    AuthoringModel,
+    AuthoringModelNotConfigured,
+)
 
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
@@ -180,6 +190,21 @@ def test_parse_plan_steps_missing_fields_use_defaults():
     assert len(result) == 1
     assert result[0]["order"] == 1  # default to i+1
     assert result[0]["type"] == "tool_call"  # default
+    assert result[0]["parent_order"] is None
+
+
+def test_parse_plan_steps_preserves_parent_order_for_the_tree():
+    """Flat steps keep an optional parent_order; malformed values are dropped."""
+    service = PlanGenerationService()
+    steps = [
+        {"order": 1, "type": "tool_call", "name": "Root"},
+        {"order": 2, "type": "tool_call", "name": "Child", "parent_order": 1},
+        {"order": 3, "type": "tool_call", "name": "Bad", "parent_order": "not-a-number"},
+    ]
+    result = service._parse_plan_steps(json.dumps(steps))
+    assert result[0]["parent_order"] is None
+    assert result[1]["parent_order"] == 1
+    assert result[2]["parent_order"] is None  # invalid value dropped, step kept
 
 
 # ── generate_plan happy path ───────────────────────────────────────────────────
@@ -349,6 +374,8 @@ async def test_generate_plan_upsert_called_with_failed_status_on_error():
     call_kwargs = upsert_mock.call_args.kwargs
     assert call_kwargs["status"] == AgentPlanStatus.failed
     assert "boom" in (call_kwargs["error"] or "")
+    # The last successful plan must survive a failed attempt.
+    assert call_kwargs["preserve_plan_on_failure"] is True
 
 
 # ── _upsert_plan: create vs update behaviour ──────────────────────────────────
@@ -588,3 +615,233 @@ async def test_resolve_graph_keeps_all_sops_when_no_instruction_and_no_default()
     sop_names = {s["name"] for s in graph["sops"]}
     assert sop_names == {"query-supabase", "send-email"}
 
+
+
+# ── Authoring-model policy: no fallback, preserved last plan ─────────────────
+
+
+def _make_authoring_model(model_id: str = "authoring-large-model") -> AuthoringModel:
+    config = MagicMock()
+    config.id = uuid.uuid4()
+    config.provider_type = ModelProvider.openai
+    config.enabled_models = [model_id]
+    return AuthoringModel(model_id=model_id, model_config=config)
+
+
+def _empty_graph() -> dict:
+    return {"role": None, "sops": [], "skills": [], "tools": []}
+
+
+@pytest.mark.asyncio
+async def test_invoke_llm_authors_with_the_authoring_model():
+    """``_invoke_llm`` dispatches with the resolved authoring model id + its
+    provider context — NOT ``AgentType.model_id`` and never a first-available
+    ``ModelConfig`` lookup."""
+    from app.services.agents.model_binding import ModelBindingLayer
+
+    service = PlanGenerationService()
+    at = _make_agent_type(model_id="agent-runtime-small-model")
+    db = AsyncMock()
+
+    authoring = _make_authoring_model("authoring-large-model")
+    context_dict = {
+        "provider_type": "openai",
+        "api_base_url": "http://localhost:9999/v1",
+        "api_key": "decrypted-key",
+    }
+    response = {"raw": "response"}
+
+    with (
+        patch(
+            "app.services.agents.plan_generation_service.require_authoring_model",
+            new=AsyncMock(return_value=authoring),
+        ),
+        patch.object(
+            ModelBindingLayer,
+            "build_completion_context",
+            return_value=context_dict,
+        ),
+        patch.object(
+            ModelBindingLayer,
+            "complete_from_context",
+            new=AsyncMock(return_value=response),
+        ) as complete,
+        patch.object(
+            ModelBindingLayer, "extract_text", return_value="the-plan-text"
+        ),
+    ):
+        text = await service._invoke_llm(at, db, "build a plan")
+
+    assert text == "the-plan-text"
+    kwargs = complete.await_args.kwargs
+    assert kwargs["model_id"] == "authoring-large-model"
+    assert kwargs["model_config_dict"] == context_dict
+    assert kwargs["max_tokens"] == 8192
+    # The agent RUNTIME model never reaches the completion call.
+    assert "agent-runtime-small-model" not in repr(complete.await_args)
+    # No fallback catalogue scan (`select(ModelConfig)`) happened.
+    assert not db.execute.called
+
+
+@pytest.mark.asyncio
+async def test_invoke_llm_propagates_unusable_authoring_model_without_fallback():
+    from app.services.agents.model_binding import ModelBindingLayer
+
+    service = PlanGenerationService()
+    at = _make_agent_type(model_id="agent-runtime-small-model")
+    db = AsyncMock()
+
+    with (
+        patch(
+            "app.services.agents.plan_generation_service.require_authoring_model",
+            new=AsyncMock(
+                side_effect=AuthoringModelNotConfigured(
+                    REASON_AUTHORING_MODEL_NOT_CONFIGURED, "select a model"
+                )
+            ),
+        ),
+        patch.object(
+            ModelBindingLayer, "complete_from_context", new=AsyncMock()
+        ) as complete,
+    ):
+        with pytest.raises(AuthoringModelNotConfigured) as excinfo:
+            await service._invoke_llm(at, db, "build a plan")
+
+    assert excinfo.value.reason_code == REASON_AUTHORING_MODEL_NOT_CONFIGURED
+    complete.assert_not_awaited()
+    assert not db.execute.called
+
+
+@pytest.mark.asyncio
+async def test_generate_plan_writes_nothing_when_authoring_model_unusable():
+    """Not-configured → the structured error propagates and no plan row is
+    created or touched (no degraded plan, no fallback model)."""
+    service = PlanGenerationService()
+    at = _make_agent_type(role_id=uuid.uuid4())
+    db = _mock_db_no_existing_plan()
+
+    with (
+        patch.object(service, "_resolve_graph", new=AsyncMock(return_value=_empty_graph())),
+        patch.object(
+            service,
+            "_invoke_llm",
+            new=AsyncMock(
+                side_effect=AuthoringModelNotConfigured(
+                    REASON_AUTHORING_MODEL_NOT_ENABLED, "re-select a model"
+                )
+            ),
+        ),
+        patch.object(service, "_upsert_plan", new=AsyncMock()) as upsert,
+    ):
+        with pytest.raises(AuthoringModelNotConfigured) as excinfo:
+            await service.generate_plan(at, db)
+
+    assert excinfo.value.reason_code == REASON_AUTHORING_MODEL_NOT_ENABLED
+    upsert.assert_not_awaited()
+    db.add.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_failed_upsert_preserves_previous_successful_plan_fields():
+    """``_upsert_plan(preserve_plan_on_failure=True)`` only updates status +
+    error: steps, topology, hash, fully_scripted and generated_at stay."""
+    service = PlanGenerationService()
+    agent_type_id = uuid.uuid4()
+
+    previous_generated_at = datetime(2026, 1, 2, 3, 4, 5, tzinfo=timezone.utc)
+    previous_steps = [{"order": 1, "type": "tool_call", "name": "Old", "description": None}]
+    previous_topology = {"nodes": [{"id": "role:x"}], "edges": []}
+
+    existing = MagicMock()
+    existing.agent_type_id = agent_type_id
+    existing.plan_steps = previous_steps
+    existing.topology = previous_topology
+    existing.agent_config_hash = "hash-of-last-success"
+    existing.fully_scripted = True
+    existing.generated_at = previous_generated_at
+    existing.generation_status = AgentPlanStatus.success
+    existing.generation_error = None
+
+    db = AsyncMock()
+    result = MagicMock()
+    result.scalar_one_or_none.return_value = existing
+    db.execute.return_value = result
+    db.flush = AsyncMock()
+    db.refresh = AsyncMock()
+    db.add = MagicMock()
+
+    await service._upsert_plan(
+        agent_type_id=agent_type_id,
+        plan_steps=None,
+        topology=None,
+        status=AgentPlanStatus.failed,
+        error="provider timeout",
+        config_hash="new-config-hash",
+        db=db,
+        fully_scripted=None,
+        preserve_plan_on_failure=True,
+    )
+
+    db.add.assert_not_called()
+    assert existing.generation_status == AgentPlanStatus.failed
+    assert existing.generation_error == "provider timeout"
+    # The last successful authoring is untouched.
+    assert existing.plan_steps == previous_steps
+    assert existing.topology == previous_topology
+    assert existing.agent_config_hash == "hash-of-last-success"
+    assert existing.fully_scripted is True
+    assert existing.generated_at == previous_generated_at
+
+
+def test_enforce_step_types_reclassifies_non_entity_steps():
+    """The step-type hard rule: only real entity invocations keep their type."""
+    service = PlanGenerationService()
+    graph = {
+        "sops": [],
+        "skills": [{"id": "s1", "name": "quick-book-cheapest-flight"}],
+        "tools": [{"name": "mcp-demo____searchFlights"}],
+        "delegated_agents": [],
+    }
+    steps = [
+        {"order": 1, "type": "skill_invocation", "name": "Invoke quick-book-cheapest-flight skill", "description": ""},
+        {"order": 2, "type": "skill_invocation", "name": "Validate request fields", "description": "Verify the input."},
+        {"order": 3, "type": "tool_call", "name": "Search flights", "description": "Call mcp-demo____searchFlights."},
+        {"order": 4, "type": "tool_call", "name": "Select cheapest", "description": "Choose the lowest fare."},
+        {"order": 5, "type": "sop_invocation", "name": "Bind the SOP", "description": "Use the SOP."},
+        {"order": 6, "type": "processing", "name": "Format output", "description": ""},
+        {"order": 7, "type": "unknown", "name": "Mystery", "description": ""},
+    ]
+    result = service._enforce_step_types(steps, graph)
+    assert [s["type"] for s in result] == [
+        "skill_invocation",
+        "processing",
+        "tool_call",
+        "processing",
+        "processing",
+        "processing",
+        "processing",
+    ]
+
+
+def test_enforce_step_types_honours_explicit_entity_refs():
+    """An explicit id/name reference is authoritative (valid keeps, invalid drops)."""
+    service = PlanGenerationService()
+    graph = {
+        "sops": [{"id": "sop1", "name": "Refund SOP"}],
+        "skills": [{"id": "sk1", "name": "Refund skill"}],
+        "tools": [{"name": "crm____refund"}],
+        "delegated_agents": [{"id": "at2", "name": "Escalation agent"}],
+    }
+    steps = [
+        {"order": 1, "type": "sop_invocation", "sop_id": "sop1", "name": "Do it", "description": ""},
+        {"order": 2, "type": "skill_invocation", "skill_id": "missing", "name": "Do it", "description": ""},
+        {"order": 3, "type": "tool_call", "tool_name": "crm____refund", "name": "Do it", "description": ""},
+        {"order": 4, "type": "agent_delegation", "target_agent_type_id": "at2", "name": "Do it", "description": ""},
+    ]
+    result = service._enforce_step_types(steps, graph)
+    assert [s["type"] for s in result] == [
+        "sop_invocation",
+        "processing",
+        "tool_call",
+        "agent_delegation",
+    ]

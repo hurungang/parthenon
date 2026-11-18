@@ -56,6 +56,10 @@ class ConversationSessionRead(BaseModel):
     updated_at: datetime
     closed_at: datetime | None
     guardrail_usage: dict[str, Any] | None = None
+    #: Durable paused-turn projection (None for sessions that never paused).
+    resume_state: str | None = None
+    resume_outcome: str | None = None
+    resume_expires_at: datetime | None = None
 
 
 class ConversationSessionDetailRead(ConversationSessionRead):
@@ -75,3 +79,19 @@ class ConversationSessionPageRead(BaseModel):
     page: int
     page_size: int
     default_window_days: int
+
+
+class ConversationOptimizationBlock(BaseModel):
+    """Optimization-mode guidance attached to a prepared turn.
+
+    Returned by ``prepare-turn`` for an optimization conversation so the chat
+    opens already in mode and can render the guidance (blocked-with-reason,
+    replay-only) before any work starts. Business / assistant conversations
+    never receive it (the field is omitted, not null).
+    """
+
+    mode: str = "optimization"
+    subject_agent_type_id: uuid.UUID
+    available: bool
+    reason_code: str | None = None
+    reason: str | None = None

@@ -691,12 +691,102 @@ class ScriptRegistryService:
 
         if script_version_id is not None:
             await self._degrade_health(db, script_version_id)
+            await self._flag_optimized_plan_for_fallback(
+                db,
+                script_version_id=script_version_id,
+                execution_record_id=execution_record_id,
+                fallback_event_id=event.id,
+                trigger_reason=trigger_reason,
+                failure_detail=failure_detail,
+            )
 
         logger.warning(
             "FallbackEvent %s (version=%s, reason=%s, action=%s)",
             event.id, script_version_id, trigger_reason.value, resulting_action.value,
         )
         return event
+
+    async def _resolve_optimized_artifact_plan(
+        self, db: AsyncSession, script_version_id: uuid.UUID
+    ) -> tuple[uuid.UUID, uuid.UUID] | None:
+        """Resolve a script version to its live source optimized plan.
+
+        Attribution traverses ``script_version_id → ScriptDefinition
+        .source_optimized_plan_id → OptimizedImplementationPlan`` (read-only;
+        no new FK). Base-plan / auto-compiled scripts carry no
+        ``source_optimized_plan_id`` and resolve to nothing; a retired plan is
+        never attributed.
+
+        Returns ``(plan_id, agent_type_id)`` when attributed, else ``None``.
+        """
+        version = await self.get_version(db, script_version_id)
+        if version is None:
+            return None
+        definition = await db.get(ScriptDefinition, version.script_definition_id)
+        if definition is None or definition.source_optimized_plan_id is None:
+            return None
+
+        from app.db.models.optimized_plan import (
+            OptimizedImplementationPlan,
+            OptimizedPlanStatus,
+        )
+
+        plan = await db.get(
+            OptimizedImplementationPlan, definition.source_optimized_plan_id
+        )
+        if plan is None or plan.status == OptimizedPlanStatus.retired:
+            return None
+        return plan.id, plan.agent_type_id
+
+    async def _flag_optimized_plan_for_fallback(
+        self,
+        db: AsyncSession,
+        *,
+        script_version_id: uuid.UUID,
+        execution_record_id: uuid.UUID,
+        fallback_event_id: uuid.UUID,
+        trigger_reason: FallbackTriggerReason,
+        failure_detail: str | None,
+    ) -> None:
+        """Mark an attributed optimized plan ``requires_fix`` + append feedback.
+
+        Runs in the SAME transaction as the FallbackEvent. The fallback itself
+        is unchanged — execution continues on the LLM path; this only records
+        that the plan needs a human-driven re-optimization.
+        """
+        attribution = await self._resolve_optimized_artifact_plan(
+            db, script_version_id
+        )
+        if attribution is None:
+            return
+        plan_id, agent_type_id = attribution
+
+        reason = (
+            trigger_reason.value
+            if hasattr(trigger_reason, "value")
+            else str(trigger_reason)
+        )
+        detail = ""
+        if failure_detail:
+            detail = failure_detail.strip().splitlines()[0][:300]
+        summary = (
+            f"Execution fell back to the LLM path ({reason}): {detail}"
+            if detail
+            else f"Execution fell back to the LLM path ({reason})"
+        )
+
+        # Imported lazily to avoid a service-layer import cycle.
+        from app.services.agents.optimized_plan_service import OptimizedPlanService
+
+        await OptimizedPlanService().mark_requires_fix(
+            db,
+            agent_type_id,
+            feedback_summary=summary,
+            raw_feedback=failure_detail or summary,
+            source_execution_id=execution_record_id,
+            source_fallback_event_id=fallback_event_id,
+            plan_id=plan_id,
+        )
 
     async def _degrade_health(
         self, db: AsyncSession, version_id: uuid.UUID

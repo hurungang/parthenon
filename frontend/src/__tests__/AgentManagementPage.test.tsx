@@ -208,6 +208,162 @@ describe('AgentManagementPage', () => {
     expect(screen.getByRole('button', { name: 'agents.types.runAgent' })).toBeDefined()
   })
 
+  it('renders a separate Optimize action per row and gates it on a successful execution', async () => {
+    const apiMock = await import('../api/apiClient')
+    const getMock = vi.mocked(apiMock.default.get)
+    const originalImpl = getMock.getMockImplementation()
+    getMock.mockImplementation(((url: string) =>
+      String(url).includes('optimization-gate')
+        ? Promise.resolve({
+            data: {
+              can_optimize: true,
+              can_generate_plan: true,
+              workflow_model_configured: true,
+              workflow_model_id: 'gpt-4o',
+              is_conversational: false,
+              successful_executions: 1,
+              reason: null,
+              reason_code: null,
+            },
+          })
+        : Promise.resolve({ data: [] })) as never)
+
+    try {
+      const { AgentManagementPage } = await import('../pages/agents/AgentManagementPage')
+      render(<AgentManagementPage />, { wrapper })
+
+      // Run stays available; Optimize is its own, separately rendered action.
+      expect(screen.getByRole('button', { name: 'agents.types.runAgent' })).toBeDefined()
+
+      const optimize = await screen.findByTestId('optimize-agent-action')
+      await waitFor(() => {
+        expect((optimize as HTMLButtonElement).disabled).toBe(false)
+      })
+
+      await act(async () => {
+        fireEvent.click(optimize)
+      })
+
+      // No pre-start confirmation dialog: the run starts directly.
+      expect(screen.queryByText('agents.optimize.intro')).toBeNull()
+      await waitFor(() => {
+        expect(apiMock.default.post).toHaveBeenCalledWith(
+          '/agents/sessions/optimize',
+          { agent_type_id: 'at-1' },
+        )
+      })
+    } finally {
+      if (originalImpl) getMock.mockImplementation(originalImpl)
+    }
+  })
+
+  it('hides the Optimize action for conversational agent rows', async () => {
+    mockAgentTypes = [
+      {
+        ...mockAgentTypes[0],
+        id: 'at-conv',
+        name: 'Chat Agent',
+        input_type: 'conversation',
+        model_id: null,
+        sop_bindings: [],
+        skill_bindings: [],
+      },
+    ]
+
+    const { AgentManagementPage } = await import('../pages/agents/AgentManagementPage')
+    render(<AgentManagementPage />, { wrapper })
+
+    await waitFor(() => {
+      expect(screen.getByText('Chat Agent')).toBeDefined()
+    })
+
+    // Conversational agents have no plan or optimization — the action self-hides.
+    expect(screen.queryByTestId('optimize-agent-action')).toBeNull()
+    // Their Run/Start Chat surface is unchanged.
+    expect(screen.getByRole('button', { name: 'agents.types.startChat' })).toBeDefined()
+  })
+
+  it('disables Optimize with the localized authoring-model reason when no model is configured', async () => {
+    const apiMock = await import('../api/apiClient')
+    const getMock = vi.mocked(apiMock.default.get)
+    const originalImpl = getMock.getMockImplementation()
+    getMock.mockImplementation(((url: string) =>
+      String(url).includes('optimization-gate')
+        ? Promise.resolve({
+            data: {
+              can_optimize: false,
+              can_generate_plan: false,
+              workflow_model_configured: false,
+              workflow_model_id: null,
+              is_conversational: false,
+              successful_executions: 0,
+              reason_code: 'authoring_model_not_configured',
+              reason: 'No authoring model configured.',
+            },
+          })
+        : Promise.resolve({ data: [] })) as never)
+
+    try {
+      const { AgentManagementPage } = await import('../pages/agents/AgentManagementPage')
+      render(<AgentManagementPage />, { wrapper })
+
+      const optimize = await screen.findByTestId('optimize-agent-action')
+      await waitFor(() => {
+        expect((optimize as HTMLButtonElement).disabled).toBe(true)
+      })
+
+      // The reason_code copy is preferred over the raw backend reason.
+      fireEvent.mouseOver(optimize.closest('span') as HTMLElement)
+      expect(
+        await screen.findByText('agents.optimize.gateReasons.authoring_model_not_configured'),
+      ).toBeDefined()
+
+      // A gated action never starts a run.
+      fireEvent.click(optimize)
+      expect(apiMock.default.post).not.toHaveBeenCalled()
+    } finally {
+      if (originalImpl) getMock.mockImplementation(originalImpl)
+    }
+  })
+
+  it('asks the operator to re-select when the saved authoring model is no longer enabled', async () => {
+    const apiMock = await import('../api/apiClient')
+    const getMock = vi.mocked(apiMock.default.get)
+    const originalImpl = getMock.getMockImplementation()
+    getMock.mockImplementation(((url: string) =>
+      String(url).includes('optimization-gate')
+        ? Promise.resolve({
+            data: {
+              can_optimize: false,
+              can_generate_plan: false,
+              workflow_model_configured: false,
+              workflow_model_id: 'retired-model',
+              is_conversational: false,
+              successful_executions: 2,
+              reason_code: 'authoring_model_not_enabled',
+              reason: 'The saved authoring model is gone.',
+            },
+          })
+        : Promise.resolve({ data: [] })) as never)
+
+    try {
+      const { AgentManagementPage } = await import('../pages/agents/AgentManagementPage')
+      render(<AgentManagementPage />, { wrapper })
+
+      const optimize = await screen.findByTestId('optimize-agent-action')
+      await waitFor(() => {
+        expect((optimize as HTMLButtonElement).disabled).toBe(true)
+      })
+
+      fireEvent.mouseOver(optimize.closest('span') as HTMLElement)
+      expect(
+        await screen.findByText('agents.optimize.gateReasons.authoring_model_not_enabled'),
+      ).toBeDefined()
+    } finally {
+      if (originalImpl) getMock.mockImplementation(originalImpl)
+    }
+  })
+
   it('opens AgentJobLaunchDialog when Launch is clicked', async () => {
     const { AgentManagementPage } = await import('../pages/agents/AgentManagementPage')
     render(<AgentManagementPage />, { wrapper })
@@ -263,6 +419,12 @@ describe('AgentManagementPage', () => {
     const { AgentManagementPage } = await import('../pages/agents/AgentManagementPage')
     render(<AgentManagementPage />, { wrapper })
     expect(screen.getByRole('button', { name: 'app.edit' })).toBeDefined()
+  })
+
+  it('does not render a separate View action (row click already opens details)', async () => {
+    const { AgentManagementPage } = await import('../pages/agents/AgentManagementPage')
+    render(<AgentManagementPage />, { wrapper })
+    expect(screen.queryByRole('button', { name: 'app.view' })).toBeNull()
   })
 })
 
@@ -455,13 +617,13 @@ describe('AgentManagementPage — role and identity columns', () => {
     expect(dashes.length).toBeGreaterThanOrEqual(1)
   })
 
-  it('renders Data Type column header', async () => {
+  it('does not render a Data Type column (kept out of the list to reduce table width)', async () => {
     const { AgentManagementPage } = await import('../pages/agents/AgentManagementPage')
     render(<AgentManagementPage />, { wrapper })
-    expect(screen.getByRole('columnheader', { name: 'agents.types.outputDataType' })).toBeDefined()
+    expect(screen.queryByRole('columnheader', { name: 'agents.types.outputDataType' })).toBeNull()
   })
 
-  it('shows data type name in Data Type column when agent has one assigned', async () => {
+  it('does not show the assigned data type name in the list table', async () => {
     mockAgentTypes = [
       {
         id: 'at-2',
@@ -489,10 +651,12 @@ describe('AgentManagementPage — role and identity columns', () => {
 
     const { AgentManagementPage } = await import('../pages/agents/AgentManagementPage')
     render(<AgentManagementPage />, { wrapper })
-    expect(screen.getByText('Structured Report')).toBeDefined()
+    // Data type is intentionally not shown in the list table; it remains in the
+    // agent type details dialog and edit form.
+    expect(screen.queryByText('Structured Report')).toBeNull()
   })
 
-  it('shows dash in Data Type column when no data type is assigned', async () => {
+  it('shows dash in the list when no data type is assigned', async () => {
     // mockAgentTypes[0] has output_data_type_name: null, so the cell shows '—'
     const { AgentManagementPage } = await import('../pages/agents/AgentManagementPage')
     render(<AgentManagementPage />, { wrapper })

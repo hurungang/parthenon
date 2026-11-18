@@ -33,6 +33,12 @@ def _make_identity(
     identity.status = status
     identity.access_token = access_token
     identity.refresh_token = refresh_token
+    identity.encrypted_refresh_token = None
+    identity.refresh_token_expires_at = None
+    identity.token_status = None
+    identity.last_token_refresh_at = None
+    identity.last_token_refresh_outcome = None
+    identity.token_health_state = None
     identity.token_expires_at = token_expires_at or (
         datetime.now(timezone.utc) + timedelta(seconds=60)
     )

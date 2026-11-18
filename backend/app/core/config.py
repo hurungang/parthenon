@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Any, Literal
 
 import yaml
-from pydantic import AliasChoices, BaseModel, Field, field_validator
+from pydantic import AliasChoices, BaseModel, Field, ValidationInfo, field_validator
 from pydantic_settings import (
     BaseSettings,
     PydanticBaseSettingsSource,
@@ -22,6 +22,16 @@ def _app_yaml_path() -> str:
     return os.environ.get(
         "APP_YAML_PATH", str(_REPO_ROOT / "config" / "app.yaml")
     )
+
+
+# Lower bounds (seconds, except the byte cap) for the conversational turn
+# resume settings — operator-supplied values below these are clamped up.
+_CONVERSATION_TURN_SETTING_MINIMUMS: dict[str, int] = {
+    "conversation_turn_resume_ttl_seconds": 30,
+    "conversation_turn_checkpoint_max_bytes": 1024,
+    "conversation_turn_claim_ttl_seconds": 1,
+    "conversation_turn_checkpoint_purge_after_seconds": 60,
+}
  
 
 # ---------------------------------------------------------------------------
@@ -338,6 +348,75 @@ class Settings(BaseSettings):
     # date range is given — keeps the default view bounded. Explicit
     # date_from/date_to params override; all_time=true disables the window.
     conversation_sessions_default_window_days: int = 7
+    # Answerable window: how long a paused conversational turn stays
+    # answerable after it reports ``waiting_for_human`` (the resume index
+    # ``expires_at`` horizon). Must agree with the intervention window so the
+    # UI never shows a waiting turn that is already unanswerable.
+    # Default 15 minutes; clamped to >= 30 seconds.
+    conversation_turn_resume_ttl_seconds: int = 900
+    # Durable paused-turn checkpoint payload cap (opaque agent-framework state,
+    # never secrets). Larger payloads are rejected before they reach the store.
+    # Default 2 MB; clamped to >= 1 KiB.
+    conversation_turn_checkpoint_max_bytes: int = 2 * 1024 * 1024
+    # Short-lived turn claim: one Agent Runtime instance continues a paused turn
+    # at a time. Lease expiry only frees the turn for failover — it never
+    # changes the lifecycle state. Default 45 seconds; clamped to >= 1 second.
+    conversation_turn_claim_ttl_seconds: int = 45
+    # How long a resolved/unresumable turn's checkpoint payload is retained
+    # after resolution before the retention sweep deletes it. The resume index
+    # row always survives, so audit and outcome remain intact.
+    # Default 1 hour; clamped to >= 60 seconds.
+    conversation_turn_checkpoint_purge_after_seconds: int = 3600
+
+    # ── Optimization live test (single-use, operator-approved) ────────────────
+    # How long a ``pending`` live-test approval stays answerable before it is
+    # closed as ``expired`` (the session then stays replay-only). Default 15
+    # minutes — the same window family as the paused-turn resume TTL.
+    optimizer_live_test_decision_ttl_minutes: int = 15
+    # Bounded per-conversation cap on APPROVED live tests (a new need is a new
+    # request + a new approval, never a remembered/always-allow mode).
+    optimizer_live_test_approved_cap: int = 3
+    # Hard wall-clock bound for one approved live-test run (CC → CH → AR) and
+    # for each individual operation inside it. Nothing runs beyond these.
+    optimizer_live_test_run_timeout_seconds: int = 120
+    optimizer_live_test_operation_timeout_seconds: int = 45
+    # Periodic sweep cadence for overdue ``pending`` live-test requests.
+    optimizer_live_test_sweep_interval_seconds: int = 60
+
+    @field_validator(
+        "optimizer_live_test_decision_ttl_minutes",
+        "optimizer_live_test_approved_cap",
+        "optimizer_live_test_run_timeout_seconds",
+        "optimizer_live_test_operation_timeout_seconds",
+        "optimizer_live_test_sweep_interval_seconds",
+        mode="after",
+    )
+    @classmethod
+    def clamp_optimizer_live_test_settings(cls, value: int) -> int:
+        """Clamp the live-test bounds to at least 1 (never zero/negative)."""
+        return max(1, value)
+
+    @field_validator(
+        "conversation_turn_resume_ttl_seconds",
+        "conversation_turn_checkpoint_max_bytes",
+        "conversation_turn_claim_ttl_seconds",
+        "conversation_turn_checkpoint_purge_after_seconds",
+        mode="after",
+    )
+    @classmethod
+    def clamp_conversation_turn_settings(
+        cls, value: int, info: ValidationInfo
+    ) -> int:
+        """Clamp the conversational turn-resume settings to sane minimums.
+
+        These are operator-tunable knobs (env vars
+        ``CONVERSATION_TURN_*``); a zero/negative or trivially small value
+        would break the resume contract (unanswerable window, unusable claim
+        lease, rejected-but-valid payload, purge before resolution). Clamping
+        keeps a misconfigured deployment working instead of failing startup.
+        """
+        minimum = _CONVERSATION_TURN_SETTING_MINIMUMS[info.field_name]
+        return max(minimum, value)
 
     # Scheduling
     scheduler_enabled: bool = True

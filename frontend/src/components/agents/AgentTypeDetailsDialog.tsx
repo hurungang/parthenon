@@ -32,6 +32,7 @@ import RefreshIcon from '@mui/icons-material/Refresh'
 import CloseIcon from '@mui/icons-material/Close'
 import EditIcon from '@mui/icons-material/Edit'
 import OpenInNewIcon from '@mui/icons-material/OpenInNew'
+import SettingsIcon from '@mui/icons-material/Settings'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useAgentType, useAgentTypes } from '../../hooks/useAgentTypes'
 import PermissionDeniedAlert from '../permissions/PermissionDeniedAlert'
@@ -44,6 +45,7 @@ import { AgentExecutionsDialog } from './AgentExecutionsDialog'
 import { AgentExecutionDetailsDialog } from './AgentExecutionDetailsDialog'
 import { ConversationSessionsTab } from './ConversationSessionsTab'
 import { AgentOptimizedPlanTab } from './AgentOptimizedPlanTab'
+import { AgentOptimizeAction } from './AgentOptimizeAction'
 import { AgentClientsPanel } from './AgentClientsPanel'
 import { ScriptViewDialog, type ScriptViewData } from './ScriptViewDialog'
 import { ConversationDialog } from './ConversationDialog'
@@ -52,6 +54,11 @@ import { SkillEditor } from './SkillEditor'
 import { AgentRoleDialog } from './AgentRoleDialog'
 import { AgentIdentityViewDialog } from './AgentIdentityViewDialog'
 import apiClient from '../../api/apiClient'
+import {
+  localizeOptimizationGateReason,
+  useOptimizationGate,
+} from '../../hooks/useOptimizationGate'
+import { extractPlanGenerationReason, type StructuredGateFailure } from '../../utils/errorUtils'
 import type { AgentIdentity, AgentJob, AgentJobStatus, AgentRole, Skill, Sop, SopDetail, TopologyNode } from '../../types'
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
@@ -129,12 +136,16 @@ export function AgentTypeDetailsDialog({
   const [agentTypeViewOpen, setAgentTypeViewOpen] = useState(false)
   const [agentTypeViewId, setAgentTypeViewId] = useState<string | null>(null)
   const [viewScript, setViewScript] = useState<ScriptViewData | null>(null)
+  const [planGenerationFailure, setPlanGenerationFailure] =
+    useState<StructuredGateFailure | null>(null)
+  const [isReloading, setIsReloading] = useState(false)
 
   // Reset tab and error when dialog opens
   useEffect(() => {
     if (open) {
       setActiveTab(initialTab)
       setDialogError(null)
+      setPlanGenerationFailure(null)
     }
   }, [open, initialTab])
 
@@ -151,6 +162,10 @@ export function AgentTypeDetailsDialog({
     }
   }, [fetchError])
 
+  // Composed plan/optimize gate: conversational → authoring model → executions.
+  // `can_generate_plan` gates the explicit Generate/Regenerate plan actions.
+  const { data: planGate } = useOptimizationGate(agentTypeId, open)
+
   // Execution Logs tab query — keyed separately from the page-level cache
   const { data: dialogSessions, isLoading: sessionsLoading } = useQuery<AgentJob[]>({
     queryKey: ['agents', 'sessions', 'dialog', agentTypeId],
@@ -160,7 +175,7 @@ export function AgentTypeDetailsDialog({
       )
       return data
     },
-    enabled: !!agentTypeId && open && activeTab === 2,
+    enabled: !!agentTypeId && open && activeTab === 3,
   })
 
   // Role/identity name resolution — fetches all roles/identities (uses cached React Query data)
@@ -182,7 +197,7 @@ export function AgentTypeDetailsDialog({
     enabled: open && !!agentType?.identity_id,
   })
 
-  // Agent Preview: SOPs and Skills — only fetched for conversation agents on tab 1
+  // Agent Topology: SOPs and Skills — only fetched for conversation agents on tab 1
   const isConversation = agentType?.input_type === 'conversation'
 
   // All agent types — for resolving delegation target names in preview/topology
@@ -234,7 +249,13 @@ export function AgentTypeDetailsDialog({
   const displaySops = hasBindings ? roleSops.filter((s) => boundSopIds.has(s.id)) : roleSops
   const displaySkills = hasBindings ? roleSkills.filter((s) => boundSkillIds.has(s.id)) : roleSkills
 
-  const planGeneratedAt = agentType?.plan?.generated_at ? new Date(agentType.plan.generated_at) : null
+  const planGeneratedAt = useMemo(
+    () =>
+      agentType?.plan?.generated_at
+        ? new Date(agentType.plan.generated_at)
+        : null,
+    [agentType?.plan?.generated_at],
+  )
 
   const latestPreviewDefinitionUpdate = useMemo(() => {
     const timestamps = [
@@ -291,6 +312,20 @@ export function AgentTypeDetailsDialog({
 
   const planIsStale = !!planGeneratedAt && !!latestPreviewDefinitionUpdate && latestPreviewDefinitionUpdate > planGeneratedAt
 
+  // Plan generation is explicit-only and gated on the workspace authoring model
+  // (and never exists for conversational agents). A partial/legacy gate payload
+  // fails open — the backend re-checks and returns the structured 412.
+  const isConversationalAgent = isConversation === true || planGate?.is_conversational === true
+  const planHasSteps = (agentType?.plan?.plan_steps?.length ?? 0) > 0
+  const planGenerationFailed = agentType?.plan?.generation_status === 'failed'
+  const planIsEmpty = !agentType?.plan || (planGenerationFailed && !planHasSteps)
+  const planGateKnown = typeof planGate?.can_generate_plan === 'boolean'
+  const canGeneratePlan = planGateKnown ? planGate?.can_generate_plan === true : true
+  const planBlockedReason =
+    !isConversationalAgent && planGateKnown && !canGeneratePlan
+      ? localizeOptimizationGateReason(t, planGate?.reason_code, planGate?.reason)
+      : null
+
   const regeneratePlanMutation = useMutation({
     mutationFn: async () => {
       if (!agentTypeId) {
@@ -306,13 +341,39 @@ export function AgentTypeDetailsDialog({
       return data
     },
     onSuccess: async () => {
+      // The plan renders without a reload: refresh the agent type (+ gate),
+      // the type list, scripts compiled from the old plan, and the optimized-plan
+      // tab state.
       await queryClient.invalidateQueries({ queryKey: ['agents', 'types', agentTypeId] })
       await queryClient.invalidateQueries({ queryKey: ['agents', 'types'] })
+      await queryClient.invalidateQueries({ queryKey: ['scripts'] })
+      await queryClient.invalidateQueries({
+        queryKey: ['agents', 'types', agentTypeId, 'optimized-plan'],
+      })
     },
     onError: (error) => {
-      setDialogError(error)
+      // A blocked generation keeps the last good plan visible and explains why.
+      const failure = extractPlanGenerationReason(error)
+      if (failure) {
+        setPlanGenerationFailure(failure)
+      } else {
+        setDialogError(error)
+      }
     },
   })
+
+  const handleGeneratePlan = () => {
+    if (!canGeneratePlan || isConversationalAgent) return
+    setDialogError(null)
+    setPlanGenerationFailure(null)
+    regeneratePlanMutation.mutate()
+  }
+
+  // Show a processing spinner in the Implementation Plan tab while the
+  // authoring call is in flight (or a server-side pending plan is being written).
+  const isPlanGenerating =
+    regeneratePlanMutation.isPending ||
+    (!isConversationalAgent && agentType?.plan?.generation_status === 'pending')
 
   const roleName = agentType?.role_id
     ? (allRoles?.find((r) => r.id === agentType.role_id)?.name ?? agentType.role_id)
@@ -329,8 +390,35 @@ export function AgentTypeDetailsDialog({
     [agentType],
   )
 
+  /**
+   * Manual reload for the whole dialog: re-reads the agent type (base/optimized
+   * plan state, tool grants, instances), its execution sessions, the Optimize
+   * gate and any scripts shown in the tabs. Use it when a background run
+   * (e.g. an optimization command) changed state while the dialog was open.
+   */
+  const handleReloadDialog = async () => {
+    if (!agentTypeId || isReloading) return
+    setIsReloading(true)
+    setDialogError(null)
+    try {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['agents', 'types', agentTypeId] }),
+        queryClient.invalidateQueries({ queryKey: ['agents', 'types'] }),
+        queryClient.invalidateQueries({ queryKey: ['agents', 'sessions'] }),
+        queryClient.invalidateQueries({ queryKey: ['scripts'] }),
+        queryClient.invalidateQueries({ queryKey: ['sops'] }),
+        queryClient.invalidateQueries({ queryKey: ['skills'] }),
+        queryClient.invalidateQueries({ queryKey: ['agents', 'roles'] }),
+        queryClient.invalidateQueries({ queryKey: ['agents', 'identities'] }),
+      ])
+    } finally {
+      setIsReloading(false)
+    }
+  }
+
   const handleClose = () => {
     setDialogError(null)
+    setPlanGenerationFailure(null)
     onClose()
   }
 
@@ -424,6 +512,19 @@ export function AgentTypeDetailsDialog({
             {agentType ? agentType.name : t('agents.types.dialogTitle')}
           </Typography>
           <Box display="flex" alignItems="center" gap={1}>
+            <Tooltip title={t('app.refresh', { defaultValue: 'Refresh' })}>
+              <span>
+                <IconButton
+                  size="small"
+                  onClick={() => void handleReloadDialog()}
+                  disabled={isReloading || !agentTypeId}
+                  aria-label={t('app.refresh', { defaultValue: 'Refresh' })}
+                  data-testid="reload-agent-dialog"
+                >
+                  {isReloading ? <CircularProgress size={16} /> : <RefreshIcon />}
+                </IconButton>
+              </span>
+            </Tooltip>
             {agentType && !agentType.is_system && (
               <Tooltip title={t('app.edit')}>
                 <IconButton size="small" onClick={handleEdit} aria-label={t('app.edit')}>
@@ -474,37 +575,47 @@ export function AgentTypeDetailsDialog({
                 >
                   <Tab
                     label={t('agents.types.detailsTab')}
+                    value={0}
                     id="agent-details-tab-0"
                     aria-controls="agent-details-tabpanel-0"
                   />
                   <Tab
-                    label={t('agents.types.agentPreviewTab')}
+                    label={t('agents.types.agentTopologyTab')}
+                    value={1}
                     id="agent-details-tab-1"
                     aria-controls="agent-details-tabpanel-1"
                   />
                   <Tab
-                    label={t('agents.types.executionLogsTab')}
+                    label={t('agents.types.implementationPlanTab')}
+                    value={2}
                     id="agent-details-tab-2"
                     aria-controls="agent-details-tabpanel-2"
+                  />
+                  <Tab
+                    label={t('agents.types.executionLogsTab')}
+                    value={3}
+                    id="agent-details-tab-3"
+                    aria-controls="agent-details-tabpanel-3"
                   />
                   {agentType.input_type === 'conversation' && (
                     <Tab
                       label={t('conversations.sessions.tabLabel')}
-                      id="agent-details-tab-3"
-                      aria-controls="agent-details-tabpanel-3"
+                      value={4}
+                      id="agent-details-tab-4"
+                      aria-controls="agent-details-tabpanel-4"
                     />
                   )}
                   <Tab
                     label={t('agents.optimizedPlan.tab')}
-                    value={4}
-                    id="agent-details-tab-4"
-                    aria-controls="agent-details-tabpanel-4"
-                  />
-                  <Tab
-                    label={t('agents.types.clientsTab', 'Clients')}
                     value={5}
                     id="agent-details-tab-5"
                     aria-controls="agent-details-tabpanel-5"
+                  />
+                  <Tab
+                    label={t('agents.types.clientsTab', 'Clients')}
+                    value={6}
+                    id="agent-details-tab-6"
+                    aria-controls="agent-details-tabpanel-6"
                   />
                 </Tabs>
               </Box>
@@ -646,53 +757,8 @@ export function AgentTypeDetailsDialog({
 
                 </TabPanel>
 
-                {/* ── Tab 1: Plan Preview OR Agent Preview ──────────────── */}
+                {/* ── Tab 1: Agent Topology ─────────────────────────────── */}
                 <TabPanel value={activeTab} index={1}>
-                  {planIsStale && (
-                    <Box display="flex" gap={1} alignItems="stretch" sx={{ mb: 2 }}>
-                      <Alert severity="warning" sx={{ flex: 1, alignItems: 'center' }}>
-                        {staleDefinitionsMessage}
-                      </Alert>
-                      <Button
-                        variant="outlined"
-                        size="small"
-                        startIcon={<RefreshIcon />}
-                        onClick={() => void regeneratePlanMutation.mutateAsync()}
-                        disabled={regeneratePlanMutation.isPending}
-                      >
-                        Regenerate plan
-                      </Button>
-                    </Box>
-                  )}
-
-                  {!planIsStale && (
-                    <Box display="flex" justifyContent="flex-end" gap={1} sx={{ mb: 2 }}>
-                      <Button
-                        variant="outlined"
-                        size="small"
-                        startIcon={<RefreshIcon />}
-                        onClick={() => {
-                          void queryClient.invalidateQueries({ queryKey: ['agents', 'types'] })
-                          void queryClient.invalidateQueries({
-                            queryKey: ['agents', 'sessions', 'dialog', agentTypeId],
-                          })
-                          void queryClient.invalidateQueries({ queryKey: ['scripts'] })
-                        }}
-                      >
-                        {t('app.refresh')}
-                      </Button>
-                      <Button
-                        variant="outlined"
-                        size="small"
-                        startIcon={<RefreshIcon />}
-                        onClick={() => void regeneratePlanMutation.mutateAsync()}
-                        disabled={regeneratePlanMutation.isPending}
-                      >
-                        Regenerate plan
-                      </Button>
-                    </Box>
-                  )}
-
                   {isConversation ? (
                     <Box>
                       {draftComposition && (
@@ -798,25 +864,195 @@ export function AgentTypeDetailsDialog({
                           onNodeClick={handleNodeClick}
                         />
                       )}
-
-                      <Divider sx={{ my: 2 }} />
-
-                      {/* Unified topology above; plan steps below. The old
-                          plan-based topology is suppressed via hideTopology. */}
-                      <AgentPlanContent
-                        plan={agentType.plan}
-                        noPlanMessage={t('agents.types.noPlan')}
-                        hideTopology
-                        // Base-plan script links point to the Optimized Plan
-                        // tab (index 4) where per-step script dialogs live.
-                        onOpenScript={() => setActiveTab(4)}
-                      />
                     </Box>
                   )}
                 </TabPanel>
 
-                {/* ── Tab 2: Execution Logs ────────────────────────────────── */}
+                {/* ── Tab 2: Implementation Plan ───────────────────────── */}
                 <TabPanel value={activeTab} index={2}>
+                  {isConversationalAgent && (
+                    <Alert
+                      severity="info"
+                      sx={{ mb: 2 }}
+                      data-testid="plan-conversational-unavailable"
+                    >
+                      {t('agents.plan.conversationalUnavailable')}
+                    </Alert>
+                  )}
+
+                  {!isConversationalAgent && planBlockedReason && (
+                    <Alert
+                      severity="warning"
+                      sx={{ mb: 2 }}
+                      data-testid="plan-generation-blocked"
+                      action={
+                        <Button
+                          color="inherit"
+                          size="small"
+                          startIcon={<SettingsIcon />}
+                          onClick={() => navigate('/system-config')}
+                          data-testid="plan-system-config-shortcut"
+                        >
+                          {t('agents.plan.systemConfigShortcut')}
+                        </Button>
+                      }
+                    >
+                      <Typography variant="subtitle2" fontWeight={700}>
+                        {t('agents.plan.blockedTitle')}
+                      </Typography>
+                      <Typography variant="body2">{planBlockedReason}</Typography>
+                    </Alert>
+                  )}
+
+                  {!isConversationalAgent && planGenerationFailure && (
+                    <Alert
+                      severity="error"
+                      sx={{ mb: 2 }}
+                      data-testid="plan-generation-failed"
+                      action={
+                        planGenerationFailure.reason_code?.startsWith('authoring_model') ? (
+                          <Button
+                            color="inherit"
+                            size="small"
+                            onClick={() => navigate('/system-config')}
+                            data-testid="plan-generation-failed-system-config"
+                          >
+                            {t('agents.plan.systemConfigShortcut')}
+                          </Button>
+                        ) : undefined
+                      }
+                    >
+                      <Typography variant="subtitle2" fontWeight={700}>
+                        {t('agents.plan.generationFailedTitle')}
+                      </Typography>
+                      <Typography variant="body2">
+                        {localizeOptimizationGateReason(
+                          t,
+                          planGenerationFailure.reason_code,
+                          planGenerationFailure.reason,
+                        ) ?? t('agents.plan.generationFailedFallback')}
+                      </Typography>
+                      {planHasSteps && (
+                        <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+                          {t('agents.plan.generationFailedKept')}
+                        </Typography>
+                      )}
+                    </Alert>
+                  )}
+
+                  {/* Server-recorded failure from a previous attempt — the last
+                      successful plan stays visible. */}
+                  {!isConversationalAgent &&
+                    !planGenerationFailure &&
+                    planGenerationFailed &&
+                    agentType?.plan?.generation_error && (
+                      <Alert
+                        severity="error"
+                        sx={{ mb: 2 }}
+                        data-testid="plan-generation-status-failed"
+                      >
+                        <Typography variant="subtitle2" fontWeight={700}>
+                          {t('agents.plan.generationFailedTitle')}
+                        </Typography>
+                        <Typography variant="body2">
+                          {t('agents.plan.generationFailedDetail', {
+                            error: agentType.plan.generation_error,
+                          })}
+                        </Typography>
+                        {planHasSteps && (
+                          <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+                            {t('agents.plan.generationFailedKept')}
+                          </Typography>
+                        )}
+                      </Alert>
+                    )}
+
+                  {!isConversationalAgent && !planIsEmpty && planIsStale && (
+                    <Alert severity="warning" sx={{ mb: 2 }} data-testid="stale-plan-banner">
+                      {staleDefinitionsMessage}
+                    </Alert>
+                  )}
+
+                  {!isConversationalAgent && !planIsEmpty && (
+                    <Box display="flex" justifyContent="flex-end" gap={1} sx={{ mb: 2 }}>
+                      <Button
+                        variant="outlined"
+                        size="small"
+                        startIcon={<RefreshIcon />}
+                        onClick={() => {
+                          void queryClient.invalidateQueries({ queryKey: ['agents', 'types'] })
+                          void queryClient.invalidateQueries({
+                            queryKey: ['agents', 'sessions', 'dialog', agentTypeId],
+                          })
+                          void queryClient.invalidateQueries({ queryKey: ['scripts'] })
+                        }}
+                      >
+                        {t('app.refresh')}
+                      </Button>
+                      <Button
+                        variant="outlined"
+                        size="small"
+                        startIcon={<RefreshIcon />}
+                        onClick={handleGeneratePlan}
+                        disabled={!canGeneratePlan || regeneratePlanMutation.isPending}
+                        data-testid="plan-regenerate"
+                      >
+                        {regeneratePlanMutation.isPending
+                          ? t('agents.plan.generating')
+                          : t('agents.plan.regenerate')}
+                      </Button>
+                    </Box>
+                  )}
+
+                  {!isConversationalAgent && (
+                    <Box>
+                      {isPlanGenerating ? (
+                        <Box textAlign="center" py={4} data-testid="plan-generating">
+                          <CircularProgress size={28} />
+                          <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+                            {t('agents.plan.generating')}
+                          </Typography>
+                        </Box>
+                      ) : planIsEmpty ? (
+                        <Box textAlign="center" py={3} data-testid="plan-empty-state">
+                          <Typography variant="subtitle1" fontWeight={600}>
+                            {t('agents.plan.emptyTitle')}
+                          </Typography>
+                          <Typography
+                            variant="body2"
+                            color="text.secondary"
+                            sx={{ mt: 0.5, mb: 2, maxWidth: 520, mx: 'auto' }}
+                          >
+                            {t('agents.plan.emptyHint')}
+                          </Typography>
+                          <Button
+                            variant="contained"
+                            startIcon={<RefreshIcon />}
+                            onClick={handleGeneratePlan}
+                            disabled={!canGeneratePlan || regeneratePlanMutation.isPending}
+                            data-testid="plan-generate"
+                          >
+                            {regeneratePlanMutation.isPending
+                              ? t('agents.plan.generating')
+                              : t('agents.plan.generate')}
+                          </Button>
+                        </Box>
+                      ) : (
+                        <AgentPlanContent
+                          plan={agentType.plan}
+                          noPlanMessage={t('agents.types.noPlan')}
+                          hideTopology
+                          // Base-plan script links point to the Optimized Plan
+                          // tab (index 5) where per-step script dialogs live.
+                          onOpenScript={() => setActiveTab(5)}
+                        />
+                      )}
+                    </Box>
+                  )}
+                </TabPanel>
+
+                {/* ── Tab 3: Execution Logs ────────────────────────────────── */}
+                <TabPanel value={activeTab} index={3}>
                   {sessionsLoading ? (
                     <Box display="flex" justifyContent="center" pt={2}>
                       <CircularProgress size={24} />
@@ -889,19 +1125,21 @@ export function AgentTypeDetailsDialog({
                   </Box>
                 </TabPanel>
 
-                {/* ── Tab 3: Sessions (conversation agents only) ───────────── */}
+                {/* ── Tab 4: Sessions (conversation agents only) ───────────── */}
                 {agentType.input_type === 'conversation' && agentTypeId && (
-                  <TabPanel value={activeTab} index={3}>
+                  <TabPanel value={activeTab} index={4}>
                     <ConversationSessionsTab agentTypeId={agentTypeId} onClose={onClose} />
                   </TabPanel>
                 )}
 
-                {/* ── Tab 4: Optimized Plan (composition + verification + feedback) */}
+                {/* ── Tab 5: Optimized Plan (composition + verification + feedback) */}
                 {agentTypeId && (
-                  <TabPanel value={activeTab} index={4}>
+                  <TabPanel value={activeTab} index={5}>
                     <AgentOptimizedPlanTab
                       agentTypeId={agentTypeId}
+                      agentTypeName={agentType?.name}
                       onError={setDialogError}
+                      onOpenSystemConfig={() => navigate('/system-config')}
                       onViewScript={(step) =>
                         setViewScript({
                           name: step.name ?? null,
@@ -913,9 +1151,9 @@ export function AgentTypeDetailsDialog({
                   </TabPanel>
                 )}
 
-                {/* ── Tab 5: Clients (third-party integration access grants) ── */}
+                {/* ── Tab 6: Clients (third-party integration access grants) ── */}
                 {agentTypeId && (
-                  <TabPanel value={activeTab} index={5}>
+                  <TabPanel value={activeTab} index={6}>
                     <AgentClientsPanel agentTypeId={agentTypeId} />
                   </TabPanel>
                 )}
@@ -926,6 +1164,18 @@ export function AgentTypeDetailsDialog({
 
         {agentType && (
           <DialogActions sx={{ px: 3, py: 2, borderTop: 1, borderColor: 'divider' }}>
+            {/* Optimize is a distinct, gated action — separate from Run. */}
+            <AgentOptimizeAction
+              variant="button"
+              agentTypeId={agentType.id}
+              agentTypeName={agentType.name}
+              disabled={!agentType.is_active}
+              isConversational={isConversationalAgent}
+              onTriggered={(sessionId) => {
+                setSelectedSessionId(sessionId)
+                setExecutionDetailsDialogOpen(true)
+              }}
+            />
             {isConversation ? (
               <Button
                 variant="contained"
@@ -955,11 +1205,6 @@ export function AgentTypeDetailsDialog({
             setLaunchOpen(false)
             setSelectedSessionId(sessionId)
             setExecutionDetailsDialogOpen(true)
-          }}
-          onRegeneratePlan={async () => {
-            await regeneratePlanMutation.mutateAsync()
-            setLaunchOpen(false)
-            setActiveTab(1)
           }}
         />
       )}
@@ -1003,6 +1248,18 @@ export function AgentTypeDetailsDialog({
             setSelectedSessionId(null)
           }}
           sessionId={selectedSessionId}
+          onSessionCompleted={() => {
+            if (!agentTypeId) return
+            // An optimization (or run) started from this dialog just finished:
+            // refresh the agent type, its plan state and its session list so
+            // the dialog behind the execution view is not stale.
+            void queryClient.invalidateQueries({
+              queryKey: ['agents', 'types', agentTypeId],
+            })
+            void queryClient.invalidateQueries({ queryKey: ['agents', 'types'] })
+            void queryClient.invalidateQueries({ queryKey: ['agents', 'sessions'] })
+            void queryClient.invalidateQueries({ queryKey: ['scripts'] })
+          }}
         />
       )}
 

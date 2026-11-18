@@ -96,6 +96,37 @@ describe('OutputTypeResultTab', () => {
     expect(container.firstChild).not.toBeNull()
   })
 
+  it('renders the final optimization summary when typed field_values is null', () => {
+    // The runtime stores a failed typed/plain-text result as a Python-dict
+    // string; the optimization summary must still be shown (formatted).
+    render(
+      <OutputTypeResultTab
+        outputType="typed"
+        outputData={null}
+        validationStatus="validation_error"
+        rawOutput={
+          "{'value': 'Optimization complete. The optimized plan was authored and verified successfully.\\n\\n**Summary:**\\n- Authored a single deterministic script.\\n- Verification passed.'}"
+        }
+      />,
+    )
+    expect(screen.queryByText('No result data available.')).toBeNull()
+    expect(screen.getByText(/Optimization complete/)).toBeDefined()
+    expect(screen.getByText('Final Result')).toBeDefined()
+  })
+
+  it('renders plain raw output as a preformatted fallback', () => {
+    render(
+      <OutputTypeResultTab
+        outputType="typed"
+        outputData={null}
+        validationStatus="validation_error"
+        rawOutput="plain failure detail"
+      />,
+    )
+    expect(screen.getByText('Raw Output (Fallback)')).toBeDefined()
+    expect(screen.getByText('plain failure detail')).toBeDefined()
+  })
+
   it('renders outputSchema when provided for typed output', () => {
     render(
       <OutputTypeResultTab

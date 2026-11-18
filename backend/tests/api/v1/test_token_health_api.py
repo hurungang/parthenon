@@ -159,6 +159,128 @@ async def test_token_health_permission_denied_flags(api_client, db_session):
     assert body["identities"]["items"] == []
 
 
+async def _seed_identity_with_expiry(
+    db: AsyncSession,
+    *,
+    name: str,
+    token_expires_at: datetime | None,
+    refresh_token_expires_at: datetime | None,
+):
+    identity = AgentIdentity(
+        id=uuid.uuid4(),
+        name=name,
+        identity_type=AgentIdentityType.realm_user,
+        token_expires_at=token_expires_at,
+        refresh_token_expires_at=refresh_token_expires_at,
+        token_status=AgentTokenStatus.active,
+        status=AgentIdentityStatus.active,
+    )
+    db.add(identity)
+    await db.flush()
+    return identity
+
+
+async def _seed_oauth_session_with_expiry(
+    db: AsyncSession,
+    *,
+    name: str,
+    oauth_expires_at: datetime | None,
+    oauth_refresh_expires_at: datetime | None,
+):
+    server = McpServer(
+        id=uuid.uuid4(),
+        name=f"srv-{uuid.uuid4().hex[:6]}",
+        slug=f"srv-{uuid.uuid4().hex[:6]}",
+        base_url="https://example.com",
+        status=McpServerStatus.active,
+    )
+    db.add(server)
+    await db.flush()
+    session = McpSession(
+        id=uuid.uuid4(),
+        server_id=server.id,
+        name=name,
+        auth_type=McpSessionAuthType.oauth2,
+        is_active=True,
+        oauth_expires_at=oauth_expires_at,
+        oauth_refresh_expires_at=oauth_refresh_expires_at,
+    )
+    db.add(session)
+    await db.flush()
+    return session
+
+
+@pytest.mark.asyncio
+async def test_token_health_counts_refresh_valid_targets_as_not_expired(
+    api_client, db_session
+):
+    """FIX-20261116-061805: an expired ACCESS token backed by a still-valid
+    REFRESH token must NOT be counted as expired — by identity or by session.
+
+    A genuinely expired control row (earliest expiry in the past) proves the
+    endpoint still reports real expiries.
+    """
+    await _seed_user(db_session)
+    # Control: unrecoverable (refresh token also expired) → must stay expired.
+    await _seed_identity_with_expiry(
+        db_session,
+        name="control-expired-identity",
+        token_expires_at=NOW - timedelta(hours=2),
+        refresh_token_expires_at=NOW - timedelta(days=1),
+    )
+    # Access token expired, refresh token valid → healthy (refreshable).
+    await _seed_identity_with_expiry(
+        db_session,
+        name="refresh-ok-identity",
+        token_expires_at=NOW - timedelta(hours=1),
+        refresh_token_expires_at=NOW + timedelta(days=30),
+    )
+    # OAuth session: access token expired, refresh token valid → healthy.
+    await _seed_oauth_session_with_expiry(
+        db_session,
+        name="refresh-ok-session",
+        oauth_expires_at=NOW - timedelta(hours=1),
+        oauth_refresh_expires_at=NOW + timedelta(days=30),
+    )
+
+    mock_auth = AsyncMock(return_value=type("Result", (), {"allowed": True}))
+    with patch(
+        "app.services.permissions.permission_engine.PermissionEngine.authorize", mock_auth
+    ):
+        with _bypass_auth():
+            resp = await api_client.get("/api/v1/dashboard/token-health")
+
+    assert resp.status_code == 200
+    body = resp.json()
+
+    identity_expired = {
+        i["name"] for i in body["identities"]["items"] if i["health_state"] == "expired"
+    }
+    identity_expiring = {
+        i["name"] for i in body["identities"]["items"] if i["health_state"] == "expiring"
+    }
+    assert "control-expired-identity" in identity_expired
+    assert "refresh-ok-identity" not in identity_expired, (
+        "identity with an expired access token but a valid refresh token was "
+        f"counted as expired: {sorted(identity_expired)}"
+    )
+    assert "refresh-ok-identity" not in identity_expiring
+    assert body["identities"]["healthy_count"] >= 1
+
+    session_expired = {
+        i["name"] for i in body["mcp_sessions"]["items"] if i["health_state"] == "expired"
+    }
+    session_expiring = {
+        i["name"] for i in body["mcp_sessions"]["items"] if i["health_state"] == "expiring"
+    }
+    assert "refresh-ok-session" not in session_expired, (
+        "MCP session with an expired access token but a valid refresh token was "
+        f"counted as expired: {sorted(session_expired)}"
+    )
+    assert "refresh-ok-session" not in session_expiring
+    assert body["mcp_sessions"]["healthy_count"] >= 1
+
+
 # ── Internal preflight ────────────────────────────────────────────────────────
 
 

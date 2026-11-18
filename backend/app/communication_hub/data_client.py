@@ -7,10 +7,12 @@ Communication Hub has ZERO direct database access.  All data flows through this 
 """
 from __future__ import annotations
 
+import json
 import logging
 import os
 import uuid
-from typing import Any
+from dataclasses import dataclass
+from typing import Any, TypedDict
 
 import httpx
 
@@ -21,11 +23,87 @@ logger = logging.getLogger(__name__)
 _DEFAULT_TIMEOUT = 30.0  # seconds
 
 
+class ConversationActivityData(TypedDict, total=False):
+    """Read model of ``GET /internal/data/conversations/{id}/activity``.
+
+    Only the keys Communication Hub consumes are typed; Control Center may
+    return more (and older builds return fewer), so every key is optional.
+    ``active_resume_id`` / ``resume_state`` / ``terminal_reason_code`` are the
+    durable paused-turn projection: a ``waiting_for_human`` activity is only
+    answerable while ``active_resume_id`` is set.
+    """
+
+    conversation_session_id: str
+    state: str
+    current_turn_id: str | None
+    tool_name: str | None
+    target_agent_type_id: str | None
+    pending_intervene_request_id: str | None
+    active_resume_id: str | None
+    resume_state: str | None
+    resume_outcome: str | None
+    terminal_reason_code: str | None
+    terminal_message_key: str | None
+    detail: dict[str, Any] | None
+    is_terminal: bool
+    started_at: str | None
+    last_updated_at: str | None
+    finished_at: str | None
+
+
+@dataclass(frozen=True)
+class ConversationResumeLookup:
+    """Result of reading a session's live resume record from Control Center.
+
+    ``is_conversation_session`` distinguishes "this id is a conversation
+    session with no live resume record" (idle / already terminal) from "this id
+    is not a conversation session at all" (an ``AgentJob`` — the legacy resume
+    path), which Control Center answers with a 404.
+    """
+
+    is_conversation_session: bool
+    record: dict[str, Any] | None = None
+
+    @property
+    def live_record(self) -> dict[str, Any] | None:
+        """The live resume record, or ``None`` when the session is idle."""
+        return self.record
+
+
+@dataclass(frozen=True)
+class InternalRelayResponse:
+    """Raw upstream response returned by :meth:`ControlCenterDataClient.relay_internal`.
+
+    Communication Hub relays the body **byte-for-byte** and never inspects it
+    (the checkpoint payload is opaque); callers surface upstream 4xx/5xx as a
+    typed relay error instead of an empty payload.
+    """
+
+    status_code: int
+    content: bytes
+    media_type: str | None = None
+
+    @property
+    def is_success(self) -> bool:
+        return self.status_code < 400
+
+
 def _allow_insecure_internal_fallback() -> bool:
     """Return True only for explicit development-mode insecure fallback opt-in."""
     environment = os.environ.get("ENVIRONMENT", "").strip().lower()
     opt_in = os.environ.get("ALLOW_INSECURE_INTERNAL_CALL_FALLBACK", "").strip().lower()
     return environment == "development" and opt_in in {"1", "true", "yes", "on"}
+
+
+def _decode_json(content: bytes) -> Any:
+    """Decode a relayed JSON body; ``None`` for empty / ``null`` / non-JSON."""
+    if not content:
+        return None
+    try:
+        return json.loads(content)
+    except Exception:  # noqa: BLE001 - opaque/non-JSON body means "no value"
+        return None
+
 
 
 class ControlCenterDataError(Exception):
@@ -148,6 +226,45 @@ class ControlCenterDataClient:
                 ) from exc
             except Exception as exc:
                 raise ControlCenterDataError(f"CC PUT {url} failed: {exc}") from exc
+
+    async def relay_internal(
+        self,
+        method: str,
+        path: str,
+        *,
+        raw_body: bytes | None = None,
+        content_type: str = "application/json",
+    ) -> InternalRelayResponse:
+        """Relay one internal data-plane call **without interpreting the body**.
+
+        Used by the AR-facing checkpoint relay: the request body is forwarded
+        byte-for-byte and the upstream status/content are returned so the
+        route can replay them unchanged.  Tenant headers are attached by the
+        single shared egress hook (CH forwards the verified CC-signed set and
+        never signs).  Transport failures raise :class:`ControlCenterDataError`.
+        """
+        url = self._url(path)
+        headers: dict[str, str] = {}
+        if raw_body is not None:
+            headers["Content-Type"] = content_type
+        async with self._make_client() as client:
+            try:
+                resp = await client.request(
+                    method,
+                    url,
+                    content=raw_body,
+                    headers=headers,
+                    timeout=_DEFAULT_TIMEOUT,
+                )
+            except Exception as exc:
+                raise ControlCenterDataError(
+                    f"CC {method} {url} failed: {exc}"
+                ) from exc
+        return InternalRelayResponse(
+            status_code=resp.status_code,
+            content=resp.content,
+            media_type=resp.headers.get("content-type"),
+        )
 
     # ── Session data ──────────────────────────────────────────────────────────
 
@@ -292,12 +409,16 @@ class ControlCenterDataClient:
         tool_name: str | None = None,
         target_agent_type_id: uuid.UUID | None = None,
         pending_intervene_request_id: uuid.UUID | None = None,
+        active_resume_id: uuid.UUID | None = None,
         detail: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         """Upsert the persisted conversation activity row via Control Center.
 
         Calls ``PUT /internal/data/conversations/{conv_session_id}/activity``.
         ``state`` must be a valid ``ActivityState`` value (validated CC-side).
+        ``active_resume_id`` pins the durable resume record backing a
+        ``waiting_for_human`` state; Control Center resolves the session's live
+        record when it is omitted.
         """
         body: dict[str, Any] = {"state": state}
         if current_turn_id is not None:
@@ -308,6 +429,8 @@ class ControlCenterDataClient:
             body["target_agent_type_id"] = str(target_agent_type_id)
         if pending_intervene_request_id is not None:
             body["pending_intervene_request_id"] = str(pending_intervene_request_id)
+        if active_resume_id is not None:
+            body["active_resume_id"] = str(active_resume_id)
         if detail is not None:
             body["detail"] = detail
 
@@ -316,15 +439,40 @@ class ControlCenterDataClient:
             body,
         )
 
-    async def get_conversation_activity(
+    async def touch_conversation_activity(
         self, conv_session_id: uuid.UUID
     ) -> dict[str, Any] | None:
+        """Refresh the persisted activity heartbeat of a live working turn.
+
+        Calls ``POST /internal/data/conversations/{conv_session_id}/activity/touch``
+        from the conversation heartbeat loop (~15s). Only ``last_updated_at``
+        moves — the state never changes, and Control Center ignores the touch
+        for terminal / paused rows. Fire-and-forget: a CC hiccup must never
+        break the heartbeat.
+        """
+        try:
+            return await self._post(
+                f"/internal/data/conversations/{conv_session_id}/activity/touch",
+                {},
+            )
+        except ControlCenterDataError as exc:
+            logger.debug(
+                "Activity touch for conversation %s failed (ignored): %s",
+                conv_session_id,
+                exc,
+            )
+            return None
+
+    async def get_conversation_activity(
+        self, conv_session_id: uuid.UUID
+    ) -> ConversationActivityData | None:
         """Return the persisted current activity, or None when idle/not found.
 
         Calls ``GET /internal/data/conversations/{conv_session_id}/activity``.
-        Returns dict with: conversation_session_id, state, current_turn_id,
-        tool_name, target_agent_type_id, pending_intervene_request_id,
-        detail, is_terminal, started_at, last_updated_at, finished_at.
+        Returns the persisted activity (``state``, ``current_turn_id``,
+        ``tool_name``, ``target_agent_type_id``, ``pending_intervene_request_id``,
+        ``active_resume_id``, ``resume_state``, ``terminal_reason_code``,
+        ``detail``, ``is_terminal``, timestamps).
         """
         try:
             return await self._get(
@@ -334,6 +482,55 @@ class ControlCenterDataClient:
             if "404" in str(exc):
                 return None
             raise
+
+    # ── Durable paused-turn resume index / checkpoint payload ────────────────
+    # CH is transport for these calls only: it relays AR's writes/reads to CC
+    # and never inspects the checkpoint payload (beyond the route's size guard).
+
+    async def get_conversation_turn_resume(
+        self, conv_session_id: uuid.UUID
+    ) -> ConversationResumeLookup:
+        """Read the session's live resume record (explicit ``null`` when idle).
+
+        Calls ``GET /internal/data/conversations/{conv_session_id}/resume``.
+        A 404 means the id is not a conversation session (an ``AgentJob``);
+        a ``null`` body means the session exists but nothing is paused.
+        """
+        result = await self.relay_internal(
+            "GET", f"/internal/data/conversations/{conv_session_id}/resume"
+        )
+        if result.status_code == 404:
+            return ConversationResumeLookup(is_conversation_session=False)
+        if result.status_code >= 400:
+            raise ControlCenterDataError(
+                f"CC GET resume for {conv_session_id} returned "
+                f"{result.status_code}: {result.content[:200]!r}"
+            )
+        payload = _decode_json(result.content)
+        return ConversationResumeLookup(
+            is_conversation_session=True,
+            record=payload if isinstance(payload, dict) else None,
+        )
+
+    async def save_conversation_turn_resume(
+        self,
+        conv_session_id: uuid.UUID,
+        body: dict[str, Any],
+    ) -> dict[str, Any]:
+        """Create/refresh the live resume record (relay of AR's pause intent)."""
+        return await self._put(
+            f"/internal/data/conversations/{conv_session_id}/resume", body
+        )
+
+    async def complete_conversation_turn_resume(
+        self,
+        conv_session_id: uuid.UUID,
+        body: dict[str, Any],
+    ) -> dict[str, Any]:
+        """Close a paused turn exactly once (outcome turn + terminal state)."""
+        return await self._post(
+            f"/internal/data/conversations/{conv_session_id}/resume/complete", body
+        )
 
     # ── A2A orchestration ────────────────────────────────────────────────────
 

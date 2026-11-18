@@ -269,3 +269,76 @@ describe('AgentIdentityListPage — conditional action buttons', () => {
   })
 })
 
+/**
+ * FIX-20261116-061805 — token status must reflect the REFRESH token.
+ *
+ * Approved semantics (option 2A): when a refresh token exists the chip is
+ * driven only by `refresh_token_expires_at`; an expired access token is not
+ * an error while the credential can still be refreshed. Only when no refresh
+ * token exists does the access-token expiry drive the status.
+ */
+describe('AgentIdentityListPage — token status reflects refresh token', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  const identityRow = (name: string): HTMLElement => {
+    const row = screen.getByText(name).closest('tr')
+    if (!row) throw new Error(`row for ${name} not found`)
+    return row as HTMLElement
+  }
+
+  /** Chip labels only — avoids matching unrelated cell text (e.g. realm_username). */
+  const chipLabels = (row: HTMLElement): string[] =>
+    Array.from(row.querySelectorAll('.MuiChip-root')).map((chip) => chip.textContent ?? '')
+
+  it('renders a NON-expired token status when access token expired but refresh token is valid', async () => {
+    const refreshBackedIdentity = {
+      id: 'id-refresh-valid',
+      name: 'Refreshable Bot',
+      realm_name: 'ai_agents',
+      realm_username: 'agent-user-refresh-valid',
+      status: 'active',
+      // Access token already expired — but the refresh token is valid.
+      token_expires_at: '2020-01-01T00:00:00Z',
+      refresh_token_expires_at: '2099-01-01T00:00:00Z',
+      has_refresh_token: true,
+      created_at: '2026-01-01T00:00:00Z',
+      updated_at: '2026-01-01T00:00:00Z',
+    }
+    mockApiClient.get.mockResolvedValueOnce({ data: [refreshBackedIdentity] })
+    const { AgentIdentityListPage } = await import('../pages/agents/AgentIdentityListPage')
+    render(<AgentIdentityListPage />, { wrapper })
+    await waitFor(() => screen.getByText('Refreshable Bot'))
+
+    const row = identityRow('Refreshable Bot')
+    const labels = chipLabels(row)
+    expect(labels.some((label) => /expired/i.test(label))).toBe(false)
+    expect(row.querySelector('.MuiChip-colorError')).toBeNull()
+  })
+
+  it('renders EXPIRED token status when refresh token expired even though access token is still valid', async () => {
+    const unrefreshableIdentity = {
+      id: 'id-refresh-expired',
+      name: 'Unrefreshable Bot',
+      realm_name: 'ai_agents',
+      realm_username: 'agent-user-refresh-expired',
+      status: 'active',
+      // Access token still valid — but the refresh token is gone.
+      token_expires_at: '2099-01-01T00:00:00Z',
+      refresh_token_expires_at: '2020-01-01T00:00:00Z',
+      has_refresh_token: true,
+      created_at: '2026-01-01T00:00:00Z',
+      updated_at: '2026-01-01T00:00:00Z',
+    }
+    mockApiClient.get.mockResolvedValueOnce({ data: [unrefreshableIdentity] })
+    const { AgentIdentityListPage } = await import('../pages/agents/AgentIdentityListPage')
+    render(<AgentIdentityListPage />, { wrapper })
+    await waitFor(() => screen.getByText('Unrefreshable Bot'))
+
+    const row = identityRow('Unrefreshable Bot')
+    const labels = chipLabels(row)
+    expect(labels.some((label) => /expired/i.test(label))).toBe(true)
+  })
+})
+

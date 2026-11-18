@@ -69,16 +69,37 @@ class SkillSummary(BaseModel):
     name: str
 
 
+class OptimizationContextBlock(BaseModel):
+    """Mode marker returned for an optimization-mode conversation turn.
+
+    Present ONLY when ``conv_session_id`` resolves to a session whose
+    ``channel == "optimization"`` and whose subject is the requested agent
+    type. Absent (not merely null) for every business / assistant /
+    integration / ``__command`` context so those payloads stay unchanged.
+    """
+
+    mode: str = "optimization"
+    subject_agent_type_id: uuid.UUID
+    subject_name: str | None = None
+    replay_only: bool = True
+
+
 class AgentContextResponse(BaseModel):
     """Full execution context pre-computed by Control Center.
 
     Contains everything Agent Runtime needs to execute a session without
     additional database calls.  Identity tokens are never included.
+
+    ``model_id`` / ``model_config_id`` carry the agent's RUNTIME model for
+    normal runs and the workspace AUTHORING model for ``__command`` runs
+    (the optimization execution authors/verifies plans on the authoring
+    model).  Only identifiers cross this boundary — Agent Runtime fetches the
+    credentials per call via ``GET /model-configs/{model_config_id}``.
     """
 
     agent_type_id: uuid.UUID
     system_instruction: str | None
-    model_id: str | None
+    model_id: str | None  # runtime model, or the authoring model for __command runs
     model_config_id: uuid.UUID | None  # resolved from model_id string
     role_id: uuid.UUID | None
     role_name: str | None
@@ -113,6 +134,10 @@ class AgentContextResponse(BaseModel):
 
     # Guardrail policy snapshot (pre-computed from AgentType fields)
     guardrail_policy: dict[str, Any]
+
+    #: Present only for an optimization-mode conversation turn (see
+    #: ``OptimizationContextBlock``). Omitted from the payload otherwise.
+    optimization: OptimizationContextBlock | None = None
 
 
 class ModelConfigResponse(BaseModel):
@@ -371,6 +396,7 @@ def _build_output_schema_prompt(dt: Any) -> str | None:
 @InternalAgentDataRouter.get(
     "/agent-types/{agent_type_id}/context",
     response_model=AgentContextResponse,
+    response_model_exclude_unset=True,
     dependencies=[Depends(require_service_certificate)],
     summary="Return full execution context for an agent type",
 )
@@ -378,12 +404,21 @@ async def get_agent_context(
     agent_type_id: uuid.UUID,
     db: DbSession,
     session_id: uuid.UUID | None = None,
+    conv_session_id: uuid.UUID | None = None,
 ) -> AgentContextResponse:
     """Return the full execution context for an agent type.
 
     Pre-computes allowed tools, SOP content, MCP session context, tool
     definitions, and role MCP session map so Agent Runtime needs no direct
     database access during execution.
+
+    ``conv_session_id`` resolves the conversation's MODE: when it names a
+    session whose ``channel == "optimization"`` and whose ``agent_type_id`` is
+    this agent type, the returned context is the optimization-mode context
+    (mission instruction instead of the business instruction/SOP/skills, the
+    optimizer model identifiers, the optimization tool set, no typed output
+    schema, and an ``optimization`` block). A missing / foreign / business
+    conversation id keeps today's context unchanged.
 
     Identity tokens are never returned.
     """
@@ -414,6 +449,28 @@ async def get_agent_context(
         raise HTTPException(
             status_code=404, detail=f"AgentType {agent_type_id} not found"
         )
+
+    # ── Conversation mode (optimization vs business) ─────────────────────────
+    # Resolve the conversation ONCE. Only a session whose channel is
+    # ``optimization`` and whose subject is this agent type switches the turn
+    # to optimization mode; every other caller (normal run, assistant,
+    # integration, ``__command``, business conversation) keeps today's context.
+    is_optimization = False
+    subject_name: str | None = agent_type.name
+    if conv_session_id is not None:
+        from app.services.agents.optimization_mode import resolve_optimization_mode
+
+        conv_mode = await resolve_optimization_mode(db, conv_session_id)
+        if conv_mode is not None and conv_mode.agent_type_id != agent_type_id:
+            logger.warning(
+                "Conversation %s is about agent type %s but context was requested "
+                "for %s — keeping the business context",
+                conv_session_id,
+                conv_mode.agent_type_id,
+                agent_type_id,
+            )
+        elif conv_mode is not None and conv_mode.is_optimization:
+            is_optimization = True
 
     # ── Identity and role info ────────────────────────────────────────────────
     identity_name: str | None = None
@@ -787,28 +844,62 @@ async def get_agent_context(
         get_inherent_skill_summaries_for,
     )
 
-    # ── Optimization gating (user-confirmed runs only) ────────────────────
+    if is_optimization:
+        # ── Optimization mode tool set ────────────────────────────────────
+        # An optimization conversation runs with the authoring + self-context
+        # tools (plus ``request_live_test``) ONLY. The subject's business MCP /
+        # decision tools are excluded from the turn tool set: they are
+        # reachable only by the approved, single-use live-test runner (under
+        # the same identity), never by the LLM turn. This is strictly narrower
+        # than a business run.
+        resolved_tool_names_raw = set()
+        allowed_tools = set()
+        decision_tools_resolved = []
+        decision_unready_names = set()
+        allowed_agent_types = set()
+        delegated_agent_type_metadata = {}
+        sops_summary = []
+        skills_summary = []
+
+    # ── Optimization gating (dedicated optimize runs only) ────────────────
     # The workflow-optimization inherent skill (instruction summary + its
-    # AUTHORING tools) loads ONLY when the execution is a user-confirmed
-    # optimize run — the launch dialog opt-in converts the run into the
-    # "optimize-and-verify" command via the ``__command`` marker stored on
-    # the session's input_data.  Every other run (default runs,
-    # conversational/chat sessions — which have no dialog at all) executes
-    # WITHOUT the workflow-optimization skill.  ``execute_script`` and the
-    # self-context tools remain always available (inherent iteration-saver,
-    # by design).
+    # AUTHORING tools) loads ONLY when the execution is a dedicated optimize
+    # run — ``POST /agents/sessions/optimize`` stores the ``__command`` marker
+    # ("optimize-and-verify") on the session's input_data — OR when the
+    # conversation itself is an optimization conversation (the channel decides
+    # the mode, regardless of the agent type's ``input_type``).  Every other
+    # run (normal runs, business conversations) executes WITHOUT the
+    # workflow-optimization skill.  ``execute_script`` and the self-context
+    # tools remain always available (inherent iteration-saver, by design).
+    # The same loaded job also drives the command-run model override below
+    # (authoring model instead of the agent runtime model).
     optimization_requested = False
+    command_run = False
     if session_id is not None:
         from app.db.models.agents import AgentJob
         from app.services.agents.command_prompts import OPTIMIZE_AND_VERIFY_SLUG
 
         job = await db.get(AgentJob, session_id)
         job_command = (job.input_data or {}).get("__command") if job else None
+        command_run = bool(job_command)
         optimization_requested = job_command == OPTIMIZE_AND_VERIFY_SLUG
+    if is_optimization:
+        optimization_requested = True
 
     allowed_tools.update(
         get_inherent_canonical_tool_names_for(optimization_requested)
     )
+    if is_optimization:
+        # The live-test request tool is available ONLY in an optimization
+        # conversation — it is deliberately not part of the inherent set, so a
+        # normal run / assistant / integration / ``__command`` context never
+        # gains it. Registry-validated alongside the inherent set.
+        from app.services.agents.builtin_skills import (
+            get_optimization_mode_tool_names,
+        )
+
+        for bare_tool in get_optimization_mode_tool_names():
+            allowed_tools.add(build_tool_name("system", bare_tool))
     existing_summary_names = {s.name for s in skills_summary}
     for inherent_id, inherent_name in get_inherent_skill_summaries_for(
         optimization_requested
@@ -922,12 +1013,15 @@ async def get_agent_context(
             tool_definitions.append(definition)
 
     # ── Binding content (pre-formatted for system instruction) ──────────────
+    # Optimization mode REPLACES the business instruction/SOP/skills with the
+    # mission, so the business SOP + MCP context are not built at all.
     sop_content: str | None = None
-    sop_content = await _build_binding_content(agent_type, db)
+    if not is_optimization:
+        sop_content = await _build_binding_content(agent_type, db)
 
     # ── MCP session context (pre-formatted for system instruction) ───────────
     mcp_session_context: str | None = None
-    if agent_type.role_id:
+    if agent_type.role_id and not is_optimization:
         mcp_session_context = await _build_mcp_session_context(agent_type.role_id, db)
 
     # ── Role MCP session map (for tool dispatch) ─────────────────────────────
@@ -947,12 +1041,59 @@ async def get_agent_context(
                 "auth_type": row.auth_type.value,
             }
 
-    # ── Resolve model_config_id from model_id string ─────────────────────────
+    # ── Resolve model_id / model_config_id ───────────────────────────────────
+    # Normal runs: the agent's RUNTIME model (AgentType.model_id) + the config
+    # that enables it. Command runs (``__command``, e.g. optimize-and-verify):
+    # the workspace AUTHORING model — the same tenant-level model that authored
+    # the implementation/optimized plan — with no fallback to the agent model.
+    # Optimization conversations: the workspace OPTIMIZER model (explicit
+    # ``optimizer_model_id`` else the authoring model) — NEVER the agent's
+    # runtime model. A missing/unusable model fails closed (412) so the turn
+    # surfaces the structured reason instead of running on the wrong model.
+    model_id: str | None = agent_type.model_id
     model_config_id: uuid.UUID | None = None
-    if agent_type.model_id:
+    if is_optimization:
+        from app.services.agents.optimizer_model_settings import (
+            OptimizerModelNotConfigured,
+            require_optimizer_model,
+        )
+
+        try:
+            optimizer = await require_optimizer_model(db)
+        except OptimizerModelNotConfigured as exc:
+            raise HTTPException(
+                status_code=412,
+                detail={
+                    "error": "optimizer_model_unavailable",
+                    "reason_code": exc.reason_code,
+                    "reason": exc.message,
+                },
+            ) from exc
+        model_id = optimizer.model_id
+        model_config_id = optimizer.model_config.id
+    elif command_run:
+        from app.services.agents.workflow_generation_settings import (
+            AuthoringModelNotConfigured,
+            require_authoring_model,
+        )
+
+        try:
+            authoring = await require_authoring_model(db)
+        except AuthoringModelNotConfigured as exc:
+            raise HTTPException(
+                status_code=412,
+                detail={
+                    "error": "authoring_model_unavailable",
+                    "reason_code": exc.reason_code,
+                    "reason": exc.message,
+                },
+            ) from exc
+        model_id = authoring.model_id
+        model_config_id = authoring.model_config.id
+    elif model_id:
         mc_rows = await db.execute(select(ModelConfig))
         for mc in mc_rows.scalars().all():
-            if agent_type.model_id in (mc.enabled_models or []):
+            if model_id in (mc.enabled_models or []):
                 model_config_id = mc.id
                 break
 
@@ -976,30 +1117,80 @@ async def get_agent_context(
         except Exception:
             pass
 
+    # ── Optimization mode: mission replaces the business instruction ────────
+    system_instruction = agent_type.system_instruction
+    optimization_block: OptimizationContextBlock | None = None
+    if is_optimization:
+        from app.services.agents.optimization_mode import (
+            OPTIMIZATION_MODE,
+            compose_optimization_mission,
+        )
+
+        system_instruction = await compose_optimization_mission(
+            db, agent_type_id=agent_type.id
+        )
+        optimization_block = OptimizationContextBlock(
+            mode=OPTIMIZATION_MODE,
+            subject_agent_type_id=agent_type.id,
+            subject_name=subject_name,
+            replay_only=True,
+        )
+
     return AgentContextResponse(
         agent_type_id=agent_type.id,
-        system_instruction=agent_type.system_instruction,
-        model_id=agent_type.model_id,
+        system_instruction=system_instruction,
+        model_id=model_id,
         model_config_id=model_config_id,
         role_id=agent_type.role_id,
         role_name=role_name,
         identity_name=identity_name,
-        input_type=agent_type.input_type.value,
-        output_type=agent_type.output_type.value,
-        output_schema=agent_type.output_schema,
-        output_data_type_id=str(agent_type.output_data_type_id) if agent_type.output_data_type_id else None,
+        # Optimization turns are shaped as conversational turns: no typed input
+        # validation and no structured-output contract — the mission is the only
+        # instruction and replies are free text for the operator.
+        input_type="conversation" if is_optimization else agent_type.input_type.value,
+        output_type="auto" if is_optimization else agent_type.output_type.value,
+        output_schema=None if is_optimization else agent_type.output_schema,
+        output_data_type_id=(
+            None
+            if is_optimization
+            else (
+                str(agent_type.output_data_type_id)
+                if agent_type.output_data_type_id
+                else None
+            )
+        ),
         output_data_type_name=(
-            agent_type.output_data_type.name if agent_type.output_data_type_id and hasattr(agent_type, 'output_data_type') and agent_type.output_data_type else None
+            None
+            if is_optimization
+            else (
+                agent_type.output_data_type.name
+                if agent_type.output_data_type_id
+                and hasattr(agent_type, "output_data_type")
+                and agent_type.output_data_type
+                else None
+            )
         ),
         output_schema_prompt=(
-            _build_output_schema_prompt(agent_type.output_data_type)
-            if agent_type.output_data_type_id and hasattr(agent_type, 'output_data_type') and agent_type.output_data_type
-            else None
+            None
+            if is_optimization
+            else (
+                _build_output_schema_prompt(agent_type.output_data_type)
+                if agent_type.output_data_type_id
+                and hasattr(agent_type, "output_data_type")
+                and agent_type.output_data_type
+                else None
+            )
         ),
         output_json_schema=(
-            _build_output_json_schema(agent_type.output_data_type)
-            if agent_type.output_data_type_id and hasattr(agent_type, 'output_data_type') and agent_type.output_data_type
-            else None
+            None
+            if is_optimization
+            else (
+                _build_output_json_schema(agent_type.output_data_type)
+                if agent_type.output_data_type_id
+                and hasattr(agent_type, "output_data_type")
+                and agent_type.output_data_type
+                else None
+            )
         ),
         primary_sop_id=derived_primary_sop_id,
         is_active=agent_type.is_active,
@@ -1027,6 +1218,7 @@ async def get_agent_context(
             "conversational_token_visibility_mode": agent_type.guardrail_conversational_token_visibility_mode.value,
             "conversational_continuation_policy": agent_type.guardrail_conversational_continuation_policy.value,
         },
+        **({"optimization": optimization_block} if is_optimization else {}),
     )
 
 

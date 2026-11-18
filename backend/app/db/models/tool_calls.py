@@ -78,6 +78,15 @@ class RuntimeToolCall(Base):
     )
     duration_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
     error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Set only when the call was part of an operator-approved, single-use
+    # optimization live test (``OptimizationLiveTestRequest``); NULL for every
+    # ordinary run, replay verification and normal conversation turn — so live
+    # contact is distinguishable from replay work inside the raw tool log.
+    optimization_live_test_request_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("optimization_live_tests.id", ondelete="SET NULL"),
+        nullable=True,
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

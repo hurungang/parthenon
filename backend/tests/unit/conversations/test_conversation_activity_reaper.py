@@ -4,7 +4,8 @@ The reaper must resolve stale / orphaned activity to a terminal state (never a
 perpetual "working"/"waiting") while protecting a still-pending intervention on
 an active session:
 
-- stale ``thinking``/``using_tool``/``delegating`` heartbeat → ``timed_out``
+- stale ``thinking``/``using_tool``/``delegating`` heartbeat → ``failed`` with
+  the dedicated ``unexpectedly_terminated`` reason (the live turn died)
 - dead session (closed/archived/error) → ``failed`` (even if not stale)
 - fresh active working activity → untouched
 - ``waiting_for_human`` with a pending intervention on an active session →
@@ -23,11 +24,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 import app.services.conversations.activity_reaper as reaper_module
 from app.db.models.conversation_activity import ActivityState
+from app.db.models.conversation_turn_resume import ResumeOutcome
 from app.db.models.conversations import ConversationSession, ConversationStatus
 from app.db.models.intervene import InterveneRequest, InterveneRequestStatus, InterventionType
 from app.db.models.agents import AgentInputType, AgentType, AgentJob, AgentJobStatus
 from app.services.conversations.activity_reaper import ConversationActivityReaper
 from app.services.conversations.activity_store import ConversationActivityStore
+from app.services.conversations.turn_resume_store import ConversationTurnResumeStore
 
 NOW = datetime(2026, 11, 10, 12, 0, 0, tzinfo=timezone.utc)
 
@@ -61,13 +64,26 @@ async def _make_activity(
     pending_intervene_request_id=None,
     current_turn_id=None,
 ) -> None:
+    from app.services.conversations.turn_resume_store import (
+        ConversationTurnResumeStore,
+    )
+
     store = ConversationActivityStore()
+    # waiting_for_human requires a live resume record (the durable pause).
+    active_resume_id = None
+    if state is ActivityState.waiting_for_human:
+        resume = await ConversationTurnResumeStore().create_or_reuse(
+            conv.id, db, intervene_request_id=pending_intervene_request_id
+        )
+        active_resume_id = resume.id
+
     activity = await store.upsert(
         conv.id,
         db,
         state=state,
         pending_intervene_request_id=pending_intervene_request_id,
         current_turn_id=current_turn_id,
+        active_resume_id=active_resume_id,
     )
     # Force a deterministic heartbeat (server_default/now() is DB time).
     activity.last_updated_at = last_updated
@@ -101,7 +117,7 @@ async def _make_pending_intervention(db: AsyncSession, conv=None) -> InterveneRe
 
 class TestWorkingStateResolution:
     @pytest.mark.asyncio
-    async def test_stale_heartbeat_resolves_to_timed_out(
+    async def test_stale_heartbeat_resolves_failed_unexpectedly_terminated(
         self, db_session: AsyncSession, reaper
     ):
         conv = await _make_session(db_session)
@@ -110,8 +126,11 @@ class TestWorkingStateResolution:
         )
         assert await reaper.reap(db_session, now=NOW) == 1
         activity = await _activity_of(db_session, conv)
-        assert activity.state == ActivityState.timed_out
+        assert activity.state == ActivityState.failed
         assert activity.is_terminal is True
+        assert (
+            activity.detail["terminal_reason_code"] == "unexpectedly_terminated"
+        )
 
     @pytest.mark.asyncio
     async def test_fresh_working_activity_is_untouched(
@@ -240,11 +259,19 @@ class TestWaitingForHumanProtection:
         activity = await _activity_of(db_session, conv)
         assert activity.state == ActivityState.waiting_for_human
 
-        # Stale: the AR restart lost the resume registry — the turn is dead.
+        # Stale: the answered turn never moved — the dispatched resume was
+        # lost, so the durable record closes as ``unresumable/resume_failed``
+        # and the activity agrees (task 5.2 Terminal Resolver).
         activity.last_updated_at = NOW - timedelta(hours=1)
         await db_session.flush()
         assert await reaper.reap(db_session, now=NOW) == 1
-        assert (await _activity_of(db_session, conv)).state == ActivityState.timed_out
+        assert (await _activity_of(db_session, conv)).state == ActivityState.failed
+        resume = await ConversationTurnResumeStore().get_for_intervention(
+            req.id, db_session
+        )
+        assert resume is not None
+        assert resume.is_terminal is True
+        assert resume.resume_outcome == ResumeOutcome.resume_failed
 
     @pytest.mark.asyncio
     async def test_orphaned_waiting_row_stale_resolves_to_timed_out(

@@ -18,10 +18,17 @@ Plan service behaviour:
 - Failed status is persisted correctly (generation_error non-empty)
 
 API endpoint responses:
-- POST /api/v1/agents/types returns 201 with plan field (with mocked LLM)
-- PUT /api/v1/agents/types/{type_id} returns 200 with plan field
+- POST /api/v1/agents/types returns 201 and NEVER schedules plan generation
+  (the response has no plan; no model time is spent)
+- PUT /api/v1/agents/types/{type_id} returns 200 and never regenerates an
+  existing plan (the last successful plan is untouched)
 - plan field is absent from GET /api/v1/agents/types list
-- Failed plan generation still returns 201 (non-blocking)
+- POST /api/v1/agents/types/{type_id}/regenerate-plan is the ONLY authoring
+  path: it is gated (conversational / unusable authoring model → structured
+  412 with no plan write and no serving-version retirement), authors on the
+  workspace authoring model, returns the refreshed plan, and a failed attempt
+  records generation_status/generation_error while preserving the last
+  successful plan.
 """
 from __future__ import annotations
 
@@ -384,145 +391,6 @@ async def authed_client(test_engine) -> AsyncGenerator[AsyncClient, None]:
 
 
 @pytest.mark.asyncio
-@pytest.mark.skip(reason='Pre-existing: plan response validation')
-
-@pytest.mark.skip(reason='Pre-existing: plan response validation')
-
-async def test_create_agent_type_response_includes_plan_field(authed_client: AsyncClient):
-    """POST /api/v1/agents/types returns 201 with a `plan` field in the response body."""
-    at_id = uuid.uuid4()
-    mock_plan = _mock_plan_response(at_id, AgentPlanStatus.success)
-
-    async def mock_generate_plan(self, agent_type, db) -> AgentPlan:
-        return mock_plan
-
-    with patch.object(PlanGenerationService, "generate_plan", mock_generate_plan):
-        resp = await authed_client.post(
-            "/api/v1/agents/types",
-            json={
-                "name": f"PlanTestAgent-{uuid.uuid4().hex[:6]}",
-                "input_type": "typed",
-                "output_type": "markdown",
-                "is_active": True,
-            },
-        )
-
-    assert resp.status_code == 201, f"Expected 201, got {resp.status_code}: {resp.text}"
-    body = resp.json()
-    # plan field must be present (may be null if plan relationship not loaded, but key should exist)
-    assert "plan" in body
-
-
-@pytest.mark.asyncio
-@pytest.mark.skip(reason='Pre-existing: plan response validation')
-
-@pytest.mark.skip(reason='Pre-existing: plan response validation')
-
-async def test_create_agent_type_failed_plan_still_returns_201(authed_client: AsyncClient):
-    """Failed plan generation does not block the 201 response."""
-    at_id = uuid.uuid4()
-    mock_plan = _mock_plan_response(at_id, AgentPlanStatus.failed)
-
-    async def mock_generate_plan_failed(self, agent_type, db) -> AgentPlan:
-        return mock_plan
-
-    with patch.object(PlanGenerationService, "generate_plan", mock_generate_plan_failed):
-        resp = await authed_client.post(
-            "/api/v1/agents/types",
-            json={
-                "name": f"FailedPlanAgent-{uuid.uuid4().hex[:6]}",
-                "input_type": "typed",
-                "output_type": "markdown",
-                "is_active": True,
-            },
-        )
-
-    assert resp.status_code == 201, f"Expected 201 even on plan failure, got {resp.status_code}"
-
-
-@pytest.mark.asyncio
-@pytest.mark.skip(reason='Pre-existing: plan response validation')
-
-@pytest.mark.skip(reason='Pre-existing: plan response validation')
-
-async def test_update_agent_type_response_includes_plan_field(authed_client: AsyncClient):
-    """PUT /api/v1/agents/types/{type_id} returns 200 with plan field."""
-    at_id = uuid.uuid4()
-
-    # First create an agent type
-    mock_plan = _mock_plan_response(at_id, AgentPlanStatus.success)
-
-    async def mock_generate_plan(self, agent_type, db) -> AgentPlan:
-        return mock_plan
-
-    with patch.object(PlanGenerationService, "generate_plan", mock_generate_plan):
-        create_resp = await authed_client.post(
-            "/api/v1/agents/types",
-            json={
-                "name": f"UpdatePlanAgent-{uuid.uuid4().hex[:6]}",
-                "input_type": "typed",
-                "output_type": "markdown",
-                "is_active": True,
-            },
-        )
-
-    assert create_resp.status_code == 201
-    created_id = create_resp.json()["id"]
-
-    # Now update it
-    with patch.object(PlanGenerationService, "generate_plan", mock_generate_plan):
-        update_resp = await authed_client.put(
-            f"/api/v1/agents/types/{created_id}",
-            json={
-                "name": "Updated Agent Name",
-                "input_type": "typed",
-                "output_type": "markdown",
-                "is_active": True,
-            },
-        )
-
-    assert update_resp.status_code == 200, f"Expected 200, got {update_resp.status_code}: {update_resp.text}"
-    body = update_resp.json()
-    assert "plan" in body
-
-
-@pytest.mark.asyncio
-@pytest.mark.skip(reason='Pre-existing: plan response validation')
-
-@pytest.mark.skip(reason='Pre-existing: plan response validation')
-
-async def test_regenerate_agent_type_plan_returns_plan_field(authed_client: AsyncClient):
-    """POST /api/v1/agents/types/{type_id}/regenerate-plan returns 200 with plan field."""
-    at_id = uuid.uuid4()
-
-    mock_plan = _mock_plan_response(at_id, AgentPlanStatus.success)
-
-    async def mock_generate_plan(self, agent_type, db) -> AgentPlan:
-        return mock_plan
-
-    with patch.object(PlanGenerationService, "generate_plan", mock_generate_plan):
-        create_resp = await authed_client.post(
-            "/api/v1/agents/types",
-            json={
-                "name": f"RegeneratePlanAgent-{uuid.uuid4().hex[:6]}",
-                "input_type": "typed",
-                "output_type": "markdown",
-                "is_active": True,
-            },
-        )
-
-    assert create_resp.status_code == 201
-    created_id = create_resp.json()["id"]
-
-    with patch.object(PlanGenerationService, "generate_plan", mock_generate_plan):
-        resp = await authed_client.post(f"/api/v1/agents/types/{created_id}/regenerate-plan")
-
-    assert resp.status_code == 200, f"Expected 200, got {resp.status_code}: {resp.text}"
-    body = resp.json()
-    assert "plan" in body
-
-
-@pytest.mark.asyncio
 async def test_list_agent_types_does_not_include_plan_field(authed_client: AsyncClient):
     """GET /api/v1/agents/types (list) does not include plan in each item."""
     # Create an agent type first so the list is non-empty
@@ -551,3 +419,454 @@ async def test_list_agent_types_does_not_include_plan_field(authed_client: Async
         # Plan field may be absent or null in list responses
         plan_val = item.get("plan", None)
         assert plan_val is None, f"List endpoint should not return plan data, got: {plan_val}"
+
+
+# ── Explicit-only generation + gated regenerate-plan ──────────────────────────
+#
+# Plan authoring is EXPLICIT ONLY (the workspace authoring model authors the
+# plan, never the agent runtime model) and both create/update must never spend
+# model time. The regenerate endpoint checks its preconditions BEFORE any
+# side effect (no plan write, no serving-version retirement).
+
+AUTHORING_MODEL_ID = "plan-authoring-model"
+STALE_MODEL_ID = "plan-removed-model"
+_CONFIG_PREFIX = "plan-authoring-"
+
+
+def _api_session_factory(test_engine):
+    return async_sessionmaker(
+        bind=test_engine, class_=AsyncSession, expire_on_commit=False
+    )
+
+
+async def _root_tenant_id(test_engine) -> uuid.UUID:
+    from app.services.tenancy.root_tenant import get_root_tenant_id
+
+    async with _api_session_factory(test_engine)() as session:
+        tenant_id = await get_root_tenant_id(session)
+    assert tenant_id is not None
+    return tenant_id
+
+
+async def _clear_authoring_model(test_engine) -> None:
+    from sqlalchemy import delete
+
+    from app.db.models.agents import ModelConfig
+    from app.db.models.tenant_setting import TenantSetting
+    from app.services.agents.workflow_generation_settings import (
+        WORKFLOW_GENERATION_MODEL_KEY,
+    )
+
+    async with _api_session_factory(test_engine)() as session:
+        await session.execute(
+            delete(TenantSetting).where(
+                TenantSetting.key == WORKFLOW_GENERATION_MODEL_KEY
+            )
+        )
+        await session.execute(
+            delete(ModelConfig).where(
+                ModelConfig.display_name.like(f"{_CONFIG_PREFIX}%")
+            )
+        )
+        await session.commit()
+
+
+async def _configure_authoring_model(test_engine) -> None:
+    from app.db.models.agents import ModelConfig, ModelProvider
+    from app.services.agents.workflow_generation_settings import (
+        WORKFLOW_GENERATION_MODEL_KEY,
+    )
+    from app.services.tenancy.tenant_settings_service import set_value
+
+    root_id = await _root_tenant_id(test_engine)
+    async with _api_session_factory(test_engine)() as session:
+        session.add(
+            ModelConfig(
+                id=uuid.uuid4(),
+                tenant_id=root_id,
+                display_name=f"{_CONFIG_PREFIX}{AUTHORING_MODEL_ID}",
+                provider_type=ModelProvider.openai,
+                api_base_url="http://localhost:9999/v1",
+                enabled_models=[AUTHORING_MODEL_ID],
+            )
+        )
+        await session.flush()
+        await set_value(
+            session, root_id, WORKFLOW_GENERATION_MODEL_KEY, AUTHORING_MODEL_ID
+        )
+        await session.commit()
+
+
+async def _select_stale_authoring_model(test_engine) -> None:
+    from app.services.agents.workflow_generation_settings import (
+        WORKFLOW_GENERATION_MODEL_KEY,
+    )
+    from app.services.tenancy.tenant_settings_service import set_value
+
+    root_id = await _root_tenant_id(test_engine)
+    async with _api_session_factory(test_engine)() as session:
+        await set_value(session, root_id, WORKFLOW_GENERATION_MODEL_KEY, STALE_MODEL_ID)
+        await session.commit()
+
+
+@pytest_asyncio.fixture(autouse=True)
+async def _isolated_authoring_model(test_engine):
+    """Each test starts and ends with NO workspace authoring model."""
+    await _clear_authoring_model(test_engine)
+    yield
+    await _clear_authoring_model(test_engine)
+
+
+async def _seed_agent_type(
+    test_engine,
+    *,
+    input_type: AgentInputType = AgentInputType.typed,
+    plan_status: AgentPlanStatus | None = None,
+) -> uuid.UUID:
+    """Create an agent type (+ one skill binding) directly in the DB.
+
+    The binding satisfies the update endpoint's "at least one SOP or Skill"
+    contract without going through role-permission wiring.
+    """
+    from app.db.models.agents import AgentTypeSkillBinding
+    from app.db.models.skills import Skill
+
+    agent_type_id = uuid.uuid4()
+    async with _api_session_factory(test_engine)() as session:
+        skill = Skill(
+            id=uuid.uuid4(), name=f"plan-skill-{uuid.uuid4().hex[:8]}"
+        )
+        session.add(skill)
+        session.add(
+            AgentType(
+                id=agent_type_id,
+                name=f"plan-agent-{agent_type_id.hex[:8]}",
+                input_type=input_type,
+                output_type=(
+                    AgentOutputType.auto
+                    if input_type == AgentInputType.conversation
+                    else AgentOutputType.markdown
+                ),
+                is_active=True,
+            )
+        )
+        await session.flush()
+        session.add(
+            AgentTypeSkillBinding(
+                id=uuid.uuid4(),
+                agent_type_id=agent_type_id,
+                skill_id=skill.id,
+                order=1,
+            )
+        )
+        if plan_status is not None:
+            session.add(
+                AgentPlan(
+                    id=uuid.uuid4(),
+                    agent_type_id=agent_type_id,
+                    plan_steps=[
+                        {
+                            "order": 1,
+                            "type": "tool_call",
+                            "name": "Previous Step",
+                            "description": "kept",
+                        }
+                    ],
+                    topology={
+                        "nodes": [
+                            {
+                                "id": "role:old",
+                                "type": "role",
+                                "label": "Old Role",
+                                "meta": None,
+                            }
+                        ],
+                        "edges": [],
+                    },
+                    generation_status=plan_status,
+                    generation_error=None,
+                    agent_config_hash="previous-hash",
+                    generated_at=datetime(2026, 1, 1, 12, 0, 0, tzinfo=timezone.utc),
+                )
+            )
+        await session.commit()
+    return agent_type_id
+
+
+async def _plan_row_count(test_engine, agent_type_id: uuid.UUID) -> int:
+    async with _api_session_factory(test_engine)() as session:
+        return int(
+            (
+                await session.execute(
+                    select(sqlfunc.count())
+                    .select_from(AgentPlan)
+                    .where(AgentPlan.agent_type_id == agent_type_id)
+                )
+            ).scalar_one()
+        )
+
+
+def _fake_do_generate(steps: list[dict]):
+    async def fake(self, agent_type, db, *, user_requirement=None):
+        return steps, {"nodes": [], "edges": []}, False
+
+    return fake
+
+
+async def _seed_role_with_skill(test_engine) -> tuple[uuid.UUID, uuid.UUID]:
+    """Create a role that grants one skill (for API-level create payloads)."""
+    from app.db.models.agents import AgentRole, AgentRoleSkill
+    from app.db.models.skills import Skill
+
+    role_id = uuid.uuid4()
+    skill_id = uuid.uuid4()
+    async with _api_session_factory(test_engine)() as session:
+        session.add(
+            AgentRole(id=role_id, name=f"plan-role-{role_id.hex[:8]}", description=None)
+        )
+        session.add(Skill(id=skill_id, name=f"plan-role-skill-{skill_id.hex[:8]}"))
+        await session.flush()
+        session.add(AgentRoleSkill(role_id=role_id, skill_id=skill_id))
+        await session.commit()
+    return role_id, skill_id
+
+
+@pytest.mark.asyncio
+async def test_create_agent_type_never_schedules_plan_generation(
+    authed_client: AsyncClient, test_engine
+):
+    """POST /agents/types authors nothing — no model time, no plan row."""
+    role_id, skill_id = await _seed_role_with_skill(test_engine)
+
+    with patch.object(
+        PlanGenerationService, "generate_plan", new=AsyncMock()
+    ) as generate:
+        resp = await authed_client.post(
+            "/api/v1/agents/types",
+            json={
+                "name": f"no-autogen-{uuid.uuid4().hex[:8]}",
+                "role_id": str(role_id),
+                "skill_bindings": [{"skill_id": str(skill_id), "order": 1}],
+                "input_type": "typed",
+                "output_type": "markdown",
+                "is_active": True,
+            },
+        )
+
+    assert resp.status_code == 201, resp.text
+    body = resp.json()
+    assert body["plan"] is None
+    generate.assert_not_awaited()
+    assert await _plan_row_count(test_engine, uuid.UUID(body["id"])) == 0
+
+
+@pytest.mark.asyncio
+async def test_no_plan_generation_hook_exists_in_agent_api():
+    """The create/update background-generation helper is gone for good."""
+    from app.api.v1 import agents as agents_module
+
+    assert not hasattr(agents_module, "_run_plan_generation_bg")
+
+
+@pytest.mark.asyncio
+async def test_update_agent_type_never_regenerates_plan(
+    authed_client: AsyncClient, test_engine
+):
+    """PUT leaves the last successful plan and its generated_at untouched."""
+    agent_type_id = await _seed_agent_type(
+        test_engine, plan_status=AgentPlanStatus.success
+    )
+
+    with patch.object(
+        PlanGenerationService, "generate_plan", new=AsyncMock()
+    ) as generate:
+        resp = await authed_client.put(
+            f"/api/v1/agents/types/{agent_type_id}",
+            json={"name": f"renamed-{uuid.uuid4().hex[:8]}"},
+        )
+
+    assert resp.status_code == 200, resp.text
+    generate.assert_not_awaited()
+
+    # The stored plan is untouched (the update response does not eagerly load
+    # the plan relationship, so assert the persisted state).
+    async with _api_session_factory(test_engine)() as session:
+        plan = (
+            await session.execute(
+                select(AgentPlan).where(AgentPlan.agent_type_id == agent_type_id)
+            )
+        ).scalar_one()
+    assert plan.generation_status == AgentPlanStatus.success
+    assert plan.plan_steps[0]["name"] == "Previous Step"
+    assert plan.agent_config_hash == "previous-hash"
+    assert plan.generation_error is None
+
+
+@pytest.mark.asyncio
+async def test_regenerate_plan_authors_and_returns_refreshed_plan(
+    authed_client: AsyncClient, test_engine
+):
+    """The explicit request is the only authoring path: it retires serving
+    versions, authors, and returns the refreshed plan."""
+    from app.services.script_registry import ScriptRegistryService
+
+    await _configure_authoring_model(test_engine)
+    agent_type_id = await _seed_agent_type(test_engine)
+
+    steps = [{"order": 1, "type": "tool_call", "name": "Fresh Step", "description": None}]
+
+    with (
+        patch.object(
+            ScriptRegistryService, "retire_serving_versions", new=AsyncMock()
+        ) as retire,
+        patch.object(
+            PlanGenerationService, "_do_generate", new=_fake_do_generate(steps)
+        ),
+    ):
+        resp = await authed_client.post(
+            f"/api/v1/agents/types/{agent_type_id}/regenerate-plan"
+        )
+
+    assert resp.status_code == 200, resp.text
+    retire.assert_awaited_once()
+    body = resp.json()
+    assert body["plan"] is not None
+    assert body["plan"]["generation_status"] == "success"
+    assert body["plan"]["plan_steps"][0]["name"] == "Fresh Step"
+    assert await _plan_row_count(test_engine, agent_type_id) == 1
+
+
+@pytest.mark.asyncio
+async def test_regenerate_plan_blocked_when_authoring_model_unset(
+    authed_client: AsyncClient, test_engine
+):
+    """No authoring model → structured 412, no plan write, no retirement."""
+    from app.services.script_registry import ScriptRegistryService
+
+    agent_type_id = await _seed_agent_type(test_engine)
+
+    with (
+        patch.object(
+            ScriptRegistryService, "retire_serving_versions", new=AsyncMock()
+        ) as retire,
+        patch.object(
+            PlanGenerationService, "generate_plan", new=AsyncMock()
+        ) as generate,
+    ):
+        resp = await authed_client.post(
+            f"/api/v1/agents/types/{agent_type_id}/regenerate-plan"
+        )
+
+    assert resp.status_code == 412, resp.text
+    detail = resp.json()["detail"]
+    assert detail["error"] == "plan_generation_unavailable"
+    assert detail["reason_code"] == "authoring_model_not_configured"
+    assert detail["reason"]
+    retire.assert_not_awaited()
+    generate.assert_not_awaited()
+    assert await _plan_row_count(test_engine, agent_type_id) == 0
+
+
+@pytest.mark.asyncio
+async def test_regenerate_plan_blocked_when_authoring_model_not_enabled(
+    authed_client: AsyncClient, test_engine
+):
+    from app.services.script_registry import ScriptRegistryService
+
+    await _select_stale_authoring_model(test_engine)
+    agent_type_id = await _seed_agent_type(test_engine)
+
+    with (
+        patch.object(
+            ScriptRegistryService, "retire_serving_versions", new=AsyncMock()
+        ) as retire,
+        patch.object(
+            PlanGenerationService, "generate_plan", new=AsyncMock()
+        ) as generate,
+    ):
+        resp = await authed_client.post(
+            f"/api/v1/agents/types/{agent_type_id}/regenerate-plan"
+        )
+
+    assert resp.status_code == 412, resp.text
+    detail = resp.json()["detail"]
+    assert detail["error"] == "plan_generation_unavailable"
+    assert detail["reason_code"] == "authoring_model_not_enabled"
+    assert STALE_MODEL_ID in detail["reason"]
+    retire.assert_not_awaited()
+    generate.assert_not_awaited()
+    assert await _plan_row_count(test_engine, agent_type_id) == 0
+
+
+@pytest.mark.asyncio
+async def test_regenerate_plan_blocked_for_conversational_agent(
+    authed_client: AsyncClient, test_engine
+):
+    """Conversational agents have no plan — rejected before any side effect."""
+    from app.services.script_registry import ScriptRegistryService
+
+    await _configure_authoring_model(test_engine)
+    agent_type_id = await _seed_agent_type(
+        test_engine, input_type=AgentInputType.conversation
+    )
+
+    with (
+        patch.object(
+            ScriptRegistryService, "retire_serving_versions", new=AsyncMock()
+        ) as retire,
+        patch.object(
+            PlanGenerationService, "generate_plan", new=AsyncMock()
+        ) as generate,
+    ):
+        resp = await authed_client.post(
+            f"/api/v1/agents/types/{agent_type_id}/regenerate-plan"
+        )
+
+    assert resp.status_code == 412, resp.text
+    detail = resp.json()["detail"]
+    assert detail["error"] == "plan_generation_unavailable"
+    assert detail["reason_code"] == "conversational_agent"
+    retire.assert_not_awaited()
+    generate.assert_not_awaited()
+    assert await _plan_row_count(test_engine, agent_type_id) == 0
+
+
+@pytest.mark.asyncio
+async def test_regenerate_plan_failure_preserves_last_successful_plan(
+    authed_client: AsyncClient, test_engine
+):
+    """A model failure is recorded (status/error) but never discards the last
+    successful steps/topology/hash/generated_at."""
+    from app.services.script_registry import ScriptRegistryService
+
+    await _configure_authoring_model(test_engine)
+    agent_type_id = await _seed_agent_type(
+        test_engine, plan_status=AgentPlanStatus.success
+    )
+
+    async def exploding_do_generate(self, agent_type, db, *, user_requirement=None):
+        raise RuntimeError("provider exploded")
+
+    with (
+        patch.object(
+            ScriptRegistryService, "retire_serving_versions", new=AsyncMock()
+        ),
+        patch.object(
+            PlanGenerationService, "_do_generate", new=exploding_do_generate
+        ),
+    ):
+        resp = await authed_client.post(
+            f"/api/v1/agents/types/{agent_type_id}/regenerate-plan"
+        )
+
+    assert resp.status_code == 200, resp.text
+    plan = resp.json()["plan"]
+    assert plan is not None
+    assert plan["generation_status"] == "failed"
+    assert "provider exploded" in (plan["generation_error"] or "")
+    # The last successful authoring is still readable.
+    assert plan["plan_steps"][0]["name"] == "Previous Step"
+    assert plan["agent_config_hash"] == "previous-hash"
+    assert plan["topology_nodes"][0]["id"] == "role:old"
+    assert plan["generated_at"].startswith("2026-01-01")
+

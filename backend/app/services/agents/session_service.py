@@ -3,18 +3,65 @@ from __future__ import annotations
 
 import logging
 import uuid
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any
 
 from fastapi import WebSocket
 from opentelemetry import trace
-from sqlalchemy import select
+from sqlalchemy import func, select
 
-from app.db.models.agents import AgentJob, AgentJobStatus, AgentType
+from app.db.models.agents import AgentInputType, AgentJob, AgentJobStatus, AgentType
 from app.db.models.identity import Identity
 
 logger = logging.getLogger(__name__)
 tracer = trace.get_tracer(__name__)
+
+
+@dataclass(frozen=True)
+class OptimizationGate:
+    """Read-only plan/optimize preconditions for an agent type.
+
+    Composed (cheap, computed, no stored flag) in ``get_optimization_gate``:
+
+    1. the agent must not be conversational (plans do not exist for them),
+    2. the workspace authoring model must be configured AND enabled,
+    3. at least one ``completed`` normal execution must exist.
+
+    ``reason`` / ``reason_code`` describe the FIRST unmet precondition in that
+    order (both ``None`` when ``can_optimize`` is true).  ``can_generate_plan``
+    is the base-plan precondition (1+2); the execution precondition only gates
+    the optimization run.
+    """
+
+    can_optimize: bool
+    successful_executions: int
+    reason: str | None
+    #: Base-plan generation precondition (authoring model + non-conversational).
+    can_generate_plan: bool = False
+    #: Derived "not configured / re-select" state of the workspace authoring model.
+    workflow_model_configured: bool = False
+    #: Raw stored authoring model id (echoed even when unusable, so the UI can
+    #: say "<id> is no longer available — re-select").
+    workflow_model_id: str | None = None
+    is_conversational: bool = False
+    reason_code: str | None = None
+    #: Optimization-CONVERSATION availability (distinct from the one-shot
+    #: ``can_optimize``): conversational subjects are allowed here, and a
+    #: missing plan is information, not a block.
+    optimization_conversation_available: bool = False
+    optimization_conversation_reason_code: str | None = None
+    #: Derived optimizer-model state (explicit selection else authoring).
+    optimizer_model_configured: bool = False
+    optimizer_model_id: str | None = None
+    optimizer_model_source: str | None = None
+    optimizer_model_reason_code: str | None = None
+
+
+#: ``reason_code`` values shared by the gate, the optimize trigger, and the
+#: explicit plan-generation endpoint (mirrored in frontend copy).
+REASON_CONVERSATIONAL_AGENT = "conversational_agent"
+REASON_NO_SUCCESSFUL_EXECUTION = "no_successful_execution"
 
 
 class AgentSessionService:
@@ -151,6 +198,111 @@ class AgentSessionService:
             await db.refresh(job)
             logger.error("Session %s failed: %s", session_id, error_message)
             return job
+
+    async def count_successful_executions(
+        self, db: AsyncSession, agent_type_id: uuid.UUID
+    ) -> int:
+        """Count completed executions for an agent type (read-only).
+
+        A completed job is "successful" even when its business result is
+        legitimately empty — the optimization run only needs a real reference
+        execution to learn from.
+        """
+        result = await db.execute(
+            select(func.count())
+            .select_from(AgentJob)
+            .where(
+                AgentJob.agent_type_id == agent_type_id,
+                AgentJob.status == AgentJobStatus.completed,
+            )
+        )
+        return int(result.scalar_one() or 0)
+
+    async def get_optimization_gate(
+        self,
+        db: AsyncSession,
+        agent_type_id: uuid.UUID,
+        *,
+        agent_type: AgentType | None = None,
+    ) -> OptimizationGate:
+        """Return the composed plan/optimize preconditions for an agent type.
+
+        Precedence of the reported blocker: conversational agent → authoring
+        model (unset / no longer enabled) → no successful execution.  Everything
+        is computed from existing rows — no stored counter, no DB writes.
+
+        Args:
+            agent_type: Optional already-loaded ``AgentType`` (avoids a second
+                read when the caller has one); loaded by id otherwise.
+        """
+        # CC-only resolver, imported locally: this module is imported by Agent
+        # Runtime, which must not pull Control-Center DB services at import time.
+        from app.services.agents.workflow_generation_settings import (
+            get_authoring_model_state,
+        )
+
+        if agent_type is None:
+            agent_type = await db.get(AgentType, agent_type_id)
+        is_conversational = (
+            agent_type is not None
+            and agent_type.input_type == AgentInputType.conversation
+        )
+
+        model_state = await get_authoring_model_state(db)
+        successful = await self.count_successful_executions(db, agent_type_id)
+
+        can_generate_plan = model_state.usable and not is_conversational
+        can_optimize = can_generate_plan and successful > 0
+
+        reason: str | None = None
+        reason_code: str | None = None
+        if is_conversational:
+            reason_code = REASON_CONVERSATIONAL_AGENT
+            reason = (
+                "Plan generation and optimization are not available for "
+                "conversational agents — they have no implementation plan."
+            )
+        elif not model_state.usable:
+            reason_code = model_state.reason_code
+            reason = model_state.reason
+        elif successful == 0:
+            reason_code = REASON_NO_SUCCESSFUL_EXECUTION
+            reason = (
+                "Optimization requires at least one successful execution of "
+                "this agent. Run the agent successfully first so the optimizer "
+                "has a real reference execution to learn from."
+            )
+
+        # ── Conversation availability (additive; does NOT change can_optimize) ─
+        # The optimization conversation is a mode of the agent itself, so it is
+        # available for typed AND conversational subjects. A missing plan does
+        # not block it; the optimizer model and a reference execution do.
+        from app.services.agents.optimization_mode import (
+            get_optimization_conversation_availability,
+        )
+
+        conversation = await get_optimization_conversation_availability(
+            db,
+            agent_type,
+            successful_executions=successful,
+        )
+
+        return OptimizationGate(
+            can_optimize=can_optimize,
+            successful_executions=successful,
+            reason=reason,
+            can_generate_plan=can_generate_plan,
+            workflow_model_configured=model_state.usable,
+            workflow_model_id=model_state.model_id,
+            is_conversational=is_conversational,
+            reason_code=reason_code,
+            optimization_conversation_available=conversation.available,
+            optimization_conversation_reason_code=conversation.reason_code,
+            optimizer_model_configured=conversation.optimizer_model.enabled,
+            optimizer_model_id=conversation.optimizer_model.effective_model_id,
+            optimizer_model_source=conversation.optimizer_model.source,
+            optimizer_model_reason_code=conversation.optimizer_model.reason_code,
+        )
 
     async def get_session(
         self, session_id: uuid.UUID, db: AsyncSession

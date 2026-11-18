@@ -2,7 +2,11 @@ import type { ReactNode } from 'react'
 import { Box, Card, CardContent, Skeleton, Typography } from '@mui/material'
 import LockIcon from '@mui/icons-material/Lock'
 import { useTranslation } from 'react-i18next'
-import type { CardColorVariant } from './StatCard'
+import {
+  ActionRequiredBadge,
+  type CardColorVariant,
+  type CardStatusTone,
+} from './StatCard'
 
 const ICON_COLORS: Record<CardColorVariant, string> = {
   blue: '#1D4ED8',
@@ -15,6 +19,13 @@ const ICON_COLORS: Record<CardColorVariant, string> = {
   slate: '#475569',
 }
 
+/** Card tint/border colours per health tone (matches `StatCard`). */
+const TONE_STYLES: Record<CardStatusTone, { bgcolor: string; borderColor: string }> = {
+  success: { bgcolor: '#F0FDF4', borderColor: '#BBF7D0' },
+  warning: { bgcolor: '#FFFBEB', borderColor: '#FDE68A' },
+  error: { bgcolor: '#FEF2F2', borderColor: '#FECACA' },
+}
+
 export interface TimeSensitiveCardProps {
   variant: 'single' | 'dual'
   icon: ReactNode
@@ -25,6 +36,10 @@ export interface TimeSensitiveCardProps {
   isLoading: boolean
   isPermissionDenied: boolean
   colorVariant?: CardColorVariant
+  /** Card health tone (`neutral` when omitted). */
+  statusTone?: CardStatusTone
+  /** Renders the "Action required" badge and the action-highlight styling. */
+  actionRequired?: boolean
 }
 
 export function TimeSensitiveCard({
@@ -37,6 +52,8 @@ export function TimeSensitiveCard({
   isLoading,
   isPermissionDenied,
   colorVariant = 'blue',
+  statusTone,
+  actionRequired = false,
 }: TimeSensitiveCardProps) {
   const { t } = useTranslation()
   const iconColor = ICON_COLORS[colorVariant]
@@ -45,19 +62,30 @@ export function TimeSensitiveCard({
     variant === 'single' ? value === 0 : (completed === 0 && failed === 0)
   )
 
+  // Permission-denied visuals always win over the status-tone tint.
+  const toneStyle = !isPermissionDenied && statusTone ? TONE_STYLES[statusTone] : undefined
+  const strengthenAccent = !isPermissionDenied && (statusTone === 'error' || statusTone === 'warning')
+  const showActionBadge = actionRequired && !isPermissionDenied && !isLoading
+
   return (
     <Card
+      data-status-tone={statusTone ?? 'neutral'}
+      data-action-required={actionRequired ? 'true' : 'false'}
       sx={{
         height: '100%',
         minHeight: 120,
         borderRadius: 2,
         border: isPermissionDenied
           ? '1px dashed #EF4444'
-          : '1px solid',
-        borderColor: isPermissionDenied ? undefined : 'divider',
-        borderLeft: isPermissionDenied ? undefined : `3px solid ${iconColor}`,
+          : toneStyle
+            ? `1px solid ${toneStyle.borderColor}`
+            : '1px solid',
+        borderColor: isPermissionDenied || toneStyle ? undefined : 'divider',
+        borderLeft: isPermissionDenied
+          ? undefined
+          : `${strengthenAccent ? 4 : 3}px solid ${iconColor}`,
         boxShadow: 1,
-        bgcolor: isPermissionDenied ? '#FFF5F5' : undefined,
+        bgcolor: isPermissionDenied ? '#FFF5F5' : toneStyle?.bgcolor,
         opacity: isPermissionDenied ? 0.7 : 1,
         position: 'relative',
         overflow: 'hidden',
@@ -143,6 +171,7 @@ export function TimeSensitiveCard({
               {label}
             </Typography>
           )}
+          {showActionBadge && <ActionRequiredBadge tone={statusTone} />}
         </Box>
 
         <Box sx={{ mt: 'auto' }}>

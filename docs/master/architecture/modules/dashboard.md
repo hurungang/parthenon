@@ -20,7 +20,7 @@ flowchart TD
 
 ## Token Health Cards
 
-The dashboard also surfaces **token health** for agent identities and MCP sessions, powered by the Control Center Token Health Service (the sole DB reader of token metadata). Cards show counts per state (`healthy` / `expiring-within-7-days` / `expired`) with click-through to identity / MCP session pages for refresh or re-auth. The same token-health states are consumed client-side to enrich the **topology view** with warning/error badges per container.
+The dashboard also surfaces **refresh-token health** for agent identities and MCP sessions, powered by the Control Center Token Health Service (the sole DB reader of token metadata). Cards show counts per state (`healthy` / `expiring-within-7-days` / `expired`) with click-through to identity / MCP session pages for refresh or re-auth. Because access tokens are renewed automatically, only the refresh token's expiry drives these states; identities without a refresh token (and MCP sessions without a recorded refresh expiry) fall back to the access-token expiry. The same refresh-token health states are consumed client-side to enrich the **topology view** with warning/error badges per container.
 
 ```mermaid
 flowchart LR

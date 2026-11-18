@@ -30,6 +30,7 @@ arguments)`` performs one MCP tool call.
 """
 from __future__ import annotations
 
+import ast
 import asyncio
 import concurrent.futures
 import contextvars
@@ -58,6 +59,12 @@ logger = logging.getLogger(__name__)
 DEFAULT_WALL_TIME_SECONDS = 30
 DEFAULT_CPU_SECONDS = 10
 DEFAULT_MEMORY_MB = 512
+
+#: Per-call cap for the FULL recorded tool result shipped in the execution log
+#: (``script_tool_call.data.result``). This is the replay source for
+#: optimization verification, so it is far larger than the human-readable
+#: ``result_preview`` — a truncated response is still usable evidence.
+MAX_RECORDED_RESULT_CHARS = 50_000
 
 
 def _env_int(name: str, fallback: int) -> int:
@@ -445,6 +452,15 @@ def unwrap_mcp_tool_result(result: Any) -> tuple[Any, bool]:
     """
     if not (isinstance(result, dict) and isinstance(result.get("content"), list)):
         return result, False
+    # Prefer the structured ``result`` field when the server mirrors the payload
+    # there. Some MCP servers serialize ``content[].text`` as a Python repr
+    # (single quotes) that JSON cannot parse — using the structured value avoids
+    # the script silently receiving a STRING (live defect: a flight-search
+    # script got the repr string and reported "no flights found" although the
+    # list was populated).
+    structured = result.get("result")
+    if isinstance(structured, (dict, list)):
+        return structured, True
     entries: list[Any] = []
     for entry in result["content"]:
         if isinstance(entry, dict) and "text" in entry:
@@ -453,7 +469,11 @@ def unwrap_mcp_tool_result(result: Any) -> tuple[Any, bool]:
                 try:
                     entries.append(_json.loads(text))
                 except ValueError:
-                    entries.append(text)
+                    # Python-repr fallback (e.g. ``{'results': [...]}``).
+                    try:
+                        entries.append(ast.literal_eval(text))
+                    except (ValueError, SyntaxError):
+                        entries.append(text)
             else:
                 entries.append(text)
         else:
@@ -490,6 +510,7 @@ class SandboxToolFacade:
         call_timeout_seconds: float = 60.0,
         context: contextvars.Context | None = None,
         io_time_tracker: dict[str, float] | None = None,
+        tool_calls_out: list[dict[str, Any]] | None = None,
     ) -> None:
         self._tool_client = tool_client
         self._loop = loop
@@ -508,7 +529,65 @@ class SandboxToolFacade:
         # network latency (the per-call timeout still bounds each call).
         self._io_time_tracker = io_time_tracker if io_time_tracker is not None else {}
         self.calls: list[dict[str, Any]] = []
+        # Optional detailed per-call record sink (tool name, arguments,
+        # duration, result preview, error) for the execution log.
+        self._tool_calls_out = tool_calls_out
         self._io_lock = threading.Lock()
+
+    def _record_tool_call(
+        self,
+        tool_name: str,
+        arguments: dict[str, Any] | None,
+        started: float,
+        payload: Any = None,
+        error: str | None = None,
+    ) -> None:
+        """Record a detailed tool call for the execution log (best-effort).
+
+        Two shapes are recorded:
+        - ``result_preview`` — short, human-readable (500 chars).
+        - ``result`` — the FULL response JSON (up to
+          ``MAX_RECORDED_RESULT_CHARS``) plus ``result_truncated``. This is the
+          replay source: optimization verification replays a recorded
+          execution's responses instead of calling live MCP tools.
+        """
+        if self._tool_calls_out is None:
+            return
+        try:
+            if isinstance(payload, str):
+                preview = payload
+            else:
+                preview = _json.dumps(payload, default=str)
+        except Exception:  # noqa: BLE001 — preview must never break the call
+            preview = str(payload)
+        if len(preview) > 500:
+            preview = preview[:500] + "…"
+
+        recorded: Any = payload
+        result_truncated = False
+        try:
+            serialized = _json.dumps(payload, default=str)
+            if len(serialized) > MAX_RECORDED_RESULT_CHARS:
+                recorded = serialized[:MAX_RECORDED_RESULT_CHARS]
+                result_truncated = True
+            else:
+                # Round-trip so only JSON-able values reach the JSON log column.
+                recorded = _json.loads(serialized)
+        except Exception:  # noqa: BLE001 — recording must never break the call
+            recorded = str(payload)[:MAX_RECORDED_RESULT_CHARS]
+            result_truncated = True
+
+        self._tool_calls_out.append(
+            {
+                "tool_name": tool_name,
+                "arguments": dict(arguments or {}),
+                "duration_ms": int((time.monotonic() - started) * 1000),
+                "result_preview": preview,
+                "result": recorded,
+                "result_truncated": result_truncated,
+                "error": error,
+            }
+        )
 
     def call(self, tool_name: str, arguments: dict[str, Any] | None = None) -> Any:
         """Perform ONE MCP tool call through Communication Hub (blocking)."""
@@ -544,10 +623,22 @@ class SandboxToolFacade:
             result = future.result(timeout=self._call_timeout_seconds)
         except concurrent.futures.TimeoutError as exc:
             future.cancel()
+            self._record_tool_call(
+                tool_name,
+                arguments,
+                started,
+                None,
+                f"Timeout after {self._call_timeout_seconds:.0f}s",
+            )
             raise ResourceLimitExceededError(
                 f"Tool call '{tool_name}' exceeded the "
                 f"{self._call_timeout_seconds:.0f}s per-call limit"
             ) from exc
+        except Exception as exc:  # noqa: BLE001 — record then propagate
+            self._record_tool_call(
+                tool_name, arguments, started, None, str(exc)[:300]
+            )
+            raise
         finally:
             # Exclude the awaited duration from the wall-time budget — only
             # the script's own compute counts against the cap.
@@ -565,6 +656,9 @@ class SandboxToolFacade:
         if unwrapped:
             if isinstance(result, dict) and result.get("isError"):
                 detail = payload if isinstance(payload, str) else _json.dumps(payload, default=str)
+                self._record_tool_call(
+                    tool_name, arguments, started, None, detail[:300]
+                )
                 raise SandboxViolationError(
                     f"Tool '{tool_name}' reported an error: {detail[:300]}"
                 )
@@ -574,6 +668,7 @@ class SandboxToolFacade:
                 tool_name,
                 type(payload).__name__,
             )
+        self._record_tool_call(tool_name, arguments, started, payload, None)
         return payload
 
 
@@ -590,6 +685,7 @@ def run_sandboxed_python(
     input_context: dict[str, Any] | None = None,
     caps: SandboxCaps | None = None,
     loop: asyncio.AbstractEventLoop | None = None,
+    tool_calls_out: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """Compile and execute model-authored Python in the sandbox.
 
@@ -624,6 +720,7 @@ def run_sandboxed_python(
         input_context=input_context,
         caps=caps,
         dispatch_context=dispatch_context,
+        tool_calls_out=tool_calls_out,
     )
 
 
@@ -638,6 +735,7 @@ def _sandbox_globals_for(
     input_context: dict[str, Any] | None,
     dispatch_context: contextvars.Context | None = None,
     io_time_tracker: dict[str, float] | None = None,
+    tool_calls_out: list[dict[str, Any]] | None = None,
 ) -> tuple[dict[str, Any], SandboxToolFacade | None]:
     """Build per-execution globals incl. the MCP-only tools facade."""
     tools: SandboxToolFacade | None = None
@@ -650,6 +748,7 @@ def _sandbox_globals_for(
             script_version_label=script_version_label,
             context=dispatch_context,
             io_time_tracker=io_time_tracker,
+            tool_calls_out=tool_calls_out,
         )
     globs = build_safe_globals(
         extra={
@@ -695,6 +794,7 @@ def _execute_with_caps(
     input_context: dict[str, Any] | None,
     caps: SandboxCaps,
     dispatch_context: contextvars.Context | None = None,
+    tool_calls_out: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """Execute in a daemon worker thread with wall-time / memory caps (N1).
 
@@ -732,6 +832,7 @@ def _execute_with_caps(
                 input_context=input_context,
                 dispatch_context=dispatch_context,
                 io_time_tracker=io_time,
+                tool_calls_out=tool_calls_out,
             )
             holder["result"] = _run_entry(code, globs)
         except BaseException as exc:  # noqa: BLE001 — propagated fail-closed

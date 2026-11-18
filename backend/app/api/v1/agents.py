@@ -11,7 +11,6 @@ from typing import Any
 
 from fastapi import (
     APIRouter,
-    BackgroundTasks,
     Depends,
     HTTPException,
     Query,
@@ -24,6 +23,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.api.deps import authorize_identity, get_current_claims, require_permission
@@ -56,6 +56,7 @@ from app.schemas.agents import (
     AgentJobCreate,
     AgentJobRead,
     AgentJobStatusRead,
+    AgentOptimizeRequest,
     AgentRoleAssignment,
     AgentRoleCreate,
     AgentRoleIdentityAssignment,
@@ -75,6 +76,7 @@ from app.schemas.agents import (
     ModelUsageGuardrailLimitRead,
     ModelUsageGuardrailLimitUpdate,
     ModelUsagePostureRead,
+    OptimizationGateRead,
     PreflightAvailabilityRequest,
     PreflightAvailabilityResponse,
     RuntimeTerminalJobPurgeRead,
@@ -115,11 +117,21 @@ from app.services.agents.role_service import (
     AgentRoleService,
 )
 from app.services.agents.session_service import AgentSessionService
+from app.services.agents.optimizer_model_settings import (
+    get_optimizer_model_id,
+    get_optimizer_model_state,
+    set_optimizer_model_id,
+)
 from app.services.agents.system_tool_registry import SystemToolRegistry
 from app.services.agents.tool_naming import build_tool_name, is_system_tool
 from app.services.agents.workflow_generation_settings import (
     get_workflow_generation_model_id,
     set_workflow_generation_model_id,
+)
+from app.schemas.optimizer import (
+    OptimizerModelConfigRead,
+    OptimizerModelConfigUpdate,
+    OptimizerModelOptionRead,
 )
 from app.services.control_center.model_availability_service import (
     ModelAvailabilityService,
@@ -627,14 +639,20 @@ async def get_reauth_url(
 # ── Agent Session (Job) Endpoints ──────────────────────────────────────────────
 
 
-@AgentJobRouter.post("", response_model=AgentJobStatusRead, status_code=status.HTTP_202_ACCEPTED)
-async def launch_agent_session(
-    body: AgentJobCreate,
-    db: DbSession,
+async def _resolve_launch_preflight(
+    *,
+    db: AsyncSession,
     request: Request,
-    _: dict = Depends(require_permission(RT_AGENT, "execute")),
-) -> AgentJob:
-    """Validate agent identity OAuth token, enqueue a new agent session, and return 202 with session ID."""
+    agent_type_id: uuid.UUID,
+) -> tuple[uuid.UUID | None, Any, uuid.UUID | None]:
+    """Shared pre-flight for any execution launch (normal Run or Optimize).
+
+    Resolves the triggering user, enforces the monthly execution quota
+    (consulted BEFORE any side effect) and runs the SOP recursion pre-flight.
+    The quota counter is incremented by the caller at acceptance.
+
+    Returns ``(user_id, tenant_context, quota_tenant_id)``.
+    """
     # Trigger provenance: the middleware resolves the authenticated human to
     # their canonical Identity row (request.state.identity_id) — JWTs carry no
     # platform user id, so the old claims lookup always yielded None and runs
@@ -662,7 +680,7 @@ async def launch_agent_session(
     # Recursion pre-flight validation before launching
     try:
         await get_recursion_validation_service().validate_agent_type(
-            agent_type_id=body.agent_type_id,
+            agent_type_id=agent_type_id,
             context=SopRecursionCheckContext.run,
             db=db,
             checked_by_user_id=user_id,
@@ -685,6 +703,23 @@ async def launch_agent_session(
             },
         )
 
+    return user_id, tenant_context, quota_tenant_id
+
+
+@AgentJobRouter.post("", response_model=AgentJobStatusRead, status_code=status.HTTP_202_ACCEPTED)
+async def launch_agent_session(
+    body: AgentJobCreate,
+    db: DbSession,
+    request: Request,
+    _: dict = Depends(require_permission(RT_AGENT, "execute")),
+) -> AgentJob:
+    """Validate agent identity OAuth token, enqueue a new agent session, and return 202 with session ID."""
+    user_id, tenant_context, quota_tenant_id = await _resolve_launch_preflight(
+        db=db, request=request, agent_type_id=body.agent_type_id
+    )
+
+    from app.services.tenancy.quota_service import get_tenant_quota_service
+
     try:
         # Count the execution at ACCEPTANCE (before any dispatch) so the
         # monthly counter never double-counts in-flight runs and never
@@ -692,45 +727,11 @@ async def launch_agent_session(
         if quota_tenant_id is not None:
             await get_tenant_quota_service().increment_executions(db, quota_tenant_id)
 
-        launch_input = body.input_data
-        # Opt-in optimization: "Run with optimization" turns THIS execution into
-        # the optimization opportunity — the session runs as the
-        # "optimize-and-verify" command (the agent authors and verifies scripts
-        # against REAL tool-call executions while accomplishing the user's real
-        # task) and persists the verified optimized plan for reuse. Reuses the
-        # existing ``__command`` side-execution marker mechanism end to end.
-        if body.optimize:
-            from app.services.agents.command_prompts import (
-                OPTIMIZE_AND_VERIFY_SLUG,
-                build_command_mission,
-                get_command_prompt,
-            )
-
-            command_prompt = await get_command_prompt(db, OPTIMIZE_AND_VERIFY_SLUG)
-            mission = build_command_mission(
-                command_prompt.prompt_text, agent_type_id=body.agent_type_id
-            )
-            user_input = dict(body.input_data or {})
-            real_task = (
-                json.dumps(user_input, ensure_ascii=False, default=str)
-                if user_input
-                else "(no structured input — the mission above is the whole task)"
-            )
-            user_input["__command"] = OPTIMIZE_AND_VERIFY_SLUG
-            user_input["__command_agent_type_id"] = str(body.agent_type_id)
-            user_input["message"] = (
-                f"{mission}\n\n## Real task for this run\n"
-                "The user launched you with the input below. Accomplish THIS "
-                "task with REAL tool-call executions while authoring and "
-                "verifying the scripts against those real calls — the tool "
-                "calls run for real; there is no stub client.\n"
-                f"{real_task}"
-            )
-            launch_input = user_input
-
+        # A normal Run always uses the agent's own system/skill instructions —
+        # optimization is a separate, explicit action (POST /agents/sessions/optimize).
         result = await _lifecycle_handler.launch(
             agent_type_id=body.agent_type_id,
-            input_data=launch_input,
+            input_data=body.input_data,
             user_id=user_id,
             db=db,
             # Multi-tenancy: propagate the resolved calling tenant so the
@@ -741,6 +742,92 @@ async def launch_agent_session(
         )
     except AgentAuthError as exc:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc))
+
+    session_id = uuid.UUID(result["session_id"])
+    job = await _session_service.get_session(session_id, db)
+    return job
+
+
+@AgentJobRouter.post(
+    "/optimize", response_model=AgentJobStatusRead, status_code=status.HTTP_202_ACCEPTED
+)
+async def launch_optimization_session(
+    body: AgentOptimizeRequest,
+    db: DbSession,
+    request: Request,
+    _: dict = Depends(require_permission(RT_AGENT, "execute")),
+) -> AgentJob:
+    """Trigger a dedicated, preconditioned optimization execution.
+
+    Distinct from a normal Run: the session is a ``__command`` execution whose
+    prompt is the ``optimize-and-verify`` mission (the agent authors and
+    verifies the optimized implementation plan from the current plan + the
+    latest reference execution). The user's task input is neither required nor
+    used.
+    """
+    agent_type = await db.get(AgentType, body.agent_type_id)
+    if agent_type is None:
+        raise HTTPException(status_code=404, detail="Agent type not found")
+
+    # Server-side enforcement of the COMPOUND gate (the UI reads the same
+    # computed gate via GET /agents/types/{type_id}/optimization-gate). Order:
+    # conversational → authoring model (unset/no longer enabled) → executions.
+    # Nothing is created, counted, or dispatched when blocked.
+    gate = await _session_service.get_optimization_gate(
+        db, body.agent_type_id, agent_type=agent_type
+    )
+    if not gate.can_optimize:
+        raise HTTPException(
+            status_code=status.HTTP_412_PRECONDITION_FAILED,
+            detail={
+                "error": "optimize_gate_unmet",
+                "reason_code": gate.reason_code,
+                "reason": gate.reason,
+            },
+        )
+
+    user_id, tenant_context, quota_tenant_id = await _resolve_launch_preflight(
+        db=db, request=request, agent_type_id=body.agent_type_id
+    )
+
+    from app.services.agents.command_prompts import (
+        OPTIMIZE_AND_VERIFY_SLUG,
+        build_command_mission,
+        get_command_prompt,
+    )
+    from app.services.tenancy.quota_service import get_tenant_quota_service
+
+    try:
+        if quota_tenant_id is not None:
+            await get_tenant_quota_service().increment_executions(db, quota_tenant_id)
+
+        command_prompt = await get_command_prompt(db, OPTIMIZE_AND_VERIFY_SLUG)
+        mission = build_command_mission(
+            command_prompt.prompt_text, agent_type_id=body.agent_type_id
+        )
+        launch_input = {
+            "__command": OPTIMIZE_AND_VERIFY_SLUG,
+            "__command_agent_type_id": str(body.agent_type_id),
+            "message": (
+                f"{mission}\n\n## Optimization-only run\n"
+                "There is no user task for this run. This execution exists ONLY "
+                "to author, repair and verify the optimized implementation plan "
+                "from the current plan and the latest execution. Use the most "
+                "recent execution log as the reference for HOW the workflow "
+                "runs; do not perform the agent's ordinary business task."
+            ),
+        }
+        result = await _lifecycle_handler.launch(
+            agent_type_id=body.agent_type_id,
+            input_data=launch_input,
+            user_id=user_id,
+            db=db,
+            tenant_context=tenant_context if tenant_context.is_set else None,
+        )
+    except AgentAuthError as exc:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc))
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
 
     session_id = uuid.UUID(result["session_id"])
     job = await _session_service.get_session(session_id, db)
@@ -1276,31 +1363,6 @@ async def agent_session_chat(
         await websocket.close(code=1011)
 
 
-async def _run_plan_generation_bg(agent_type_id: uuid.UUID) -> None:
-    """Background task: generate plan with its own DB session."""
-    from app.db.session import AsyncSessionLocal
-
-    async with AsyncSessionLocal() as bg_db:
-        try:
-            async with bg_db.begin():
-                result = await bg_db.execute(
-                    select(AgentType)
-                    .where(AgentType.id == agent_type_id)
-                    .options(
-                        selectinload(AgentType.sop_bindings),
-                        selectinload(AgentType.skill_bindings),
-                    )
-                )
-                agent_type = result.scalar_one_or_none()
-                if agent_type:
-                    await _plan_generation_service.generate_plan(agent_type, bg_db)
-        except Exception:
-            logger.exception(
-                "Background plan generation failed for agent_type=%s",
-                agent_type_id,
-            )
-
-
 def _binding_conflict_detail(exc: IntegrityError) -> dict[str, object]:
     """Map a binding-write IntegrityError to a structured 409 detail payload.
 
@@ -1382,7 +1444,6 @@ async def create_agent_type(
     body: AgentTypeCreate,
     request: Request,
     db: DbSession,
-    background_tasks: BackgroundTasks,
     _: dict = Depends(require_permission(RT_AGENT, "create")),
 ) -> AgentTypeRead:
     if not body.sop_bindings and not body.skill_bindings:
@@ -1487,14 +1548,11 @@ async def create_agent_type(
             },
         )
 
-    # Commit before scheduling plan regeneration: the background task runs
-    # with its own session while the LLM call takes tens of seconds — leaving
-    # the binding write uncommitted for that window makes a concurrent save
-    # block on the unique binding index and 500 (UniqueViolationError).
+    # Commit the bindings before returning. Plan authoring is EXPLICIT ONLY:
+    # saving an agent type never schedules (or spends model time on) plan
+    # generation — the current AgentPlan is left untouched and a stale plan is
+    # only flagged in the UI.
     await db.commit()
-
-    # Schedule plan generation in background (non-blocking)
-    background_tasks.add_task(_run_plan_generation_bg, agent_type.id)
 
     # Reload with relationships eagerly loaded so the response includes bindings
     result = await db.execute(
@@ -1538,7 +1596,6 @@ async def update_agent_type(
     body: AgentTypeUpdate,
     request: Request,
     db: DbSession,
-    background_tasks: BackgroundTasks,
     _: dict = Depends(require_permission(RT_AGENT, "update")),
 ) -> AgentTypeRead:
     agent_type = await db.get(AgentType, type_id)
@@ -1698,14 +1755,11 @@ async def update_agent_type(
             },
         )
 
-    # Commit before scheduling plan regeneration: the background task runs
-    # with its own session while the LLM call takes tens of seconds — leaving
-    # the binding write uncommitted for that window makes a concurrent save
-    # block on the unique binding index and 500 (UniqueViolationError).
+    # Commit the bindings before returning. Plan authoring is EXPLICIT ONLY:
+    # an agent-type update never schedules (or spends model time on) plan
+    # generation — the current AgentPlan is left untouched and a stale plan is
+    # only flagged in the UI (Regenerate plan is an explicit user action).
     await db.commit()
-
-    # Schedule plan regeneration in background (non-blocking)
-    background_tasks.add_task(_run_plan_generation_bg, agent_type.id)
 
     # Reload with relationships eagerly loaded so the response includes bindings
     result = await db.execute(
@@ -1727,6 +1781,19 @@ async def regenerate_agent_type_plan(
     db: DbSession,
     _: dict = Depends(require_permission(RT_AGENT, "update")),
 ) -> AgentTypeRead:
+    """Author the implementation plan with the workspace authoring model.
+
+    This is the ONLY implementation-plan generation path (agent create/update
+    never author a plan). Preconditions are checked BEFORE any side effect:
+
+    - conversational agent → ``412 plan_generation_unavailable`` /
+      ``conversational_agent`` (plans do not exist for conversational agents),
+    - no workspace authoring model, or a stored one no longer in the tenant's
+      enabled catalogue → ``412 plan_generation_unavailable`` with the
+      resolver's ``reason_code`` (never a fallback model).
+
+    When blocked, nothing is written and no serving script version is retired.
+    """
     result = await db.execute(
         select(AgentType)
         .where(AgentType.id == type_id)
@@ -1739,17 +1806,45 @@ async def regenerate_agent_type_plan(
     if not agent_type:
         raise HTTPException(status_code=404, detail="Agent type not found")
 
+    gate = await _session_service.get_optimization_gate(
+        db, agent_type.id, agent_type=agent_type
+    )
+    if not gate.can_generate_plan:
+        raise HTTPException(
+            status_code=status.HTTP_412_PRECONDITION_FAILED,
+            detail={
+                "error": "plan_generation_unavailable",
+                "reason_code": gate.reason_code,
+                "reason": gate.reason,
+            },
+        )
+
     # Plan regeneration invalidates serving scripts: any currently compiled
     # script version was authored from the OLD plan. Retire it and clear the
     # serving pointer so the next execution re-runs the LLM, re-authors the
     # composition from the NEW plan, and auto-compiles a matching script.
+    from app.services.agents.workflow_generation_settings import (
+        AuthoringModelNotConfigured,
+    )
     from app.services.script_registry import ScriptRegistryService
 
     await ScriptRegistryService().retire_serving_versions(
         db, agent_type.id, actor="plan_regeneration"
     )
 
-    await _plan_generation_service.generate_plan(agent_type, db)
+    try:
+        await _plan_generation_service.generate_plan(agent_type, db)
+    except AuthoringModelNotConfigured as exc:
+        # Race: the authoring model was removed between the gate read and the
+        # model call — fail with the structured contract instead of a 500.
+        raise HTTPException(
+            status_code=status.HTTP_412_PRECONDITION_FAILED,
+            detail={
+                "error": "plan_generation_unavailable",
+                "reason_code": exc.reason_code,
+                "reason": exc.message,
+            },
+        ) from exc
 
     result = await db.execute(
         select(AgentType)
@@ -1806,6 +1901,51 @@ async def retire_agent_type_optimized_plan(
     return OptimizePlanRetireResponse(retired=True, plans_removed=removed)
 
 
+@AgentTypeRouter.get(
+    "/{type_id}/optimization-gate", response_model=OptimizationGateRead
+)
+async def get_agent_type_optimization_gate(
+    type_id: uuid.UUID,
+    db: DbSession,
+    _: dict = Depends(require_permission(RT_AGENT, "read")),
+) -> OptimizationGateRead:
+    """Return the composed plan/optimize preconditions for an agent type.
+
+    All values are computed (read-only, tenant-scoped). ``reason`` /
+    ``reason_code`` describe the FIRST unmet precondition — conversational
+    agent → authoring model (unset / no longer enabled) → no successful
+    execution — and are ``None`` when ``can_optimize`` is true.
+    ``can_generate_plan`` gates the explicit Plan Preview generation (authoring
+    model + non-conversational); the execution count does not apply to it.
+    """
+    agent_type = await db.get(AgentType, type_id)
+    if not agent_type:
+        raise HTTPException(status_code=404, detail="Agent type not found")
+    gate = await _session_service.get_optimization_gate(
+        db, type_id, agent_type=agent_type
+    )
+    return OptimizationGateRead(
+        can_optimize=gate.can_optimize,
+        successful_executions=gate.successful_executions,
+        reason=gate.reason,
+        can_generate_plan=gate.can_generate_plan,
+        workflow_model_configured=gate.workflow_model_configured,
+        workflow_model_id=gate.workflow_model_id,
+        is_conversational=gate.is_conversational,
+        reason_code=gate.reason_code,
+        optimization_conversation_available=(
+            gate.optimization_conversation_available
+        ),
+        optimization_conversation_reason_code=(
+            gate.optimization_conversation_reason_code
+        ),
+        optimizer_model_configured=gate.optimizer_model_configured,
+        optimizer_model_id=gate.optimizer_model_id,
+        optimizer_model_source=gate.optimizer_model_source,
+        optimizer_model_reason_code=gate.optimizer_model_reason_code,
+    )
+
+
 @AgentTypeRouter.get("/{type_id}/optimized-plan")
 async def get_agent_type_optimized_plan(
     type_id: uuid.UUID,
@@ -1832,8 +1972,8 @@ async def submit_optimize_plan_feedback(
 ) -> dict[str, Any]:
     """Accumulate user feedback on the current optimized plan: the LLM
     summarizes the feedback (one-shot) and the {created_at, raw_feedback,
-    summary} entry is stored on the plan. ALL stored comments are included in
-    the authoring prompt when the optimized plan is regenerated."""
+    summary, source: "manual"} entry is stored on the plan. ALL stored comments
+    are included in the authoring prompt when the optimized plan is regenerated."""
     result = await db.execute(select(AgentType).where(AgentType.id == type_id))
     agent_type = result.scalar_one_or_none()
     if not agent_type:
@@ -2087,6 +2227,9 @@ async def get_workflow_generation_model(
     configs = await _model_config_service.list_model_configs(db)
     options: list[WorkflowGenerationModelOption] = []
     for config in configs:
+        # Disabled provider configurations are not selectable for authoring.
+        if getattr(config, "is_disabled", False):
+            continue
         for model_id in config.enabled_models or []:
             options.append(
                 WorkflowGenerationModelOption(
@@ -2111,7 +2254,10 @@ async def set_workflow_generation_model(
 ) -> WorkflowGenerationModelConfigRead:
     configs = await _model_config_service.list_model_configs(db)
     allowed_model_ids: set[str] = {
-        model_id for config in configs for model_id in (config.enabled_models or [])
+        model_id
+        for config in configs
+        if not getattr(config, "is_disabled", False)
+        for model_id in (config.enabled_models or [])
     }
     if body.model_id is not None and body.model_id not in allowed_model_ids:
         raise HTTPException(
@@ -2192,7 +2338,10 @@ async def set_assistant_model_config(
 
     configs = await _model_config_service.list_model_configs(db)
     allowed_model_ids: set[str] = {
-        model_id for config in configs for model_id in (config.enabled_models or [])
+        model_id
+        for config in configs
+        if not getattr(config, "is_disabled", False)
+        for model_id in (config.enabled_models or [])
     }
     if body.model_id is not None and body.model_id not in allowed_model_ids:
         raise HTTPException(
@@ -2234,6 +2383,91 @@ async def set_assistant_model_config(
     await db.flush()
 
     return await get_assistant_model_config(db=db, _={})
+
+
+# ── Per-tenant Optimizer Model Configuration ─────────────────────────────────
+#
+# The conversational optimizer runs on a workspace-chosen model that is kept
+# SEPARATE from the agent type's runtime model. Unset inherits the workspace
+# plan-authoring model at read time; a stale/disabled selection is reported
+# (never auto-cleared, never substituted). Both endpoints are tenant-scoped:
+# options come only from the session tenant's enabled, non-disabled catalogue
+# and the write touches only the session tenant's own ``TenantSetting`` row.
+
+
+def _optimizer_model_options(configs: list[Any]) -> list[OptimizerModelOptionRead]:
+    """Catalogue options for the optimizer-model Select (this workspace only)."""
+    options: list[OptimizerModelOptionRead] = []
+    for config in configs:
+        if getattr(config, "is_disabled", False):
+            continue
+        for model_id in config.enabled_models or []:
+            options.append(
+                OptimizerModelOptionRead(
+                    model_id=model_id,
+                    config_id=config.id,
+                    config_display_name=config.display_name,
+                    provider_type=config.provider_type,
+                )
+            )
+    return options
+
+
+@ModelConfigRouter.get(
+    "/optimizer-model", response_model=OptimizerModelConfigRead
+)
+async def get_optimizer_model_config(
+    db: DbSession,
+    _: dict = Depends(require_permission(RT_AGENT, "read")),
+) -> OptimizerModelConfigRead:
+    """Return the workspace optimizer-model selection and derived state.
+
+    ``selected_model_id`` is the RAW stored value (a stale id stays visible so
+    the UI can ask for a re-select); ``effective_model_id`` / ``source``
+    describe what optimization would actually use.
+    """
+    configs = await _model_config_service.list_model_configs(db)
+    state = await get_optimizer_model_state(db)
+    return OptimizerModelConfigRead(
+        selected_model_id=await get_optimizer_model_id(db),
+        effective_model_id=state.effective_model_id,
+        source=state.source,
+        configured=state.configured,
+        enabled=state.enabled,
+        reason_code=state.reason_code,
+        options=_optimizer_model_options(configs),
+    )
+
+
+@ModelConfigRouter.put(
+    "/optimizer-model", response_model=OptimizerModelConfigRead
+)
+async def set_optimizer_model_config(
+    body: OptimizerModelConfigUpdate,
+    db: DbSession,
+    _: dict = Depends(require_permission(RT_AGENT, "update")),
+) -> OptimizerModelConfigRead:
+    """Select the workspace optimizer model (``null`` clears → inherit).
+
+    ``422`` when the id is not enabled in this workspace's catalogue. Clearing
+    restores the authoring fallback without writing a second value.
+    """
+    configs = await _model_config_service.list_model_configs(db)
+    allowed_model_ids: set[str] = {
+        option.model_id for option in _optimizer_model_options(configs)
+    }
+    if body.model_id is not None and body.model_id not in allowed_model_ids:
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                "Selected optimizer model is not enabled in this workspace's "
+                "model catalogue"
+            ),
+        )
+
+    await set_optimizer_model_id(db, body.model_id)
+    await db.flush()
+    return await get_optimizer_model_config(db=db, _={})
 
 
 @ModelConfigRouter.get("/{config_id}", response_model=ModelConfigRead)

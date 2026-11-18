@@ -51,6 +51,21 @@ class _QueryResultArgs(BaseModel):
     query: Optional[str] = Field(default=None, description="Optional query filter.")
 
 
+class _RequestLiveTestArgs(BaseModel):
+    script_version_id: str = Field(
+        description=(
+            "The SAVED script version to run end-to-end (the `version_id` "
+            "returned by `generate_script`). The whole script runs once."
+        )
+    )
+    reason: str = Field(
+        description="Why replay cannot prove this script — what is missing."
+    )
+    agent_type_id: Optional[str] = Field(
+        default=None, description="The subject agent type id (this conversation's agent)."
+    )
+
+
 class LangChainSendNotificationTool(BaseTool):
     """LangChain tool that sends a notification via CommHub."""
 
@@ -238,45 +253,13 @@ class LangChainHumanInterveneTool(BaseTool):
                         "Tool-call recording failed for human_intervene: %s", exc
                     )
 
-        # CommHub registration succeeded — pause the agent.
-        # FIX-20261031-133253: for CONVERSATIONAL turns (the assistant), the
-        # tool waits on the in-process conversational resume registry — the
-        # AR /internal/resume call resolves it and the SAME tool call
-        # returns the operator's response. LangGraph interrupt()/Command
-        # resume replayed the tool task (re-registering duplicate requests),
-        # so the conversational path avoids interrupt() entirely. Task
-        # agents keep the existing interrupt() flow unchanged.
-        if self.conv_session_id:
-            from app.core.config import get_settings as _gs
-            from app.agent_runtime import conversation_resume as _cr
-
-            _timeout = float(
-                max(30, int(getattr(_gs(), "conversation_intervention_timeout_seconds", 240)))
-            )
-            _response_value = await _cr.wait_for_resume(
-                self.conv_session_id, timeout_seconds=_timeout
-            )
-            if _response_value is None:
-                return json.dumps(
-                    {
-                        "status": "timeout",
-                        "request_id": request_id,
-                        "error": (
-                            "The confirmation request timed out without an "
-                            "operator response — the operation was NOT executed."
-                        ),
-                    }
-                )
-            return json.dumps(
-                {
-                    "status": (
-                        "approved" if _response_value.get("approval_value") else "resolved"
-                    ),
-                    "request_id": request_id,
-                    **_response_value,
-                }
-            )
-
+        # CommHub registration succeeded — pause the agent with LangGraph's
+        # native interrupt/resume.  This is the SAME mechanism the task path
+        # has always used: a replayed tool task (LangGraph re-executes the
+        # interrupted task on resume) reuses the pending request on the CC
+        # side, and ``interrupt()`` returns the operator's resume value.
+        # The in-process ``conversation_resume`` future is retired — a paused
+        # conversational turn is durably resumable on any AR instance.
         resume_value = interrupt(
             {"request_id": request_id, "intervention_type": intervention_type, "reason": reason}
         )
@@ -293,6 +276,174 @@ class LangChainHumanInterveneTool(BaseTool):
                 }
             )
         return json.dumps({"status": "pending", "request_id": request_id})
+
+
+class LangChainRequestLiveTestTool(BaseTool):
+    """LangChain tool that asks for ONE operator-approved live run of a script.
+
+    The conversational optimizer is replay-only. When replay cannot prove a
+    script, this tool proposes running **that saved script** once, end to end,
+    and pauses the turn with LangGraph's ``interrupt()`` — the same durable
+    pause/resume chain as every other in-chat decision:
+
+    1. Control Center validates the request (the script version must be this
+       agent's own, saved and runnable, with a statically previewable
+       ``tools.call`` set), derives the tool-call preview from the script
+       source, and records the ledger row plus an ``approval`` intervention
+       (nothing runs and nothing is granted yet);
+    2. ``interrupt()`` pauses the turn with the approval card payload;
+    3. on resume the operator's decision has already been consumed by Control
+       Center; for an approval, the script ran ONCE under this agent's own
+       identity and the run record (result + telemetry) rides the resume value,
+       which is returned to the model as this tool's result.
+
+    A refusal (unknown/foreign version, no tool calls, out-of-grant script,
+    already pending, quota exhausted) is returned as a structured refusal and
+    the turn does NOT pause. A replayed tool task (LangGraph re-executes the
+    interrupted task on resume) finds the terminal ledger row and returns that
+    stored outcome instead of asking for a second approval.
+    """
+
+    name: str = "request_live_test"
+    description: str = (
+        "Request ONE operator-approved live run of a SCRIPT you already saved. "
+        "A live test runs the whole script end-to-end against live MCP tools — "
+        "it is NOT a per-tool test and MCP tools are assumed to work. Use it "
+        "only when replay cannot prove the script: save it with "
+        "`generate_script`, then pass its `version_id` as `script_version_id` "
+        "plus the reason. The operator must approve; the script runs once, as "
+        "this agent, and never automatically. Never request a live test for an "
+        "individual tool, never repeat an earlier approval, and never include "
+        "credentials, tokens or secrets."
+    )
+    args_schema: Type[BaseModel] = _RequestLiveTestArgs
+
+    comm_hub_client: Any = Field(exclude=True)
+    session_id: str = Field(exclude=True)
+    agent_type_id: str = Field(exclude=True, default="")
+    conv_session_id: Optional[str] = Field(default=None, exclude=True)
+    tool_call_recorder: Optional[Any] = Field(default=None, exclude=True)
+
+    class Config:
+        arbitrary_types_allowed = True
+
+    def _run(
+        self,
+        script_version_id: str,
+        reason: str,
+        agent_type_id: Optional[str] = None,
+    ) -> str:
+        import asyncio
+        try:
+            loop = asyncio.get_event_loop()
+            return loop.run_until_complete(
+                self._arun(
+                    script_version_id=script_version_id,
+                    reason=reason,
+                    agent_type_id=agent_type_id,
+                )
+            )
+        except Exception as exc:
+            return json.dumps({"error": str(exc)})
+
+    async def _arun(
+        self,
+        script_version_id: str,
+        reason: str,
+        agent_type_id: Optional[str] = None,
+    ) -> str:
+        """Record the proposal via Control Center, then pause (or refuse)."""
+        from langgraph.types import interrupt
+
+        import time
+
+        _started = time.monotonic()
+        _call_status = "success"
+        _call_error: Optional[str] = None
+        try:
+            result = await self.comm_hub_client.call_request_live_test(
+                session_id=self.session_id,
+                script_version_id=str(script_version_id or ""),
+                reason=str(reason or ""),
+                # Never widen the subject here: Control Center derives it from
+                # the conversation and refuses any other agent type.
+                agent_type_id=str(agent_type_id or self.agent_type_id or ""),
+                conv_session_id=self.conv_session_id,
+            )
+        except Exception as exc:
+            logger.error("LangChainRequestLiveTestTool: CommHub call failed: %s", exc)
+            _call_status = "error"
+            _call_error = str(exc)
+            return json.dumps({"status": "error", "error": str(exc)})
+        finally:
+            recorder = self.tool_call_recorder
+            if recorder is not None:
+                try:
+                    await recorder(
+                        tool_name="request_live_test",
+                        route_type="system",
+                        status=_call_status,
+                        duration_ms=int((time.monotonic() - _started) * 1000),
+                        mcp_slug="system",
+                        error=_call_error,
+                    )
+                except Exception as exc:
+                    logger.warning(
+                        "Tool-call recording failed for request_live_test: %s", exc
+                    )
+
+        status = str(result.get("status") or "")
+        if not status and isinstance(result.get("result"), dict):
+            # Defensive: CH relays CC's body verbatim; never treat a wrapped
+            # refusal as an approval.
+            result = result["result"]
+            status = str(result.get("status") or "")
+        if status != "pending":
+            # Refused (nothing recorded) or a replayed task finding the stored
+            # outcome — never pause, just hand the result to the model.
+            return json.dumps(result)
+
+        live_test_request_id = result.get("live_test_request_id")
+        intervene_request_id = result.get("intervene_request_id")
+        resume_value = interrupt(
+            {
+                "request_id": intervene_request_id,
+                "intervention_type": "approval",
+                "reason": (
+                    "Approval requested to run script version "
+                    f"{result.get('script_version_id') or script_version_id} live."
+                ),
+                "live_test": {
+                    "live_test_request_id": live_test_request_id,
+                    "status": "pending",
+                    "expires_at": result.get("expires_at"),
+                    "script_version_id": result.get("script_version_id"),
+                    # Tool-call PREVIEW of the script that will run (the script
+                    # is the unit of approval, not these calls).
+                    "operations": result.get("operations") or [],
+                },
+            }
+        )
+
+        # Reached only after Command(resume=...): Control Center has already
+        # consumed the decision (and run the approved script once).
+        if isinstance(resume_value, dict):
+            return json.dumps(
+                {
+                    "status": "live_test_decided",
+                    "live_test_request_id": live_test_request_id,
+                    "live_test_status": resume_value.get("live_test_status"),
+                    "approval_value": resume_value.get("approval_value"),
+                    "script_version_id": resume_value.get("script_version_id")
+                    or result.get("script_version_id"),
+                    "script_run": resume_value.get("script_run"),
+                    "executed_operations": resume_value.get("executed_operations"),
+                    "live_test_error": resume_value.get("live_test_error"),
+                    "selected_choice": resume_value.get("selected_choice"),
+                    "text_value": resume_value.get("text_value"),
+                }
+            )
+        return json.dumps({"status": "pending", **result})
 
 
 class LangChainQueryResultTool(BaseTool):

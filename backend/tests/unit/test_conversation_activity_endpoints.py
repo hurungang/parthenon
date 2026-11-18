@@ -124,13 +124,27 @@ class TestUpsertEndpoint:
 
     @pytest.mark.asyncio
     async def test_repeated_put_keeps_one_live_row(self, open_client, db_session):
+        from app.services.conversations.turn_resume_store import (
+            ConversationTurnResumeStore,
+        )
+
         conv = await _make_session(db_session)
-        for state in ("thinking", "delegating", "waiting_for_human"):
+        for state in ("thinking", "delegating"):
             response = await open_client.put(
                 ACTIVITY_URL.format(sid=conv.id), json={"state": state}
             )
             assert response.status_code == 200
+
+        resume = await ConversationTurnResumeStore().create_or_reuse(
+            conv.id, db_session
+        )
+        response = await open_client.put(
+            ACTIVITY_URL.format(sid=conv.id),
+            json={"state": "waiting_for_human", "active_resume_id": str(resume.id)},
+        )
+        assert response.status_code == 200
         assert response.json()["state"] == "waiting_for_human"
+        assert response.json()["active_resume_id"] == str(resume.id)
 
         from sqlalchemy import select
 
@@ -148,6 +162,94 @@ class TestUpsertEndpoint:
             .all()
         )
         assert len(rows) == 1
+
+
+TOUCH_URL = "/api/v1/internal/data/conversations/{sid}/activity/touch"
+
+
+class TestTouchEndpoint:
+    """POST /activity/touch — live-turn heartbeat refresh (no state change)."""
+
+    @pytest.mark.asyncio
+    async def test_touch_without_service_cert_is_401(self, secured_client):
+        response = await secured_client.post(TOUCH_URL.format(sid=uuid.uuid4()))
+        assert response.status_code == 401
+
+    @pytest.mark.asyncio
+    async def test_touch_refreshes_last_updated_at_without_changing_state(
+        self, open_client, db_session
+    ):
+        from datetime import datetime, timedelta, timezone
+
+        conv = await _make_session(db_session)
+        await ConversationActivityStore().upsert(
+            conv.id, db_session, state=ActivityState.using_tool, tool_name="cc____x"
+        )
+        stored = await ConversationActivityStore().get(conv.id, db_session)
+        assert stored is not None
+        stale = datetime.now(timezone.utc) - timedelta(minutes=10)
+        stored.last_updated_at = stale
+        await db_session.flush()
+
+        response = await open_client.post(TOUCH_URL.format(sid=conv.id))
+        assert response.status_code == 200, response.text
+        body = response.json()
+        assert body["state"] == "using_tool"
+        assert body["tool_name"] == "cc____x"
+        assert body["is_terminal"] is False
+
+        refreshed = await ConversationActivityStore().get(conv.id, db_session)
+        assert refreshed is not None
+        stored_last_updated = refreshed.last_updated_at
+        if stored_last_updated.tzinfo is None:
+            stored_last_updated = stored_last_updated.replace(tzinfo=timezone.utc)
+        assert stored_last_updated > stale
+        assert refreshed.state == ActivityState.using_tool
+
+    @pytest.mark.asyncio
+    async def test_touch_does_not_refresh_a_paused_row(self, open_client, db_session):
+        from datetime import datetime, timedelta, timezone
+
+        from app.services.conversations.turn_resume_store import (
+            ConversationTurnResumeStore,
+        )
+
+        conv = await _make_session(db_session)
+        resume = await ConversationTurnResumeStore().create_or_reuse(conv.id, db_session)
+        await ConversationActivityStore().upsert(
+            conv.id,
+            db_session,
+            state=ActivityState.waiting_for_human,
+            active_resume_id=resume.id,
+        )
+        stored = await ConversationActivityStore().get(conv.id, db_session)
+        assert stored is not None
+        paused_beat = datetime.now(timezone.utc) - timedelta(minutes=30)
+        stored.last_updated_at = paused_beat
+        await db_session.flush()
+
+        response = await open_client.post(TOUCH_URL.format(sid=conv.id))
+        assert response.status_code == 200, response.text
+        assert response.json()["state"] == "waiting_for_human"
+
+        unchanged = await ConversationActivityStore().get(conv.id, db_session)
+        assert unchanged is not None
+        stored_last_updated = unchanged.last_updated_at
+        if stored_last_updated.tzinfo is None:
+            stored_last_updated = stored_last_updated.replace(tzinfo=timezone.utc)
+        assert stored_last_updated == paused_beat
+
+    @pytest.mark.asyncio
+    async def test_touch_idle_session_returns_explicit_null(self, open_client, db_session):
+        conv = await _make_session(db_session)
+        response = await open_client.post(TOUCH_URL.format(sid=conv.id))
+        assert response.status_code == 200
+        assert response.json() is None
+
+    @pytest.mark.asyncio
+    async def test_touch_unknown_session_is_404(self, open_client):
+        response = await open_client.post(TOUCH_URL.format(sid=uuid.uuid4()))
+        assert response.status_code == 404
 
 
 class TestReadEndpoint:

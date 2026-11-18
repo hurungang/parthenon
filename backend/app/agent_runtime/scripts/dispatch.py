@@ -304,6 +304,7 @@ async def run_session_script_first(
             registry_client=registry_client,
             serving=serving,
             run_llm=run_llm,
+            input_data=input_data,
         )
 
 
@@ -351,6 +352,7 @@ async def _execute_script(
     agent_type_id: str,
     version_label: str | None,
     log_shipper: Callable[..., Any] | None = None,
+    input_data: dict[str, Any] | None = None,
 ) -> tuple[Any, dict[str, Any]]:
     """Run one script execution, returning (result, telemetry)."""
     runner = ScriptRunner(tool_client, log_shipper=log_shipper)
@@ -359,6 +361,7 @@ async def _execute_script(
         session_id=session_id,
         agent_type_id=agent_type_id,
         script_version_label=version_label,
+        initial_context=input_data,
     )
     telemetry: dict[str, Any] = {}
     if isinstance(result, dict):
@@ -474,6 +477,7 @@ async def _attempt_script(
     script_version_label: str | None,
     controller: FallbackController,
     log_shipper: Any = None,
+    input_data: dict[str, Any] | None = None,
 ) -> _ScriptOutcome:
     """Attempt a script run; typed failures are captured (never raised)."""
     try:
@@ -485,6 +489,7 @@ async def _attempt_script(
                 agent_type_id=agent_type_id,
                 version_label=script_version_label,
                 log_shipper=log_shipper,
+                input_data=input_data,
             ),
             script_version_id=script_version_id,
             script_version_label=script_version_label,
@@ -538,8 +543,14 @@ async def _run_script_path(
     registry_client: ScriptRegistryClient,
     serving: _ServingScript,
     run_llm: Callable[[], Awaitable[None]],
+    input_data: dict[str, Any] | None = None,
 ) -> None:
-    """Run the serving script; on any failure fall back unconditionally (E2)."""
+    """Run the serving script; on any failure fall back unconditionally (E2).
+
+    ``input_data`` is the session's typed input payload. It is bound as the
+    sandbox ``context`` so scripts can read the task fields (e.g.
+    ``context['origin']``) exactly as they were recorded during verification.
+    """
     # Composition validation before execution (Phase 2.5): a sandboxed
     # python_source version must sandbox-compile; a declarative graph must
     # StepGraph-validate. Any failure → unconditional LLM fallback; the run
@@ -564,6 +575,7 @@ async def _run_script_path(
             registry_client=registry_client,
             serving=serving,
             run_llm=run_llm,
+            input_data=input_data,
         )
         return
 
@@ -599,6 +611,7 @@ async def _run_script_path(
         script_version_label=serving.script_version_label,
         controller=controller,
         log_shipper=log_shipper,
+        input_data=input_data,
     )
 
     outcome: _ScriptOutcome = first
@@ -642,6 +655,7 @@ async def _run_script_path(
                 script_version_label=None,
                 controller=controller,
                 log_shipper=log_shipper,
+                input_data=input_data,
             )
             if retry.ok:
                 logger.info(
@@ -688,6 +702,7 @@ async def _run_sandboxed_script_path(
     registry_client: ScriptRegistryClient,
     serving: _ServingScript,
     run_llm: Callable[[], Awaitable[None]],
+    input_data: dict[str, Any] | None = None,
 ) -> None:
     """Run a model-authored ``python_source`` version in the AR sandbox (N3).
 
@@ -722,6 +737,9 @@ async def _run_sandboxed_script_path(
                 serving.memory_limit_mb,
                 serving.wall_time_limit_seconds,
             ),
+            # The session's typed input IS the script context. Without this the
+            # sandbox sees an empty dict and every input field reads as None.
+            initial_context=input_data,
         )
         telemetry: dict[str, Any] = {}
         if isinstance(result, dict):
@@ -729,7 +747,7 @@ async def _run_sandboxed_script_path(
         return result, telemetry
 
     try:
-        result = await controller.run_with_fallback(
+        run_output = await controller.run_with_fallback(
             _run,
             script_version_id=serving.script_version_id,
             script_version_label=serving.script_version_label,
@@ -747,11 +765,18 @@ async def _run_sandboxed_script_path(
         await run_llm()
         return
 
+    # ``_run`` returns ``(result, telemetry)`` and the fallback controller
+    # passes that through on success. Unpack it so the telemetry NEVER becomes
+    # the session output (live defect: output_data was stored as
+    # ``[{"result": ...}, {"duration_ms": ...}]`` and rendered as raw JSON).
     telemetry: dict[str, Any] = {}
-    output_payload: Any = result
-    if isinstance(result, dict):
-        telemetry = result.pop("__execution_telemetry__", {}) or {}
-        output_payload = result
+    output_payload: Any = run_output
+    if (
+        isinstance(run_output, tuple)
+        and len(run_output) == 2
+        and isinstance(run_output[1], dict)
+    ):
+        output_payload, telemetry = run_output
     await _report_success_execution(
         registry_client,
         script_version_id=serving.script_version_id,

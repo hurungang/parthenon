@@ -243,6 +243,176 @@ class TestFallbackAndExecutionReporting:
         assert response.status_code == 422
 
 
+class TestFallbackTriggersRequiresFix:
+    """End-to-end (AR → CC internal API) fallback reaction: reporting a
+    fallback for an optimized-artifact script flags its source plan."""
+
+    async def test_fallback_flags_attributed_optimized_plan(
+        self, internal_client, db_session, tenant_id, test_engine
+    ):
+        from app.db.models.agents import AgentPlan, AgentPlanStatus, AgentType
+        from app.db.models.optimized_plan import (
+            OptimizedImplementationPlan,
+            OptimizedPlanStatus,
+        )
+
+        service = ScriptRegistryService()
+        agent_type = AgentType(
+            tenant_id=tenant_id,
+            name=f"fallback-fix-{uuid.uuid4().hex[:8]}",
+        )
+        db_session.add(agent_type)
+        await db_session.flush()
+        base_plan = AgentPlan(
+            agent_type_id=agent_type.id,
+            plan_steps=[{"name": "fetch", "tool_name": "a____b"}],
+            generation_status=AgentPlanStatus.success,
+        )
+        db_session.add(base_plan)
+        await db_session.flush()
+        plan = OptimizedImplementationPlan(
+            tenant_id=tenant_id,
+            agent_type_id=agent_type.id,
+            agent_plan_id=base_plan.id,
+            plan_steps=[],
+            fully_scripted=True,
+            status=OptimizedPlanStatus.ready,
+        )
+        db_session.add(plan)
+        await db_session.flush()
+
+        definition = await service.create_definition(
+            db_session,
+            name=f"internal-opt-def-{uuid.uuid4().hex[:8]}",
+            agent_type_id=agent_type.id,
+            tenant_id=tenant_id,
+        )
+        definition.source_optimized_plan_id = plan.id
+        await db_session.flush()
+        version = await service.create_version(
+            db_session,
+            definition_id=definition.id,
+            declarative_step_graph=MINIMAL_GRAPH,
+        )
+        from app.db.models.script_registry import ScriptLifecycleStatus
+
+        await service.transition_version(
+            db_session, version.id, ScriptLifecycleStatus.compiled
+        )
+        await db_session.commit()
+        plan_id = plan.id
+
+        execution = (
+            await internal_client.post(
+                "/api/v1/internal/scripts/executions",
+                json={"outcome": "fell_back", "script_version_id": str(version.id)},
+            )
+        ).json()
+        response = await internal_client.post(
+            "/api/v1/internal/scripts/fallbacks",
+            json={
+                "execution_record_id": execution["id"],
+                "script_version_id": str(version.id),
+                "trigger_reason": "execution_error",
+                "resulting_action": "llm_completed",
+                "failure_detail": "NameError: missing_tool",
+            },
+        )
+        assert response.status_code == 201, response.text
+
+        SessionLocal = async_sessionmaker(
+            bind=test_engine, class_=AsyncSession, expire_on_commit=False
+        )
+        async with SessionLocal() as session:
+            reloaded = await session.get(OptimizedImplementationPlan, plan_id)
+            assert reloaded.status == OptimizedPlanStatus.requires_fix
+            comments = reloaded.feedback_comments or []
+            assert len(comments) == 1
+            assert comments[0]["source"] == "execution_derived"
+            assert comments[0]["source_execution_id"] == execution["id"]
+            assert comments[0]["source_fallback_event_id"] == response.json()["id"]
+            assert "execution_error" in comments[0]["summary"]
+            assert "NameError: missing_tool" in comments[0]["summary"]
+
+    async def test_fallback_without_attribution_leaves_plan_untouched(
+        self, internal_client, db_session, tenant_id, test_engine
+    ):
+        """A base-plan script carries no attribution → no plan reaction."""
+        from app.db.models.agents import AgentPlan, AgentPlanStatus, AgentType
+        from app.db.models.optimized_plan import (
+            OptimizedImplementationPlan,
+            OptimizedPlanStatus,
+        )
+        from app.db.models.script_registry import ScriptLifecycleStatus
+
+        service = ScriptRegistryService()
+        agent_type = AgentType(
+            tenant_id=tenant_id,
+            name=f"fallback-base-{uuid.uuid4().hex[:8]}",
+        )
+        db_session.add(agent_type)
+        await db_session.flush()
+        base_plan = AgentPlan(
+            agent_type_id=agent_type.id,
+            plan_steps=[{"name": "fetch", "tool_name": "a____b"}],
+            generation_status=AgentPlanStatus.success,
+        )
+        db_session.add(base_plan)
+        await db_session.flush()
+        plan = OptimizedImplementationPlan(
+            tenant_id=tenant_id,
+            agent_type_id=agent_type.id,
+            agent_plan_id=base_plan.id,
+            plan_steps=[],
+            fully_scripted=True,
+            status=OptimizedPlanStatus.ready,
+        )
+        db_session.add(plan)
+        await db_session.flush()
+
+        definition = await service.create_definition(
+            db_session,
+            name=f"internal-base-def-{uuid.uuid4().hex[:8]}",
+            agent_type_id=agent_type.id,
+            tenant_id=tenant_id,
+        )
+        version = await service.create_version(
+            db_session,
+            definition_id=definition.id,
+            declarative_step_graph=MINIMAL_GRAPH,
+        )
+        await service.transition_version(
+            db_session, version.id, ScriptLifecycleStatus.compiled
+        )
+        await db_session.commit()
+        plan_id = plan.id
+
+        execution = (
+            await internal_client.post(
+                "/api/v1/internal/scripts/executions",
+                json={"outcome": "fell_back", "script_version_id": str(version.id)},
+            )
+        ).json()
+        response = await internal_client.post(
+            "/api/v1/internal/scripts/fallbacks",
+            json={
+                "execution_record_id": execution["id"],
+                "script_version_id": str(version.id),
+                "trigger_reason": "execution_error",
+                "resulting_action": "llm_completed",
+            },
+        )
+        assert response.status_code == 201, response.text
+
+        SessionLocal = async_sessionmaker(
+            bind=test_engine, class_=AsyncSession, expire_on_commit=False
+        )
+        async with SessionLocal() as session:
+            reloaded = await session.get(OptimizedImplementationPlan, plan_id)
+            assert reloaded.status == OptimizedPlanStatus.ready
+            assert not reloaded.feedback_comments
+
+
 async def _compiled_definition(db_session, agent_type_id=None):
     from app.db.models.script_registry import ScriptLifecycleStatus
 

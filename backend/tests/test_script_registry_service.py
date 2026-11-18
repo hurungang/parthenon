@@ -18,6 +18,7 @@ from __future__ import annotations
 import uuid
 
 import pytest
+from sqlalchemy import select
 
 from app.db.models.agents import AgentPlan, AgentPlanStatus, AgentType
 from app.db.models.script_execution import (
@@ -427,6 +428,270 @@ class TestFallbacksAndHealth:
         assert summary["total_fallback_count"] == 1
         assert summary["recent_fallback_count"] == 1
         assert summary["latest_fallback"]["failure_detail"] == "validation diff recorded"
+
+
+# ── Fallback attribution → requires_fix (self-healing) ────────────────────────
+
+
+class TestFallbackMarksOptimizedPlanRequiresFix:
+    """A fallback on an optimized-artifact script flags its source plan.
+
+    Attribution traverses ``script_version_id → ScriptDefinition
+    .source_optimized_plan_id → OptimizedImplementationPlan`` (live plans
+    only). The fallback itself is unchanged — execution continues on the LLM
+    path; the reaction only records that the plan needs a human re-optimize.
+    """
+
+    async def _seed_plan(
+        self,
+        db_session,
+        agent_type,
+        *,
+        status=None,
+        error=None,
+        feedback_comments=None,
+        updated_at=None,
+    ):
+        from datetime import datetime, timezone
+
+        from app.db.models.optimized_plan import (
+            OptimizedImplementationPlan,
+            OptimizedPlanStatus,
+        )
+
+        existing = (
+            await db_session.execute(
+                select(AgentPlan).where(AgentPlan.agent_type_id == agent_type.id)
+            )
+        ).scalar_one_or_none()
+        if existing is not None:
+            base_plan = existing
+        else:
+            base_plan = AgentPlan(
+                agent_type_id=agent_type.id,
+                plan_steps=[{"name": "fetch", "tool_name": "a____b"}],
+                generation_status=AgentPlanStatus.success,
+                updated_at=datetime.now(timezone.utc),
+            )
+            db_session.add(base_plan)
+            await db_session.flush()
+        plan = OptimizedImplementationPlan(
+            agent_type_id=agent_type.id,
+            agent_plan_id=base_plan.id,
+            plan_steps=[],
+            fully_scripted=True,
+            status=status or OptimizedPlanStatus.ready,
+            error=error,
+            feedback_comments=feedback_comments,
+            updated_at=updated_at or datetime.now(timezone.utc),
+        )
+        db_session.add(plan)
+        await db_session.flush()
+
+        # Normalize the freshness pair through the DB: SQLite round-trips
+        # naive datetimes, and the serving lookup compares them directly
+        # (mixed naive/aware timestamps raise). Base is older, plan newer.
+        from datetime import timedelta
+
+        from sqlalchemy import update
+
+        now = datetime.now(timezone.utc)
+        await db_session.execute(
+            update(AgentPlan)
+            .where(AgentPlan.id == base_plan.id)
+            .values(updated_at=now - timedelta(minutes=5))
+        )
+        await db_session.execute(
+            update(OptimizedImplementationPlan)
+            .where(OptimizedImplementationPlan.id == plan.id)
+            .values(updated_at=now)
+        )
+        await db_session.flush()
+        await db_session.refresh(base_plan)
+        await db_session.refresh(plan)
+        return plan
+
+    async def _optimized_version(
+        self, db_session, service, agent_type, plan_id
+    ) -> "object":
+        definition = await service.create_definition(
+            db_session,
+            name=f"opt-def-{uuid.uuid4().hex[:8]}",
+            agent_type_id=agent_type.id,
+            tenant_id=await get_root_tenant_id(db_session),
+        )
+        definition.source_optimized_plan_id = plan_id
+        await db_session.flush()
+        version = await service.create_version(
+            db_session,
+            definition_id=definition.id,
+            declarative_step_graph=MINIMAL_GRAPH,
+        )
+        await service.transition_version(
+            db_session, version.id, ScriptLifecycleStatus.compiled
+        )
+        return version
+
+    async def _fallback(
+        self, db_session, service, version, detail="tool call failed"
+    ):
+        execution = await service.record_execution(
+            db_session,
+            outcome=ScriptExecutionOutcome.fell_back,
+            script_version_id=version.id,
+        )
+        event = await service.record_fallback(
+            db_session,
+            execution_record_id=execution.id,
+            script_version_id=version.id,
+            trigger_reason=FallbackTriggerReason.execution_error,
+            resulting_action=FallbackResultingAction.llm_completed,
+            failure_detail=detail,
+        )
+        return execution, event
+
+    async def test_attributed_fallback_flags_plan_and_appends_feedback(
+        self, db_session, service, agent_type
+    ):
+        from app.db.models.optimized_plan import OptimizedPlanStatus
+
+        plan = await self._seed_plan(db_session, agent_type, error="authoring note")
+        version = await self._optimized_version(
+            db_session, service, agent_type, plan.id
+        )
+
+        execution, event = await self._fallback(
+            db_session, service, version, detail="KeyError: 'id'\nsecond line"
+        )
+
+        await db_session.refresh(plan)
+        assert plan.status == OptimizedPlanStatus.requires_fix
+        # ``error`` is authoring-side and untouched by the fallback reaction.
+        assert plan.error == "authoring note"
+        assert event.script_version_id == version.id
+
+        comments = plan.feedback_comments or []
+        assert len(comments) == 1
+        entry = comments[0]
+        assert entry["source"] == "execution_derived"
+        assert entry["source_execution_id"] == str(execution.id)
+        assert entry["source_fallback_event_id"] == str(event.id)
+        assert "execution_error" in entry["summary"]
+        # First line of the failure detail only.
+        assert "KeyError: 'id'" in entry["summary"]
+        assert "second line" not in entry["summary"]
+        assert "KeyError: 'id'" in entry["raw_feedback"]
+
+    async def test_repeated_fallback_stays_requires_fix_and_appends(
+        self, db_session, service, agent_type
+    ):
+        from app.db.models.optimized_plan import OptimizedPlanStatus
+
+        plan = await self._seed_plan(db_session, agent_type)
+        version = await self._optimized_version(
+            db_session, service, agent_type, plan.id
+        )
+
+        await self._fallback(db_session, service, version)
+        await self._fallback(db_session, service, version)
+
+        await db_session.refresh(plan)
+        assert plan.status == OptimizedPlanStatus.requires_fix
+        assert len(plan.feedback_comments) == 2
+        assert {c["source"] for c in plan.feedback_comments} == {
+            "execution_derived"
+        }
+
+    async def test_retired_plan_is_never_attributed(
+        self, db_session, service, agent_type
+    ):
+        """A late-arriving fallback must not flag a retired (superseded) plan."""
+        from app.db.models.optimized_plan import OptimizedPlanStatus
+
+        plan = await self._seed_plan(
+            db_session, agent_type, status=OptimizedPlanStatus.retired
+        )
+        version = await self._optimized_version(
+            db_session, service, agent_type, plan.id
+        )
+
+        await self._fallback(db_session, service, version)
+
+        await db_session.refresh(plan)
+        assert plan.status == OptimizedPlanStatus.retired
+        assert not plan.feedback_comments
+
+    async def test_base_plan_script_fallback_does_nothing(
+        self, db_session, service, agent_type
+    ):
+        """A base-plan (non-optimized) script carries no attribution → no plan
+        reaction and no errors."""
+        from app.db.models.optimized_plan import OptimizedPlanStatus
+
+        plan = await self._seed_plan(db_session, agent_type)
+        definition = await service.create_definition(
+            db_session,
+            name=f"base-def-{uuid.uuid4().hex[:8]}",
+            agent_type_id=agent_type.id,
+            tenant_id=await get_root_tenant_id(db_session),
+        )
+        version = await service.create_version(
+            db_session,
+            definition_id=definition.id,
+            declarative_step_graph=MINIMAL_GRAPH,
+        )
+        await service.transition_version(
+            db_session, version.id, ScriptLifecycleStatus.compiled
+        )
+
+        await self._fallback(db_session, service, version)
+
+        await db_session.refresh(plan)
+        assert plan.status == OptimizedPlanStatus.ready
+        assert not plan.feedback_comments
+
+    async def test_unknown_script_version_is_a_noop(
+        self, db_session, service, agent_type
+    ):
+        plan = await self._seed_plan(db_session, agent_type)
+        execution = await service.record_execution(
+            db_session,
+            outcome=ScriptExecutionOutcome.fell_back,
+            script_version_id=None,
+        )
+        # No version → the fallback is still recorded, attribution resolves to
+        # nothing, and no plan is touched.
+        await service.record_fallback(
+            db_session,
+            execution_record_id=execution.id,
+            script_version_id=None,
+            trigger_reason=FallbackTriggerReason.execution_error,
+            resulting_action=FallbackResultingAction.llm_completed,
+        )
+        await db_session.refresh(plan)
+        assert not plan.feedback_comments
+
+    async def test_requires_fix_plan_is_not_served_after_attribution(
+        self, db_session, service, agent_type
+    ):
+        plan = await self._seed_plan(db_session, agent_type)
+        version = await self._optimized_version(
+            db_session, service, agent_type, plan.id
+        )
+        served = await service.get_fresh_optimized_plan(
+            db_session, agent_type_id=agent_type.id
+        )
+        assert served is not None
+        assert served["status"] == "ready"
+
+        await self._fallback(db_session, service, version)
+
+        served_after = await service.get_fresh_optimized_plan(
+            db_session, agent_type_id=agent_type.id
+        )
+        assert served_after is None, (
+            "a requires_fix plan must never be silently re-served"
+        )
 
 
 # ── Execution-mode configuration & resolution (E1–E3) ─────────────────────────

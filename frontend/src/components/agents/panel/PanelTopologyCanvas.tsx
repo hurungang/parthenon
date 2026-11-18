@@ -12,6 +12,7 @@ import { dataTypeToInputSchema } from './EquipmentSlots'
 import { useDataTypes } from '../../../hooks/useDataTypes'
 import { useAvailableModels } from '../../../hooks/useAvailableModels'
 import { useAllTools, useMcpServers } from '../../../hooks/useMcpServers'
+import { useAgentTypes } from '../../../hooks/useAgentTypes'
 import apiClient from '../../../api/apiClient'
 import { useTokenHealth } from '../../../hooks/useTokenHealth'
 import { TokenHealthState } from '../../../types/tokenHealth'
@@ -73,6 +74,15 @@ export interface PanelTopologyNames {
    * steps — SOP → skill composition chain in the capabilities zone).
    */
   sopComposedSkillIds: Record<string, string[]>
+  /**
+   * Delegated agent type ids per SOP id (from the SOP detail's
+   * `agent_delegation` steps — SOP → agent delegation branch in the
+   * capabilities zone). Rendered as tree children beneath their SOP, like
+   * composed skills, but with the `agent_type` node type.
+   */
+  sopDelegatedAgentTypeIds: Record<string, string[]>
+  /** Agent type display names by agent type id (delegation branch labels). */
+  agentTypeNames: Record<string, string>
 }
 
 export interface PanelTopologyLabels {
@@ -104,6 +114,8 @@ export interface PanelTopologyLabels {
     grants: string
     /** Label of the SOP → composed skill composition edge. */
     composed: string
+    /** Label of the SOP → delegated agent type edge. */
+    delegates: string
   }
   zones: {
     config: { title: string; subtitle: string }
@@ -143,6 +155,8 @@ export interface PanelTopologyPending {
   sops: boolean
   /** Bound SOP details in flight (composition chain unknown). */
   sopDetails: boolean
+  /** Agent types list in flight (delegated agent labels). */
+  agentTypes: boolean
   /** MCP tools / servers in flight (tools zone resolution). */
   tools: boolean
 }
@@ -156,6 +170,7 @@ export const NO_PENDING: PanelTopologyPending = {
   skills: false,
   sops: false,
   sopDetails: false,
+  agentTypes: false,
   tools: false,
 }
 
@@ -302,7 +317,10 @@ function refLabel(ref: ResolvedRef, id: string, loadingLabel: string): string {
  * skills (from its loaded detail) render as indented tree children beneath
  * it — each SOP wrapped in its own group box — connected by SOP-accent-
  * coloured tree elbow composition edges, and their tools route like any
- * other skill's. Empty slots render as dashed placeholders — except the
+ * other skill's. A SOP's `agent_delegation` steps render as `agent_type`
+ * tree children beneath the SOP (delegated agent labels come from the agent
+ * types list); delegation branches have no tool routing of their own. Empty
+ * slots render as dashed placeholders — except the
  * Skills and SOPs sections, which are omitted entirely when nothing is
  * bound to them (a single empty placeholder remains only when the draft
  * has no capabilities at all) — and the conversational output lock is
@@ -454,7 +472,12 @@ export function buildPanelTopology(
     capabilityIds.push('sop_empty')
   }
   /** Compositions per bound SOP: node id + accent colour + composed skill ids. */
-  const sopCompositions: { sopNodeId: string; sopColor: string; skillIds: string[] }[] = []
+  const sopCompositions: {
+    sopNodeId: string
+    sopColor: string
+    skillIds: string[]
+    agentTypeIds: string[]
+  }[] = []
   for (const binding of sops) {
     const nodeId = `sop_${binding.sop_id}`
     const sopColor = capabilityColor(nodeId)
@@ -477,6 +500,7 @@ export function buildPanelTopology(
       sopNodeId: nodeId,
       sopColor,
       skillIds: names.sopComposedSkillIds?.[binding.sop_id] ?? [],
+      agentTypeIds: names.sopDelegatedAgentTypeIds?.[binding.sop_id] ?? [],
     })
     // Composition unknown while the SOP detail request is in flight: render a
     // pending tree child beneath the SOP (same indented row geometry a real
@@ -505,6 +529,8 @@ export function buildPanelTopology(
   // remains only when the draft has no capabilities at all).
   /** Skill node ids rendered in the capabilities zone (direct + composed). */
   const routedSkillNodeIds = new Set<string>()
+  /** Delegated agent type node ids already rendered (SOP delegation branch). */
+  const routedAgentTypeNodeIds = new Set<string>()
   for (const binding of skills) {
     const nodeId = `skill_${binding.skill_id}`
     routedSkillNodeIds.add(nodeId)
@@ -524,7 +550,7 @@ export function buildPanelTopology(
     grantTargets.push(nodeId)
   }
 
-  // ── SOP composition chain: SOP → composed skills ───────────────────────────
+  // ── SOP composition chain: SOP → composed skills / delegated agents ────────
   // Composed skill nodes render as INDENTED TREE CHILDREN beneath their SOP
   // (node.childOf) — each SOP gets its own group box wrapping itself and its
   // child stack, and the composition edges route as tree elbow connectors
@@ -533,6 +559,12 @@ export function buildPanelTopology(
   // existing node — only the composition edge is added, so no duplicates
   // appear. Until a SOP's detail is loaded its composition is simply absent
   // (the SOP node itself is already rendered).
+  //
+  // The SAME tree geometry carries the SOP's `agent_delegation` steps: each
+  // target agent type renders as an `agent_type` tree child beneath its SOP
+  // (agent-to-agent delegation is part of the procedure, not a skill). Agent
+  // nodes are deduplicated across SOPs the same way composed skills are, and
+  // their edges reuse the SOP's accent colour.
   for (const composition of sopCompositions) {
     const composedNodeIds: string[] = []
     const seen = new Set<string>()
@@ -568,6 +600,37 @@ export function buildPanelTopology(
         ...(index === 0 ? { label: labels.edges.composed } : {}),
       })
     })
+
+    // Delegated agent types (agent_delegation steps) — rendered after the
+    // composed skills in the same tree stack. Reused nodes only gain an edge.
+    const delegatedNodeIds: string[] = []
+    for (const agentTypeId of composition.agentTypeIds) {
+      const nodeId = `agent_type_${agentTypeId}`
+      delegatedNodeIds.push(nodeId)
+      if (routedAgentTypeNodeIds.has(nodeId)) continue
+      routedAgentTypeNodeIds.add(nodeId)
+      const delegatedRef = resolveRef(agentTypeId, names.agentTypeNames, pending.agentTypes)
+      nodes.push({
+        id: nodeId,
+        type: 'agent_type',
+        label: refLabel(delegatedRef, agentTypeId, labels.loading),
+        zone: 'capabilities',
+        group: 'sops',
+        groupLabel: labels.sections.sops,
+        groupColor: SECTION_GROUP_COLOR,
+        childOf: composition.sopNodeId,
+        ...pendingFlag(delegatedRef.pending),
+      })
+    }
+    delegatedNodeIds.forEach((agentNodeId, index) => {
+      edges.push({
+        source: composition.sopNodeId,
+        target: agentNodeId,
+        style: 'solid',
+        color: composition.sopColor,
+        ...(index === 0 ? { label: labels.edges.delegates } : {}),
+      })
+    })
   }
 
   // Solid "equipped with" edges: agent boundary → every capability (label once).
@@ -597,9 +660,9 @@ export function buildPanelTopology(
   // Communication Hub bar (rendered by the renderer between ② and ③) — the
   // runtime monitor's firewall routing, static. Each connector reuses its
   // source skill's accent colour. Skills COMPOSED under a SOP route exactly
-  // like directly bound skills (SOP → skill → tool chain). (SOP delegation
-  // flows are not resolvable client-side from the draft, so no SOP→tool
-  // connectors exist.)
+  // like directly bound skills (SOP → skill → tool chain). Delegated agents
+  // render as SOP tree children above, but their own tools are not resolvable
+  // client-side, so no route connectors originate from an `agent_type` node.
   const toolGroups = new Map<string, string[]>()
   for (const skillNodeId of routedSkillNodeIds) {
     const skillId = skillNodeId.replace(/^skill_/, '')
@@ -796,6 +859,9 @@ export function PanelTopologyCanvas({ agentName, draft, isDirty, onNodeClick }: 
     },
     enabled: boundSopIds.length > 0,
   })
+  // Agent types — used to label the SOP `agent_delegation` branch (the
+  // delegated agent type nodes beneath a bound SOP) with its display name.
+  const { data: agentTypes, isLoading: agentTypesLoading } = useAgentTypes()
   const { data: dataTypesPage, isLoading: dataTypesLoading } = useDataTypes({ page: 1, page_size: 100 })
   const { data: availableModels, isLoading: modelsLoading } = useAvailableModels()
   // Tools zone: MCP tools + servers for MCP-server tool grouping.
@@ -818,18 +884,29 @@ export function PanelTopologyCanvas({ agentName, draft, isDirty, onNodeClick }: 
     }
     const sopNames: Record<string, string> = {}
     for (const sop of sops ?? []) sopNames[sop.id] = sop.name
-    // SOP → composed skills, from each bound SOP's loaded detail
-    // (skill_invocation steps, step order preserved, deduplicated).
+    // SOP → composed skills / delegated agents, from each bound SOP's loaded
+    // detail. Skill nodes come from `skill_invocation` steps; agent type nodes
+    // from `agent_delegation` steps (`target_agent_type_id`). Both preserve
+    // step order and are deduplicated.
     const sopComposedSkillIds: Record<string, string[]> = {}
+    const sopDelegatedAgentTypeIds: Record<string, string[]> = {}
     for (const detail of sopDetails ?? []) {
       if (!detail?.id) continue
-      const composedIds = (detail.steps ?? [])
+      const steps = (detail.steps ?? []).slice().sort((a, b) => a.order - b.order)
+      const composedIds = steps
         .filter((step) => step.step_type === 'skill_invocation' && step.skill_id != null)
-        .slice()
-        .sort((a, b) => a.order - b.order)
         .map((step) => step.skill_id as string)
       sopComposedSkillIds[detail.id] = [...new Set(composedIds)]
+      const delegatedIds = steps
+        .filter(
+          (step) =>
+            step.step_type === 'agent_delegation' && step.target_agent_type_id != null,
+        )
+        .map((step) => step.target_agent_type_id as string)
+      sopDelegatedAgentTypeIds[detail.id] = [...new Set(delegatedIds)]
     }
+    const agentTypeNames: Record<string, string> = {}
+    for (const agentType of agentTypes ?? []) agentTypeNames[agentType.id] = agentType.name
     const dataTypeNames: Record<string, string> = {}
     for (const dataType of dataTypesPage?.items ?? []) dataTypeNames[dataType.id] = dataType.name
     const modelLabels: Record<string, string> = {}
@@ -903,6 +980,7 @@ export function PanelTopologyCanvas({ agentName, draft, isDirty, onNodeClick }: 
       skills: skillsLoading,
       sops: sopsLoading,
       sopDetails: sopDetailsLoading,
+      agentTypes: agentTypesLoading,
       tools: mcpToolsLoading || mcpServersLoading,
     }
 
@@ -923,6 +1001,8 @@ export function PanelTopologyCanvas({ agentName, draft, isDirty, onNodeClick }: 
         skillToolIds,
         identityTokenHealth,
         sopComposedSkillIds,
+        sopDelegatedAgentTypeIds,
+        agentTypeNames,
       },
       {
         hub: t('agents.plan.nodeTypes.communication_hub'),
@@ -945,6 +1025,7 @@ export function PanelTopologyCanvas({ agentName, draft, isDirty, onNodeClick }: 
           equippedWith: t('agents.plan.edgeEquipped'),
           grants: t('agents.plan.edgeGrants'),
           composed: t('agents.plan.edgeComposed'),
+          delegates: t('agents.plan.edgeDelegates'),
         },
         zones: {
           config: {
@@ -965,8 +1046,8 @@ export function PanelTopologyCanvas({ agentName, draft, isDirty, onNodeClick }: 
       },
       pending,
     )
-  }, [agentName, draft, roles, identities, skills, sops, sopDetails, dataTypesPage, availableModels, mcpTools, mcpServers, tokenHealth, t,
-      rolesLoading, identitiesLoading, skillsLoading, sopsLoading, sopDetailsLoading, dataTypesLoading, modelsLoading, mcpToolsLoading, mcpServersLoading])
+  }, [agentName, draft, roles, identities, skills, sops, sopDetails, agentTypes, dataTypesPage, availableModels, mcpTools, mcpServers, tokenHealth, t,
+      rolesLoading, identitiesLoading, skillsLoading, sopsLoading, sopDetailsLoading, agentTypesLoading, dataTypesLoading, modelsLoading, mcpToolsLoading, mcpServersLoading])
 
   const hubLabel = t('agents.plan.nodeTypes.communication_hub')
   const fullscreenLabel = t('agents.panel.topologyFullscreen')

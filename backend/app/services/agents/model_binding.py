@@ -207,6 +207,27 @@ class ModelBindingLayer:
             logger.warning("Failed to decrypt credentials for ModelConfig %s: %s", model_config.id, exc)
             return None
 
+    def build_completion_context(self, model_config: ModelConfig) -> dict[str, Any]:
+        """Build the ``complete_from_context`` config dict from an ORM ModelConfig.
+
+        Returns ``{provider_type, api_base_url, api_key}`` (the same shape the
+        internal ``GET /model-configs/{id}`` data-plane response carries), with
+        the API key decrypted at call time.  Lets Control Center callers invoke
+        ``complete_from_context`` for an explicitly resolved model (e.g. the
+        tenant authoring model) instead of ``complete()`` — which derives the
+        model name from ``AgentType.model_id``.
+
+        Callers must not log or persist the returned dict (it holds the
+        decrypted key); it is local to the model call.
+        """
+        provider = model_config.provider_type
+        provider_key = provider.value if isinstance(provider, ModelProvider) else str(provider)
+        return {
+            "provider_type": provider_key,
+            "api_base_url": model_config.api_base_url,
+            "api_key": self._resolve_api_key(model_config),
+        }
+
     @staticmethod
     def extract_text(response, provider) -> str:
         """Extract the assistant\'s text response from a model response.

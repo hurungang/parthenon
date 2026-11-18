@@ -28,9 +28,10 @@ Parthenon agent identities and MCP sessions rely on OAuth/OIDC refresh tokens th
 
 ## Acceptance Criteria
 
-- Dashboard shows "expired" and "about to expire (within 7 days)" states as separate, clearly labeled indicators for (a) agent identities and (b) MCP sessions.
+- Dashboard shows "expired" and "about to expire (within 7 days)" states as separate, clearly labeled **refresh-token** indicators for (a) agent identities and (b) MCP sessions. Access-token expiry is not an alert state while the refresh token is still valid, because Control Center renews access tokens automatically.
+- Token status labels on the dashboard, agent identity list, and MCP session list explicitly identify the refresh token as the measured credential and show its expiry.
 - Each dashboard warning is clickable and navigates to the relevant agent identity page or MCP session page where the user can refresh/re-authenticate.
-- Before an agent executes, all tokens the execution will use — including those of associated subagents — are checked; if any are expired, execution is blocked with a clear message identifying the affected identity/session, and execution proceeds only after refresh/re-auth.
+- Before an agent executes, all credentials the execution will use — including those of associated subagents — are checked; if any required **refresh token** is expired (or its refresh is unrecoverable), execution is blocked with a clear message identifying the affected identity/session, and execution proceeds only after refresh/re-auth. A merely expired access token that can be refreshed does not block execution.
 - Users can never discover token failure for the first time at execution time; every expired token that would be used is surfaced before the run.
 - In the agent topology diagram, a container whose identity or MCP session is within 7 days of expiry shows a warning state; an expired one shows an error state.
 - Token health checks respect tenant isolation: users only see and are alerted about tokens in their own tenant.
@@ -47,8 +48,8 @@ Parthenon agent identities and MCP sessions rely on OAuth/OIDC refresh tokens th
 
 ## Dependencies & Constraints
 
-- Depends on OIDC provider behavior (Keycloak / Azure EntraID) exposing refresh token expiry information that Control Center can evaluate.
-- Agent identities live in the agent realm and are managed as first-class OIDC principals; the alerting must align with the existing automatic refresh mechanism.
+- Depends on OIDC provider behavior (Keycloak / Azure EntraID) exposing refresh token expiry information that Control Center can evaluate. When a provider reports no refresh-token expiry, the token is treated as having no known expiry (no false warning); when an entity has no refresh token at all, access-token expiry is the fallback signal.
+- Agent identities live in the agent realm and are managed as first-class OIDC principals; the alerting must align with the existing automatic refresh mechanism — the refresh token, not the short-lived access token, is the credential whose expiry matters.
 - Architectural constraint: agents never hold sensitive data including identity tokens; all token resolution/refresh stays in Control Center.
 - Strict tenant isolation applies: token health data and warnings are tenant-scoped end to end.
 - MCP session expiry depends on the credential/identity binding of each named session per MCP server.
