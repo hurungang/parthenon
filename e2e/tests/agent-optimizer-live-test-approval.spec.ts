@@ -349,7 +349,10 @@ test.describe('Live-test approval — approve runs the approved script once', ()
       }),
     })
     const second = reopen.getByTestId(CARD)
-    await expect(second).toHaveAttribute('data-state', 'pending')
+    // Reopening a chat surface re-hydrates over the socket; wait for the card
+    // itself before asserting its state (attribute-only waits race hydration).
+    await expect(second).toBeVisible({ timeout: 15_000 })
+    await expect(second).toHaveAttribute('data-state', 'pending', { timeout: 15_000 })
     await expect(second).toHaveAttribute('data-expanded', 'true')
     await expect(second.getByTestId(`${CARD}-approve`)).toBeEnabled()
     // A fresh script — nothing was inherited from the used approval.

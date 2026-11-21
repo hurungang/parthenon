@@ -1,6 +1,10 @@
 # Results, Scheduling & Notifications — Entities
 
+[← Data model overview](../../overview.md)
+
 All entities below carry a **mandatory tenant binding**: every row belongs to exactly one tenant (when multi-tenancy is disabled, everything binds to the root tenant — never tenant-less). Retrieval, dispatch, and query paths match the exact calling tenant only; there is no shared/global slot and no fallback.
+
+> **Schedules:** cron schedules and their execution history (`ScheduledJob`, `JobExecution`) are shown here for relationship context; the **Scheduling** module ([`../scheduling/entities.md`](../scheduling/entities.md)) is their authoritative home, including business rules and status transitions.
 
 ```mermaid
 erDiagram

@@ -681,8 +681,10 @@ class TestInternalEndpoints:
     async def test_stale_timestamp_401(self, client, db):
         """A correctly signed but STALE set (replay outside the window) → 401."""
         tenant_a, _ = await create_two_tenants(db)
+        # Max age defaults to 86_400s (a signed header set must survive a
+        # whole agent run); sign well outside that window.
         stale = build_tenant_signature_headers(
-            _ctx(tenant_a), timestamp=client._time.time() - 600
+            _ctx(tenant_a), timestamp=client._time.time() - 90_000
         )
         response = await client.get("/probe", headers=stale)
         assert response.status_code == 401

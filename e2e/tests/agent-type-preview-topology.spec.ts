@@ -1,17 +1,20 @@
 import { expect, test, type Page } from '@playwright/test'
 import { FAKE_TOKEN, mockApiCatchAllProxyAware, standardSetup } from './_helpers'
-import { mockPanelWorld, PANEL_ROLE, seedAgents } from './_agent_panel_world'
+import { mockPanelWorld, seedAgents } from './_agent_panel_world'
 
 /**
  * Agent Type preview — unified panel topology canvas (unify-agent-topology-diagram).
  *
- * The agent preview dialog (`AgentTypeDetailsDialog` → Agent Preview tab) for
- * conversational agents now renders the SAME `PanelTopologyCanvas` used by the
- * agent management panel — zoned layout (Configuration / Capabilities / ③ TOOLS),
+ * The agent preview dialog (`AgentTypeDetailsDialog` → "Agent Topology" tab) for
+ * ALL agent types renders the SAME `PanelTopologyCanvas` used by the agent
+ * management panel — zoned layout (① Configuration / ② Capabilities / ③ TOOLS),
  * the Communication Hub bar, empty-slot placeholders — fed by the pure
  * agent-type → draft mapping. Zoom (0.5×–3×, step 1.2) and node interaction
  * (entity view dialogs) work in the preview exactly as in the panel, and the
  * old divergent conversation-topology rendering is gone.
+ *
+ * The implementation plan lives on its own "Implementation Plan" tab (there is
+ * no separate plan-preview modal and no "Agent Preview" tab any more).
  *
  * All backend traffic is mocked via `page.route()` per project convention —
  * no live backend needed.
@@ -19,6 +22,21 @@ import { mockPanelWorld, PANEL_ROLE, seedAgents } from './_agent_panel_world'
 
 test.describe.configure({ timeout: 90_000 })
 
+/**
+ * Locates the agent-type details dialog. Its accessible name is the agent type
+ * name (the DialogTitle renders it), so it is identified by its tab set.
+ */
+function agentDetailsDialog(page: Page) {
+  return page
+    .getByRole('dialog')
+    .filter({ has: page.getByRole('tab', { name: 'Agent Topology' }) })
+}
+
+/**
+ * Opens the agent-type details dialog from the Agent Types list (a row click
+ * opens the dialog — there is no per-row View button) and switches to the
+ * "Agent Topology" tab, where the unified canvas renders.
+ */
 async function openPreview(page: Page, agentName: string) {
   await page.goto('/agents')
   await page.waitForLoadState('load')
@@ -28,11 +46,11 @@ async function openPreview(page: Page, agentName: string) {
   }
   const row = page.getByRole('row').filter({ hasText: agentName })
   await expect(row).toBeVisible()
-  await row.getByLabel('View').click()
+  await row.getByText(agentName, { exact: true }).click()
 
-  const dialog = page.getByRole('dialog')
-  await expect(dialog.getByRole('tab', { name: 'Agent Preview' })).toBeVisible()
-  await dialog.getByRole('tab', { name: 'Agent Preview' }).click()
+  const dialog = agentDetailsDialog(page)
+  await expect(dialog.getByRole('tab', { name: 'Agent Topology' })).toBeVisible()
+  await dialog.getByRole('tab', { name: 'Agent Topology' }).click()
   return true
 }
 
@@ -51,26 +69,27 @@ test.describe('Agent Type preview — unified panel topology canvas', () => {
   }) => {
     if (!(await openPreview(page, 'panel-e2e-conv'))) return
 
-    const dialog = page.getByRole('dialog')
-    const svg = dialog.getByLabel('Agent Topology')
+    const dialog = agentDetailsDialog(page)
+    const canvas = dialog.getByTestId('panel-topology-canvas')
+    await expect(canvas).toBeVisible()
 
     // Zoned composition identical to the panel: role node (Capabilities zone),
     // the composed SOP skill tree, the routed tool, and the ③ TOOLS zone.
-    await expect(svg.getByText('panel-e2e-role')).toBeVisible()
-    await expect(svg.getByText('panel-e2e-sop', { exact: true })).toBeVisible()
-    await expect(svg.getByText('panel-e2e-sop-skill')).toBeVisible()
-    await expect(svg.getByText('panel____search')).toBeVisible()
-    await expect(svg.getByText('③ TOOLS')).toBeVisible()
+    await expect(canvas.getByText('panel-e2e-role')).toBeVisible()
+    await expect(canvas.getByText('panel-e2e-sop', { exact: true })).toBeVisible()
+    await expect(canvas.getByText('panel-e2e-sop-skill')).toBeVisible()
+    await expect(canvas.getByText('panel____search')).toBeVisible()
+    await expect(canvas.getByText('③ TOOLS')).toBeVisible()
 
     // The Communication Hub renders as the vertical hub BAR (not the old
     // divergent preview's dashed "platform messaging" conversation edge).
-    await expect(svg.getByText('Communication Hub')).toBeVisible()
-    await expect(svg.getByText('platform messaging')).toHaveCount(0)
-    await expect(svg.getByText('executes via')).toHaveCount(0)
+    await expect(canvas.getByText('Communication Hub')).toBeVisible()
+    await expect(canvas.getByText('platform messaging')).toHaveCount(0)
+    await expect(canvas.getByText('executes via')).toHaveCount(0)
 
     // Empty-slot placeholders appear for unequipped slots (conv agent has no
     // identity, model, or data types).
-    await expect(svg.getByText('Identity (empty)')).toBeVisible()
+    await expect(canvas.getByText('Identity (empty)')).toBeVisible()
 
     // No stale typed/plan branch content — this is the panel canvas.
     await expect(dialog.getByTestId('no-plan')).toHaveCount(0)
@@ -81,9 +100,9 @@ test.describe('Agent Type preview — unified panel topology canvas', () => {
   }) => {
     if (!(await openPreview(page, 'panel-e2e-conv'))) return
 
-    const dialog = page.getByRole('dialog')
-    const svg = dialog.getByLabel('Agent Topology')
-    await expect(svg.getByText('panel-e2e-role')).toBeVisible()
+    const dialog = agentDetailsDialog(page)
+    const canvas = dialog.getByTestId('panel-topology-canvas')
+    await expect(canvas.getByText('panel-e2e-role')).toBeVisible()
 
     // Enter fullscreen via the canvas header toggle (same control as panel).
     await dialog.getByTestId('panel-topology-fullscreen').click()
@@ -91,7 +110,7 @@ test.describe('Agent Type preview — unified panel topology canvas', () => {
     // Auto-fit on enter: zoom level reads 100%, whole graph visible.
     const overlay = page.getByTestId('panel-topology-fullscreen-overlay')
     await expect(overlay).toBeVisible()
-    await expect(overlay.getByLabel('Agent Topology').getByText('③ TOOLS')).toBeVisible()
+    await expect(overlay.getByText('③ TOOLS')).toBeVisible()
     await expect(page.getByTestId('panel-topology-zoom-level')).toHaveText('100%')
 
     // Zoom in/out steps by the panel's factor (1.2 → 120%).
@@ -109,30 +128,21 @@ test.describe('Agent Type preview — unified panel topology canvas', () => {
     // Exit returns to the inline canvas inside the dialog.
     await page.getByTestId('panel-topology-fullscreen-exit').click()
     await expect(page.getByTestId('panel-topology-fullscreen-overlay')).toHaveCount(0)
-    await expect(svg.getByText('panel-e2e-role')).toBeVisible()
+    await expect(canvas.getByText('panel-e2e-role')).toBeVisible()
   })
 
   test('clicking a topology node opens the entity view dialog', async ({ page }) => {
-    // Role detail fetch (the canvas node click opens AgentRoleViewDialog).
-    await page.route(/\/api\/v1\/agents\/roles\/role-p1(\?.*)?$/, (route) =>
-      route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify(PANEL_ROLE),
-      }),
-    )
-
     if (!(await openPreview(page, 'panel-e2e-conv'))) return
 
-    const dialog = page.getByRole('dialog')
-    const svg = dialog.getByLabel('Agent Topology')
-    await expect(svg.getByText('panel-e2e-role')).toBeVisible()
+    const dialog = agentDetailsDialog(page)
+    const canvas = dialog.getByTestId('panel-topology-canvas')
+    await expect(canvas.getByText('panel-e2e-role')).toBeVisible()
 
     // Click the role node in the preview topology → the role view dialog
     // opens (same interaction contract as the panel's detail bubble).
-    await svg.getByText('panel-e2e-role').click()
+    await canvas.getByText('panel-e2e-role').click()
 
-    await expect(page.getByRole('dialog').getByText('Agent Role')).toBeVisible()
+    await expect(page.getByRole('dialog', { name: 'Agent Role' })).toBeVisible()
   })
 })
 
@@ -177,17 +187,18 @@ test.describe('Agent Type preview — regression of untouched branches', () => {
 
     if (!(await openPreview(page, 'panel-e2e-plan-agent'))) return
 
-    const dialog = page.getByRole('dialog')
+    const dialog = agentDetailsDialog(page)
     // Unified zoned panel canvas renders for typed agents too (fed by the
     // agent-type → draft mapping, not the plan's topology nodes).
-    const svg = dialog.getByLabel('Agent Topology')
-    await expect(svg.getByText('panel-e2e-role')).toBeVisible()
-    await expect(svg.getByText('③ TOOLS')).toBeVisible()
-    await expect(svg.getByText('Communication Hub')).toBeVisible()
+    const canvas = dialog.getByTestId('panel-topology-canvas')
+    await expect(canvas.getByText('panel-e2e-role')).toBeVisible()
+    await expect(canvas.getByText('③ TOOLS')).toBeVisible()
+    await expect(canvas.getByText('Communication Hub')).toBeVisible()
     // The old plan-topology branch content must NOT appear.
-    await expect(svg.getByText('platform messaging')).toHaveCount(0)
+    await expect(canvas.getByText('platform messaging')).toHaveCount(0)
 
-    // Plan steps are still kept below the canvas.
+    // Plan steps are still kept on the Implementation Plan tab.
+    await dialog.getByRole('tab', { name: 'Implementation Plan' }).click()
     await expect(dialog.getByText('Do the thing')).toBeVisible()
   })
 })

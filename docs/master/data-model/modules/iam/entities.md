@@ -1,5 +1,7 @@
 # IAM & Policy Authorization — Entities
 
+[← Data model overview](../../overview.md)
+
 ```mermaid
 erDiagram
     Role ||--o{ PolicyStatement : "contains"

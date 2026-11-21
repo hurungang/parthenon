@@ -60,6 +60,8 @@ Tenants have a unique name and unique web address. Platform admins can create, e
 Isolation is **strict**: every tenant is fully independent — no cross-tenant fallback, sharing, or visibility of business data, ever (see [Strict Tenant Isolation](strict-tenant-isolation.md)).
 
 - **Everything is tenant-owned**: roles, agents, agent identities, MCP hubs and sessions, skills, SOPs, schedules, model configurations, conversations, execution logs, outputs, saved data, notifications, and API keys each belong to exactly one tenant and are filtered automatically in every list, search, and action. Lookups match the exact session tenant only — never shared or tenant-less rows.
+- **Optimization belongs to the tenant**: optimization conversations, optimized plans, scripted artifacts, live-test approvals and their results, and the workspace's authoring/optimizer model choice are tenant-owned and tenant-scoped. A live test runs inside the session's tenant under the agent's identity; nothing crosses a workspace boundary.
+- **Durable conversational work stays in-tenant**: the persisted activity state and the information kept to resume a paused turn contain status and coordination data only — never identity tokens, credentials, or other sensitive material — and a resumed turn stays inside its conversation's tenant and inside the existing service boundaries.
 - **Strict permission containment**: any grant, including wildcards, applies only within the session's tenant — verified by automated containment tests.
 - **Tenant-bound sessions**: a session created at one tenant's address is invalid everywhere outside that tenant.
 - **Agent isolation**: agents execute only with their tenant's skills, tools, credentials, and identities; agent-to-agent messages cannot cross tenants.
@@ -78,6 +80,7 @@ Isolation is **strict**: every tenant is fully independent — no cross-tenant f
 - Tenant root membership cannot be changed, demoted, or removed by anyone; attempts are rejected and audited.
 - Inviting users, creating agent types, or submitting executions beyond the tenant's tier quota is blocked with tier, limit, usage, and upgrade-path feedback; monthly executions reset at the start of each calendar month.
 - No user, agent, or API key — through UI, API, agent execution, scheduling, notifications, or MCP tools — can read or write another tenant's data; attempts return "not found / permission denied" and are recorded as security-relevant audit events.
+- Optimization artifacts (conversations, plans, live-test approvals and results, model choice) resolve only within their owning tenant, and a resumed conversational turn never crosses tenants.
 - Everyone signs in via the unified workspace-address flow; non-members are rejected cleanly with "no access to this workspace".
 - First OIDC sign-in with a default role configured auto-creates membership with that role; with no default role, first-time visitors are rejected without a membership being created.
 - License changes take effect immediately; removing a license falls the tenant back to free-tier defaults.

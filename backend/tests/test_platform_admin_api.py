@@ -100,8 +100,21 @@ async def client(test_engine, _bypass_auth):
             await session.commit()
 
     app.dependency_overrides[get_db] = override_db
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
-        yield c
+
+    # The tenant-resolution middleware opens its own session via
+    # ``from app.db.session import AsyncSessionLocal`` (function-local import), so
+    # it would otherwise read the real PostgreSQL test DB while the endpoints
+    # write SQLite — the two views would diverge as soon as tenancy flips on.
+    # Point the process-wide factory at the same SQLite engine for these tests.
+    from unittest.mock import patch
+
+    import app.db.session as db_session_module
+
+    with patch.object(db_session_module, "AsyncSessionLocal", SessionLocal):
+        async with AsyncClient(
+            transport=ASGITransport(app=app), base_url="http://test"
+        ) as c:
+            yield c
 
 
 @pytest_asyncio.fixture(autouse=True)
@@ -110,6 +123,12 @@ async def _clean_tables(test_engine):
     yield
     SessionLocal = async_sessionmaker(bind=test_engine, class_=AsyncSession, expire_on_commit=False)
     async with SessionLocal() as db:
+        # The tenancy switch is persisted in platform_settings; leaving it set
+        # would make every later test run with tenancy ON (and require a tenant
+        # header), so reset it with the rest of the state.
+        from app.db.models.platform_setting import PlatformSetting
+
+        await db.execute(PlatformSetting.__table__.delete())
         await db.execute(TenantUserMembership.__table__.delete())
         await db.execute(Role.__table__.delete())
         await db.execute(AgentRole.__table__.delete())

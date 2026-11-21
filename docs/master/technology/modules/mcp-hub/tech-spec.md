@@ -186,7 +186,7 @@ Synchronisation (`POST /mcp/servers/{id}/sync`) is hardened: non-fatal initialis
 | `mcp.sessions.passthroughInfo` | i18n key | Informational Alert text shown when passthrough auth type is selected | `frontend/src/i18n/locales/en.json` |
 | `mcp.sessions.needsReauth` | i18n key | Token-status label ("Needs re-authentication") for sessions whose refresh token is unrecoverable | `frontend/src/i18n/locales/en.json` |
 
-## Strict Tenant Isolation (as-built — strict-tenant-isolation change)
+## Strict Tenant Isolation
 
 MCP hub identity is per-tenant `(tenant, slug)`, not platform-wide:
 
@@ -195,7 +195,7 @@ MCP hub identity is per-tenant `(tenant, slug)`, not platform-wide:
 - `ToolPermission` grants and skill bindings enforce same-tenant containment: a grant in tenant A never authorizes tenant B's same-named tool. The `server____tool` wire format is unchanged — tenant qualification happens at resolution time only.
 - Resolution of `server____tool` names at runtime is tenant-filtered and fails closed (see the [multi-tenancy spec](../multi-tenancy/tech-spec.md) and [agent-runtime spec](../agent-runtime/tech-spec.md)).
 
-### As-built Code Reference Map additions
+### Strict Tenant Isolation — Code Reference Map
 
 | Symbol | Type | Description | File |
 |--------|------|-------------|------|
@@ -212,9 +212,9 @@ MCP hub identity is per-tenant `(tenant, slug)`, not platform-wide:
 
 ---
 
-## Control Center MCP entity (`cc`) — lifecycle, permission gating and catalog contract (control-center-chatbot change)
+## Control Center MCP entity (`cc`) — lifecycle, permission gating and catalog contract
 
-Every tenant owns a platform-provisioned **Control Center** MCP entity (slug `cc`) hosting that tenant's `cc____<bare>` management tools. It is the grant anchor for the Control Center Assistant's management surface (agent-side details: [agents module](../agents/tech-spec.md); OAuth plane: [comm-hub module](../comm-hub/tech-spec.md)).
+Every tenant owns a platform-provisioned **Control Center** MCP entity (slug `cc`) hosting that tenant's `cc____<bare>` management tools. It is the grant anchor for the Control Center Assistant's management surface (agent-side details: [agents — assistant](../agents/assistant.md); OAuth plane: [comm-hub module](../comm-hub/tech-spec.md)).
 
 **Platform-provisioned and idempotent.** `AssistantSeeder` is the only writer: name, description, base URL and status drift are refreshed at seed time. The slug can never drift because the router reserves it.
 

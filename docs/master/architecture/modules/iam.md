@@ -17,7 +17,7 @@ flowchart TD
 
     EP[Protected API Endpoint] -->|"Depends(require_permission)"| RP[require_permission<br>FastAPI dependency]
     RP -->|"user_id, module, action"| ENG[PermissionEngine<br>authorize]
-    ENG -->|"validates against"| MAN["ResourceTypeManifest<br>17 namespaced entries"]
+    ENG -->|"validates against"| MAN["ResourceTypeManifest<br>29 registered types"]
     ENG -->|"queries allow policies"| DB
     ENG -->|"Authorized / Denied"| RP
     RP -->|"403"| FEE[Frontend Error Display]

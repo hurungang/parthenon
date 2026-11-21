@@ -23,6 +23,7 @@ Skill Management allows administrators to define, organize, and govern Skills as
 - The Skills list shows each skill's bound tools (grouped by owning server), and a skill with no bound tools carries an explicit "No tools bound" indicator instead of appearing ready to use
 - Adding tool bindings is additive: existing bindings are never silently removed when a skill is updated
 - Skills can be created and updated conversationally through the [Control Center Assistant](control-center-assistant.md), which discovers a server's available tools and binds the needed ones at creation
+- The [MCP Demo App](mcp-demo-app.md) airline scenario ships demo skills (flight search, booking, payment link, ticket status, check-in, seat selection, cancellation) bound to a demo agent role, including a restricted variant that omits a tool so role-level denial can be demonstrated deliberately
 
 ## Key Concepts
 - **Skill**: A reusable, permission-controlled action wrapping one or more tool calls. Each skill carries an `updated_at` timestamp that changes whenever the skill definition is modified.
@@ -52,6 +53,7 @@ Skill Management allows administrators to define, organize, and govern Skills as
 - Updating a skill adds bindings without silently removing existing ones
 - A bound tool the user cannot browse stays visible and pre-selected as read-only, so saving never drops it
 - Skills can be created and updated conversationally through the Control Center Assistant, subject to the same permission enforcement
+- Demo skills for the airline booking scenario are grantable through a demo agent role; a restricted role variant that omits one skill/tool produces a clear access-denied outcome when the agent attempts it, and that path is intentional (used to demonstrate role-based governance)
 
 ## Out of Scope
 - SOP composition and sequencing (covered by SOP Management)

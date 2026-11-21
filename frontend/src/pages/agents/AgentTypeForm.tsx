@@ -622,7 +622,7 @@ export function AgentTypeForm({ values, onChange }: AgentTypeFormProps) {
                 label={t('agents.types.guardrails.maxDelegationDepth')}
                 value={values.guardrail_max_delegation_depth}
                 onChange={(e) => set('guardrail_max_delegation_depth', Number(e.target.value || 0))}
-                inputProps={{ min: 0, max: 32 }}
+                inputProps={{ min: 0 }}
                 fullWidth
               />
               <TextField

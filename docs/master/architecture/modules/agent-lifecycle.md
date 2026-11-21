@@ -79,20 +79,38 @@ If identity-role validation fails, the session fails immediately with a permissi
 At dispatch, the Script-First Dispatcher checks for a serving optimized
 composition (`OptimizedImplementationPlan`):
 
-- If a **fresh** plan exists (ready and newer than the base plan), the run
-  follows the model-authored composition: `fully_scripted` plans execute as
-  a zero-LLM sandboxed script; otherwise the composition's scripts are
-  exposed as invocable tools the LLM orchestrates. Sandbox violations and
+- If a **fresh** plan exists (ready, fresh, and not marked `requires_fix`),
+  the run follows the model-authored composition: `fully_scripted` plans
+  execute as a zero-LLM sandboxed script; otherwise the composition's scripts
+  are exposed as invocable tools the LLM orchestrates. Sandbox violations and
   resource-cap terminations are **unconditional LLM-fallback triggers** with
-  the reason recorded — a run never fails solely because a script failed.
+  the reason recorded — a run never fails solely because a script failed. A
+  fallback attributed to an optimized artifact marks the plan `requires_fix`
+  with recorded feedback, so it is never re-served as healthy.
 - If no fresh plan exists, the run proceeds on the base plan's LLM path
-  (below). The "Run with optimization" option at launch launches the
-  "Optimize & Verify" side execution (command-prompt-driven) that authors
-  and verifies the optimized plan for future runs.
+  (below). Plan authoring is a **separate, explicit Optimize action** (see
+  below) — a normal Run never optimizes.
 
 See [Sandboxed Scripting](sandboxed-scripting.md).
 
-### 3b. Token Preflight (Execution Gate)
+### 3b. Plan Authoring and Optimize (Separate Actions)
+
+Plan authoring and optimization are operator actions, never phases of a run:
+
+| Action | Preconditions | Model |
+|---|---|---|
+| **Run** | The agent type is executable | The agent type's runtime model |
+| **Generate plan** (explicit) | Not a conversational agent type; an authoring model is configured | The workspace authoring model |
+| **Optimize** (one-shot) | At least one successful execution; an authoring model is configured | The workspace authoring model |
+| **Optimization conversation** | Operator may view/optimize the agent type; a usable optimizer or authoring model | The optimizer model, falling back to the authoring model |
+
+When a precondition fails the action is disabled with an explanation and
+nothing is authored — there is no fallback model. Optimization runs as a
+dedicated command execution on Agent Runtime, reading a bounded state window
+and verifying script syntax and tool invocation; the agent type's identity,
+role, and grants are unchanged, and no separate optimizer agent exists.
+
+### 3c. Token Preflight (Execution Gate)
 
 Before any execution is dispatched (including delegated subagents), the Communication Hub Agent Gateway runs a token-health preflight against Control Center: expired tokens **block** the execution (422, re-auth message), tokens expiring within 7 days **warn** without blocking, healthy tokens proceed. No token material ever reaches Agent Runtime. See [Communication Hub Architecture](communication-hub/architecture.md#execution-preflight-gate) and [Token Refresh Service](token-refresh.md).
 
@@ -114,15 +132,15 @@ The loop continues until the LLM produces a final answer or a session limit is r
 
 During the observe-reason-act loop, an agent may call the `human_intervene` system tool to pause execution and request human input. When this occurs:
 
-1. The Agent Runtime serialises the current execution context (messages, iteration count, tool results) and signals suspension to the Communication Hub.
+1. The Agent Runtime pauses the turn and writes its paused state as an **opaque checkpoint to Control Center** (through the Communication Hub), keyed by the conversation session.
 2. The Communication Hub routes the tool call to Control Center for persistence.
-3. Control Center persists the `InterveneRequest` record with `status=pending` and emits an `intervene_request_created` notification event.
-4. The agent session suspends — no further LLM or tool calls are made.
+3. Control Center persists the `InterveneRequest` record with `status=pending`, the resume index entry (validity window, claim), and the authoritative activity state `waiting_for_human`; it emits an `intervene_request_created` notification event.
+4. The turn pauses — no further LLM or tool calls are made on that instance, and nothing about the pause depends on that instance staying alive.
 5. An operator (or business user viewing the live execution log stream) views the request through the Web UI and submits a response (approval Yes/No, choice selection, or free-form text).
-6. The response flows: Web UI → Communication Hub → Control Center, where the response is persisted and the request status becomes `responded`.
-7. Control Center signals resume through the Communication Hub to the Agent Runtime.
-8. The Agent Runtime restores the execution context and injects the response value as the `human_intervene` tool's return value.
-9. The observe-reason-act loop resumes with the human input available to the agent.
+6. The response flows: Web UI → Communication Hub → Control Center, where the response is persisted, the request status becomes `responded`, and the activity state moves out of waiting in the same transaction.
+7. Control Center signals resume through the Communication Hub to **an Agent Runtime instance able to load the checkpoint** — not necessarily the one that paused it.
+8. That instance claims the turn, reloads the checkpoint, and injects the response value as the `human_intervene` tool's return value.
+9. The observe-reason-act loop resumes with the human input available to the agent; the confirmed write applies at most once.
 
 This suspend/resume cycle also applies to the inline intervene popup on the execution log streaming page — when a user is viewing live logs and the agent triggers an intervene request, a popup appears directly on the log page. After the user responds, the popup closes and the stream resumes automatically.
 
@@ -143,7 +161,63 @@ Delegation depth is limited to 1 level for non-conversational agents. The **Dele
 
 ### 6. Result Persistence and Completion
 
-The structured result, full conversation history, and complete execution log are persisted to the Result Store. The Agent Session Queue marks the session as complete. The Agent Instance Dashboard surfaces session status, filtering by state (running / waiting_for_human / completed / failed / cancelled) and time range. See [Agent Instance Dashboard](../agent-instance-dashboard.md) and [Execution Logs](../execution-logs.md).
+The structured result, full conversation history, and complete execution log are persisted to the Result Store. The Agent Session Queue marks the session as complete. The Agent Instance Dashboard surfaces session status, filtering by state (running / waiting_for_human / completed / failed / cancelled) and time range. See [Agent Instance Dashboard](agent-instance-dashboard.md) and [Execution Logs](execution-logs.md).
+
+## Conversational Activity & Pause Lifecycle
+
+A conversational turn has two lifecycles that must always agree: what the assistant is *doing*, and whether a pause is *answerable*. Both are owned by Control Center, so both survive a restart, a reconnect, a rolling deploy, or a different serving instance.
+
+### Activity State Lifecycle
+
+```mermaid
+stateDiagram-v2
+    [*] --> thinking : turn starts
+    thinking --> using_tool : tool call
+    thinking --> delegating : delegation
+    using_tool --> thinking : result
+    delegating --> thinking : result
+    thinking --> waiting_for_human : pause for input
+    using_tool --> waiting_for_human : pause for input
+    waiting_for_human --> thinking : answer accepted
+    thinking --> finished : reply delivered
+    using_tool --> finished : reply delivered
+    waiting_for_human --> timed_out : window closed
+    thinking --> failed : error
+    thinking --> timed_out : heartbeat stopped
+    finished --> [*]
+    failed --> [*]
+    timed_out --> [*]
+```
+
+- **One authoritative record** — Control Center writes it; Agent Runtime originates transitions and Communication Hub forwards them. A reconnecting client is hydrated from it rather than from a live socket.
+- **Freshness is heartbeat-driven** — a working state stays truthful because the heartbeat refreshes it, so a live-but-quiet turn is not mistaken for a dead one.
+- **Terminal always terminates** — `finished`, `failed`, and `timed out` are terminal. A working state whose heartbeat stopped (crash, restart, abandoned turn) resolves as an unexpected termination with an actionable message, never as an eternal spinner.
+
+### Intervention & Resume Lifecycle
+
+```mermaid
+flowchart LR
+    A[Turn pauses] --> B["Awaiting human input<br/>answerable on any instance"]
+    B -->|approved| C["Resumed<br/>claimed by one instance"]
+    B -->|denied| R["Resolved · nothing written"]
+    B -->|"window closed or work ended"| E["No longer resumable<br/>one actionable message"]
+    B -->|"service restart or failover"| B
+    C -->|"write applied once"| D["Resolved · outcome recorded once"]
+    D --> F["Confirmation folded read-only<br/>input re-enabled"]
+    R --> F
+    E --> F
+```
+
+| Situation | Outcome |
+|---|---|
+| Approved inside the validity window | Resumed on an instance that can load the pause; the confirmed write lands once |
+| Denied, or answered with free text | Turn continues on the agent's model-driven path; nothing is written for a denial |
+| Answered outside the window, or the work was ended | Terminal and not resumable, with the reason and a "repeat the request" path |
+| Duplicate response | Returns the stored outcome; no second dispatch and no second write |
+| Service restart or failover while waiting | The pause stays actionable — the state is durable, not process-local |
+| Turn dies mid-flight | Resolved to a terminal failure; the operator can resend immediately |
+
+A displayed pause is always backed by a live resume record, so "waiting for your input" can never coexist with an unresumable turn, and a dead confirmation is never offered as an actionable dialog.
 
 ## Conversational Session Lifecycle
 

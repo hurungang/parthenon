@@ -388,7 +388,7 @@ export function LoginPage() {
   if (isLoading) {
     return (
       <Container maxWidth="sm" sx={{ mt: 12, textAlign: 'center' }}>
-        <CircularProgress />
+        <CircularProgress aria-label={t('app.loading')} />
       </Container>
     )
   }
@@ -428,7 +428,7 @@ export function LoginPage() {
             "find your workspace" card when nothing is bound yet */}
         {effectivePhase === 'resolving' && (
           <Box mt={4}>
-            <CircularProgress />
+            <CircularProgress aria-label={t('app.loading')} />
           </Box>
         )}
         {effectivePhase === 'find' && renderFindWorkspaceForm()}

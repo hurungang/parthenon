@@ -96,6 +96,10 @@ class SessionResponse(BaseModel):
     stop_details: dict | None
     conversation_history: list | None
     created_at: datetime
+    #: Persisted delegation depth of this job (0 for a root run).  Agent
+    #: Runtime seeds its guardrail state from this value so a delegated child
+    #: evaluates nested delegation from its real chain depth instead of zero.
+    delegation_depth: int
 
 
 class ConversationHistoryResponse(BaseModel):
@@ -496,6 +500,7 @@ async def get_session(
         stop_details=job.stop_details,
         conversation_history=job.conversation_history,
         created_at=job.created_at,
+        delegation_depth=job.delegation_depth or 0,
     )
 
 

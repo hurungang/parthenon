@@ -8,15 +8,20 @@
  * - Assign channel to group updates count
  * - Remove channel from group updates count
  * - Delete group removes it from list
+ *
+ * Both list endpoints are paginated (`?limit=&offset=`), so collection globs
+ * end with `**`. Shapes mirror `RecipientGroup` / `NotificationChannel` in
+ * frontend/src/types/index.ts (channel_type uses the enum wire values).
  */
 import { test, expect } from '@playwright/test'
+import type { Page } from '@playwright/test'
 import { standardSetup } from '../_helpers'
 
 const JSON_HEADERS = { 'Content-Type': 'application/json' }
 
 const MOCK_CHANNELS = [
-  { id: 'ch-1', name: 'Ops Webhook', channel_type: 'webhook', is_active: true, properties: [] },
-  { id: 'ch-2', name: 'Slack Alerts', channel_type: 'slack', is_active: true, properties: [] },
+  { id: 'ch-1', name: 'Ops Teams', channel_type: 'TEAMS_WEBHOOK', description: null, is_active: true, created_at: '2026-01-01T00:00:00Z', updated_at: '2026-01-01T00:00:00Z', properties: [] },
+  { id: 'ch-2', name: 'Slack Alerts', channel_type: 'SLACK_WEBHOOK', description: null, is_active: true, created_at: '2026-01-01T00:00:00Z', updated_at: '2026-01-01T00:00:00Z', properties: [] },
 ]
 
 const GROUP_OPS = {
@@ -41,6 +46,8 @@ const GROUP_EMPTY = {
   channel_mappings: [],
 }
 
+const dialog = (page: Page) => page.locator('[role="dialog"].MuiDialog-paper')
+
 test.describe('Recipient Group Management', () => {
   test.beforeEach(async ({ page }) => {
     await standardSetup(page)
@@ -50,10 +57,10 @@ test.describe('Recipient Group Management', () => {
     const errors: string[] = []
     page.on('pageerror', (err) => errors.push(err.message))
 
-    await page.route('**/api/v1/notifications/recipient-groups', (route) =>
+    await page.route('**/api/v1/notifications/recipient-groups**', (route) =>
       route.fulfill({ status: 200, headers: JSON_HEADERS, body: JSON.stringify([GROUP_OPS, GROUP_EMPTY]) })
     )
-    await page.route('**/api/v1/notifications/channels', (route) =>
+    await page.route('**/api/v1/notifications/channels**', (route) =>
       route.fulfill({ status: 200, headers: JSON_HEADERS, body: JSON.stringify(MOCK_CHANNELS) })
     )
 
@@ -65,10 +72,10 @@ test.describe('Recipient Group Management', () => {
   })
 
   test('renders group names and slugs', async ({ page }) => {
-    await page.route('**/api/v1/notifications/recipient-groups', (route) =>
+    await page.route('**/api/v1/notifications/recipient-groups**', (route) =>
       route.fulfill({ status: 200, headers: JSON_HEADERS, body: JSON.stringify([GROUP_OPS, GROUP_EMPTY]) })
     )
-    await page.route('**/api/v1/notifications/channels', (route) =>
+    await page.route('**/api/v1/notifications/channels**', (route) =>
       route.fulfill({ status: 200, headers: JSON_HEADERS, body: JSON.stringify(MOCK_CHANNELS) })
     )
 
@@ -83,27 +90,28 @@ test.describe('Recipient Group Management', () => {
   })
 
   test('renders channel count for each group', async ({ page }) => {
-    await page.route('**/api/v1/notifications/recipient-groups', (route) =>
+    await page.route('**/api/v1/notifications/recipient-groups**', (route) =>
       route.fulfill({ status: 200, headers: JSON_HEADERS, body: JSON.stringify([GROUP_OPS, GROUP_EMPTY]) })
     )
-    await page.route('**/api/v1/notifications/channels', (route) =>
+    await page.route('**/api/v1/notifications/channels**', (route) =>
       route.fulfill({ status: 200, headers: JSON_HEADERS, body: JSON.stringify(MOCK_CHANNELS) })
     )
 
     await page.goto('/admin/notifications/groups')
     await page.waitForLoadState('networkidle')
 
-    // GROUP_OPS has 1 channel, GROUP_EMPTY has 0
-    // Count badge/chip: "1" and "0"
-    await expect(page.getByText('1').first()).toBeVisible()
-    await expect(page.getByText('0').first()).toBeVisible()
+    // GROUP_OPS has 1 channel, GROUP_EMPTY has 0 — the 3rd cell is the count
+    const opsRow = page.getByRole('row').filter({ has: page.getByRole('cell', { name: 'Operations', exact: true }) })
+    const devRow = page.getByRole('row').filter({ has: page.getByRole('cell', { name: 'Dev Team', exact: true }) })
+    await expect(opsRow.getByRole('cell').nth(2)).toHaveText('1')
+    await expect(devRow.getByRole('cell').nth(2)).toHaveText('0')
   })
 
   test('add group button is visible', async ({ page }) => {
-    await page.route('**/api/v1/notifications/recipient-groups', (route) =>
+    await page.route('**/api/v1/notifications/recipient-groups**', (route) =>
       route.fulfill({ status: 200, headers: JSON_HEADERS, body: JSON.stringify([]) })
     )
-    await page.route('**/api/v1/notifications/channels', (route) =>
+    await page.route('**/api/v1/notifications/channels**', (route) =>
       route.fulfill({ status: 200, headers: JSON_HEADERS, body: JSON.stringify([]) })
     )
 
@@ -118,7 +126,7 @@ test.describe('Recipient Group Management', () => {
     const newGroup = { ...GROUP_EMPTY, id: 'grp-new', name: 'New Group', slug: 'new-group', channel_mappings: [] }
     let groups: unknown[] = []
 
-    await page.route('**/api/v1/notifications/recipient-groups', (route) => {
+    await page.route('**/api/v1/notifications/recipient-groups**', (route) => {
       if (route.request().method() === 'GET') {
         route.fulfill({ status: 200, headers: JSON_HEADERS, body: JSON.stringify(groups) })
       } else {
@@ -126,7 +134,7 @@ test.describe('Recipient Group Management', () => {
         route.fulfill({ status: 201, headers: JSON_HEADERS, body: JSON.stringify(newGroup) })
       }
     })
-    await page.route('**/api/v1/notifications/channels', (route) =>
+    await page.route('**/api/v1/notifications/channels**', (route) =>
       route.fulfill({ status: 200, headers: JSON_HEADERS, body: JSON.stringify([]) })
     )
 
@@ -135,12 +143,13 @@ test.describe('Recipient Group Management', () => {
 
     const addBtn = page.getByRole('button').filter({ hasText: /add|create|new/i }).first()
     await addBtn.click()
-    await page.locator('[role="dialog"].MuiDialog-paper').waitFor({ state: 'visible', timeout: 5000 })
+    await expect(dialog(page)).toBeVisible({ timeout: 5000 })
 
-    await page.getByLabel(/name/i).first().fill('New Group')
+    // The required marker is part of the label text, so match by prefix
+    await dialog(page).getByRole('textbox', { name: /^Group Name/ }).fill('New Group')
 
-    await page.getByRole('button', { name: /save|create|add/i }).last().click()
-    await page.locator('[role="dialog"].MuiDialog-paper').waitFor({ state: 'hidden', timeout: 5000 })
+    await dialog(page).getByRole('button', { name: 'Save' }).click()
+    await expect(dialog(page)).toBeHidden({ timeout: 5000 })
 
     await expect(page.getByText('New Group')).toBeVisible({ timeout: 5000 })
   })
@@ -148,7 +157,8 @@ test.describe('Recipient Group Management', () => {
   test('delete group removes it from list', async ({ page }) => {
     let groups = [GROUP_OPS, GROUP_EMPTY]
 
-    await page.route('**/api/v1/notifications/recipient-groups', (route) =>
+    // Collection first, item route second (Playwright resolves last-registered-first)
+    await page.route('**/api/v1/notifications/recipient-groups**', (route) =>
       route.fulfill({ status: 200, headers: JSON_HEADERS, body: JSON.stringify(groups) })
     )
     await page.route('**/api/v1/notifications/recipient-groups/grp-2', (route) => {
@@ -159,7 +169,7 @@ test.describe('Recipient Group Management', () => {
         route.fulfill({ status: 200, headers: JSON_HEADERS, body: JSON.stringify(GROUP_EMPTY) })
       }
     })
-    await page.route('**/api/v1/notifications/channels', (route) =>
+    await page.route('**/api/v1/notifications/channels**', (route) =>
       route.fulfill({ status: 200, headers: JSON_HEADERS, body: JSON.stringify(MOCK_CHANNELS) })
     )
 
@@ -168,7 +178,7 @@ test.describe('Recipient Group Management', () => {
     await expect(page.getByText('Dev Team')).toBeVisible()
 
     // Accept the native confirm() dialog that handleDelete triggers
-    page.once('dialog', (dialog) => dialog.accept())
+    page.once('dialog', (d) => d.accept())
 
     // Delete button is the last IconButton in the row (Edit | Delete)
     const row = page.getByRole('row').filter({ hasText: 'Dev Team' })

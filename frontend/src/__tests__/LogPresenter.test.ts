@@ -906,3 +906,34 @@ describe('presentLog — startedAt / completedAt', () => {
     expect(result.summary.completedAt).toBeNull()
   })
 })
+
+// ── Guardrail usage: delegation depth reflects logged configuration ──────────
+
+describe('presentLog — guardrail usage delegation depth', () => {
+  function snapshotEntry(maxDelegationDepth: number, delegationDepth: number): ExecutionLogEntry {
+    return makeEntry({
+      event_type: 'guardrail.runtime.snapshot',
+      data: {
+        policy_snapshot_id: 'snap-1',
+        current_value: { delegation_depth: delegationDepth },
+        threshold_value: { max_delegation_depth: maxDelegationDepth },
+      },
+    })
+  }
+
+  it('reads current and maximum delegation depth from the logged payload', () => {
+    const result = presentLog(makeLog(), [snapshotEntry(7, 2)])
+
+    expect(result.summary.guardrailUsage?.delegationDepth).toBe(2)
+    expect(result.summary.guardrailUsage?.maxDelegationDepth).toBe(7)
+  })
+
+  it('reports different maximums for different configurations (no fixed constant)', () => {
+    const maxFor = (max: number) =>
+      presentLog(makeLog(), [snapshotEntry(max, 1)]).summary.guardrailUsage?.maxDelegationDepth
+
+    expect(maxFor(3)).toBe(3)
+    expect(maxFor(9)).toBe(9)
+    expect(maxFor(3)).not.toBe(maxFor(9))
+  })
+})

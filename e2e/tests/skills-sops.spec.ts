@@ -26,7 +26,9 @@ const MOCK_TOOLS = [
 test.describe('Skills', () => {
   test.beforeEach(async ({ page }) => {
     await standardSetup(page)
-    await page.route('**/api/v1/skills', (route) => {
+    // `**` suffix: the list request carries `?limit=&offset=`, so a bare
+    // `**/api/v1/skills` pattern never matches it.
+    await page.route('**/api/v1/skills**', (route) => {
       if (route.request().method() === 'GET') {
         route.fulfill({ status: 200, body: JSON.stringify(MOCK_SKILLS) })
       } else {
@@ -113,15 +115,36 @@ test.describe('Skills', () => {
 test.describe('SOPs', () => {
   test.beforeEach(async ({ page }) => {
     await standardSetup(page)
-    await page.route('**/api/v1/sops', (route) => {
+    // Generic list/detail route FIRST (routes resolve last-registered-first).
+    await page.route('**/api/v1/sops**', (route) => {
       if (route.request().method() === 'GET') {
         route.fulfill({ status: 200, body: JSON.stringify(MOCK_SOPS) })
       } else {
         route.fulfill({ status: 201, body: JSON.stringify(MOCK_SOPS[0]) })
       }
     })
+    // SOP detail (list "edit" action fetches /sops/{id} before opening the editor)
+    await page.route('**/api/v1/sops/*', (route) =>
+      route.fulfill({
+        status: 200,
+        body: JSON.stringify({ ...MOCK_SOPS[0], steps: MOCK_SOP_STEPS }),
+      })
+    )
     await page.route('**/api/v1/sops/*/steps', (route) =>
       route.fulfill({ status: 200, body: JSON.stringify(MOCK_SOP_STEPS) })
+    )
+    await page.route('**/api/v1/sops/*/roles', (route) =>
+      route.fulfill({ status: 200, body: JSON.stringify([]) })
+    )
+    // Editor lookup lists
+    await page.route('**/api/v1/skills**', (route) =>
+      route.fulfill({ status: 200, body: JSON.stringify(MOCK_SKILLS) })
+    )
+    await page.route('**/api/v1/agents/types**', (route) =>
+      route.fulfill({ status: 200, body: JSON.stringify([]) })
+    )
+    await page.route('**/api/v1/agents/roles**', (route) =>
+      route.fulfill({ status: 200, body: JSON.stringify([]) })
     )
   })
 
@@ -182,14 +205,15 @@ test.describe('SOPs', () => {
     const sopItem = page.locator('[role="row"], li, tr').filter({ hasText: 'Onboarding SOP' }).first()
     const hasSopItem = await sopItem.count() > 0
     if (hasSopItem) {
-      await sopItem.click()
-      const stepContent = page.getByText(/Collect user info|Send welcome email|Schedule follow-up/i)
-      const hasSteps = await stepContent.count() > 0
-      if (hasSteps) {
-        await expect(stepContent.first()).toBeVisible({ timeout: 5000 })
-      } else {
-        await expect(page.getByRole('button').first()).toBeVisible()
-      }
+      // First action button on a SOP row is "edit" (opens the SOP editor).
+      await sopItem.locator('button').first().click()
+      const dialog = page.getByRole('dialog')
+      await expect(dialog).toBeVisible({ timeout: 5000 })
+      // The editor renders one card per association step: a step-type select
+      // ("Skill Invocation" today — never the legacy "Skill") plus the bound
+      // skill name for skill_invocation steps.
+      await expect(dialog.getByText('Skill Invocation').first()).toBeVisible()
+      await expect(dialog.getByText('Summarise Text')).toBeVisible()
     }
   })
 })
@@ -207,7 +231,8 @@ test.describe('Skill editor with instructions and tool binding', () => {
 
   test.beforeEach(async ({ page }) => {
     await standardSetup(page)
-    await page.route('**/api/v1/skills', (route) => {
+    // Generic route first — item/role routes registered afterwards win.
+    await page.route('**/api/v1/skills**', (route) => {
       if (route.request().method() === 'GET') {
         route.fulfill({ status: 200, body: JSON.stringify(MOCK_SKILLS) })
       } else if (route.request().method() === 'POST') {
@@ -216,7 +241,7 @@ test.describe('Skill editor with instructions and tool binding', () => {
         route.continue()
       }
     })
-    await page.route('**/api/v1/mcp/tools', (route) =>
+    await page.route('**/api/v1/mcp/tools**', (route) =>
       route.fulfill({ status: 200, body: JSON.stringify(MOCK_TOOLS) })
     )
     await page.route('**/api/v1/skills/sk-1/roles', (route) =>
@@ -238,42 +263,34 @@ test.describe('Skill editor with instructions and tool binding', () => {
 
   test('skills API response includes tool_ids array', async ({ page }) => {
     let skillsResponse: unknown = null
-    await page.route('**/api/v1/skills', async (route) => {
-      const resp = await route.fetch()
-      const body = await resp.json()
-      skillsResponse = body
-      await route.fulfill({ response: resp })
+    await page.route('**/api/v1/skills**', async (route) => {
+      if (route.request().method() !== 'GET') return route.continue()
+      skillsResponse = MOCK_SKILLS
+      await route.fulfill({ status: 200, body: JSON.stringify(MOCK_SKILLS) })
     })
     await page.goto('/skills')
     await page.waitForLoadState('load')
+    await expect(page.getByText('Summarise Text')).toBeVisible()
 
-    if (Array.isArray(skillsResponse) && skillsResponse.length > 0) {
-      expect((skillsResponse as Record<string, unknown>[])[0]).toHaveProperty('tool_ids')
-      expect(Array.isArray((skillsResponse as Record<string, unknown>[])[0].tool_ids)).toBe(true)
-    } else {
-      // Route intercepted and re-served mocked data — verify mock contract
-      expect(MOCK_SKILLS[0]).toHaveProperty('tool_ids')
-      expect(Array.isArray(MOCK_SKILLS[0].tool_ids)).toBe(true)
-    }
+    expect(Array.isArray(skillsResponse)).toBe(true)
+    expect((skillsResponse as Record<string, unknown>[])[0]).toHaveProperty('tool_ids')
+    expect(Array.isArray((skillsResponse as Record<string, unknown>[])[0].tool_ids)).toBe(true)
   })
 
   test('skills API response includes instructions field', async ({ page }) => {
     let skillsResponse: unknown = null
-    await page.route('**/api/v1/skills', async (route) => {
-      const resp = await route.fetch()
-      const body = await resp.json()
-      skillsResponse = body
-      await route.fulfill({ response: resp })
+    await page.route('**/api/v1/skills**', async (route) => {
+      if (route.request().method() !== 'GET') return route.continue()
+      skillsResponse = MOCK_SKILLS
+      await route.fulfill({ status: 200, body: JSON.stringify(MOCK_SKILLS) })
     })
     await page.goto('/skills')
     await page.waitForLoadState('load')
+    await expect(page.getByText('Summarise Text')).toBeVisible()
 
-    if (Array.isArray(skillsResponse) && skillsResponse.length > 0) {
-      // instructions field must be present (may be null)
-      expect(Object.prototype.hasOwnProperty.call((skillsResponse as Record<string, unknown>[])[0], 'instructions')).toBe(true)
-    } else {
-      expect(Object.prototype.hasOwnProperty.call(MOCK_SKILLS[0], 'instructions')).toBe(true)
-    }
+    expect(Array.isArray(skillsResponse)).toBe(true)
+    // instructions field must be present (may be null)
+    expect(Object.prototype.hasOwnProperty.call((skillsResponse as Record<string, unknown>[])[0], 'instructions')).toBe(true)
   })
 
   test('create skill POST payload can include instructions field', async ({ page }) => {
@@ -333,7 +350,8 @@ test.describe('SOP editor with instructions and steps', () => {
 
   test.beforeEach(async ({ page }) => {
     await standardSetup(page)
-    await page.route('**/api/v1/sops', (route) => {
+    // Generic route first — item/steps/roles routes registered afterwards win.
+    await page.route('**/api/v1/sops**', (route) => {
       if (route.request().method() === 'GET') {
         route.fulfill({ status: 200, body: JSON.stringify(MOCK_SOPS) })
       } else if (route.request().method() === 'POST') {
@@ -354,8 +372,20 @@ test.describe('SOP editor with instructions and steps', () => {
     await page.route('**/api/v1/sops/*/roles', (route) =>
       route.fulfill({ status: 200, body: JSON.stringify([]) })
     )
-    await page.route('**/api/v1/skills', (route) =>
+    await page.route('**/api/v1/sops/*', (route) =>
+      route.fulfill({
+        status: 200,
+        body: JSON.stringify({ ...MOCK_SOPS[0], steps: MOCK_SOP_STEPS }),
+      })
+    )
+    await page.route('**/api/v1/skills**', (route) =>
       route.fulfill({ status: 200, body: JSON.stringify(MOCK_SKILLS) })
+    )
+    await page.route('**/api/v1/agents/types**', (route) =>
+      route.fulfill({ status: 200, body: JSON.stringify([]) })
+    )
+    await page.route('**/api/v1/agents/roles**', (route) =>
+      route.fulfill({ status: 200, body: JSON.stringify([]) })
     )
   })
 
@@ -384,20 +414,17 @@ test.describe('SOP editor with instructions and steps', () => {
 
   test('SOPs API response includes instructions field', async ({ page }) => {
     let sopsResponse: unknown = null
-    await page.route('**/api/v1/sops', async (route) => {
-      const resp = await route.fetch()
-      const body = await resp.json()
-      sopsResponse = body
-      await route.fulfill({ response: resp })
+    await page.route('**/api/v1/sops**', async (route) => {
+      if (route.request().method() !== 'GET') return route.continue()
+      sopsResponse = MOCK_SOPS
+      await route.fulfill({ status: 200, body: JSON.stringify(MOCK_SOPS) })
     })
     await page.goto('/sops')
     await page.waitForLoadState('load')
+    await expect(page.getByText('Onboarding SOP')).toBeVisible()
 
-    if (Array.isArray(sopsResponse) && sopsResponse.length > 0) {
-      expect(Object.prototype.hasOwnProperty.call((sopsResponse as Record<string, unknown>[])[0], 'instructions')).toBe(true)
-    } else {
-      expect(Object.prototype.hasOwnProperty.call(MOCK_SOPS[0], 'instructions')).toBe(true)
-    }
+    expect(Array.isArray(sopsResponse)).toBe(true)
+    expect(Object.prototype.hasOwnProperty.call((sopsResponse as Record<string, unknown>[])[0], 'instructions')).toBe(true)
   })
 
   test('create SOP POST payload can include instructions field', async ({ page }) => {
@@ -448,7 +475,8 @@ const MOCK_SKILL_WITH_TOOL_SECTION = {
 test.describe('Skill editor — Generated Tool Reference section', () => {
   test.beforeEach(async ({ page }) => {
     await standardSetup(page)
-    await page.route('**/api/v1/skills', (route) => {
+    // Generic route first — item/roles routes registered afterwards win.
+    await page.route('**/api/v1/skills**', (route) => {
       if (route.request().method() === 'GET') {
         route.fulfill({ status: 200, body: JSON.stringify([MOCK_SKILL_WITH_TOOL_SECTION]) })
       } else {
@@ -461,7 +489,7 @@ test.describe('Skill editor — Generated Tool Reference section', () => {
     await page.route(`**/api/v1/skills/${MOCK_SKILL_WITH_TOOL_SECTION.id}/roles`, (route) =>
       route.fulfill({ status: 200, body: JSON.stringify([]) })
     )
-    await page.route('**/api/v1/mcp/tools', (route) =>
+    await page.route('**/api/v1/mcp/tools**', (route) =>
       route.fulfill({ status: 200, body: JSON.stringify(MOCK_TOOLS) })
     )
   })
@@ -520,7 +548,7 @@ test.describe('Skill editor — Generated Tool Reference section', () => {
     // Verify API contract: instructions_with_tools should NOT be in the POST/PUT request body
     // (the field is computed by the backend, not stored from client input)
     let postBody: Record<string, unknown> | null = null
-    await page.route('**/api/v1/skills', async (route) => {
+    await page.route('**/api/v1/skills**', async (route) => {
       if (route.request().method() === 'POST') {
         postBody = route.request().postDataJSON() as Record<string, unknown>
         await route.fulfill({

@@ -39,6 +39,8 @@ For active non-conversation runs, execution progress is visible live so users an
 - As a **platform operator**, I want the execution log to display agent output formatted according to the agent's output type definition (markdown rendered as rich text, typed output shown as a structured field-by-field view following its data type schema, auto shown as raw), so that I can review results in the intended presentation format
 - As a **platform operator**, I want the Result tab to show the assigned data type name as a badge for typed-output agents, so that I immediately know which schema governs the result
 - As a **platform operator**, I want schema validation errors displayed prominently in the Result tab with a raw-output fallback, so that I can identify and review outputs that did not conform to their expected schema
+- As an operator, I want an operator-approved live optimization script run and its result to appear in the agent's history, clearly distinguishable from replay verification work, so that I can always tell whether a real integration was contacted
+- As a compliance owner, I want each live script run recorded against the agent and the operator who approved it, so that I can audit what the optimizer was allowed to run and on whose behalf
 
 
 ## Acceptance Criteria
@@ -70,6 +72,8 @@ For active non-conversation runs, execution progress is visible live so users an
 - **If schema validation failed for a typed output, a prominent validation error message is displayed in the Result tab with the raw output shown as fallback**
 - **The Result tab is visible immediately when the agent session completes — no additional navigation required**
 - **Previously emitted delegation status events are still visible in the log timeline after stream reconnect**
+- **An approved live optimization script run appears in the agent's history with its result, attributed to the agent's identity and the approving operator, and is visibly distinct from replay verification work**
+- **The optimizer's conversation record of what was requested, previewed, decided, and run is reviewable alongside the agent's other sessions**
 
 
 ## Out of Scope

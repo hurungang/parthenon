@@ -1,10 +1,12 @@
 """Unit tests for delegation depth limit enforcement.
 
-Covers Phase 1.1: max_delegation_depth override for non-conversational agents,
-depth guard blocking in _act() and _execute_tool_calls() paths,
-and delegation_depth_blocked event emission.
+Covers configured-maximum depth resolution (no input-type override), starting
+depth provenance (recorded job depth vs legacy input key), depth guard blocking
+in the ``_act()`` path, and ``delegation_depth_blocked`` event emission.
 
-Acceptance criteria: AC-DD-1 through AC-DD-4.
+Acceptance criteria: the configured Max Delegation Depth is the sole depth limit
+for conversational and task agents, and over-deep hops are blocked with the
+configured maximum reported.
 """
 
 import uuid
@@ -49,84 +51,139 @@ def _make_agent_type(input_type: str = "typed", **kwargs) -> MagicMock:
     return agent_type
 
 
-# ── Tests: _build_guardrail_state depth override ─────────────────────────────
+# ── Tests: _build_guardrail_state configured depth ───────────────────────────
 
 
-class TestBuildGuardrailStateDepthOverride:
-    """Verify max_delegation_depth override for non-conversational agents."""
+class TestBuildGuardrailStateConfiguredDepth:
+    """The agent type's configured maximum depth is authoritative.
 
-    def test_conversational_depth_default_is_3(self) -> None:
-        """Conversational agents retain max_delegation_depth=3."""
+    There is no input-type override and no platform cap: conversational and task
+    (non-conversational) agents with the same configuration resolve the same
+    maximum.  The platform default only fills an ABSENT value.
+    """
+
+    def test_conversational_configured_depth_is_honoured(self) -> None:
         executor = AgentRuntimeExecutor()
-        context = {"input_type": "conversation", "guardrail_policy": {}}
+        context = {"input_type": "conversation", "guardrail_policy": {"max_delegation_depth": 5}}
         state = executor._build_guardrail_state(context, {})
-        assert state.max_delegation_depth == 3, (
-            "Conversational agents should have max_delegation_depth=3"
-        )
+        assert state.max_delegation_depth == 5
 
-    def test_typed_input_depth_override_to_1(self) -> None:
-        """Non-conversational (typed) agents get max_delegation_depth=1."""
+    def test_task_configured_depth_is_honoured(self) -> None:
+        """A task agent configured for 5 resolves 5 — not the old forced 1."""
         executor = AgentRuntimeExecutor()
-        context = {"input_type": "typed", "guardrail_policy": {}}
+        context = {"input_type": "typed", "guardrail_policy": {"max_delegation_depth": 5}}
         state = executor._build_guardrail_state(context, {})
-        assert state.max_delegation_depth == 1, (
-            "Non-conversational (typed) agents should have max_delegation_depth=1"
-        )
+        assert state.max_delegation_depth == 5
 
-    def test_none_input_depth_override_to_1(self) -> None:
-        """Non-conversational (none input) agents get max_delegation_depth=1."""
+    def test_task_configured_depth_of_three_is_not_reduced(self) -> None:
         executor = AgentRuntimeExecutor()
-        context = {"input_type": "none", "guardrail_policy": {}}
+        context = {"input_type": "typed", "guardrail_policy": {"max_delegation_depth": 3}}
         state = executor._build_guardrail_state(context, {})
-        assert state.max_delegation_depth == 1, (
-            "Non-conversational (none input) agents should have max_delegation_depth=1"
-        )
-
-    def test_policy_max_depth_respected_for_conversational(self) -> None:
-        """Conversational agents respect the policy's max_delegation_depth if set."""
-        executor = AgentRuntimeExecutor()
-        context = {
-            "input_type": "conversation",
-            "guardrail_policy": {"max_delegation_depth": 5},
-        }
-        state = executor._build_guardrail_state(context, {})
-        assert state.max_delegation_depth == 5, (
-            "Conversational agents should respect policy max_delegation_depth"
-        )
-
-    def test_policy_max_depth_overridden_for_non_conv(self) -> None:
-        """Non-conversational agents override policy max_delegation_depth to 1."""
-        executor = AgentRuntimeExecutor()
-        context = {
-            "input_type": "typed",
-            "guardrail_policy": {"max_delegation_depth": 10},
-        }
-        state = executor._build_guardrail_state(context, {})
-        assert state.max_delegation_depth == 1, (
-            "Non-conversational agents should override policy max_delegation_depth to 1"
-        )
-
-    def test_empty_context_uses_defaults(self) -> None:
-        """Empty context with no input_type uses default max_delegation_depth=3."""
-        executor = AgentRuntimeExecutor()
-        state = executor._build_guardrail_state({}, {})
         assert state.max_delegation_depth == 3
+
+    def test_none_input_is_not_forced_to_one(self) -> None:
+        executor = AgentRuntimeExecutor()
+        context = {"input_type": "none", "guardrail_policy": {"max_delegation_depth": 10}}
+        state = executor._build_guardrail_state(context, {})
+        assert state.max_delegation_depth == 10
+
+    @pytest.mark.parametrize("configured_depth", [0, 1, 3, 7, 64])
+    def test_task_and_conversational_resolve_identically(self, configured_depth: int) -> None:
+        executor = AgentRuntimeExecutor()
+        policy = {"max_delegation_depth": configured_depth}
+        task_state = executor._build_guardrail_state(
+            {"input_type": "typed", "guardrail_policy": dict(policy)}, {}
+        )
+        conv_state = executor._build_guardrail_state(
+            {"input_type": "conversation", "guardrail_policy": dict(policy)}, {}
+        )
+        assert task_state.max_delegation_depth == configured_depth
+        assert conv_state.max_delegation_depth == configured_depth
+
+    def test_zero_configured_depth_is_not_treated_as_unset(self) -> None:
+        """0 is a valid non-negative value: no delegation permitted at the root."""
+        executor = AgentRuntimeExecutor()
+        context = {"input_type": "typed", "guardrail_policy": {"max_delegation_depth": 0}}
+        state = executor._build_guardrail_state(context, {})
+        assert state.max_delegation_depth == 0
+
+    def test_empty_context_uses_platform_default(self) -> None:
+        """No policy value → platform default 3 (unchanged effective default)."""
+        executor = AgentRuntimeExecutor()
+        assert executor._build_guardrail_state({}, {}).max_delegation_depth == 3
+        assert executor._build_guardrail_state(
+            {"guardrail_policy": {}}, {}
+        ).max_delegation_depth == 3
 
     def test_input_type_as_enum_object(self) -> None:
-        """Input_type may be an enum object; verify hasattr check works."""
+        """Input_type may be an enum object; it no longer influences depth."""
         from app.db.models.agents import AgentInputType
+
         executor = AgentRuntimeExecutor()
-        context = {"input_type": AgentInputType.typed, "guardrail_policy": {}}
+        context = {
+            "input_type": AgentInputType.typed,
+            "guardrail_policy": {"max_delegation_depth": 4},
+        }
         state = executor._build_guardrail_state(context, {})
-        assert state.max_delegation_depth == 1
+        assert state.max_delegation_depth == 4
 
     def test_input_type_as_enum_conversation(self) -> None:
-        """Conversational input type as enum object retains depth 3."""
         from app.db.models.agents import AgentInputType
+
         executor = AgentRuntimeExecutor()
-        context = {"input_type": AgentInputType.conversation, "guardrail_policy": {}}
+        context = {
+            "input_type": AgentInputType.conversation,
+            "guardrail_policy": {"max_delegation_depth": 4},
+        }
         state = executor._build_guardrail_state(context, {})
-        assert state.max_delegation_depth == 3
+        assert state.max_delegation_depth == 4
+
+
+# ── Tests: _build_guardrail_state starting depth provenance ──────────────────
+
+
+class TestBuildGuardrailStateStartingDepth:
+    """The run starts from the job's recorded delegation depth."""
+
+    def test_recorded_job_depth_seeds_both_depths(self) -> None:
+        executor = AgentRuntimeExecutor()
+        state = executor._build_guardrail_state({}, {"delegation_depth": 2})
+        assert state.tree_depth == 2
+        assert state.delegation_depth == 2, "delegation_depth must reflect the real chain depth"
+
+    def test_legacy_input_key_resolves_the_same_way(self) -> None:
+        executor = AgentRuntimeExecutor()
+        state = executor._build_guardrail_state(
+            {}, {"input_data": {"__delegation_depth": 2}}
+        )
+        assert state.tree_depth == 2
+        assert state.delegation_depth == 2
+
+    def test_recorded_depth_wins_over_legacy_input_key(self) -> None:
+        executor = AgentRuntimeExecutor()
+        state = executor._build_guardrail_state(
+            {},
+            {"delegation_depth": 2, "input_data": {"__delegation_depth": 5}},
+        )
+        assert state.tree_depth == 2
+        assert state.delegation_depth == 2
+
+    def test_recorded_zero_wins_over_legacy_input_key(self) -> None:
+        """An explicit recorded 0 (root job) is authoritative, not falsy-skipped."""
+        executor = AgentRuntimeExecutor()
+        state = executor._build_guardrail_state(
+            {},
+            {"delegation_depth": 0, "input_data": {"__delegation_depth": 3}},
+        )
+        assert state.tree_depth == 0
+        assert state.delegation_depth == 0
+
+    def test_payload_without_depth_resolves_zero(self) -> None:
+        """Root runs (and stale payloads without the additive field) are unaffected."""
+        executor = AgentRuntimeExecutor()
+        state = executor._build_guardrail_state({}, {})
+        assert state.tree_depth == 0
+        assert state.delegation_depth == 0
 
 
 # ── Tests: _check_runtime_limits_or_raise depth guard ────────────────────────
@@ -149,6 +206,21 @@ class TestCheckRuntimeLimitsDepthGuard:
         with pytest.raises(Exception) as exc_info:
             executor._check_runtime_limits_or_raise(state)
         assert exc_info.value.reason == GuardrailStopReason.DELEGATION_DEPTH_EXCEEDED
+
+    def test_depth_advanced_by_delegation_is_enforced(self) -> None:
+        """Both run-level checks read the same actual chain depth.
+
+        A run whose tree depth is within the maximum but which has advanced its
+        delegation depth beyond it is stopped (the real chain is too deep).
+        """
+        executor = AgentRuntimeExecutor()
+        state = _make_guardrail_state(max_depth=2, current_depth=2)
+        state.delegation_depth = 3  # an in-run delegation advanced the chain
+        with pytest.raises(GuardrailStop) as exc_info:
+            executor._check_runtime_limits_or_raise(state)
+        assert exc_info.value.reason == GuardrailStopReason.DELEGATION_DEPTH_EXCEEDED
+        assert exc_info.value.details["current_value"] == 3
+        assert exc_info.value.details["threshold_value"] == 2
 
     def test_depth_equals_limit_correct_details(self) -> None:
         """Verify the guardrail details contain the depth limit values."""
@@ -174,8 +246,8 @@ class TestDelegationDepthBlockedEventActPath:
 
     @pytest.mark.asyncio
     async def test_depth_blocked_emits_event_and_returns_blocked_result(self) -> None:
-        """When depth exceeds limit, delegation_depth_blocked event is emitted
-        and tool result contains blocked=True."""
+        """When the next hop would exceed the configured max, the event is emitted
+        with that configured maximum and the tool result contains blocked=True."""
         from app.services.agents.agent_loop import TaskAgentLoop
 
         executor = AgentRuntimeExecutor()
@@ -193,9 +265,9 @@ class TestDelegationDepthBlockedEventActPath:
             output_type="auto",
             output_schema=None,
             input_data={},
-            delegation_depth=1,
-            tree_depth=1,  # Already at depth 1 — triggers block on next delegation
-            max_delegation_depth=1,  # Max depth is 1
+            delegation_depth=3,
+            tree_depth=3,  # Already at the configured maximum — a hop would exceed it
+            max_delegation_depth=3,  # Configured maximum (not a platform cap)
         )
 
         with patch.object(executor, '_permission_manager') as mock_permission:
@@ -230,18 +302,63 @@ class TestDelegationDepthBlockedEventActPath:
                 blocked_call = blocked_calls[0]
                 # The delegation target is in the data dict, not the message
                 assert blocked_call.kwargs["data"]["delegation_target"] == "sub-qa"
-                assert blocked_call.kwargs["data"]["max_depth"] == 1
+                assert blocked_call.kwargs["data"]["max_depth"] == 3, (
+                    "The blocked event must carry the CONFIGURED maximum"
+                )
+                # No stale one-level task-agent wording
+                assert "Non-conversational" not in blocked_call.kwargs["message"]
 
-                # Verify tool result contains blocked=True
+                # Verify tool result contains blocked=True and names the configured max
                 assert len(result_ctx.tool_results) >= 1
                 last_result = result_ctx.tool_results[-1]["result"]
                 assert last_result.get("blocked") is True, (
                     "Tool result should contain blocked=True"
                 )
+                assert "configured maximum delegation depth of 3" in last_result["reason"]
+
+    @pytest.mark.asyncio
+    async def test_act_fallback_blocks_at_loop_context_maximum(self) -> None:
+        """With no supplied guardrail state, the act fallback uses the loop
+        context's configured maximum (never a one-level constant)."""
+        from app.services.agents.agent_loop import TaskAgentLoop
+
+        executor = AgentRuntimeExecutor()
+        data_client = AsyncMock()
+        executor._data_client = data_client
+
+        ctx = TaskAgentLoop(
+            session_id=str(uuid.uuid4()),
+            agent_type_id=str(uuid.uuid4()),
+            role_id=str(uuid.uuid4()),
+            allowed_tools=["agent____sub-qa"],
+            system_instruction="You are a test agent",
+            output_type="auto",
+            output_schema=None,
+            input_data={},
+            delegation_depth=7,
+            tree_depth=7,
+            max_delegation_depth=7,
+        )
+
+        with patch.object(executor, '_permission_manager') as mock_permission:
+            mock_permission.check_tool_allowed = MagicMock()
+            with patch.object(executor, '_load_role_mcp_session_map', AsyncMock(return_value={})):
+                ctx._pending_tool_calls = [
+                    {"id": "call-1", "name": "agent____sub-qa", "args": {}},
+                ]
+                with patch("app.agent_runtime.comm_hub_client.CommHubToolClient"):
+                    await executor._act(ctx, {"agent____sub-qa"}, AsyncMock())
+
+        blocked_calls = [
+            call for call in data_client.log_execution_event.call_args_list
+            if call.kwargs.get("event_type") == "delegation_depth_blocked"
+        ]
+        assert len(blocked_calls) == 1
+        assert blocked_calls[0].kwargs["data"]["max_depth"] == 7
 
     @pytest.mark.asyncio
     async def test_depth_allowed_proceeds_with_delegation(self) -> None:
-        """When depth is within limit, delegation proceeds (no blocked event)."""
+        """A hop stays allowed while it is within the configured maximum."""
         from app.services.agents.agent_loop import TaskAgentLoop
 
         executor = AgentRuntimeExecutor()
@@ -258,8 +375,9 @@ class TestDelegationDepthBlockedEventActPath:
             output_type="auto",
             output_schema=None,
             input_data={},
-            delegation_depth=0,  # At depth 0
-            max_delegation_depth=1,  # Max depth is 1 — delegation from depth 0 is ok
+            delegation_depth=1,
+            tree_depth=1,  # Delegated child at chain depth 1
+            max_delegation_depth=3,  # Configured maximum 3 — next hop reaches 2
         )
 
         with patch.object(executor, '_permission_manager') as mock_permission:
@@ -301,6 +419,54 @@ class TestDelegationDepthBlockedEventActPath:
                 assert len(started_calls) >= 1, (
                     "Expected delegation_started event when delegation proceeds"
                 )
+
+    @pytest.mark.asyncio
+    async def test_hop_reaching_exactly_the_configured_maximum_is_allowed(self) -> None:
+        """The last permitted level is allowed: next depth == max is not a block.
+
+        A run at chain depth 2 with configured maximum 3 delegates to depth 3 —
+        the boundary case the pre-change one-level cap always rejected.
+        """
+        from app.services.agents.agent_loop import TaskAgentLoop
+
+        executor = AgentRuntimeExecutor()
+        data_client = AsyncMock()
+        executor._data_client = data_client
+
+        ctx = TaskAgentLoop(
+            session_id=str(uuid.uuid4()),
+            agent_type_id=str(uuid.uuid4()),
+            role_id=str(uuid.uuid4()),
+            allowed_tools=["agent__sub-qa"],
+            system_instruction="You are a test agent",
+            output_type="auto",
+            output_schema=None,
+            input_data={},
+            delegation_depth=2,
+            tree_depth=2,
+            max_delegation_depth=3,  # next_depth (3) == max — last permitted hop
+        )
+
+        with patch.object(executor, '_permission_manager') as mock_permission:
+            mock_permission.check_tool_allowed = MagicMock()
+            with patch.object(executor, '_load_role_mcp_session_map', AsyncMock(return_value={})):
+                ctx._pending_tool_calls = [
+                    {"id": "call-1", "name": "agent__sub-qa", "args": {"query": "test"}},
+                ]
+                with patch(
+                    "app.agent_runtime.comm_hub_client.CommHubToolClient"
+                ) as mock_comm_cls:
+                    mock_comm_cls.return_value.call_a2a_request = AsyncMock(
+                        return_value={"status": "completed", "output": "result"}
+                    )
+                    await executor._act(ctx, {"agent__sub-qa"}, AsyncMock())
+
+        event_types = [
+            call.kwargs.get("event_type")
+            for call in data_client.log_execution_event.call_args_list
+        ]
+        assert "delegation_depth_blocked" not in event_types
+        assert "delegation_started" in event_types
 
 
 # ── Tests: Delegation depth blocked in execute_tool_calls path (non-conv run loop) ──
@@ -390,9 +556,9 @@ class TestDelegationDepthBlockedExecuteToolCalls:
             output_type="auto",
             output_schema=None,
             input_data={},
-            delegation_depth=1,
-            tree_depth=1,  # Block next delegation
-            max_delegation_depth=1,
+            delegation_depth=3,
+            tree_depth=3,  # At the configured maximum — next hop is blocked
+            max_delegation_depth=3,
         )
 
         with patch.object(executor, '_permission_manager') as mock_perm:
@@ -411,28 +577,42 @@ class TestDelegationDepthBlockedExecuteToolCalls:
                 assert len(result_ctx.tool_results) >= 1
 
 
-# ── Tests: Conversational agent depth limit unchanged ────────────────────────
+# ── Tests: conversational agents resolve the configured limit ────────────────
 
 
-class TestConversationalDepthLimitUnchanged:
-    """Verify conversational agents retain their depth limit (AC-DD-4)."""
+class TestConversationalConfiguredDepth:
+    """Conversational agents use the configured maximum like every other type."""
 
     @pytest.mark.asyncio
-    async def test_conversational_agent_depth_3_not_blocked(self) -> None:
-        """Depth 1 delegation from a conversational agent should proceed."""
+    async def test_conversational_agent_default_depth_is_platform_default(self) -> None:
+        """An unconfigured conversational agent resolves the platform default 3."""
         executor = AgentRuntimeExecutor()
         context = {"input_type": "conversation", "guardrail_policy": {}}
         state = executor._build_guardrail_state(context, {})
-        assert state.max_delegation_depth == 3, (
-            "Conversational agents should retain depth limit of 3"
-        )
+        assert state.max_delegation_depth == 3
 
     @pytest.mark.asyncio
-    async def test_conversational_agent_depth_2_from_sub_still_allowed(self) -> None:
-        """Depth 2 delegation (sub-agent of conversational) is still within limit."""
+    async def test_conversational_agent_within_configured_limit_not_blocked(self) -> None:
+        """Depth 2 within a configured maximum of 3 is not a breach."""
         executor = AgentRuntimeExecutor()
-        context = {"input_type": "conversation", "guardrail_policy": {}}
+        context = {
+            "input_type": "conversation",
+            "guardrail_policy": {"max_delegation_depth": 3},
+        }
         state = executor._build_guardrail_state(context, {})
         state.delegation_depth = 2
-        # Should not raise: delegation_depth (2) <= max (3)
+        # Should not raise: delegation_depth (2) <= configured max (3)
         executor._check_runtime_limits_or_raise(state)
+
+    @pytest.mark.asyncio
+    async def test_conversational_agent_honours_deeper_configured_limit(self) -> None:
+        """A conversational agent configured for 6 is allowed through depth 6."""
+        executor = AgentRuntimeExecutor()
+        context = {
+            "input_type": "conversation",
+            "guardrail_policy": {"max_delegation_depth": 6},
+        }
+        state = executor._build_guardrail_state(context, {})
+        state.tree_depth = 6
+        state.delegation_depth = 6
+        executor._check_runtime_limits_or_raise(state)  # no raise at 6/6

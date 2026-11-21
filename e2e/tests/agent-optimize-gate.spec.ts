@@ -373,24 +373,23 @@ test.describe('Optimize gate — blocks then enables the separate Optimize actio
     expect(state.runRequests[0]).toMatchObject({ agent_type_id: AGENT_ID })
     expect(state.runRequests[0]).not.toHaveProperty('optimize')
 
-    // The still-open execution details dialog is closed; Optimize then opens
-    // its own dedicated dialog (never the Run launch dialog).
+    // The still-open execution details dialog is closed; Optimize then starts
+    // its dedicated run directly — there is no pre-run confirmation dialog
+    // (the explanation lives in the Optimized Plan tab help + the chat).
     await dismissExecutionDetails(page)
     await optimizeAction(page).click()
-    const optimizeDialog = dialogWithHeading(page, `Optimize Agent — ${AGENT_NAME}`)
-    await expect(optimizeDialog).toBeVisible()
-    await expect(optimizeDialog.getByText(/Optimization is a dedicated run/)).toBeVisible()
-    await expect(optimizeDialog.getByRole('heading', { name: `Launch Session — ${AGENT_NAME}` })).toHaveCount(0)
-
-    await optimizeDialog.getByTestId('optimize-confirm').click()
 
     // A distinct optimization execution was launched for this agent type.
-    expect(state.optimizeRequests).toHaveLength(1)
+    await expect.poll(() => state.optimizeRequests.length).toBe(1)
     expect(state.optimizeRequests[0]).toEqual({ agent_type_id: AGENT_ID })
-    await expect(optimizeDialog).toBeHidden()
+    // No "Optimize Agent — …" confirmation dialog was ever opened.
+    await expect(dialogWithHeading(page, `Optimize Agent — ${AGENT_NAME}`)).toHaveCount(0)
+    await expect(page.getByTestId('optimize-start-error')).toHaveCount(0)
+    // The launched optimization session's execution details open on top.
+    await dismissExecutionDetails(page)
   })
 
-  test('server re-checks the gate: 412 with reason_code shows the reason + System Config shortcut', async ({
+  test('server re-checks the gate: 412 with reason_code shows the reason in a snackbar', async ({
     page,
   }) => {
     // Gate open in the UI…
@@ -407,21 +406,15 @@ test.describe('Optimize gate — blocks then enables the separate Optimize actio
     }
 
     await optimizeAction(page).click()
-    const dialog = dialogWithHeading(page, `Optimize Agent — ${AGENT_NAME}`)
-    await dialog.getByTestId('optimize-confirm').click()
 
-    const unmet = dialog.getByTestId('optimize-gate-unmet')
+    // The failure is surfaced as a lightweight warning snackbar, localized from
+    // the structured reason_code (not a generic message).
+    const unmet = page.getByTestId('optimize-start-error')
     await expect(unmet).toBeVisible()
-    // Localized from the reason_code, not a generic message.
     await expect(unmet).toContainText(MODEL_NOT_CONFIGURED_COPY)
-    // Authoring-model blockers point the operator at the fix.
-    const shortcut = unmet.getByTestId('optimize-system-config-shortcut')
-    await expect(shortcut).toBeVisible()
-    await expect(shortcut).toHaveAttribute('href', '/system-config')
-    // The dialog stays open (no silent close) and exactly one trigger attempt
-    // was made — nothing was launched.
-    await expect(dialog).toBeVisible()
+    // Nothing was launched and no confirmation dialog exists in this flow.
     expect(state.optimizeRequests).toHaveLength(1)
+    await expect(dialogWithHeading(page, `Optimize Agent — ${AGENT_NAME}`)).toHaveCount(0)
   })
 
   test('server re-checks the gate: legacy reason-only 412 surfaces the backend reason', async ({
@@ -437,13 +430,11 @@ test.describe('Optimize gate — blocks then enables the separate Optimize actio
     state.rejectOptimize = { error: 'optimize_gate_unmet', reason: legacyReason }
 
     await optimizeAction(page).click()
-    const dialog = dialogWithHeading(page, `Optimize Agent — ${AGENT_NAME}`)
-    await dialog.getByTestId('optimize-confirm').click()
 
-    await expect(dialog.getByTestId('optimize-gate-unmet')).toContainText(legacyReason)
-    // No reason code → no System Config shortcut for this blocker.
-    await expect(dialog.getByTestId('optimize-system-config-shortcut')).toHaveCount(0)
-    await expect(dialog).toBeVisible()
+    const unmet = page.getByTestId('optimize-start-error')
+    await expect(unmet).toBeVisible()
+    await expect(unmet).toContainText(legacyReason)
     expect(state.optimizeRequests).toHaveLength(1)
+    await expect(dialogWithHeading(page, `Optimize Agent — ${AGENT_NAME}`)).toHaveCount(0)
   })
 })

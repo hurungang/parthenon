@@ -139,6 +139,8 @@ async def test_tools_default_window_is_not_truncated_at_50(db_session) -> None:
     await _seed_server(db_session, f"supabase-{marker}", 60)
     await _seed_server(db_session, f"mapdemo-{marker}", 3)
 
+    default_limit = _declared_default(list_all_tools, "limit")
+    assert default_limit >= 200
     response = Response()
     with _cc_gate(True):
         page = await list_all_tools(
@@ -146,17 +148,19 @@ async def test_tools_default_window_is_not_truncated_at_50(db_session) -> None:
             db_session,
             response,
             {},
-            limit=_declared_default(list_all_tools, "limit"),
+            limit=default_limit,
             offset=0,
         )
 
-    assert _declared_default(list_all_tools, "limit") >= 200
+    total = int(response.headers["X-Total-Count"])
     assert len(page) > 50, f"default window returned only {len(page)} tools"
-    assert len(page) == int(response.headers["X-Total-Count"])
+    # The window covers the full logical set while it fits, and is capped at the
+    # declared default when the shared test database already holds more rows.
+    assert len(page) == min(total, default_limit)
+    assert total >= 63
     slugs = {tool.server_slug for tool in page}
     assert f"supabase-{marker}" in slugs
     assert f"mapdemo-{marker}" in slugs
-    assert int(response.headers["X-Total-Count"]) >= len(page)
 
 
 @pytest.mark.asyncio
@@ -212,12 +216,16 @@ async def test_cc_tools_hidden_without_control_center_read(db_session) -> None:
 @pytest.mark.asyncio
 async def test_cc_tools_listed_with_control_center_read(db_session) -> None:
     marker = uuid.uuid4().hex[:8]
-    await _seed_server(db_session, "cc", 4)
+    cc_server = await _seed_server(db_session, "cc", 4)
     await _seed_server(db_session, f"supabase-{marker}", 3)
+    seeded_names = {tool.name for tool in await _tools_of(db_session, cc_server)}
 
     with _cc_gate(True):
         page = await list_all_tools(_request(), db_session, Response(), {}, limit=200, offset=0)
-    assert sum(1 for tool in page if tool.server_slug == "cc") == 4
+    visible_names = {tool.name for tool in page if tool.server_slug == "cc"}
+    # The shared test database may already contain other cc rows; assert this
+    # test's seeded tools are all visible rather than a global row count.
+    assert seeded_names <= visible_names
 
 
 # ── Individual tool resolution (referenced cc tools stay visible) ─────────────
@@ -317,8 +325,11 @@ async def test_server_pagination_filters_cc_before_slicing(db_session) -> None:
 
     pages, total = await _walk_servers(db_session, visible=False, page_size=3)
     slugs = [server.slug for server in pages]
+    ids = [server.id for server in pages]
     assert "cc" not in slugs
-    assert len(slugs) == len(set(slugs)), "server duplicated across pages"
+    # Distinct servers may legitimately share a slug across tenants; the
+    # pagination invariant is that no *row* appears twice across pages.
+    assert len(ids) == len(set(ids)), "server duplicated across pages"
     seeded = {f"sv-{marker}-{index:02d}" for index in range(7)}
     assert seeded <= set(slugs)
     assert total == len(pages)
@@ -334,10 +345,12 @@ async def test_server_pagination_includes_cc_once_with_read(db_session) -> None:
     marker = uuid.uuid4().hex[:8]
     for index in range(4):
         await _seed_server(db_session, f"sv-{marker}-{index:02d}", 0)
-    await _seed_server(db_session, "cc", 0)
+    seeded_cc = await _seed_server(db_session, "cc", 0)
 
     pages, total = await _walk_servers(db_session, visible=True, page_size=3)
-    slugs = [server.slug for server in pages]
-    assert slugs.count("cc") == 1
-    assert len(slugs) == len(set(slugs))
+    ids = [server.id for server in pages]
+    # This test's cc server is listed, and no row is repeated across pages.
+    # (The shared test database may hold cc rows from other tenants.)
+    assert str(seeded_cc.id) in {str(server_id) for server_id in ids}
+    assert len(ids) == len(set(ids))
     assert total == len(pages)

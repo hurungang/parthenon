@@ -391,14 +391,29 @@ At least one E2E test suite must run against the real backend stack with **no `p
 
 ---
 
-## 8. Test File References
+## 8. Conversational Pauses Are Now Durable (resumable-agent-turn-persistence, 2026-11)
+
+The **non-conversational** flow in this plan is unchanged (dashboard queue, `running → waiting_for_human → running`). What changed is the **conversational** path that shares the `InterveneRequest` record:
+
+- A conversational pause no longer parks the turn on an in-process future. It returns through the LangGraph interrupt/resume mechanism and persists a resume record + checkpoint owned by Control Center, so an approval still works after CC, CH or AR restarted.
+- Approving applies the confirmed write exactly once, even if the answer is delivered twice (reconnect, double click, retry) — the duplicate returns the stored outcome.
+- A turn that can no longer be resumed resolves to one reason-keyed terminal state (`expired` / `resume_failed` / `cancelled`) instead of the generic "delegated step timed out or failed", and input is re-enabled.
+- An ordinary in-process approval (no restart) closes the confirmation immediately and does **not** claim a "resumed" state.
+
+Coverage, including the mandatory per-service restart drills, lives in **[Resumable Turns](resumable-turn-test-plan.md)**; the inline conversational surface is covered in `conversation-intervention-test-plan.md`.
+
+Key files: `backend/tests/unit/test_management_tool_idempotency.py`, `backend/tests/integration/test_internal_intervene_respond.py`, `backend/tests/integration/test_conversation_pause_resume_flow.py`, `frontend/src/__tests__/ConversationDialog.resumeRecovery.test.tsx`.
+
+---
+
+## 9. Test File References
 
 | Test Layer | File Path |
 |---|---|
-| Backend unit — `InterveneRequestStore` service | [backend/tests/services/test_intervene_service.py](../../../backend/tests/services/test_intervene_service.py) |
-| Backend integration — Intervene API endpoints | [backend/tests/api/v1/test_intervene.py](../../../backend/tests/api/v1/test_intervene.py) |
-| Backend integration — Schema migration verification | [backend/tests/api/v1/test_intervene.py](../../../backend/tests/api/v1/test_intervene.py) |
-| Frontend component — Response dialogs (approval, choice, text) | [frontend/src/__tests__/InterveneResponseDialog.test.tsx](../../../frontend/src/__tests__/InterveneResponseDialog.test.tsx) |
-| Frontend component — Request list | [frontend/src/__tests__/InterveneRequestList.test.tsx](../../../frontend/src/__tests__/InterveneRequestList.test.tsx) |
-| E2E — Full human-in-the-loop flows | [e2e/tests/intervene.spec.ts](../../../e2e/tests/intervene.spec.ts) |
-| E2E — Real backend integration (no mocks) | [e2e/tests/intervene.spec.ts](../../../e2e/tests/intervene.spec.ts) (as `describe` block within the same file or a separate suite) |
+| Backend unit — `InterveneRequestStore` service | [backend/tests/services/test_intervene_service.py](../../../../backend/tests/services/test_intervene_service.py) |
+| Backend integration — Intervene API endpoints | [backend/tests/api/v1/test_intervene.py](../../../../backend/tests/api/v1/test_intervene.py) |
+| Backend integration — Schema migration verification | [backend/tests/api/v1/test_intervene.py](../../../../backend/tests/api/v1/test_intervene.py) |
+| Frontend component — Response dialogs (approval, choice, text) | [frontend/src/__tests__/InterveneResponseDialog.test.tsx](../../../../frontend/src/__tests__/InterveneResponseDialog.test.tsx) |
+| Frontend component — Request list | [frontend/src/__tests__/InterveneRequestList.test.tsx](../../../../frontend/src/__tests__/InterveneRequestList.test.tsx) |
+| E2E — Full human-in-the-loop flows | [e2e/tests/intervene.spec.ts](../../../../e2e/tests/intervene.spec.ts) |
+| E2E — Real backend integration (no mocks) | [e2e/tests/intervene.spec.ts](../../../../e2e/tests/intervene.spec.ts) (as `describe` block within the same file or a separate suite) |

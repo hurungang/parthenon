@@ -423,3 +423,141 @@ class TestTransitions:
         assert closed.terminal_reason_code == "checkpoint_missing"
         assert closed.terminal_message_key == "chat.resume.checkpointUnavailable"
         assert closed.resume_outcome == ResumeOutcome.resume_failed
+
+
+class TestAppliedEffects:
+    """Per-call applied effects: one paused turn may approve a batch of writes."""
+
+    @pytest.mark.asyncio
+    async def test_two_distinct_effect_keys_merge(
+        self, db_session: AsyncSession, store
+    ):
+        conv = await _make_session(db_session)
+        record = await store.create_or_reuse(conv.id, db_session)
+        first = {
+            "tool": "create_skill",
+            "verb": "create",
+            "resource": "skills",
+            "record_id": "skill-1",
+            "name": "one",
+        }
+        second = {
+            "tool": "create_sop",
+            "verb": "create",
+            "resource": "sops",
+            "record_id": "sop-1",
+            "name": "two",
+        }
+
+        await store.mark_write_applied(
+            record.id, db_session, applied_effect_summary=first, effect_key="k1"
+        )
+        await db_session.refresh(record)
+        applied_at = record.applied_at
+        await store.mark_write_applied(
+            record.id, db_session, applied_effect_summary=second, effect_key="k2"
+        )
+
+        await db_session.refresh(record)
+        assert record.write_applied is True
+        assert record.applied_at == applied_at  # first-write stamp preserved
+        summary = record.applied_effect_summary
+        assert summary["effects"] == {"k1": first, "k2": second}
+        # Top-level compatibility fields mirror the latest effect.
+        assert summary["tool"] == "create_sop"
+        assert summary["record_id"] == "sop-1"
+
+    @pytest.mark.asyncio
+    async def test_duplicate_effect_key_raises(self, db_session: AsyncSession, store):
+        conv = await _make_session(db_session)
+        record = await store.create_or_reuse(conv.id, db_session)
+        summary = {
+            "tool": "create_skill",
+            "verb": "create",
+            "resource": "skills",
+            "record_id": "skill-1",
+            "name": "one",
+        }
+
+        await store.mark_write_applied(
+            record.id, db_session, applied_effect_summary=summary, effect_key="same"
+        )
+
+        with pytest.raises(TurnResumeTransitionError):
+            await store.mark_write_applied(
+                record.id,
+                db_session,
+                applied_effect_summary=summary,
+                effect_key="same",
+            )
+
+    @pytest.mark.asyncio
+    async def test_legacy_no_effect_key_still_refuses_a_second_write(
+        self, db_session: AsyncSession, store
+    ):
+        conv = await _make_session(db_session)
+        record = await store.create_or_reuse(conv.id, db_session)
+
+        await store.mark_write_applied(
+            record.id, db_session, applied_effect_summary={"tool": "create_skill"}
+        )
+
+        with pytest.raises(TurnResumeTransitionError):
+            await store.mark_write_applied(
+                record.id, db_session, applied_effect_summary={"tool": "create_sop"}
+            )
+
+    @pytest.mark.asyncio
+    async def test_resolve_preserves_effects_when_no_summary_is_passed(
+        self, db_session: AsyncSession, store
+    ):
+        conv = await _make_session(db_session)
+        record = await store.create_or_reuse(conv.id, db_session)
+        summary = {
+            "tool": "create_skill",
+            "verb": "create",
+            "resource": "skills",
+            "record_id": "skill-1",
+            "name": "one",
+        }
+        await store.mark_write_applied(
+            record.id, db_session, applied_effect_summary=summary, effect_key="k1"
+        )
+
+        closed = await store.resolve(
+            record.id,
+            db_session,
+            ResumeOutcome.approved_applied,
+            write_applied=True,
+        )
+
+        assert closed.is_terminal is True
+        assert closed.applied_effect_summary["effects"]["k1"] == summary
+
+    @pytest.mark.asyncio
+    async def test_resolve_merges_without_dropping_existing_effects(
+        self, db_session: AsyncSession, store
+    ):
+        conv = await _make_session(db_session)
+        record = await store.create_or_reuse(conv.id, db_session)
+        summary = {
+            "tool": "create_skill",
+            "verb": "create",
+            "resource": "skills",
+            "record_id": "skill-1",
+            "name": "one",
+        }
+        await store.mark_write_applied(
+            record.id, db_session, applied_effect_summary=summary, effect_key="k1"
+        )
+
+        closed = await store.resolve(
+            record.id,
+            db_session,
+            ResumeOutcome.approved_applied,
+            write_applied=True,
+            applied_effect_summary={"note": "closed by completion call"},
+        )
+
+        assert closed.applied_effect_summary["effects"]["k1"] == summary
+        assert closed.applied_effect_summary["note"] == "closed by completion call"

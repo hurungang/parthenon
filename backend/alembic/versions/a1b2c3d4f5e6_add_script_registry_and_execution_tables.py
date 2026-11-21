@@ -27,35 +27,36 @@ depends_on: str | Sequence[str] | None = None
 
 # Enums carried on columns with create_type=False — types are created
 # explicitly (idempotently) in _create_enum_types() below.
-script_lifecycle_status = sa.Enum(
+script_lifecycle_status = postgresql.ENUM(
     'draft', 'verified', 'compiled', 'retired',
-    name='script_lifecycle_status_enum', create_type=False,
+    name='script_lifecycle_status_enum',
+    create_type=False,
 )
-script_health_status = sa.Enum(
+script_health_status = postgresql.ENUM(
     'healthy', 'degraded', 'unhealthy',
     name='script_health_status_enum', create_type=False,
 )
-verification_comparison_outcome = sa.Enum(
+verification_comparison_outcome = postgresql.ENUM(
     'match', 'match_within_tolerance', 'mismatch',
     name='verification_comparison_outcome_enum', create_type=False,
 )
-verification_verdict = sa.Enum(
+verification_verdict = postgresql.ENUM(
     'promoted', 'rejected',
     name='verification_verdict_enum', create_type=False,
 )
-fallback_trigger_reason = sa.Enum(
+fallback_trigger_reason = postgresql.ENUM(
     'execution_error', 'tool_schema_mismatch', 'output_validation_failure',
     name='fallback_trigger_reason_enum', create_type=False,
 )
-fallback_resulting_action = sa.Enum(
+fallback_resulting_action = postgresql.ENUM(
     'llm_completed', 'repaired_candidate_produced', 'repair_not_produced',
     name='fallback_resulting_action_enum', create_type=False,
 )
-script_execution_mode = sa.Enum(
+script_execution_mode = postgresql.ENUM(
     'llm', 'compiled_with_fallback', 'compiled_only',
     name='script_execution_mode_enum', create_type=False,
 )
-script_execution_outcome = sa.Enum(
+script_execution_outcome = postgresql.ENUM(
     'success', 'validation_failure', 'fell_back',
     name='script_execution_outcome_enum', create_type=False,
 )
@@ -227,6 +228,13 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    # Circular FK (script_definitions.current_version_id -> script_versions)
+    # must go before script_versions can be dropped.
+    op.execute(
+        "ALTER TABLE script_definitions "
+        "DROP CONSTRAINT IF EXISTS script_definitions_current_version_id_fkey"
+    )
+
     op.drop_index('ix_execution_mode_configurations_agent_type_id', table_name='execution_mode_configurations')
     op.drop_index('ix_execution_mode_configurations_tenant_id', table_name='execution_mode_configurations')
     op.drop_table('execution_mode_configurations')

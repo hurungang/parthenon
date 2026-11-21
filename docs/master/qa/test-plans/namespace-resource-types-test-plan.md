@@ -2,7 +2,7 @@
 
 ## Scope
 
-Covers the migration from flat resource type identifiers to namespaced `module::submodule` format across 17 resource types in 3 modules (`agent`, `integration`, `system`), the `RolePolicyDialog` with Form/JSON dual-view editing, wildcard support (`agent::*`, `*::*`), the Alembic data migration for existing policy statements and resources, and the permission engine's `::`-delimited module matching.
+Covers the migration from flat resource type identifiers to namespaced `module::submodule` format across the namespaced resource types in the module groups (`agent`, `integration`, `system`; `platform` and `tenant` were added later), the `RolePolicyDialog` with Form/JSON dual-view editing, wildcard support (`agent::*`, `*::*`), the Alembic data migration for existing policy statements and resources, and the permission engine's `::`-delimited module matching.
 
 ---
 
@@ -11,20 +11,20 @@ Covers the migration from flat resource type identifiers to namespaced `module::
 ### 1. Namespace Structure & Manifest
 
 **What is tested:**
-- Manifest contains exactly 17 entries across 3 modules (12 agent, 2 integration, 3 system)
+- Manifest contains every registered resource type across its module groups (17 at introduction; currently 29 — agent 15, integration 3, system 5, platform 3, tenant 2, plus the bare `agent`)
 - Every identifier uses `module::submodule` format with `::` delimiter
 - No deeper nesting than two layers
 - Backend `RT_*` constants renamed/added to match new identifiers
-- `GET /api/v1/policy/resource-types` returns 17 namespaced entries with `resource_type` and `actions` fields
+- `GET /api/v1/policy/resource-types` returns every namespaced entry with `resource_type` and `actions` fields
 - Flat legacy values absent from endpoint response
 
 **Acceptance criteria:**
-- Manifest structure verified: 17 keys, 3 modules
+- Manifest structure verified: all keys present and grouped by module
 - `::` delimiter parsing: `agent::roles` splits to `("agent", "roles")`
 - Module grouping: `agent` (12), `integration` (2), `system` (3)
 
 **Test files:**
-- [backend/tests/unit/test_resource_type_manifest.py](../../../../backend/tests/unit/test_resource_type_manifest.py) — Manifest structure: 17 namespaced identifiers, module grouping, legacy constant removal/alias verification, wildcard resolution helpers
+- [backend/tests/unit/test_resource_type_manifest.py](../../../../backend/tests/unit/test_resource_type_manifest.py) — Manifest structure: all namespaced identifiers present with module grouping, legacy constant removal/alias verification, wildcard resolution helpers
 - [backend/tests/unit/test_resource_type_parser.py](../../../../backend/tests/unit/test_resource_type_parser.py) — `::` delimiter parsing, flat-value rejection, three-layer rejection, empty-value rejection, edge cases (single colon, extra whitespace)
 - [frontend/src/__tests__/ResourceTypeManifestMirror.test.ts](../../../../frontend/src/__tests__/ResourceTypeManifestMirror.test.ts) — Frontend mirror: all 17 identifiers match backend manifest; module groupings; no flat legacy values
 
@@ -143,7 +143,7 @@ Covers the migration from flat resource type identifiers to namespaced `module::
 
 | Test File | Coverage |
 |-----------|----------|
-| [e2e/tests/namespace-resource-types.spec.ts](../../../../e2e/tests/namespace-resource-types.spec.ts) | Resource types endpoint returns 17 namespaced entries; all 3 modules present; wildcard recognition; auth protection |
+| [e2e/tests/namespace-resource-types.spec.ts](../../../../e2e/tests/namespace-resource-types.spec.ts) | Resource types endpoint returns the full namespaced manifest; module groups present; wildcard recognition; auth protection |
 | [e2e/tests/namespace-migration-visibility.spec.ts](../../../../e2e/tests/namespace-migration-visibility.spec.ts) | Dashboard accessibility; roles API availability; resource-types endpoint availability; clone endpoint auth check |
 | [e2e/tests/namespace-validation-errors.spec.ts](../../../../e2e/tests/namespace-validation-errors.spec.ts) | Submit flat/legacy resource type → endpoint rejects; unknown type → rejects; empty type → rejects; three-layer type → rejects; valid namespaced type → endpoint exists |
 | [e2e/tests/role-policy-management.spec.ts](../../../../e2e/tests/role-policy-management.spec.ts) | Role policy CRUD with namespaced resource types; real-backend integration tests |

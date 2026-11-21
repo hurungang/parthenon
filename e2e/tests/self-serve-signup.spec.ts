@@ -239,15 +239,15 @@ test.describe('Self-Serve Sign-Up (mocked)', () => {
 
     // Step 2 — organization (address auto-derived from the name).
     await expect(page.getByTestId('signup-step-organization')).toBeVisible()
-    await page.getByLabel('Organization name').fill('Acme Corp')
-    await expect(page.getByLabel('Organization address')).toHaveValue('acme-corp')
+    await page.getByLabel('Workspace name').fill('Acme Corp')
+    await expect(page.getByLabel('Workspace address')).toHaveValue('acme-corp')
     await page.getByTestId('signup-submit').click()
 
     // Lands in guided onboarding as the tenant root — no platform-admin
     // action involved.
     await expect(page).toHaveURL(/\/tenant\/onboarding/)
     await expect(
-      page.getByRole('heading', { name: 'Welcome — set up your organization' }),
+      page.getByRole('heading', { name: 'Welcome — set up your workspace' }),
     ).toBeVisible()
     await expect(page.getByText('Invite users')).toBeVisible()
   })
@@ -271,7 +271,7 @@ test.describe('Self-Serve Sign-Up (mocked)', () => {
     await page.getByTestId('signup-password-input').locator('input').fill('Sup3rSecret')
     await page.getByLabel('Confirm password').fill('Sup3rSecret')
     await page.getByRole('button', { name: 'Continue' }).click()
-    await page.getByLabel('Organization name').fill('Acme Two')
+    await page.getByLabel('Workspace name').fill('Acme Two')
     await page.getByTestId('signup-submit').click()
 
     await expect(page.getByTestId('signup-error')).toContainText(
@@ -293,7 +293,7 @@ test.describe('Self-Serve Sign-Up (mocked)', () => {
     await page.getByTestId('signup-password-input').locator('input').fill('Sup3rSecret')
     await page.getByLabel('Confirm password').fill('Sup3rSecret')
     await page.getByRole('button', { name: 'Continue' }).click()
-    await page.getByLabel('Organization name').fill('Globex')
+    await page.getByLabel('Workspace name').fill('Globex')
     await page.getByTestId('signup-submit').click()
     await expect(page).toHaveURL(/\/tenant\/onboarding/)
 
@@ -303,11 +303,11 @@ test.describe('Self-Serve Sign-Up (mocked)', () => {
     await page.getByTestId('signup-password-input').locator('input').fill('Sup3rSecret')
     await page.getByLabel('Confirm password').fill('Sup3rSecret')
     await page.getByRole('button', { name: 'Continue' }).click()
-    await page.getByLabel('Organization name').fill('Globex Two')
+    await page.getByLabel('Workspace name').fill('Globex Two')
     await page.getByTestId('signup-submit').click()
 
     await expect(
-      page.getByText('Each user can own only one organization'),
+      page.getByText('Each user can own only one workspace'),
     ).toBeVisible()
   })
 })

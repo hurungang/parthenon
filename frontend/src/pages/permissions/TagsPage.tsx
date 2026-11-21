@@ -207,12 +207,20 @@ export function TagsPage() {
                 <TableCell>{new Date(tag.created_at).toLocaleDateString()}</TableCell>
                 <TableCell>
                   <Tooltip title={t('app.edit')}>
-                    <IconButton size="small" onClick={() => openEdit(tag)}>
+                    <IconButton
+                      size="small"
+                      aria-label={t('app.edit')}
+                      onClick={() => openEdit(tag)}
+                    >
                       <EditIcon fontSize="small" />
                     </IconButton>
                   </Tooltip>
                   <Tooltip title={t('app.delete')}>
-                    <IconButton size="small" onClick={() => { setDeleteTarget(tag); setDeleteError(null) }}>
+                    <IconButton
+                      size="small"
+                      aria-label={t('app.delete')}
+                      onClick={() => { setDeleteTarget(tag); setDeleteError(null) }}
+                    >
                       <DeleteIcon fontSize="small" />
                     </IconButton>
                   </Tooltip>

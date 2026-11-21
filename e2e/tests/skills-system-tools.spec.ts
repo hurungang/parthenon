@@ -115,15 +115,17 @@ async function setupSkillMocks(page: import('@playwright/test').Page, options: {
 
   await standardSetup(page)
 
-  await page.route('**/api/v1/mcp/tools', (route) => {
+  // Generic list route FIRST — routes resolve last-registered-first, so the
+  // more specific item/role routes below take priority.
+  await page.route('**/api/v1/mcp/tools**', (route) => {
     route.fulfill({ status: 200, body: JSON.stringify(ALL_TOOLS) })
   })
 
-  await page.route('**/api/v1/mcp/servers', (route) => {
+  await page.route('**/api/v1/mcp/servers**', (route) => {
     route.fulfill({ status: 200, body: JSON.stringify([SYSTEM_SERVER]) })
   })
 
-  await page.route('**/api/v1/skills', (route) => {
+  await page.route('**/api/v1/skills**', (route) => {
     if (route.request().method() === 'GET') {
       route.fulfill({ status: 200, body: JSON.stringify(skills) })
     } else if (route.request().method() === 'POST') {
@@ -131,10 +133,6 @@ async function setupSkillMocks(page: import('@playwright/test').Page, options: {
     } else {
       route.continue()
     }
-  })
-
-  await page.route('**/api/v1/skills/*/roles', (route) => {
-    route.fulfill({ status: 200, body: JSON.stringify([]) })
   })
 
   await page.route('**/api/v1/skills/**', (route) => {
@@ -145,6 +143,11 @@ async function setupSkillMocks(page: import('@playwright/test').Page, options: {
     } else {
       route.continue()
     }
+  })
+
+  // Registered last so it wins over the catch-all `**/skills/**` above.
+  await page.route('**/api/v1/skills/*/roles**', (route) => {
+    route.fulfill({ status: 200, body: JSON.stringify([]) })
   })
 }
 
@@ -167,13 +170,13 @@ test.describe('System tools in skill editor', () => {
     // the skill editor is open, so we verify the fixture data directly.
     const toolsResponse: object[] = ALL_TOOLS
     await standardSetup(page)
-    await page.route('**/api/v1/mcp/tools', (route) =>
+    await page.route('**/api/v1/mcp/tools**', (route) =>
       route.fulfill({ status: 200, body: JSON.stringify(ALL_TOOLS) })
     )
-    await page.route('**/api/v1/skills', (route) =>
+    await page.route('**/api/v1/skills**', (route) =>
       route.fulfill({ status: 200, body: JSON.stringify(MOCK_EXISTING_SKILLS) })
     )
-    await page.route('**/api/v1/skills/*/roles', (route) =>
+    await page.route('**/api/v1/skills/*/roles**', (route) =>
       route.fulfill({ status: 200, body: JSON.stringify([]) })
     )
     await page.goto('/skills')
@@ -228,13 +231,13 @@ test.describe('Create skill with system tools', () => {
     let capturedStatus = 0
 
     await standardSetup(page)
-    await page.route('**/api/v1/mcp/tools', (route) =>
+    await page.route('**/api/v1/mcp/tools**', (route) =>
       route.fulfill({ status: 200, body: JSON.stringify(ALL_TOOLS) })
     )
-    await page.route('**/api/v1/skills/*/roles', (route) =>
+    await page.route('**/api/v1/skills/*/roles**', (route) =>
       route.fulfill({ status: 200, body: JSON.stringify([]) })
     )
-    await page.route('**/api/v1/skills', (route) => {
+    await page.route('**/api/v1/skills**', (route) => {
       if (route.request().method() === 'POST') {
         capturedBody = route.request().postDataJSON() as Record<string, unknown>
         capturedStatus = 201
@@ -326,7 +329,7 @@ test.describe('Edit skill with system tools', () => {
     await setupSkillMocks(page, { skills: [MOCK_SKILL_WITH_SYSTEM_TOOLS] })
 
     // Override skills PUT to capture the request body
-    await page.route('**/api/v1/skills/sys-skill-001', (route) => {
+    await page.route('**/api/v1/skills/sys-skill-001**', (route) => {
       if (route.request().method() === 'PUT') {
         capturedPutBody = route.request().postDataJSON() as Record<string, unknown>
         route.fulfill({ status: 200, body: JSON.stringify({
@@ -411,13 +414,13 @@ test.describe('Mixed system and regular MCP tools', () => {
     let capturedBody: Record<string, unknown> | null = null
 
     await standardSetup(page)
-    await page.route('**/api/v1/mcp/tools', (route) =>
+    await page.route('**/api/v1/mcp/tools**', (route) =>
       route.fulfill({ status: 200, body: JSON.stringify(ALL_TOOLS) })
     )
-    await page.route('**/api/v1/skills/*/roles', (route) =>
+    await page.route('**/api/v1/skills/*/roles**', (route) =>
       route.fulfill({ status: 200, body: JSON.stringify([]) })
     )
-    await page.route('**/api/v1/skills', (route) => {
+    await page.route('**/api/v1/skills**', (route) => {
       if (route.request().method() === 'POST') {
         capturedBody = route.request().postDataJSON() as Record<string, unknown>
         route.fulfill({ status: 201, body: JSON.stringify(MIXED_SKILL) })

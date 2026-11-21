@@ -318,9 +318,27 @@ def test_system_tool_registry_endpoints_are_ch_allowlisted():
         path for path in SystemToolRegistry.get_cc_endpoint_map("").values()
     }
     assert endpoints, "SystemToolRegistry endpoint map is empty"
-    allowlisted = {(_canon(m), _canon(p)) for m, p in deps._CH_ALLOWLIST}
+    import re
+
+    def _matches_template(template: str, path: str) -> bool:
+        """True when a concrete path is covered by an allowlist route template
+        (e.g. ``/api/v1/internal/management-tools/{tool_name}``)."""
+        if template == path:
+            return True
+        parts = re.split(r"(\{[^}]*\})", template)
+        pattern = "".join(
+            "[^/]+" if part.startswith("{") and part.endswith("}") else re.escape(part)
+            for part in parts
+        )
+        return re.fullmatch(pattern, path) is not None
+
+    allowlisted = [(m, _canon(p)) for m, p in deps._CH_ALLOWLIST]
     missing = sorted(
-        ("POST", p) for p in endpoints if ("POST", _canon(p)) not in allowlisted
+        ("POST", p)
+        for p in endpoints
+        if not any(
+            m == "POST" and _matches_template(t, _canon(p)) for m, t in allowlisted
+        )
     )
     assert not missing, (
         "SystemToolRegistry CC endpoints NOT in _CH_ALLOWLIST "

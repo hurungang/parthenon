@@ -1180,7 +1180,11 @@ _GUARDRAIL_FIELDS: dict[str, Any] = {
     },
     "guardrail_max_delegation_depth": {
         "type": "integer",
-        "description": "Guardrail: max agent-to-agent delegation depth (0–32; default 3).",
+        "description": (
+            "Guardrail: max agent-to-agent delegation depth (non-negative "
+            "integer; default 3). This configured value is the sole depth limit "
+            "— no platform upper bound applies."
+        ),
     },
     "guardrail_max_delegated_steps": {
         "type": "integer",

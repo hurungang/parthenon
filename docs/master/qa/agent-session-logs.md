@@ -25,7 +25,7 @@ Agent session logs are validated through Vitest component tests that verify log 
 - All acceptance criteria validated via user testing with business and compliance personas
 
 ## Test File References
-- Frontend component tests: `frontend/src/__tests__/LogViewer.test.tsx`, `frontend/src/__tests__/LogPresenter.test.tsx`
+- Frontend component tests: `frontend/src/__tests__/LogViewer.test.tsx`, `frontend/src/__tests__/LogPresenter.test.ts`
 - E2E tests: `e2e/tests/agent-logs.spec.ts`
 
 ## Accessibility & Usability

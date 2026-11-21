@@ -1,4 +1,4 @@
-import type { Page } from '@playwright/test'
+import type { APIRequestContext, Page } from '@playwright/test'
 
 // Dynamic exp: 2 hours from now — keeps refreshIn within JS setTimeout's 32-bit safe range
 // (max ~24.8 days). Static far-future exp like 9999999999 overflows and fires immediately.
@@ -8,6 +8,25 @@ const _payload = Buffer.from(
   JSON.stringify({ sub: 'e2e-admin', exp, iat: 0, name: 'E2E Admin' })
 ).toString('base64')
 export const FAKE_TOKEN = `${_header}.${_payload}.fake-sig`
+
+/**
+ * True when the live Control Center API answers on :8000.
+ *
+ * Live-backend suites use this to skip cleanly in the canonical mocked-E2E run
+ * (backend intentionally stopped) while keeping their assertions for live runs.
+ */
+export async function apiIsReachable(
+  request: APIRequestContext,
+  base = 'http://localhost:8000',
+): Promise<boolean> {
+  try {
+    const response = await request.get(`${base}/api/v1/health`, { timeout: 2000 })
+    return response.status() === 200
+  } catch {
+    return false
+  }
+}
+
 
 /**
  * Full standard setup for protected-page tests:

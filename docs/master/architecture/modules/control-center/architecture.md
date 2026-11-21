@@ -1,5 +1,67 @@
 # Control Center Architecture
 
+Control Center (CC) is the platform's single database-connected service: the security authority (certificates, tenant authentication, API keys, permissions), the sole owner of the Platform DB, and the internal data plane that Agent Runtime and Communication Hub reach over mTLS. This page covers the authentication surface, core platform services, data management, and the Control Center Assistant; turn state, optimization, and runtime monitoring live on their own pages (index below).
+
+## Position in the Platform
+
+```mermaid
+flowchart LR
+    UI[Web UI]
+    EXT[External MCP client]
+
+    subgraph CC["Control Center — sole database owner"]
+        API[API Surface<br/>tenant context · auth middleware]
+        SEC[Security Services<br/>certificates · OIDC · API keys · permissions]
+        CORE[Core Platform Services<br/>context · policy · governance · topology · logs]
+        TURN[Conversation & Turn State<br/>activity · resume · checkpoint]
+        MGMT[Assistant & Management Tools]
+        DB[(Platform DB)]
+    end
+
+    CH[Communication Hub]
+    AR[Agent Runtime]
+
+    UI --> API
+    EXT --> CH
+    CH <-->|mTLS internal data plane| API
+    AR <-->|mTLS internal data plane| API
+    API --> SEC
+    API --> CORE
+    API --> TURN
+    API --> MGMT
+    SEC --> DB
+    CORE --> DB
+    TURN --> DB
+    MGMT --> DB
+    CORE -->|governed dispatch| CH
+```
+
+## Service Segregation Responsibilities
+
+- **Only Control Center touches the database.** Agent Runtime executes and Communication Hub transports; neither holds database credentials, and every persistence need is an internal CC endpoint over mTLS.
+- **One signing origin.** CC is the only signer of internal tenant headers; signed context is propagated to Agent Runtime and Communication Hub over the existing mTLS channels.
+- **Data plane vs. non-data-plane.** Internal data-plane paths require the signed tenant binding; internal paths that are not data-plane (certificates, bootstrap, API-key validation) keep certificate-only auth.
+- **Tenant context is established once**, before any feature logic, and is fail-closed — an unresolvable tenant is rejected, never defaulted.
+
+## Core Services at a Glance
+
+| Service | Responsibility | Detail |
+|---|---|---|
+| **Certificate authority** | Issues and renews agent-instance and service certificates for Agent Runtime and Communication Hub | [Certificate Management](../../security/certificate-management.md) |
+| **Authentication & tenant context** | Tenant resolution plus the three-tier auth pipeline, with JWT validation bound to the resolved tenant | this page |
+| **Permission resolution** | Role permissions intersected with agent-type visibility, resolved identically from certificate, API key, or user token | [API Key Security](../../security/api-key-security.md) |
+| **Token health & refresh** | On-demand token refresh and token-health signal for identities and sessions | [Token Refresh](../token-refresh.md) |
+| **Internal data plane** | Certificate-gated routers with per-caller allowlists for Communication Hub and Agent Runtime | this page, *Core Platform Services* |
+
+## Module Pages
+
+| Page | Covers |
+|---|---|
+| **[Conversations & Durable Turns](conversations.md)** | Intervention persistence, activity state, resume index, checkpoint store, terminal resolution, and the operator answer flow |
+| **[Optimization, Authoring Models & Plans](optimization-and-plans.md)** | Optimize gate, authoring/optimizer model resolution, optimization mode, single-use live-test approvals, plan status and requires-fix |
+| **[Agent Runtime Monitoring](runtime-monitoring.md)** | Live topology view: push channel, stream-first flow, canvas guarantees, permission parity, provenance |
+| **[Control Center Assistant Security](../../security/control-center-assistant.md)** | Layered security model for delegated management capability |
+
 ## API Layer and Authentication
 
 ```mermaid
@@ -36,7 +98,7 @@ flowchart LR
     AKM[API Key Management Service]
     POL[Policy Resolution Service]
     CTX[Governed Context Assembler]
-    CFG[Generation Model Resolver]
+    CFG[Authoring Model Resolver]
     SOP[Default SOP Resolver]
     GOV[Governance and Audit Service]
     ELS[Execution Log Store]
@@ -192,144 +254,12 @@ API keys reuse the existing permission engine without modification. The resoluti
 
 This is the same model used by internal agents — the API key provides an alternative entry point into the identity → role → permission resolution chain.
 
-## Conversation Intervention Persistence
-
-- **Conversation Intervention Turns**: Extension of `ConversationTurn` persistence to support `intervene_request` and `intervene_response` turn types. Stores intervention type (approval/choice/text), prompt text, available options, operator identity, response value, and timestamp. Turns are persisted in chronological order within the conversation stream for audit traceability.
-- **Intervene Request Store**: Extended to accept and persist conversation context fields (`conversation_session_id`, `delegation_depth`) on `InterveneRequest`. Automatically creates paired `intervene_response` conversation turns when responses are submitted to conversation-scoped requests. Non-conversational flow (no `conversation_session_id`) is unchanged.
-- **Conversation-only interventions**: requests raised inside a conversational turn (no execution job behind them) are first-class — the job reference is optional and the conversation session carries the context. Replays are idempotent: a repeated pending request is returned de-duplicated, and an already-answered request returns the stored operator response instead of prompting again.
-
 ## Task Delegation Event Persistence
 
 - **Execution Log Store**: Accepts new delegation-related execution log event types: `delegation_started`, `delegation_waiting`, `delegation_resumed`, `delegation_depth_blocked`, `delegation_timeout`, `delegation_failed`. These are persisted to the `ExecutionLogEntry` table via the internal log append endpoint and delivered to log viewers via the existing NDJSON stream.
 - **Parent-Child Resolution**: Non-conversational intervention requests use the existing `AgentJob.parent_job_id` FK chain to resolve parent context — `InterveneRequest.agent_session_id` identifies the sub-agent session, and the parent is reached via FK traversal. No new schema columns were added.
 - **Pending Intervention Query**: Returns outstanding intervention requests for a task agent session, used by the execution log viewer on reconnect to re-surface dialogs.
 - **Delegation Status Query**: Returns current delegation state (active sub-agent types, depths, exit conditions) by querying recent delegation-related `ExecutionLogEntry` entries.
-
-## Agent Runtime Monitoring
-
-Runtime observability of the agent topology is a Control Center responsibility. The **Agent Runtime Monitor** is a real-time, map-style operator view of the running agent topology — executions, delegation tree, trigger entities, and the Communication Hub / MCP tool layer. Every read, event ingest, and live push for this view is served by the Control Center, preserving the rule that only Control Center accesses the database.
-
-### Live Update Channel
-
-The monitor's data is delivered over a **push-based live update channel** served by the Control Center. The projection is recomputed on a short server-side cadence and the full payload is emitted only when it changed (hash comparison against the last emission); heartbeat traffic keeps the channel alive through intermediaries, and each channel session has a bounded lifetime after which the client re-subscribes or drops to the fallback path.
-
-```mermaid
-flowchart LR
-    Operator[Operator]
-    subgraph FE[Web UI - Agent Runtime Monitor]
-        MON[Monitor Page]
-        HOOK[Stream-First Data Hook<br/>push to cache · poll fallback]
-        CANVAS[Map Canvas]
-    end
-    subgraph CC[Control Center]
-        STREAM[Live Update Channel<br/>SSE push · change-gated emission · heartbeat]
-        READ[Topology Read Endpoint<br/>initial fetch + fallback]
-        CTRL[Runtime Topology Controller]
-        INGEST[Tool-Call Event Ingest]
-        AUTH[Auth Middleware]
-    end
-    DB[(Platform DB)]
-    AR[Agent Runtime]
-
-    Operator --> MON
-    MON --> CANVAS
-    MON --> HOOK
-    HOOK -->|subscribe · token auth| STREAM
-    HOOK -.->|automatic fallback poll| READ
-    STREAM --> CTRL
-    READ --> CTRL
-    CTRL --> DB
-    AR -->|records every tool execution| INGEST
-    INGEST --> DB
-    AUTH --> STREAM
-    AUTH --> READ
-```
-
-**Delivery properties:**
-
-| Property | Behavior |
-|---|---|
-| **Push base** | Server-sent events over the existing runtime-topology surface |
-| **Emission policy** | Full projection payload, emitted only when the projection hash differs from the last emission — no redundant traffic on idle systems |
-| **Keep-alive** | Heartbeat keeps the channel open through intermediaries |
-| **Lifetime** | Each channel session is bounded; on expiry the client re-subscribes or falls back |
-| **Authentication** | Session token passed as a query parameter (the event-stream transport cannot carry an Authorization header) and validated against the OIDC client — the established pattern of the Communication Hub chat channel |
-| **Authorization** | The same agent-read permission as the topology read endpoint |
-
-### Stream-First Data Flow
-
-The monitor is **stream-first**: on open, the frontend data hook subscribes to the live channel and writes each pushed projection into the client cache immediately, so no polling occurs while the channel is healthy. The fixed-interval poll survives only as an **automatic fallback** while the channel is disconnected, and reverts to the stream on recovery.
-
-```mermaid
-sequenceDiagram
-    participant Op as Operator
-    participant Hook as Stream-First Data Hook
-    participant Chan as Live Update Channel
-    participant Ctrl as Runtime Topology Controller
-    participant Canvas as Map Canvas
-
-    Op->>Hook: open the monitor
-    Hook->>Chan: subscribe (token auth)
-    loop server-side recompute cadence
-        Chan->>Ctrl: recompute projection
-        Ctrl-->>Chan: projection
-        alt projection changed
-            Chan-->>Hook: full payload
-            Hook->>Hook: write client cache immediately
-            Hook->>Canvas: re-render without manual refresh
-        else unchanged
-            Chan-->>Hook: heartbeat
-        end
-    end
-    Note over Hook: channel disconnected
-    Hook->>Ctrl: fixed-interval fallback poll
-    Ctrl-->>Hook: projection
-    Note over Hook: channel recovered → polling stops, push resumes
-```
-
-### Canvas Presentation Guarantees
-
-The map canvas is the monitor's primary surface and must remain legible in every state. Three guarantees hold architecturally:
-
-| Guarantee | Intent |
-|---|---|
-| **Stage-level backdrop** | The grid-dot background is painted at stage level so it covers the entire canvas when panning or zooming beyond drawn content and when the view is filtered empty |
-| **Full-height hub fixture** | The Communication Hub fixture spans the full canvas height from first load, even when the map is empty |
-| **Unclamped initial fit** | The initial auto-fit is not constrained by the interactive minimum zoom — only interactive zooming is |
-
-```mermaid
-flowchart LR
-    V[Any canvas state]
-    PAN[Panned or zoomed beyond content]
-    EMPTY[Empty or filtered-empty map]
-    BG[Stage-level backdrop covers canvas]
-    HUB[Hub fixture at full height from first load]
-    FIT[Initial auto-fit not clamped by min-zoom]
-
-    V --> PAN
-    V --> EMPTY
-    PAN --> BG
-    EMPTY --> BG
-    EMPTY --> HUB
-    FIT --> V
-```
-
-### Canvas Structure and Focus
-
-- **Delegation-tree team containers** — one tree per row, columns represent delegation depth
-- **Trigger-entity column** — person and schedule cards with per-entity coloured edges into the execution graph
-- **Communication Hub fixture** — MCP nodes and tool-call chips with orthogonal tool-call routes
-- **Directed focus graph** — hovering or clicking any entity highlights its full up- and downstream reachable set; the execution-to-MCP edge is one-way, so shared tool servers never leak focus sideways
-- Intervention-waiting and terminal-direct executions stay visible so delegation chains remain readable
-
-### Permission Parity
-
-The live channel enforces the same access model as the read endpoint: the presenting identity is resolved and validated against the OIDC client, and the same agent-read permission gates both paths. Parity matters operationally — a client that can view the topology can equally subscribe to its live updates, and no separate permission is granted for the push channel. The resolved identity also feeds the monitor's provenance attribution.
-
-### Provenance and Tool-Call Observability
-
-- **Trigger provenance** — every execution carries a human attribution anchor resolved from the requesting identity at creation (manual runs, conversation sessions, schedules, and delegated children inherit it); unknown originators are shown as none, never a placeholder
-- **Tool-call events** — Agent Runtime records every tool execution and reports it to the Control Center ingest; the projection unions these event records with conversation tool-call history. Reporting is fire-and-forget: a failed report never breaks tool execution, and Agent Runtime never writes the database
 
 ## Agent Data Type Registry
 
@@ -407,14 +337,31 @@ Management capability is served as MCP tools on a dedicated, per-tenant **Contro
 
 Parity is evaluated twice: when the catalogue is listed (only tools the caller may invoke are shown) and again before the write is executed. Out-of-scope resources and delete-shaped requests are declined in-band before any mutation.
 
+### Full-Field Management Payloads
+
+Conversational management reaches **parity with the web UI edit surface**: each create/update handler accepts the complete field set its UI form accepts, and the system tool registry exposes typed per-resource parameter schemas instead of a free-form payload object. Enrichment of dependent fields (bindings, grants, tool associations) follows the same pattern at both routing layers.
+
+```mermaid
+flowchart LR
+    A["Management tool invocation<br/>per resource family"] --> B["Payload validator / normalizer<br/>enums · id or name resolution · required fields"]
+    B -->|valid| C["Domain service write<br/>sole database owner"]
+    B -->|invalid| D["Structured validation error<br/>field · problem · remedy"]
+    D -->|"agent self-corrects and retries"| A
+    E["System tool registry<br/>typed per-resource schemas"] --> A
+    F["Parity map<br/>resource type + action"] --> A
+    C --> G[(Platform DB)]
+```
+
+Validation never substitutes for authorization: parity is re-checked per invocation before the handler runs, and a well-formed but out-of-scope payload is still refused. Structured errors exist so the assistant can repair its own request without widening what it may do.
+
 ### Confirmation & Human-in-the-Loop Flow
 
 Every **create or update** is previewed and approved before execution; reads are unaffected.
 
 - **Canonical preview** — a heading plus one field/value table of the exact payload (updates: only changed fields, old → new). Agent-type creation previews model, identity, role, skills, and grants, and an agent type without a working model and an identity or role is never created.
 - **Approval as a tool call** — approval is requested through the platform human-intervention mechanism, so the same policy, audit, and UI path serves the assistant as any other agent.
-- **Suspension, not replay** — on the conversational path the turn suspends inside the tool call and resumes when the operator responds; a replayed request is de-duplicated and an already-answered one returns the stored operator response, so approval can never execute twice.
-- **Rejection and timeout are explicit** — a rejection executes nothing; a timeout returns an explicit "not executed" result to the agent rather than a silent success.
+- **Suspension, not replay** — a conversational approval is a pause on Control Center-owned durable state, so the confirmation survives a restart, failover, or instance replacement and resumes on whichever instance can load the turn; a replayed request is de-duplicated and an already-answered one returns the stored operator response, so approval can never execute twice. The pause itself is described in [Conversations & Durable Turns](conversations.md).
+- **Rejection and timeout are explicit** — a rejection executes nothing; a timeout returns an explicit "not executed" result to the agent rather than a silent success. An unanswered confirmation beyond its validity window resolves terminally as not applied.
 
 ```mermaid
 sequenceDiagram
@@ -427,10 +374,12 @@ sequenceDiagram
     AS->>AS: discover + assemble complete payload
     AS->>CH: request approval (human intervention)
     CH->>U: intervention request with table preview
-    Note over AS: turn suspends · in-process wait
+    AS->>CH: paused turn checkpoint
+    CH->>CC: persist pause state (resume index)
+    Note over AS,CC: durable pause · answerable on any instance
     U->>CH: approve
-    CH->>CC: intervention response
-    CC-->>AS: resume the suspended turn
+    CH->>CC: intervention response (recorded once)
+    CC-->>AS: single resume dispatch
     AS->>CH: tools/call cc____create_skill
     CH->>CC: user-scope dispatch + parity check
     CC-->>AS: result
@@ -442,16 +391,3 @@ sequenceDiagram
 - **Iteration budget** — the assistant is seeded with a guardrail iteration budget sized for multi-step management workflows (several discovery calls plus the writes), far above the platform default; the per-agent-type policy is the single source of truth for the runtime monitor.
 - **Layered time bounds** — the strict per-turn model timeout still fires on a hung provider; while an approval is pending the wait is re-armed up to a longer intervention timeout, kept below the Communication Hub turn watchdog. Session end terminates in-flight work.
 - **Actionable failures** — guardrail stops and turn failures are mapped to structured, human-readable error turns persisted exactly once, so a long management turn never ends in silence.
-
-## Script Registry, Optimized Plans & LLM Mock Recordings
-
-Control Center persists the Software 3.0 script framework — the script
-registry (draft → verified → compiled → retired lifecycle, sandbox
-validation), the `OptimizedImplementationPlan` compositions authored by the
-"Optimize & Verify" side execution, `CommandPrompt` mission storage, per-
-execution records, and `LLMMockRecording` test data (written only in
-test/recording modes). Its REST APIs serve the registry to Agent Runtime
-exclusively over mTLS; its internal recording endpoint stores mock LLM
-interactions (prompt + response + usage only). The semantic-bridge endpoint
-is served by the mock layer in test modes, so model-backed script steps run
-zero-LLM in tests. See [Sandboxed Scripting](sandboxed-scripting.md).

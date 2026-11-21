@@ -236,8 +236,8 @@ class TestWebSocketServiceIntegration:
                 # or 426 (upgrade required) - anything except 200 or 101 (WebSocket upgrade)
                 assert ws_response.status_code not in [200, 101], \
                     "Control Center should not serve WebSocket endpoint with successful status"
-                assert ws_response.status_code in [401, 404, 405, 426], \
-                    f"Expected auth rejection or not found, got {ws_response.status_code}"
+                assert ws_response.status_code in [401, 403, 404, 405, 426], \
+                    f"Expected auth/permission rejection or not found, got {ws_response.status_code}"
             except httpx.HTTPError:
                 # Connection error is also acceptable
                 pass

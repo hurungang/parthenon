@@ -229,14 +229,15 @@ test.describe('Resumable Paused Turn Recovery (Mocked)', () => {
     expect(approveFrame.request_id).toBe('req-resume-1')
     expect(approveFrame.approval_value).toBe(true)
 
-    // Server confirms the resume started: the turn reads "resumed · continuing".
+    // Server confirms the response. A normal in-process approval resumes the
+    // turn as an ordinary working status — the "resumed" vocabulary comes only
+    // from server hydration of a real reconnect/restart, so no chip here.
     await emit(page, { type: 'intervene_status', request_id: 'req-resume-1', status: 'responded' })
-    await expect(page.getByTestId('chat-resume-state-chip')).toContainText(
-      /Resumed · continuing/i,
-    )
+    await expect(page.getByTestId('chat-chat-status-indicator')).toContainText(/Thinking…/i)
+    await expect(page.getByTestId('chat-resume-state-chip')).toHaveCount(0)
     await expect(page.getByTestId('chat-intervention-pending-indicator')).toHaveCount(0)
 
-    // The resumed turn keeps working (a tool call) and still reads as resumed.
+    // Server hydration of the genuinely resumed turn: "resumed · continuing".
     await emit(page, {
       type: 'chat_status',
       status: 'using_tool',
@@ -245,6 +246,9 @@ test.describe('Resumable Paused Turn Recovery (Mocked)', () => {
       resume_state: 'resuming',
     })
     await expect(page.getByText(/Using tool cc____create_skill/i)).toBeVisible()
+    await expect(page.getByTestId('chat-resume-state-chip')).toContainText(
+      /Resumed · continuing/i,
+    )
     await expect(page.getByTestId('chat-resume-badge')).toBeVisible()
 
     // Resolved: no legacy timeout text, input is enabled again.
@@ -278,10 +282,11 @@ test.describe('Resumable Paused Turn Recovery (Mocked)', () => {
     expect(denyFrame.approval_value).toBe(false)
 
     await emit(page, { type: 'intervene_status', request_id: 'req-resume-1', status: 'responded' })
-    await expect(page.getByTestId('chat-resume-state-chip')).toContainText(
-      /Resumed · continuing/i,
-    )
+    // A denied turn also resumes as an ordinary working status (no chip)…
+    await expect(page.getByTestId('chat-chat-status-indicator')).toContainText(/Thinking…/i)
+    await expect(page.getByTestId('chat-resume-state-chip')).toHaveCount(0)
 
+    // …until the server hydrates the terminal resume state.
     await emit(page, {
       type: 'chat_status',
       status: 'finished',
@@ -348,14 +353,17 @@ test.describe('Resumable Paused Turn Recovery (Mocked)', () => {
       /can no longer restore the pause point/i,
     )
 
-    // A late click must not replay the confirmed action.
-    await page.getByRole('button', { name: /^approve$/i }).click()
+    // The lingering confirmation is folded read-only: no actionable dialog and
+    // no Approve button remain, so a late click cannot replay the action.
+    await expect(page.getByTestId('chat-intervention-closed')).toBeVisible()
+    await expect(page.getByTestId('chat-intervention-dialog')).toHaveCount(0)
+    await expect(page.getByRole('button', { name: /^approve$/i })).toHaveCount(0)
 
-    await expect(page.getByTestId('chat-nothing-to-replay')).toBeVisible()
-    const responses = (await sentFrames(page)).filter(
-      (f) => f.type === 'intervene_response',
-    )
-    expect(responses).toHaveLength(0)
+    await expect
+      .poll(async () =>
+        (await sentFrames(page)).filter((f) => f.type === 'intervene_response').length,
+      )
+      .toBe(0)
   })
 
   test('reload hydration restores the waiting state and the terminal message', async ({

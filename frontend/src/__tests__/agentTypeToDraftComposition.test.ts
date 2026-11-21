@@ -75,6 +75,15 @@ describe('agentTypeToDraftComposition', () => {
     expect(draft.guardrails.conversationalContinuationPolicy).toBe('allow')
   })
 
+  it('carries a delegation depth above the former 32 ceiling unchanged', () => {
+    const draft = agentTypeToDraftComposition({
+      ...BASE_AGENT,
+      guardrail_max_delegation_depth: 40,
+    })
+
+    expect(draft.guardrails.maxDelegationDepth).toBe(40)
+  })
+
   it('maps a minimal agent type (no bindings, no optional fields) without error', () => {
     const draft = agentTypeToDraftComposition({
       id: 'at-2',

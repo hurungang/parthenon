@@ -23,6 +23,8 @@ Agent identity management in Parthenon is centralized in the Control Center as a
 - All identity operations — including API key creation and revocation — are logged for compliance and audit
 - Token refresh and authorization are handled automatically by the Control Center
 - Non-approved internal identity access paths are denied by default
+- An identity's role assignments can be changed through conversation with the same permission enforcement as the UI, and the change is applied only after the preview is approved
+- Optimization runs under the agent's own identity and role, with no separate optimizer identity or role to create, review, or revoke
 
 ## Key Principles
 - Agent identities are managed centrally and never distributed to agent runtimes
@@ -39,6 +41,8 @@ Agent identity management in Parthenon is centralized in the Control Center as a
 - Platform operators do not manage or distribute identity tokens
 - Compliance officers can demonstrate boundary enforcement using evidence of permitted and blocked identity access paths
 - Platform administrators can sign in / provision a new agent identity inline from the Agent Management Panel while configuring an agent; this reuses the existing identity sign-in/provisioning flow and does not change standalone identity management behaviour
+- Agent identity role assignments can also be managed conversationally through the Control Center Assistant, at the same parity as the identity editor (additive assignment, no removal by silent omission), with a preview and approval before anything changes
+- Optimization introduces **no** new agent identity, role, or permission: the optimizer acts with exactly the agent's existing identity, role, and tool permissions and can never act more broadly, so governing the agent is enough to govern its optimization
 
 ## Token Health States
 

@@ -1,6 +1,26 @@
 import { test, expect } from '@playwright/test'
 import { standardSetup, mockApiCatchAllProxyAware } from './_helpers'
 
+const SYSTEM_SERVER_ID = '00000000-0000-0000-0000-000000000001'
+
+// Collection list requests carry pagination query params
+// (?limit=&offset=), so collection globs must end with `**`. The generic
+// collection mock is always registered BEFORE item/sub-resource mocks
+// because Playwright resolves handlers last-registered-first.
+const SERVERS_ROUTE = '**/api/v1/mcp/servers**'
+
+/** Built-in virtual entry rendered with the "Built-in" chip. */
+const SYSTEM_SERVER = {
+  id: SYSTEM_SERVER_ID,
+  name: 'System',
+  slug: 'system',
+  base_url: '',
+  status: 'active',
+  description: 'Built-in platform tools',
+  last_synced_at: null,
+  session_count: 0,
+}
+
 const MOCK_SERVERS = [
   {
     id: 'srv-1',
@@ -27,7 +47,7 @@ const MOCK_SERVERS = [
 test.describe('MCP Hub', () => {
   test.beforeEach(async ({ page }) => {
     await standardSetup(page)
-    await page.route('**/api/v1/mcp/servers', (route) => {
+    await page.route(SERVERS_ROUTE, (route) => {
       if (route.request().method() === 'GET') {
         route.fulfill({ status: 200, body: JSON.stringify(MOCK_SERVERS) })
       } else {
@@ -50,16 +70,18 @@ test.describe('MCP Hub', () => {
     expect(page.url()).not.toContain('/login')
   })
 
-  test('MCP Hub shows server names from API', async ({ page }) => {
+  test('MCP Hub shows server slugs from API', async ({ page }) => {
     await page.goto('/mcp')
     await page.waitForLoadState('load')
-    await expect(page.getByText('Internal Tools')).toBeVisible()
+    // The servers table renders the server slug (the API `name` mirrors the
+    // slug on create and is not rendered as its own column).
+    await expect(page.getByText('internal-tools')).toBeVisible()
   })
 
   test('MCP Hub shows second server in list', async ({ page }) => {
     await page.goto('/mcp')
     await page.waitForLoadState('load')
-    await expect(page.getByText('External Research')).toBeVisible()
+    await expect(page.getByText('external-research')).toBeVisible()
   })
 
   test('MCP Hub shows server status indicators', async ({ page }) => {
@@ -113,7 +135,7 @@ test.describe('MCP Session CRUD with new fields', () => {
 
   test.beforeEach(async ({ page }) => {
     await standardSetup(page)
-    await page.route('**/api/v1/mcp/servers', (route) =>
+    await page.route(SERVERS_ROUTE, (route) =>
       route.fulfill({ status: 200, body: JSON.stringify(MOCK_SERVERS) })
     )
     await page.route(`**/api/v1/mcp/servers/${SERVER_ID}/sessions`, (route) => {
@@ -178,7 +200,7 @@ test.describe('MCP Session CRUD with new fields', () => {
     await page.goto('/mcp')
     await page.waitForLoadState('load')
     expect(errors.filter((e) => !e.includes('ResizeObserver'))).toHaveLength(0)
-    await expect(page.getByText('Internal Tools')).toBeVisible()
+    await expect(page.getByText('internal-tools')).toBeVisible()
   })
 })
 
@@ -220,7 +242,7 @@ test.describe('MCP OAuth Session Creation Flow', () => {
 
   test.beforeEach(async ({ page }) => {
     await standardSetup(page)
-    await page.route('**/api/v1/mcp/servers', (route) => {
+    await page.route(SERVERS_ROUTE, (route) => {
       if (route.request().method() === 'GET') {
         route.fulfill({ status: 200, body: JSON.stringify([MOCK_OAUTH_SERVER]) })
       } else {
@@ -254,7 +276,7 @@ test.describe('MCP OAuth Session Creation Flow', () => {
     await page.goto('/mcp')
     await page.waitForLoadState('load')
     expect(errors.filter((e) => !e.includes('ResizeObserver'))).toHaveLength(0)
-    await expect(page.getByText('OAuth Tool Server')).toBeVisible()
+    await expect(page.getByText('oauth-tool-server')).toBeVisible()
   })
 
   test('OAuth server shows oauth_config present in API response', async ({ page }) => {
@@ -265,7 +287,7 @@ test.describe('MCP OAuth Session Creation Flow', () => {
 
     await page.goto('/mcp')
     await page.waitForLoadState('load')
-    await expect(page.getByText('OAuth Tool Server')).toBeVisible()
+    await expect(page.getByText('oauth-tool-server')).toBeVisible()
   })
 
   test('OAuth session has auth_type=oauth2 in response', async ({ page }) => {
@@ -287,7 +309,7 @@ test.describe('MCP OAuth Session Creation Flow', () => {
 
     await page.goto('/mcp')
     await page.waitForLoadState('load')
-    await expect(page.getByText('OAuth Tool Server')).toBeVisible()
+    await expect(page.getByText('oauth-tool-server')).toBeVisible()
   })
 
   test('oauth_config on server does not include client_secret in API response', async ({ page }) => {
@@ -300,7 +322,7 @@ test.describe('MCP OAuth Session Creation Flow', () => {
 
     await page.goto('/mcp')
     await page.waitForLoadState('load')
-    await expect(page.getByText('OAuth Tool Server')).toBeVisible()
+    await expect(page.getByText('oauth-tool-server')).toBeVisible()
   })
 })
 
@@ -344,8 +366,10 @@ test.describe('MCP Session re-auth state', () => {
     page.on('pageerror', (err) => errors.push(err.message))
     await page.goto('/mcp')
     await page.waitForLoadState('load')
-    // Open the session manager for the (non-system) server.
-    await page.locator('button:has(svg[data-testid="StorageIcon"])').first().click()
+    // Open the session manager for the (non-system) server. The row action is
+    // an icon button whose accessible name comes from the "Manage Sessions"
+    // tooltip (the StorageIcon itself carries no test id).
+    await page.getByRole('button', { name: 'Manage Sessions' }).first().click()
     await expect(page.getByText('Needs re-authentication')).toBeVisible({ timeout: 5000 })
     expect(errors.filter((e) => !e.includes('ResizeObserver'))).toHaveLength(0)
   })
@@ -354,40 +378,47 @@ test.describe('MCP Session re-auth state', () => {
 test.describe('MCP Hub — System Entry', () => {
   test.beforeEach(async ({ page }) => {
     await standardSetup(page)
-    await page.route('**/api/v1/mcp/servers', (route) =>
+    await page.route(SERVERS_ROUTE, (route) =>
       route.fulfill({ status: 200, body: JSON.stringify(MOCK_SERVERS) })
     )
   })
 
   test('MCP server table shows one System entry with Built-in chip', async ({ page }) => {
+    // The built-in System entry is only rendered when the API returns it, so
+    // it is part of this test's fixture.
+    await page.route(SERVERS_ROUTE, (route) =>
+      route.fulfill({ status: 200, body: JSON.stringify([SYSTEM_SERVER, ...MOCK_SERVERS]) })
+    )
     await page.goto('/mcp')
     await page.waitForLoadState('load')
 
-    // System entry name should be visible
-    await expect(page.getByText('System')).toBeVisible()
+    // Server rows are buttons labelled "<slug> — Open server details".
+    const systemRow = page.getByRole('button', { name: 'system — Open server details' })
+    await expect(systemRow).toBeVisible()
 
-    // System entry has a "Built-in" chip (i18n key: mcp.system.builtIn)
-    const builtInChip = page.locator('text=Built-in')
-    const hasBuiltIn = await builtInChip.count() > 0
-    expect(hasBuiltIn).toBe(true)
+    // Exactly one row carries the "Built-in" chip (i18n key: mcp.system.builtIn)
+    await expect(page.locator('tr').filter({ hasText: 'Built-in' })).toHaveCount(1)
+    await expect(systemRow.getByText('Built-in')).toBeVisible()
+    // System-managed entries are read-only.
+    await expect(systemRow.getByText('System managed')).toBeVisible()
   })
 
   test('server with zero sessions shows sync button disabled with tooltip', async ({ page }) => {
     await page.goto('/mcp')
     await page.waitForLoadState('load')
 
-    // External Research has session_count: 0
-    // The sync button for External Research should be disabled
-    // The tooltip text comes from i18n: mcp.sync.noSessions
-    // We verify by hovering and checking tooltip text
-    const externalRow = page.getByText('External Research').first()
+    // external-research has session_count: 0
+    const externalRow = page.getByRole('button', { name: 'external-research — Open server details' })
     await expect(externalRow).toBeVisible()
 
-    // The sync button in the same row should exist and be disabled
-    const syncButtons = page.locator('[data-testid="SyncIcon"]')
-    const count = await syncButtons.count()
-    // At least 2 sync icons: System entry + External Research
-    expect(count).toBeGreaterThanOrEqual(2)
+    // Its sync button exists and is disabled, with the no-sessions tooltip
+    // (i18n key: mcp.sync.noSessions).
+    const syncButton = externalRow.locator('button:has([data-testid="SyncIcon"])')
+    await expect(syncButton).toHaveCount(1)
+    await expect(syncButton).toBeDisabled()
+
+    await externalRow.locator('span:has([data-testid="SyncIcon"])').hover()
+    await expect(page.getByRole('tooltip')).toContainText('Add a session before syncing')
   })
 })
 
@@ -397,8 +428,8 @@ test.describe('MCP Hub — Sync button visibility', () => {
   })
 
   test('server with session_count > 0 has enabled sync button', async ({ page }) => {
-    // Mock servers: Internal Tools has session_count=1
-    await page.route('**/api/v1/mcp/servers', (route) =>
+    // Mock servers: internal-tools has session_count=1
+    await page.route(SERVERS_ROUTE, (route) =>
       route.fulfill({
         status: 200,
         body: JSON.stringify([{
@@ -411,17 +442,18 @@ test.describe('MCP Hub — Sync button visibility', () => {
     await page.goto('/mcp')
     await page.waitForLoadState('load')
 
-    await expect(page.getByText('Internal Tools')).toBeVisible()
+    const row = page.getByRole('button', { name: 'internal-tools — Open server details' })
+    await expect(row).toBeVisible()
     // The sync button should be enabled (not have disabled attribute)
-    // We verify the page renders without errors
+    await expect(row.locator('button:has([data-testid="SyncIcon"])')).toBeEnabled()
     const errors: string[] = []
     page.on('pageerror', (err) => errors.push(err.message))
     expect(errors.filter((e) => !e.includes('ResizeObserver'))).toHaveLength(0)
   })
 
   test('server with session_count === 0 has disabled sync button', async ({ page }) => {
-    // Mock servers: External Research has session_count=0
-    await page.route('**/api/v1/mcp/servers', (route) =>
+    // Mock servers: external-research has session_count=0
+    await page.route(SERVERS_ROUTE, (route) =>
       route.fulfill({
         status: 200,
         body: JSON.stringify([{
@@ -434,7 +466,9 @@ test.describe('MCP Hub — Sync button visibility', () => {
     await page.goto('/mcp')
     await page.waitForLoadState('load')
 
-    await expect(page.getByText('External Research')).toBeVisible()
+    const row = page.getByRole('button', { name: 'external-research — Open server details' })
+    await expect(row).toBeVisible()
+    await expect(row.locator('button:has([data-testid="SyncIcon"])')).toBeDisabled()
     // The page should render without errors
     const errors: string[] = []
     page.on('pageerror', (err) => errors.push(err.message))
@@ -443,22 +477,49 @@ test.describe('MCP Hub — Sync button visibility', () => {
 })
 
 test.describe('Real Backend Integration - MCP Default Session', () => {
-  const SYSTEM_SERVER_ID = '00000000-0000-0000-0000-000000000001'
+  const BACKEND_URL = 'http://localhost:8000/api/v1'
 
-  test('GET /mcp/servers returns exactly one System entry at offset 0', async ({ page }) => {
+  /**
+   * The canonical E2E environment is fully mocked and runs with the backend
+   * stack stopped. These tests only make sense against a live Control Center,
+   * so probe the health endpoint and skip with a reason when it is down.
+   */
+  async function skipUnlessBackendIsLive(request: import('@playwright/test').APIRequestContext) {
+    let live = false
+    try {
+      const probe = await request.get(`${BACKEND_URL}/health`, {
+        timeout: 3000,
+        failOnStatusCode: false,
+      })
+      live = probe.ok()
+    } catch {
+      live = false
+    }
+    test.skip(
+      !live,
+      'Live backend stack is not running (canonical mocked E2E) — real-backend integration assertions only run against a live Control Center on :8000.'
+    )
+  }
+
+  test('GET /mcp/servers returns exactly one System entry at offset 0', async ({ page, request }) => {
+    await skipUnlessBackendIsLive(request)
     await standardSetup(page)
 
     // Allow the servers endpoint to hit the real backend
-    await page.unroute('**/api/v1/mcp/servers')
+    await page.unroute(SERVERS_ROUTE)
+    // The app must be loaded first: localStorage is only accessible on an
+    // app-origin document (about:blank throws a SecurityError).
+    await page.goto('/mcp')
+    await page.waitForLoadState('load')
 
     // Fetch servers from real backend API via page.evaluate
-    const response = await page.evaluate(async () => {
+    const response = await page.evaluate(async (backendUrl) => {
       const token = localStorage.getItem('access_token')
-      const resp = await fetch('http://localhost:8000/api/v1/mcp/servers?offset=0&limit=25', {
+      const resp = await fetch(`${backendUrl}/mcp/servers?offset=0&limit=25`, {
         headers: { Authorization: `Bearer ${token}` },
       })
       return { status: resp.status, body: await resp.json() }
-    })
+    }, BACKEND_URL)
 
     expect(response.status).toBe(200)
     expect(Array.isArray(response.body)).toBe(true)
@@ -470,17 +531,20 @@ test.describe('Real Backend Integration - MCP Default Session', () => {
     expect(systemEntries[0].session_count).toBe(0)
   })
 
-  test('POST /mcp/servers/{id}/sync returns 422 when no sessions exist', async ({ page }) => {
+  test('POST /mcp/servers/{id}/sync returns 422 when no sessions exist', async ({ page, request }) => {
+    await skipUnlessBackendIsLive(request)
     await standardSetup(page)
 
     // Allow the servers endpoint to hit the real backend for creating a server
-    await page.unroute('**/api/v1/mcp/servers')
+    await page.unroute(SERVERS_ROUTE)
+    await page.goto('/mcp')
+    await page.waitForLoadState('load')
 
     // Create a test server via API
-    const createResult = await page.evaluate(async () => {
+    const createResult = await page.evaluate(async (backendUrl) => {
       const token = localStorage.getItem('access_token')
       const slug = `e2e-test-srv-${Date.now()}`
-      const resp = await fetch('http://localhost:8000/api/v1/mcp/servers', {
+      const resp = await fetch(`${backendUrl}/mcp/servers`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -494,31 +558,31 @@ test.describe('Real Backend Integration - MCP Default Session', () => {
       })
       const server = await resp.json()
       return { status: resp.status, server }
-    })
+    }, BACKEND_URL)
 
     expect(createResult.status).toBe(201)
     const serverId = createResult.server.id
 
     // Try to sync without sessions — should return 422
-    const syncResult = await page.evaluate(async (serverId: string) => {
+    const syncResult = await page.evaluate(async ({ backendUrl, id }: { backendUrl: string; id: string }) => {
       const token = localStorage.getItem('access_token')
-      const resp = await fetch(`http://localhost:8000/api/v1/mcp/servers/${serverId}/sync`, {
+      const resp = await fetch(`${backendUrl}/mcp/servers/${id}/sync`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}` },
       })
       return { status: resp.status, body: await resp.json() }
-    }, serverId)
+    }, { backendUrl: BACKEND_URL, id: serverId })
 
     expect(syncResult.status).toBe(422)
     expect(syncResult.body.detail).toContain('no configured sessions')
 
     // Cleanup: delete the server
-    await page.evaluate(async (serverId: string) => {
+    await page.evaluate(async ({ backendUrl, id }: { backendUrl: string; id: string }) => {
       const token = localStorage.getItem('access_token')
-      await fetch(`http://localhost:8000/api/v1/mcp/servers/${serverId}`, {
+      await fetch(`${backendUrl}/mcp/servers/${id}`, {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${token}` },
       })
-    }, serverId)
+    }, { backendUrl: BACKEND_URL, id: serverId })
   })
 })

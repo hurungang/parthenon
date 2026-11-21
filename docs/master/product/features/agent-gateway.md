@@ -8,6 +8,8 @@ The Agent Gateway provides a centralized, secure, and observable entry point for
 ## Third-Party Client Invocations
 Third-party [clients](third-party-agent-integration.md) enter through the Agent Gateway as an additional caller class: a client authenticates with its own secret or publishable credential and invokes only the bound agent type's input interface (a stateful conversation or a typed request/response). Client invocations are tenant-scoped, rate-limited, and audited, and can never reach tools, the MCP hub, or an agent identity. Existing identity-based invocation is unchanged.
 
+The [MCP Demo App](mcp-demo-app.md) airline booking scenario is exercised through exactly this client integration path (the agent client demo app) as well as the in-product chat; it demonstrates the existing gateway behaviour and introduces no gateway change.
+
 ## Who Uses It
 - Platform Administrators: Configure agent exposure, monitor interactions, and manage gateway policies
 - Business Users: Launch and interact with agents through supported protocols

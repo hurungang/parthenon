@@ -7,8 +7,15 @@
  * - Create channel and verify it appears in the list
  * - Edit channel and verify update reflected
  * - Delete channel and verify it is removed
+ *
+ * Shapes mirror `NotificationChannel` in frontend/src/types/index.ts — the
+ * list endpoint is paginated (`?limit=&offset=`), so every collection glob
+ * ends with `**`, and `channel_type` uses the enum wire values
+ * (TEAMS_WEBHOOK / SLACK_WEBHOOK / SMTP / ...) which the page renders through
+ * i18n labels.
  */
 import { test, expect } from '@playwright/test'
+import type { Page } from '@playwright/test'
 import { standardSetup } from '../_helpers'
 
 const JSON_HEADERS = { 'Content-Type': 'application/json' }
@@ -19,6 +26,8 @@ const CHANNEL_WEBHOOK: Record<string, unknown> = {
   channel_type: 'TEAMS_WEBHOOK',
   description: 'Operations alerts',
   is_active: true,
+  created_at: '2026-01-01T00:00:00Z',
+  updated_at: '2026-01-01T00:00:00Z',
   properties: [{ id: 'prop-1', channel_id: 'ch-webhook-1', key: 'webhook_url', value: 'https://hooks.example.com/ops', is_secret: false }],
 }
 
@@ -28,8 +37,13 @@ const CHANNEL_SLACK: Record<string, unknown> = {
   channel_type: 'SLACK_WEBHOOK',
   description: 'Slack integration',
   is_active: true,
+  created_at: '2026-01-01T00:00:00Z',
+  updated_at: '2026-01-01T00:00:00Z',
   properties: [],
 }
+
+const dialog = (page: Page) =>
+  page.locator('[role="dialog"].MuiDialog-paper')
 
 test.describe('Notification Channel Management', () => {
   test.beforeEach(async ({ page }) => {
@@ -40,7 +54,7 @@ test.describe('Notification Channel Management', () => {
     const errors: string[] = []
     page.on('pageerror', (err) => errors.push(err.message))
 
-    await page.route('**/api/v1/notifications/channels', (route) =>
+    await page.route('**/api/v1/notifications/channels**', (route) =>
       route.fulfill({ status: 200, headers: JSON_HEADERS, body: JSON.stringify([CHANNEL_WEBHOOK, CHANNEL_SLACK]) })
     )
 
@@ -52,7 +66,7 @@ test.describe('Notification Channel Management', () => {
   })
 
   test('renders channel names from API', async ({ page }) => {
-    await page.route('**/api/v1/notifications/channels', (route) =>
+    await page.route('**/api/v1/notifications/channels**', (route) =>
       route.fulfill({ status: 200, headers: JSON_HEADERS, body: JSON.stringify([CHANNEL_WEBHOOK, CHANNEL_SLACK]) })
     )
 
@@ -64,20 +78,23 @@ test.describe('Notification Channel Management', () => {
   })
 
   test('renders channel type chips', async ({ page }) => {
-    await page.route('**/api/v1/notifications/channels', (route) =>
+    await page.route('**/api/v1/notifications/channels**', (route) =>
       route.fulfill({ status: 200, headers: JSON_HEADERS, body: JSON.stringify([CHANNEL_WEBHOOK, CHANNEL_SLACK]) })
     )
 
     await page.goto('/admin/notifications/channels')
     await page.waitForLoadState('networkidle')
 
-    // Channel type chip text should be visible (may be rendered as Chip labels)
-    await expect(page.getByText(/teams/i).first()).toBeVisible()
-    await expect(page.getByText(/slack/i).first()).toBeVisible()
+    // `channel_type` is rendered as an i18n label inside a Chip:
+    // TEAMS_WEBHOOK → "Microsoft Teams", SLACK_WEBHOOK → "Slack".
+    const teamsRow = page.getByRole('row').filter({ hasText: 'Ops Teams' })
+    const slackRow = page.getByRole('row').filter({ hasText: 'Slack Alerts' })
+    await expect(teamsRow.getByText('Microsoft Teams')).toBeVisible()
+    await expect(slackRow.getByRole('cell').filter({ hasText: 'Slack' }).first()).toBeVisible()
   })
 
   test('add channel button is visible', async ({ page }) => {
-    await page.route('**/api/v1/notifications/channels', (route) =>
+    await page.route('**/api/v1/notifications/channels**', (route) =>
       route.fulfill({ status: 200, headers: JSON_HEADERS, body: JSON.stringify([]) })
     )
 
@@ -89,7 +106,7 @@ test.describe('Notification Channel Management', () => {
   })
 
   test('opens create channel dialog on add button click', async ({ page }) => {
-    await page.route('**/api/v1/notifications/channels', (route) =>
+    await page.route('**/api/v1/notifications/channels**', (route) =>
       route.fulfill({ status: 200, headers: JSON_HEADERS, body: JSON.stringify([]) })
     )
 
@@ -100,14 +117,14 @@ test.describe('Notification Channel Management', () => {
     await addBtn.click()
 
     // Dialog opens — target MuiDialog-paper to avoid matching the hidden sidebar Drawer
-    await expect(page.locator('[role="dialog"].MuiDialog-paper')).toBeVisible({ timeout: 5000 })
+    await expect(dialog(page)).toBeVisible({ timeout: 5000 })
   })
 
   test('create channel updates list without page reload', async ({ page }) => {
-    const created = { ...CHANNEL_WEBHOOK, id: 'ch-new', name: 'New Channel' }
+    const created = { ...CHANNEL_WEBHOOK, id: 'ch-new', name: 'new-channel' }
     let channels: unknown[] = []
 
-    await page.route('**/api/v1/notifications/channels', (route) => {
+    await page.route('**/api/v1/notifications/channels**', (route) => {
       if (route.request().method() === 'GET') {
         route.fulfill({ status: 200, headers: JSON_HEADERS, body: JSON.stringify(channels) })
       } else {
@@ -122,23 +139,27 @@ test.describe('Notification Channel Management', () => {
     // Open create dialog
     const addBtn = page.getByRole('button').filter({ hasText: /add|create|new/i }).first()
     await addBtn.click()
-    await page.locator('[role="dialog"].MuiDialog-paper').waitFor({ state: 'visible', timeout: 5000 })
+    await expect(dialog(page)).toBeVisible({ timeout: 5000 })
 
-    // Fill in name field
-    await page.getByLabel(/name/i).first().fill('New Channel')
+    // Fill in name field (label: "Channel Name" — the required marker is part of
+    // the label text, so match the accessible name by prefix)
+    await dialog(page).getByRole('textbox', { name: /^Channel Name/ }).fill('new-channel')
 
-    // Submit
-    await page.getByRole('button', { name: /save|create|add/i }).last().click()
+    // Submit — the dialog Save button is gated on a valid slug-style name
+    const saveBtn = dialog(page).getByRole('button', { name: 'Save' })
+    await expect(saveBtn).toBeEnabled()
+    await saveBtn.click()
 
     // Dialog should close and list should show the new item
-    await page.locator('[role="dialog"].MuiDialog-paper').waitFor({ state: 'hidden', timeout: 5000 })
-    await expect(page.getByText('New Channel')).toBeVisible({ timeout: 5000 })
+    await expect(dialog(page)).toBeHidden({ timeout: 5000 })
+    await expect(page.getByText('new-channel')).toBeVisible({ timeout: 5000 })
   })
 
   test('delete channel removes it from list', async ({ page }) => {
     let channels = [CHANNEL_WEBHOOK, CHANNEL_SLACK]
 
-    await page.route('**/api/v1/notifications/channels', (route) =>
+    // Collection first, item route second (Playwright resolves last-registered-first)
+    await page.route('**/api/v1/notifications/channels**', (route) =>
       route.fulfill({ status: 200, headers: JSON_HEADERS, body: JSON.stringify(channels) })
     )
     await page.route('**/api/v1/notifications/channels/ch-webhook-1', (route) => {
@@ -155,7 +176,7 @@ test.describe('Notification Channel Management', () => {
     await expect(page.getByText('Ops Teams')).toBeVisible()
 
     // Accept the native confirm() dialog that handleDelete triggers
-    page.once('dialog', (dialog) => dialog.accept())
+    page.once('dialog', (d) => d.accept())
 
     // Delete button is the last IconButton in the row (Edit | Delete)
     const row = page.getByRole('row').filter({ hasText: 'Ops Teams' })

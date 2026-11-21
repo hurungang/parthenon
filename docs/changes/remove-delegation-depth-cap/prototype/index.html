@@ -1,0 +1,1104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Parthenon — Remove the Delegation Depth Cap (Prototype)</title>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --primary:#2563EB;--primary-dark:#1D4ED8;--primary-light:#DBEAFE;
+  --sidebar-bg:#FFFFFF;--sidebar-text:#424242;--sidebar-active-bg:rgba(0,0,0,0.06);
+  --sidebar-hover-bg:rgba(0,0,0,0.03);--sidebar-active-text:#2563EB;
+  --surface:#FFFFFF;--bg:#FAFAFA;--border:#E0E0E0;
+  --success:#4CAF50;--warning:#FF9800;--error:#F44336;--info:#2196F3;
+  --text-primary:#212121;--text-secondary:#757575;
+  --shadow:0 1px 2px 0 rgba(60,64,67,0.3),0 1px 3px 1px rgba(60,64,67,0.15);
+  --shadow-md:0 4px 6px 0 rgba(60,64,67,0.3),0 4px 8px 3px rgba(60,64,67,0.15);
+  --radius:8px;--radius-sm:4px;--radius-lg:12px;
+  --sidebar-w:250px;--topbar-h:64px;
+  --transition:0.2s ease;
+}
+html,body{height:100%;font-family:'Inter','Roboto',system-ui,sans-serif;background:var(--bg);color:var(--text-primary);font-size:14px;line-height:1.5}
+a{color:inherit;text-decoration:none}
+button{cursor:pointer;font-family:inherit;font-size:14px}
+input,select{font-family:inherit;font-size:14px}
+
+/* ── APP SHELL ── */
+.app-shell{display:flex;height:100vh;overflow:hidden}
+.sidebar{width:var(--sidebar-w);background:var(--sidebar-bg);color:var(--sidebar-text);display:flex;flex-direction:column;flex-shrink:0;overflow-y:auto;border-right:1px solid var(--border);z-index:100}
+.sidebar-logo{padding:20px 20px 16px;border-bottom:1px solid var(--border);flex-shrink:0}
+.sidebar-logo h1{font-size:18px;font-weight:700;letter-spacing:-.5px}
+.sidebar-logo small{font-size:11px;color:var(--text-secondary);letter-spacing:.5px;text-transform:uppercase}
+.nav-item{display:flex;align-items:center;gap:8px;padding:8px 14px;cursor:pointer;border-radius:var(--radius);margin:1px 6px;font-size:13px;white-space:nowrap;transition:background var(--transition),color var(--transition);user-select:none}
+.nav-item:hover{background:var(--sidebar-hover-bg)}
+.nav-item.active{background:var(--sidebar-active-bg);color:var(--sidebar-active-text);font-weight:500}
+.nav-item .nav-icon{font-size:14px;width:18px;text-align:center;flex-shrink:0;line-height:1}
+.nav-parent-group{margin-top:2px}
+.nav-parent-group-label{padding:8px 14px 4px;font-size:11px;font-weight:600;color:var(--text-secondary);display:flex;align-items:center;justify-content:space-between}
+.nav-parent-group-label .toggle-icon{font-size:10px;color:var(--text-secondary)}
+.nav-item.sub-item{padding-left:32px;font-size:11px;margin:0 6px;padding-top:5px;padding-bottom:5px;gap:6px;color:var(--text-secondary)}
+.nav-item.sub-item .nav-icon{font-size:11px;width:14px}
+.nav-item.sub-item.active{background:var(--sidebar-active-bg);color:var(--sidebar-active-text);font-weight:500}
+.nav-item.inert{opacity:.55}
+.sidebar-foot{margin-top:auto;padding:14px 16px;border-top:1px solid var(--border);font-size:10.5px;color:var(--text-secondary);line-height:1.6}
+
+.main-wrapper{flex:1;display:flex;flex-direction:column;overflow:hidden}
+.topbar{height:var(--topbar-h);background:var(--surface);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 24px;gap:16px;flex-shrink:0}
+.topbar-title{font-size:17px;font-weight:600;flex:1}
+.topbar-actions{display:flex;align-items:center;gap:12px}
+.avatar{width:36px;height:36px;border-radius:50%;background:var(--primary);color:#fff;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:600}
+.main-content{flex:1;overflow-y:auto;padding:22px 24px 40px}
+.main-content::-webkit-scrollbar{width:6px}.main-content::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+
+/* flow switcher */
+.flow-switch{display:inline-flex;background:#F1F5F9;border:1px solid var(--border);border-radius:999px;padding:3px;gap:2px}
+.flow-btn{border:none;background:none;padding:6px 14px;border-radius:999px;font-size:12px;font-weight:600;color:var(--text-secondary);transition:all var(--transition)}
+.flow-btn:hover{color:var(--text-primary)}
+.flow-btn.active{background:#fff;color:var(--primary-dark);box-shadow:0 1px 3px rgba(15,23,42,.15)}
+
+/* ── VIEWS ── */
+.view{display:none}.view.active{display:block}
+.view-header{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:18px}
+.view-header h2{font-size:21px;font-weight:600}
+.view-desc{font-size:12.5px;color:var(--text-secondary);margin-top:3px}
+.view-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+
+/* ── BUTTONS ── */
+.btn{display:inline-flex;align-items:center;gap:6px;padding:8px 16px;border-radius:var(--radius-sm);border:none;font-weight:500;transition:all var(--transition);white-space:nowrap}
+.btn-primary{background:var(--primary);color:#fff;box-shadow:var(--shadow)}
+.btn-primary:hover{background:var(--primary-dark);box-shadow:var(--shadow-md)}
+.btn-secondary{background:var(--surface);color:var(--text-primary);border:1px solid var(--border)}
+.btn-secondary:hover{background:var(--bg)}
+.btn-sm{padding:5px 12px;font-size:12px}
+.btn-xs{padding:3px 9px;font-size:11px}
+.btn-ghost{background:none;border:none;color:var(--primary);padding:4px 8px;font-size:12.5px;font-weight:500}
+.btn-ghost:hover{background:var(--primary-light);border-radius:4px}
+.btn:disabled{opacity:.45;cursor:not-allowed;box-shadow:none}
+
+/* ── CARDS ── */
+.card{background:var(--surface);border-radius:var(--radius);border:1px solid var(--border);box-shadow:var(--shadow)}
+.card-header{padding:14px 18px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.card-header h3{font-size:14.5px;font-weight:600}
+.card-body{padding:18px}
+.card-footer{padding:12px 18px;border-top:1px solid var(--border);background:#FAFAFA;border-radius:0 0 var(--radius) var(--radius);display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.card-note{font-size:11.5px;color:var(--text-secondary)}
+
+/* ── CHIPS ── */
+.chip{display:inline-flex;align-items:center;gap:4px;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:600;white-space:nowrap}
+.chip-blue{background:#DBEAFE;color:#1D4ED8}
+.chip-green{background:#DCFCE7;color:#15803D}
+.chip-red{background:#FEE2E2;color:#B91C1C}
+.chip-yellow{background:#FEF3C7;color:#92400E}
+.chip-purple{background:#EDE9FE;color:#6D28D9}
+.chip-gray{background:#F1F5F9;color:#475569}
+.chip-indigo{background:#E0E7FF;color:#3730A3}
+.dot{width:7px;height:7px;border-radius:50%;display:inline-block}
+
+/* ── CHANGE CALLOUT ── */
+.change-banner{border:1px solid #BBD8F0;background:#EAF2FC;border-left:4px solid var(--primary);border-radius:var(--radius);margin-bottom:18px;padding:12px 16px}
+.change-banner summary{cursor:pointer;display:flex;align-items:center;gap:9px;font-size:13.5px;font-weight:600;color:var(--primary-dark);list-style:none}
+.change-banner summary::-webkit-details-marker{display:none}
+.change-banner summary::after{content:'▾';margin-left:auto;font-size:11px;color:var(--primary-dark);transition:transform var(--transition)}
+.change-banner:not([open]) summary::after{transform:rotate(-90deg)}
+.cb-icon{width:22px;height:22px;border-radius:50%;background:var(--primary);color:#fff;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex-shrink:0}
+.cb-tag{font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;background:var(--primary);color:#fff;padding:2px 7px;border-radius:999px}
+.change-banner ul{margin:10px 0 0 4px;padding-left:18px;font-size:12.5px;color:#334155;line-height:1.75}
+.change-banner li strong{color:#1E3A8A}
+
+/* ── GUARDRAIL LAYOUT ── */
+.grid-2{display:grid;grid-template-columns:296px minmax(0,1fr);gap:16px;align-items:start}
+.agent-row{display:flex;flex-direction:column;gap:3px;width:100%;text-align:left;border:1px solid var(--border);background:#fff;border-radius:var(--radius-sm);padding:10px 12px;margin-bottom:8px;transition:all var(--transition)}
+.agent-row:hover{border-color:#BFDBFE;background:#F8FAFC}
+.agent-row.active{border-color:var(--primary);background:#F5F9FF;box-shadow:0 0 0 2px var(--primary-light)}
+.agent-row-top{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.agent-row-name{font-size:13px;font-weight:600;display:flex;align-items:center;gap:6px}
+.agent-row-meta{font-size:11px;color:var(--text-secondary)}
+.agent-row-depth{font-size:11px;font-weight:600;color:var(--primary-dark)}
+.agent-row:last-child{margin-bottom:0}
+
+.rail{display:flex;align-items:center;justify-content:space-between;gap:12px;padding-bottom:14px;margin-bottom:16px;border-bottom:1px solid var(--border);flex-wrap:wrap}
+.rail-left{display:flex;align-items:center;gap:10px}
+.rail-avatar{width:34px;height:34px;border-radius:8px;background:var(--primary-light);color:var(--primary-dark);display:flex;align-items:center;justify-content:center;font-size:15px}
+.rail-name{font-size:14px;font-weight:600}
+.rail-sub{font-size:11.5px;color:var(--text-secondary)}
+
+.section-label{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-secondary);margin-bottom:10px}
+
+/* depth control */
+.depth-card{border:1px solid #C7D2FE;background:#FBFCFF;border-radius:var(--radius);padding:16px;margin-bottom:16px}
+.depth-card-head{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:14px}
+.depth-card-title{font-size:14px;font-weight:600;display:flex;align-items:center;gap:8px}
+.depth-card-sub{font-size:11.5px;color:var(--text-secondary);margin-top:3px;max-width:520px}
+.depth-controls{display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+.stepper{display:inline-flex;align-items:stretch;border:1px solid #BFDBFE;border-radius:var(--radius-sm);overflow:hidden;background:#fff;box-shadow:0 1px 2px rgba(37,99,235,.08)}
+.stepper button{width:40px;height:42px;border:none;background:#fff;color:var(--primary-dark);font-size:18px;font-weight:600;display:flex;align-items:center;justify-content:center;transition:background var(--transition)}
+.stepper button:hover:not(:disabled){background:#EFF6FF}
+.stepper button:disabled{color:#CBD5E1;cursor:not-allowed}
+.stepper-value{min-width:74px;display:flex;flex-direction:column;align-items:center;justify-content:center;border-left:1px solid #BFDBFE;border-right:1px solid #BFDBFE;padding:3px 10px}
+.stepper-value input{width:80px;border:none;background:transparent;text-align:center;font-family:inherit;font-size:20px;font-weight:700;line-height:1.1;font-variant-numeric:tabular-nums;color:var(--primary-dark);outline:none;appearance:textfield;-moz-appearance:textfield}
+.stepper-value input::-webkit-outer-spin-button,.stepper-value input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+.stepper-value input:focus-visible{background:#EFF6FF;border-radius:4px}
+.stepper-value span{font-size:9.5px;text-transform:uppercase;letter-spacing:.4px;color:var(--text-secondary)}
+.presets{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.presets span.lbl{font-size:11px;color:var(--text-secondary);margin-right:2px}
+.preset{padding:6px 13px;border-radius:999px;border:1px solid var(--border);background:#fff;font-size:12px;font-weight:600;color:var(--text-secondary);transition:all var(--transition)}
+.preset:hover{border-color:#BFDBFE;color:var(--primary-dark)}
+.preset.active{border-color:var(--primary);background:var(--primary-light);color:var(--primary-dark)}
+.depth-hint{display:flex;align-items:flex-start;gap:7px;font-size:11.5px;color:#1E3A8A;background:#EFF6FF;border-radius:6px;padding:8px 10px;margin-top:14px;line-height:1.55}
+.depth-hint .hi{flex-shrink:0}
+
+/* chain preview */
+.chain-wrap{border:1px solid var(--border);border-radius:var(--radius);background:#F8FAFC;padding:14px;margin-bottom:16px}
+.chain-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px;flex-wrap:wrap}
+.chain-head .ttl{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-secondary)}
+.chain{display:flex;align-items:center;flex-wrap:wrap;gap:6px}
+.chain-node{display:flex;flex-direction:column;gap:1px;padding:7px 10px;border-radius:6px;border:1px solid var(--border);background:#fff;min-width:96px}
+.chain-node .cn-label{font-size:11.5px;font-weight:600;display:flex;align-items:center;gap:5px}
+.chain-node .cn-depth{font-size:9.5px;letter-spacing:.3px;text-transform:uppercase;color:var(--text-secondary)}
+.chain-node.root{border-color:#93C5FD;background:#EFF6FF}
+.chain-node.allowed{border-color:#A7F3D0;background:#F0FDF4}
+.chain-node.blocked{border-style:dashed;border-color:#FCA5A5;background:#FEF2F2}
+.chain-node.blocked .cn-label{color:#B91C1C}
+.chain-node.blocked .cn-depth{color:#DC2626}
+.chain-arrow{color:#94A3B8;font-size:13px;padding:0 1px}
+.chain-caption{font-size:11px;color:var(--text-secondary);margin-top:9px}
+
+/* compare */
+.compare{display:grid;gap:0;border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;margin-bottom:16px}
+.cmp-row{display:grid;grid-template-columns:74px 1fr;gap:12px;padding:11px 14px;font-size:12px;line-height:1.55;align-items:start}
+.cmp-row.before{background:#F8FAFC;border-bottom:1px solid var(--border);color:#475569}
+.cmp-row.now{background:#F0FDF4;color:#14532D}
+.cmp-tag{font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;padding:2px 7px;border-radius:999px;justify-self:start;margin-top:2px}
+.cmp-row.before .cmp-tag{background:#E2E8F0;color:#475569}
+.cmp-row.now .cmp-tag{background:#BBF7D0;color:#15803D}
+.cmp-row code{font-family:'Courier New',monospace;font-size:11px;background:#fff;border:1px solid #E2E8F0;border-radius:3px;padding:0 4px}
+
+/* read-only guardrails */
+.ro-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.ro-field{border:1px solid var(--border);background:#FCFDFE;border-radius:var(--radius-sm);padding:9px 11px}
+.ro-field .ro-label{font-size:10.5px;font-weight:600;text-transform:uppercase;letter-spacing:.4px;color:var(--text-secondary);margin-bottom:3px;display:flex;align-items:center;justify-content:space-between;gap:8px}
+.ro-field .ro-value{font-size:13px;font-weight:600}
+.foot-note{font-size:11px;color:var(--text-secondary);margin-top:12px;line-height:1.6}
+
+/* ── LOG VIEW ── */
+.font-mono{font-family:'Courier New',monospace}
+.mono{font-family:'Courier New',monospace}
+.scope-banner{display:flex;align-items:flex-start;gap:12px;padding:13px 16px;border:1px solid #BFDBFE;background:#EFF6FF;border-left:4px solid var(--primary);border-radius:var(--radius);margin-bottom:14px}
+.scope-banner .sb-icon{width:26px;height:26px;border-radius:50%;background:#fff;border:1px solid #BFDBFE;color:var(--primary-dark);display:flex;align-items:center;justify-content:center;font-size:13px;flex-shrink:0}
+.scope-banner .sb-body{flex:1;min-width:0}
+.scope-banner h4{font-size:13.5px;color:#1E3A8A;margin-bottom:2px}
+.scope-banner p{font-size:12px;color:#334155;line-height:1.55}
+
+.grid-log{display:grid;grid-template-columns:minmax(0,1fr) 296px;gap:16px;align-items:start}
+
+.log-toolbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px}
+.crumbs{display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:12px;flex:1;min-width:0}
+.crumb{padding:3px 9px;border-radius:999px;border:1px solid var(--border);background:#fff;color:var(--text-secondary);font-weight:500;transition:all var(--transition)}
+.crumb:hover{border-color:#BFDBFE;color:var(--primary-dark)}
+.crumb.current{background:var(--primary-light);border-color:#BFDBFE;color:var(--primary-dark);font-weight:600}
+.crumb-sep{color:#CBD5E1;font-size:11px}
+.crumbs .root-label{font-size:11px;color:var(--text-secondary);font-weight:600;text-transform:uppercase;letter-spacing:.4px;margin-right:2px}
+
+.log-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.log-head-left{display:flex;gap:11px;align-items:flex-start;min-width:0}
+.log-avatar{width:34px;height:34px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:15px;background:#EDE9FE;color:#5B21B6;flex-shrink:0}
+.log-agent{font-size:14.5px;font-weight:600;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.log-meta{font-size:11.5px;color:var(--text-secondary);display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:3px}
+.log-meta .sep{color:#CBD5E1}
+.log-head-right{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+
+.log-body{padding:6px 18px 16px}
+.log-group-label{font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-secondary);padding:14px 0 6px;border-bottom:1px solid #F1F5F9}
+.log-row{display:grid;grid-template-columns:74px 104px minmax(0,1fr);gap:12px;padding:8px 0;border-bottom:1px solid #F1F5F9;font-size:12.5px;align-items:start}
+.log-row:last-child{border-bottom:none}
+.log-time{font-family:'Courier New',monospace;font-size:11px;color:var(--text-secondary);padding-top:3px;font-variant-numeric:tabular-nums}
+.log-kind{font-size:9.5px;font-weight:700;letter-spacing:.4px;padding:3px 7px;border-radius:4px;text-align:center;text-transform:uppercase;margin-top:1px}
+.k-session{background:#F1F5F9;color:#475569}
+.k-llm{background:#DBEAFE;color:#1D4ED8}
+.k-tool{background:#DCFCE7;color:#15803D}
+.k-guardrail{background:#FEE2E2;color:#B91C1C}
+.k-delegation{background:#EDE9FE;color:#6D28D9}
+.k-runtime{background:#E0E7FF;color:#3730A3}
+.log-desc{font-size:12.5px;color:var(--text-primary);font-weight:500;word-break:break-word}
+.log-desc .ent{font-family:'Courier New',monospace;font-size:11.5px;color:#334155;background:#F8FAFC;border:1px solid #E7ECF2;border-radius:3px;padding:0 4px}
+.log-detail{font-size:11px;color:var(--text-secondary);font-family:'Courier New',monospace;margin-top:3px;word-break:break-word}
+
+/* delegation block */
+.delegation-block{border:1px solid #C7D2FE;background:#FAFAFF;border-left:4px solid #6366F1;border-radius:var(--radius);padding:13px 14px;margin:10px 0 12px}
+.delegation-block.blocked{border-color:#FCA5A5;background:#FFFBFB;border-left-color:#EF4444}
+.dlg-head{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.dlg-title{font-size:13px;font-weight:600;display:flex;align-items:center;gap:7px;flex-wrap:wrap}
+.dlg-title .arrow{color:#6366F1;font-size:12px}
+.dlg-title .ent{font-family:'Courier New',monospace;font-size:11.5px;font-weight:500;background:#EEF2FF;border:1px solid #E0E7FF;color:#3730A3;border-radius:3px;padding:0 4px}
+.dlg-sub{font-size:11px;color:var(--text-secondary);margin-top:3px}
+.dlg-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.dlg-life{margin-top:11px;border-top:1px dashed #E0E7FF;padding-top:8px}
+.dlg-ev{display:grid;grid-template-columns:64px minmax(0,1fr);gap:10px;padding:3px 0;font-size:11.5px;align-items:baseline}
+.dlg-ev .t{font-family:'Courier New',monospace;font-size:10.5px;color:var(--text-secondary);font-variant-numeric:tabular-nums}
+.dlg-ev .n{color:#334155;display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.dlg-ev .n .pill{font-size:9.5px;font-weight:700;padding:1px 6px;border-radius:999px}
+.pill-wait{background:#FEF3C7;color:#92400E}
+.pill-resume{background:#DCFCE7;color:#15803D}
+.pill-info{background:#E0E7FF;color:#3730A3}
+.dlg-scope{font-size:11px;color:#475569;background:#F1F5F9;border-radius:5px;padding:7px 9px;margin-top:10px;line-height:1.55}
+.dlg-block-alert{display:flex;align-items:flex-start;gap:8px;font-size:11.5px;color:#991B1B;background:#FEF2F2;border:1px solid #FECACA;border-radius:5px;padding:8px 10px;margin-top:10px;line-height:1.55}
+
+/* scope boundary marker inside log */
+.boundary{display:flex;align-items:center;gap:10px;border:1px dashed #CBD5E1;border-radius:6px;background:#FCFDFE;padding:8px 11px;margin:10px 0 4px;font-size:11.5px;color:var(--text-secondary);line-height:1.5}
+.boundary .b-icon{font-size:12px;color:#94A3B8;flex-shrink:0}
+
+.log-foot{padding:10px 18px;border-top:1px solid var(--border);background:#FAFAFA;border-radius:0 0 var(--radius) var(--radius);display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;font-size:11px;color:var(--text-secondary)}
+
+/* side cards */
+.side-card + .side-card{margin-top:14px}
+.rule-list{display:flex;flex-direction:column;gap:11px}
+.rule{display:flex;gap:9px;font-size:11.5px;line-height:1.55;color:#334155}
+.rule .r-ico{flex-shrink:0;width:16px;height:16px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;margin-top:1px}
+.ri-yes{background:#DCFCE7;color:#15803D}
+.ri-no{background:#FEE2E2;color:#B91C1C}
+.ri-info{background:#DBEAFE;color:#1D4ED8}
+.rule strong{color:var(--text-primary)}
+.depth-box{display:flex;flex-direction:column;gap:8px}
+.depth-big{display:flex;align-items:baseline;gap:6px}
+.depth-big strong{font-size:26px;line-height:1;color:var(--primary-dark);font-variant-numeric:tabular-nums}
+.depth-big span{font-size:13px;color:var(--text-secondary)}
+.mini-kv{display:flex;justify-content:space-between;gap:8px;font-size:11.5px;padding:5px 0;border-bottom:1px solid #F1F5F9}
+.mini-kv:last-child{border-bottom:none}
+.mini-kv .k{color:var(--text-secondary)}
+.mini-kv .v{font-weight:600;text-align:right}
+.side-link{font-size:11.5px;font-weight:600;color:var(--primary);padding:0;background:none;border:none;text-align:left}
+
+/* toast */
+.sched-toast-container{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);z-index:2000;display:flex;flex-direction:column;gap:8px;align-items:center;pointer-events:none}
+.sched-toast{padding:11px 18px;border-radius:var(--radius);color:#fff;font-size:12.5px;font-weight:500;box-shadow:var(--shadow-md);animation:toastIn .25s ease;max-width:520px;text-align:center}
+.sched-success{background:#2E7D32}
+.sched-info{background:#1565C0}
+.sched-warn{background:#B45309}
+@keyframes toastIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+@keyframes fadeIn{from{opacity:0}to{opacity:1}}
+.log-body > *{animation:fadeIn .18s ease}
+
+@media (max-width:1180px){
+  .grid-log{grid-template-columns:1fr}
+  .grid-2{grid-template-columns:1fr}
+}
+@media (max-width:1080px){
+  .topbar{padding:0 16px;gap:10px}
+  .topbar-title{font-size:15px;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .flow-btn{padding:6px 10px;font-size:11px}
+}
+@media (max-width:900px){
+  .sidebar{display:none}
+  .flow-switch{display:none}
+}
+@media (max-width:760px){
+  .log-row{grid-template-columns:66px 90px minmax(0,1fr)}
+  .ro-grid{grid-template-columns:1fr}
+}
+</style>
+</head>
+<body>
+
+<div class="app-shell">
+
+  <!-- ═══ SIDEBAR ═══ -->
+  <nav class="sidebar" aria-label="Primary navigation">
+    <div class="sidebar-logo">
+      <h1>⚡ Parthenon</h1>
+      <small>Enterprise AI Harness</small>
+    </div>
+
+    <div class="nav-item inert" title="Not part of this prototype"><span class="nav-icon">🏠</span>Dashboard</div>
+
+    <div class="nav-parent-group">
+      <div class="nav-parent-group-label"><span>🤖 Agents</span><span class="toggle-icon">▼</span></div>
+      <div class="nav-children">
+        <div class="nav-item sub-item inert" title="Not part of this prototype"><span class="nav-icon">👤</span>Agent Roles</div>
+        <div class="nav-item sub-item" id="nav-agent-types" onclick="go('guardrails')"><span class="nav-icon">🤖</span>Agent Types</div>
+        <div class="nav-item sub-item" id="nav-executions" onclick="go('logs')"><span class="nav-icon">▶️</span>Agent Executions</div>
+        <div class="nav-item sub-item inert" title="Not part of this prototype"><span class="nav-icon">🧾</span>Agent Logs</div>
+        <div class="nav-item sub-item inert" title="Not part of this prototype"><span class="nav-icon">🕸️</span>Agent Runtime Monitor</div>
+        <div class="nav-item sub-item inert" title="Not part of this prototype"><span class="nav-icon">🔧</span>Skills</div>
+        <div class="nav-item sub-item inert" title="Not part of this prototype"><span class="nav-icon">📋</span>SOPs</div>
+      </div>
+    </div>
+
+    <div class="nav-parent-group">
+      <div class="nav-parent-group-label"><span>⚙️ System</span><span class="toggle-icon">▼</span></div>
+      <div class="nav-children">
+        <div class="nav-item sub-item inert" title="Not part of this prototype"><span class="nav-icon">🧩</span>Model Configs</div>
+        <div class="nav-item sub-item inert" title="Not part of this prototype"><span class="nav-icon">⚙️</span>System Config</div>
+      </div>
+    </div>
+
+    <div class="sidebar-foot">
+      <strong style="color:#475569">Prototype</strong><br>
+      remove-delegation-depth-cap<br>
+      Sample data only — no backend.
+    </div>
+  </nav>
+
+  <div class="main-wrapper">
+    <!-- ═══ TOP BAR ═══ -->
+    <div class="topbar">
+      <div class="topbar-title" id="topbar-title">Agent Type Guardrails</div>
+      <div class="topbar-actions">
+        <div class="flow-switch" role="tablist" aria-label="Prototype flows">
+          <button class="flow-btn active" data-view="guardrails" onclick="go('guardrails')">1 · Guardrail configuration</button>
+          <button class="flow-btn" data-view="logs" onclick="go('logs')">2 · Execution log scoping</button>
+        </div>
+        <span class="chip chip-gray">Prototype</span>
+        <div class="avatar" title="Alex Harper — Admin">AH</div>
+      </div>
+    </div>
+
+    <div class="main-content">
+
+      <!-- WHAT CHANGED -->
+      <details class="change-banner" open>
+        <summary><span class="cb-icon">i</span>What changed<span class="cb-tag">remove-delegation-depth-cap</span></summary>
+        <ul>
+          <li><strong>Configured depth is the only limit.</strong> Max Delegation Depth on the agent type is the single depth limit — the platform no longer applies a hidden cap of its own.</li>
+          <li><strong>Task agents can delegate onward.</strong> Non-conversational agents (and conversational ones) may pass work on while the configured depth allows, so multi-level workflows complete.</li>
+          <li><strong>Logs stay single-agent scoped.</strong> An execution log shows that agent's own work plus its direct delegation lifecycle; deeper activity is reached one hop at a time via “View Execution Logs”.</li>
+        </ul>
+      </details>
+
+      <!-- ════════════════════════════════════════════════════════════
+           VIEW 1 — GUARDRAIL CONFIGURATION
+           ════════════════════════════════════════════════════════════ -->
+      <section class="view active" id="view-guardrails">
+        <div class="view-header">
+          <div>
+            <h2>Guardrails</h2>
+            <div class="view-desc">Agents › Agent Types › <span id="vhAgentName">policy-auditor</span> › Guardrails</div>
+          </div>
+          <div class="view-actions">
+            <span class="chip chip-gray" id="saveStateChip">All changes saved</span>
+          </div>
+        </div>
+
+        <div class="grid-2">
+
+          <!-- agent type list -->
+          <div class="card">
+            <div class="card-header">
+              <h3>Agent Types</h3>
+              <span class="chip chip-gray">2 shown</span>
+            </div>
+            <div class="card-body" style="padding:10px">
+              <button class="agent-row active" id="row-policy-auditor" onclick="selectAgent('policy-auditor')">
+                <span class="agent-row-top">
+                  <span class="agent-row-name">🎯 policy-auditor</span>
+                  <span class="agent-row-depth" id="rowDepth-policy-auditor">depth 3</span>
+                </span>
+                <span class="agent-row-meta">Task · non-conversational · typed output</span>
+              </button>
+              <button class="agent-row" id="row-research-analyst" onclick="selectAgent('research-analyst')">
+                <span class="agent-row-top">
+                  <span class="agent-row-name">🔎 research-analyst</span>
+                  <span class="agent-row-depth" id="rowDepth-research-analyst">depth 1</span>
+                </span>
+                <span class="agent-row-meta">Conversational · chat input</span>
+              </button>
+            </div>
+            <div class="card-footer">
+              <span class="card-note">Two agent types with different configured maximums — useful for comparing what the log reports.</span>
+            </div>
+          </div>
+
+          <!-- guardrail profile -->
+          <div class="card">
+            <div class="card-header">
+              <h3>Guardrail Profile</h3>
+              <div style="display:flex;gap:6px;flex-wrap:wrap">
+                <span class="chip chip-blue" id="railInputType">typed</span>
+                <span class="chip chip-gray" id="railUpdated">Updated 2 days ago</span>
+              </div>
+            </div>
+            <div class="card-body">
+
+              <div class="rail">
+                <div class="rail-left">
+                  <div class="rail-avatar" id="railIcon">🎯</div>
+                  <div>
+                    <div class="rail-name" id="railName">policy-auditor</div>
+                    <div class="rail-sub" id="railKind">Task agent · non-conversational</div>
+                  </div>
+                </div>
+                <span class="chip chip-indigo">Guardrails apply to every agent type</span>
+              </div>
+
+              <div class="section-label">Delegation</div>
+
+              <!-- MAX DELEGATION DEPTH -->
+              <div class="depth-card">
+                <div class="depth-card-head">
+                  <div>
+                    <div class="depth-card-title">Max Delegation Depth <span class="chip chip-purple">Only depth limit</span></div>
+                    <div class="depth-card-sub">How many delegation levels this agent type may use. This value is authoritative — nothing in the platform narrows it further.</div>
+                  </div>
+                  <span class="chip chip-gray" id="effectiveLimitChip">Effective limit: 3 levels</span>
+                </div>
+
+                <div class="depth-controls">
+                  <div class="stepper">
+                    <button type="button" id="depthMinus" onclick="stepDepth(-1)" aria-label="Decrease max delegation depth">−</button>
+                    <div class="stepper-value">
+                      <input id="depthValue" type="number" min="0" step="1" value="3" inputmode="numeric"
+                             aria-label="Max Delegation Depth in levels"
+                             oninput="setDepth(parseInt(this.value, 10))" onblur="renderGuardrail()">
+                      <span>levels</span>
+                    </div>
+                    <button type="button" id="depthPlus" onclick="stepDepth(1)" aria-label="Increase max delegation depth">+</button>
+                  </div>
+                  <div class="presets">
+                    <span class="lbl">Quick set</span>
+                    <button class="preset" data-depth="0" onclick="setDepth(0)">0</button>
+                    <button class="preset" data-depth="1" onclick="setDepth(1)">1</button>
+                    <button class="preset active" data-depth="3" onclick="setDepth(3)">3</button>
+                    <button class="preset" data-depth="8" onclick="setDepth(8)">8</button>
+                  </div>
+                </div>
+
+                <div class="depth-hint">
+                  <span class="hi">🔒</span>
+                  <span><strong>Configured depth is authoritative.</strong> There is no hidden platform ceiling and no fixed maximum on the value: set 0 to forbid delegation, 8 to allow an eight-hop chain. Every permitted and blocked outcome is measured against this number.</span>
+                </div>
+              </div>
+
+              <!-- CHAIN PREVIEW -->
+              <div class="chain-wrap">
+                <div class="chain-head">
+                  <span class="ttl">Permitted delegation chain</span>
+                  <span class="chip chip-green" id="chainChip">3 hops permitted</span>
+                </div>
+                <div class="chain" id="chainViz"></div>
+                <div class="chain-caption" id="chainCaption">Root agent at depth 0. Each hop is one delegated agent. Attempts past the configured depth are blocked and recorded against this limit.</div>
+              </div>
+
+              <!-- BEFORE / AFTER -->
+              <div class="section-label">Effect of the change</div>
+              <div class="compare">
+                <div class="cmp-row before">
+                  <span class="cmp-tag">Before</span>
+                  <div>Whatever value was configured, the platform stopped any chain after <strong>one delegated level</strong> — a hidden cap of two levels that nobody could see or configure. Agents could not delegate onward, and the log reported a fixed maximum that contradicted this screen.</div>
+                </div>
+                <div class="cmp-row now">
+                  <span class="cmp-tag">Now</span>
+                  <div id="compareNow">Configured depth <strong>3</strong> is the only limit. A root agent plus <strong>3 delegated levels</strong> may run, and the execution log reports <code id="compareCode">1 / 3</code> style depth against this value.</div>
+                </div>
+              </div>
+
+              <!-- OTHER GUARDRAILS -->
+              <div class="section-label">Other guardrails — unchanged</div>
+              <div class="ro-grid">
+                <div class="ro-field">
+                  <div class="ro-label">Max Iterations <span class="chip chip-gray">unchanged</span></div>
+                  <div class="ro-value" id="roIterations">12</div>
+                </div>
+                <div class="ro-field">
+                  <div class="ro-label">Max Delegated Steps <span class="chip chip-gray">unchanged</span></div>
+                  <div class="ro-value" id="roSteps">20</div>
+                </div>
+                <div class="ro-field">
+                  <div class="ro-label">Execution Timeout <span class="chip chip-gray">unchanged</span></div>
+                  <div class="ro-value" id="roTimeout">900 s</div>
+                </div>
+                <div class="ro-field">
+                  <div class="ro-label">Token Budget <span class="chip chip-gray">unchanged</span></div>
+                  <div class="ro-value" id="roBudget">250k tokens</div>
+                </div>
+              </div>
+              <div class="foot-note">
+                Cycle and dead-loop validation, delegated-step budgets, iteration ceilings, timeouts and token budgets continue to apply exactly as before. Agent types that never configured a depth keep their current default; stored values are not rewritten by this change.
+              </div>
+            </div>
+
+            <div class="card-footer">
+              <span class="card-note" id="footerNote">Max Delegation Depth 3 · saved 2 days ago</span>
+              <div style="display:flex;gap:8px">
+                <button class="btn btn-secondary btn-sm" onclick="resetDraft()">Reset</button>
+                <button class="btn btn-primary btn-sm" onclick="saveGuardrail()">Save Guardrail Profile</button>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </section>
+
+      <!-- ════════════════════════════════════════════════════════════
+           VIEW 2 — EXECUTION LOG SCOPING + DRILL-IN
+           ════════════════════════════════════════════════════════════ -->
+      <section class="view" id="view-logs">
+        <div class="view-header">
+          <div>
+            <h2>Execution Log</h2>
+            <div class="view-desc" id="logViewDesc">Agents › Agent Executions › sess-9f31c2 — policy-auditor</div>
+          </div>
+          <div class="view-actions">
+            <button class="btn btn-secondary btn-sm" onclick="toast('Raw JSON log is out of prototype scope.','info')">Raw log</button>
+            <button class="btn btn-secondary btn-sm" onclick="toast('Export is out of prototype scope.','info')">Export</button>
+          </div>
+        </div>
+
+        <!-- scoping banner -->
+        <div class="scope-banner">
+          <div class="sb-icon">🔍</div>
+          <div class="sb-body">
+            <h4 id="scopeTitle">Root execution log — current agent + direct delegation only</h4>
+            <p id="scopeDesc">This log contains policy-auditor's own steps and the lifecycle of its direct delegation. Activity from deeper agents is never folded in.</p>
+          </div>
+          <span class="chip chip-blue" id="scopeDepthChip">Depth 0 / 3</span>
+        </div>
+
+        <div class="grid-log">
+          <div>
+            <!-- breadcrumbs + back -->
+            <div class="log-toolbar">
+              <div class="crumbs" id="crumbs"></div>
+              <button class="btn btn-secondary btn-sm" id="backBtn" onclick="backHop()">← Back</button>
+            </div>
+
+            <!-- log card -->
+            <div class="card">
+              <div class="card-header" id="logHeader"></div>
+              <div class="log-body" id="logBody"></div>
+              <div class="log-foot" id="logFoot"></div>
+            </div>
+          </div>
+
+          <!-- side panel -->
+          <aside>
+            <div class="card side-card">
+              <div class="card-header"><h3>Log scoping rules</h3><span class="chip chip-gray">unchanged</span></div>
+              <div class="card-body" style="padding:16px 18px">
+                <div class="rule-list">
+                  <div class="rule"><span class="r-ico ri-yes">✓</span><div><strong>Own execution.</strong> This agent's session, LLM calls and tool calls.</div></div>
+                  <div class="rule"><span class="r-ico ri-yes">✓</span><div><strong>Direct delegations.</strong> Started / waiting / resumed lifecycle events for agents this one delegated to.</div></div>
+                  <div class="rule"><span class="r-ico ri-no">✕</span><div><strong>No grandchildren.</strong> A delegated agent's own sub-agents never appear in the parent log.</div></div>
+                  <div class="rule"><span class="r-ico ri-info">↳</span><div><strong>Drill in, one hop at a time.</strong> “View Execution Logs” opens the delegated agent's own log; the breadcrumb and Back return you.</div></div>
+                </div>
+              </div>
+            </div>
+
+            <div class="card side-card">
+              <div class="card-header"><h3>Depth shown here</h3><span class="chip chip-purple">from config</span></div>
+              <div class="card-body" style="padding:16px 18px">
+                <div class="depth-box">
+                  <div class="depth-big"><strong id="sideDepthNow">0</strong><span>/ <span id="sideDepthMax">3</span> permitted</span></div>
+                  <div class="mini-kv"><span class="k">Agent type (this log)</span><span class="v" id="sideAgentType">policy-auditor</span></div>
+                  <div class="mini-kv"><span class="k">Configured maximum</span><span class="v" id="sideConfigured">3 levels</span></div>
+                  <div class="mini-kv"><span class="k">Limit defined by</span><span class="v" id="sideLimitBy">policy-auditor guardrail</span></div>
+                  <div class="mini-kv"><span class="k">Guardrail snapshot</span><span class="v" id="sideSnapshot">Max Delegation Depth 3</span></div>
+                  <div class="mini-kv"><span class="k">Source of limit</span><span class="v">Agent type configuration</span></div>
+                </div>
+                <p style="font-size:11px;color:var(--text-secondary);margin-top:10px;line-height:1.6">The maximum shown is read from the agent type's guardrail, so it always matches the configuration screen. No fixed platform value is displayed. This sample run was recorded under Max Delegation Depth 3.</p>
+                <button class="side-link" style="margin-top:8px" onclick="go('guardrails')">Open guardrail configuration →</button>
+              </div>
+            </div>
+          </aside>
+        </div>
+      </section>
+
+    </div><!-- /main-content -->
+  </div><!-- /main-wrapper -->
+</div><!-- /app-shell -->
+
+<div class="sched-toast-container" id="toastHost"></div>
+
+<script>
+/* ══════════════════════════════════════════════════════════════
+   VIEW ROUTING
+   ══════════════════════════════════════════════════════════════ */
+var VIEW_CFG = {
+  guardrails: { title: 'Agent Type Guardrails', nav: 'nav-agent-types' },
+  logs:       { title: 'Agent Executions — Execution Log', nav: 'nav-executions' }
+};
+
+function go(view) {
+  var sections = document.querySelectorAll('.view');
+  for (var i = 0; i < sections.length; i++) {
+    sections[i].classList.toggle('active', sections[i].id === 'view-' + view);
+  }
+  var flowBtns = document.querySelectorAll('.flow-btn');
+  for (var j = 0; j < flowBtns.length; j++) {
+    flowBtns[j].classList.toggle('active', flowBtns[j].getAttribute('data-view') === view);
+  }
+  for (var key in VIEW_CFG) {
+    var navEl = document.getElementById(VIEW_CFG[key].nav);
+    if (navEl) navEl.classList.remove('active');
+  }
+  document.getElementById(VIEW_CFG[view].nav).classList.add('active');
+  document.getElementById('topbar-title').textContent = VIEW_CFG[view].title;
+  document.querySelector('.main-content').scrollTop = 0;
+}
+
+function toast(msg, kind) {
+  var host = document.getElementById('toastHost');
+  var el = document.createElement('div');
+  el.className = 'sched-toast sched-' + (kind || 'success');
+  el.textContent = msg;
+  host.appendChild(el);
+  window.setTimeout(function () {
+    el.style.transition = 'opacity .25s ease';
+    el.style.opacity = '0';
+    window.setTimeout(function () { if (el.parentNode) el.parentNode.removeChild(el); }, 260);
+  }, 3200);
+}
+
+/* ══════════════════════════════════════════════════════════════
+   FLOW 1 — GUARDRAIL CONFIGURATION
+   ══════════════════════════════════════════════════════════════ */
+var AGENTS = {
+  'policy-auditor': {
+    icon: '🎯', name: 'policy-auditor', kind: 'Task agent · non-conversational',
+    inputType: 'typed', iterations: 12, depth: 3, savedDepth: 3, steps: 20,
+    timeout: 900, budget: 250, updated: '2 days ago'
+  },
+  'research-analyst': {
+    icon: '🔎', name: 'research-analyst', kind: 'Conversational agent',
+    inputType: 'conversation', iterations: 8, depth: 1, savedDepth: 1, steps: 5,
+    timeout: 600, budget: 120, updated: '5 days ago'
+  }
+};
+
+var selectedAgent = 'policy-auditor';
+var draft = null;
+
+function selectAgent(key, silent) {
+  selectedAgent = key;
+  draft = {
+    depth: AGENTS[key].depth,
+    savedDepth: AGENTS[key].savedDepth,
+    iterations: AGENTS[key].iterations,
+    steps: AGENTS[key].steps,
+    timeout: AGENTS[key].timeout,
+    budget: AGENTS[key].budget
+  };
+
+  var keys = ['policy-auditor', 'research-analyst'];
+  for (var i = 0; i < keys.length; i++) {
+    document.getElementById('row-' + keys[i]).classList.toggle('active', keys[i] === key);
+  }
+
+  var a = AGENTS[key];
+  document.getElementById('vhAgentName').textContent = a.name;
+  document.getElementById('railIcon').textContent = a.icon;
+  document.getElementById('railName').textContent = a.name;
+  document.getElementById('railKind').textContent = a.kind;
+  document.getElementById('railInputType').textContent = a.inputType;
+  document.getElementById('railUpdated').textContent = 'Updated ' + a.updated;
+  document.getElementById('roIterations').textContent = a.iterations;
+  document.getElementById('roSteps').textContent = a.steps;
+  document.getElementById('roTimeout').textContent = a.timeout + ' s';
+  document.getElementById('roBudget').textContent = a.budget + 'k tokens';
+
+  renderGuardrail();
+  if (!silent) toast('Loaded guardrail profile for ' + a.name + '.', 'info');
+}
+
+function stepDepth(delta) {
+  setDepth(draft.depth + delta);
+}
+
+function setDepth(value) {
+  if (isNaN(value)) value = 0;
+  draft.depth = Math.max(0, Math.floor(value));
+  renderGuardrail();
+}
+
+function renderGuardrail() {
+  var a = AGENTS[selectedAgent];
+  var n = draft.depth;
+
+  var depthInput = document.getElementById('depthValue');
+  if (document.activeElement !== depthInput && depthInput.value !== String(n)) depthInput.value = n;
+  document.getElementById('depthMinus').disabled = n <= 0;
+
+  var presets = document.querySelectorAll('.preset');
+  for (var i = 0; i < presets.length; i++) {
+    presets[i].classList.toggle('active', Number(presets[i].getAttribute('data-depth')) === n);
+  }
+
+  document.getElementById('effectiveLimitChip').textContent = n === 0
+    ? 'Delegation disabled'
+    : 'Effective limit: ' + n + (n === 1 ? ' level' : ' levels');
+
+  document.getElementById('chainChip').className = 'chip ' + (n === 0 ? 'chip-red' : 'chip-green');
+  document.getElementById('chainChip').textContent = n === 0
+    ? 'delegation not permitted'
+    : (n === 1 ? '1 hop permitted' : n + ' hops permitted');
+
+  /* chain visualisation */
+  var host = document.getElementById('chainViz');
+  var html = '';
+  var shown = Math.min(n, 6);
+  html += '<div class="chain-node root"><span class="cn-label">Root agent</span><span class="cn-depth">depth 0 · origin</span></div>';
+  for (var d = 1; d <= shown; d++) {
+    html += '<span class="chain-arrow">→</span>';
+    html += '<div class="chain-node allowed"><span class="cn-label">✓ Delegated agent</span><span class="cn-depth">depth ' + d + ' · permitted</span></div>';
+  }
+  if (n > shown) {
+    html += '<span class="chain-arrow">→</span>';
+    html += '<div class="chain-node"><span class="cn-label">⋯</span><span class="cn-depth">' + (n - shown) + ' more permitted ' + ((n - shown) === 1 ? 'level' : 'levels') + '</span></div>';
+  }
+  html += '<span class="chain-arrow">→</span>';
+  html += n === 0
+    ? '<div class="chain-node blocked"><span class="cn-label">✕ Delegation blocked</span><span class="cn-depth">configured depth is 0</span></div>'
+    : '<div class="chain-node blocked"><span class="cn-label">✕ Blocked</span><span class="cn-depth">depth ' + (n + 1) + ' &gt; configured ' + n + '</span></div>';
+  host.innerHTML = html;
+
+  document.getElementById('chainCaption').textContent = n === 0
+    ? 'No delegation is permitted for this agent type. Any delegation attempt is blocked and recorded against the configured limit of 0.'
+    : 'Root agent at depth 0, then ' + n + ' permitted delegated ' + (n === 1 ? 'level' : 'levels') + '. Any attempt at depth ' + (n + 1) + ' is blocked and recorded against the configured limit of ' + n + '.';
+
+  document.getElementById('compareNow').innerHTML = 'Configured depth <strong>' + n + '</strong> is the only limit. '
+    + (n === 0
+        ? 'Delegation is not permitted at all, and the log reports depth against <code>0</code>'
+        : 'A root agent plus <strong>' + n + ' delegated ' + (n === 1 ? 'level' : 'levels') + '</strong> may run, and the execution log reports depth against <code>' + n + '</code>');
+
+  /* dirty state */
+  var dirty = n !== draft.savedDepth;
+  var chip = document.getElementById('saveStateChip');
+  chip.className = 'chip ' + (dirty ? 'chip-yellow' : 'chip-gray');
+  chip.textContent = dirty ? 'Unsaved changes' : 'All changes saved';
+
+  document.getElementById('footerNote').textContent = dirty
+    ? 'Unsaved: Max Delegation Depth ' + n + ' (saved value ' + draft.savedDepth + ')'
+    : 'Max Delegation Depth ' + draft.savedDepth + ' · saved ' + a.updated;
+
+  document.getElementById('rowDepth-' + selectedAgent).textContent = 'depth ' + n;
+}
+
+function resetDraft() {
+  draft.depth = draft.savedDepth;
+  renderGuardrail();
+  toast('Reverted to the saved guardrail profile.', 'info');
+}
+
+function saveGuardrail() {
+  var a = AGENTS[selectedAgent];
+  if (draft.depth === draft.savedDepth) {
+    toast('No changes to save.', 'info');
+    return;
+  }
+  a.depth = draft.depth;
+  a.savedDepth = draft.depth;
+  a.updated = 'just now';
+  draft.savedDepth = draft.depth;
+  document.getElementById('railUpdated').textContent = 'Updated just now';
+  renderGuardrail();
+  toast('Saved. Max Delegation Depth ' + a.depth + ' is now the only depth limit for ' + a.name + '.', 'success');
+}
+
+/* ══════════════════════════════════════════════════════════════
+   FLOW 2 — EXECUTION LOG SCOPING + DRILL-IN
+   ══════════════════════════════════════════════════════════════ */
+var MAX_DEPTH = 3;        /* policy-auditor's configured maximum */
+
+var EXEC = {
+  root: {
+    key: 'root', agent: 'policy-auditor', icon: '🎯', role: 'root',
+    session: 'sess-9f31c2', model: 'gpt-5.3', depth: 0, status: 'completed',
+    started: '10:41:58', duration: '48s', tokens: '18.4k',
+    items: [
+      { type: 'ev', t: '10:41:58', kind: 'SESSION', title: 'session_started',
+        detail: 'system instruction and user prompt captured before first LLM call' },
+      { type: 'ev', t: '10:41:59', kind: 'RUNTIME', title: 'tools_resolved · 7 tools, 2 skills',
+        detail: 'guardrail snapshot loaded · max depth 3, max iterations 12' },
+      { type: 'ev', t: '10:42:01', kind: 'LLM', title: 'llm_request · gpt-5.3',
+        detail: 'iteration 1 · 3,140 prompt tokens' },
+      { type: 'ev', t: '10:42:03', kind: 'LLM', title: 'llm_response · plan drafted',
+        detail: 'plan: gather policy evidence, then delegate the compliance check' },
+      { type: 'ev', t: '10:42:04', kind: 'TOOL', title: 'tool_call · policy-index.lookup',
+        detail: 'ok · 143 ms · 4 policy records returned' },
+      { type: 'ev', t: '10:42:05', kind: 'TOOL', title: 'tool_call · contract-registry.list_open',
+        detail: 'ok · 88 ms · 9 open contracts' },
+      { type: 'delegation', childKey: 'b', to: 'compliance-checker', childKind: 'Task agent',
+        depth: 1, status: 'completed',
+        lifecycle: [
+          { t: '10:42:07', n: 'delegation_started', pill: 'info', pillText: 'requested' },
+          { t: '10:42:07', n: 'delegated_step_dispatch → compliance-checker' },
+          { t: '10:42:08', n: 'status changed to waiting for delegated agent', pill: 'wait', pillText: 'waiting' },
+          { t: '10:42:41', n: 'delegation_resumed · 34 s elapsed', pill: 'resume', pillText: 'resumed' },
+          { t: '10:42:41', n: 'delegated_result_received · 1 result attached' }
+        ],
+        note: 'This block records the delegation lifecycle only. compliance-checker\'s own steps are not merged here.'
+      },
+      { type: 'boundary', text: 'Scope ends at this agent. No deeper agent activity is folded into this log — open compliance-checker\'s log to see the next hop.' },
+      { type: 'ev', t: '10:42:42', kind: 'LLM', title: 'llm_response · synthesis with delegated result',
+        detail: 'iteration 2 · 4,820 prompt tokens' },
+      { type: 'ev', t: '10:42:44', kind: 'TOOL', title: 'tool_call · save_data (compliance_summary)',
+        detail: 'ok · 41 ms' },
+      { type: 'ev', t: '10:42:45', kind: 'SESSION', title: 'session_completed · outcome: completed',
+        detail: 'delegation depth used 1 of 3 · no guardrail breach' }
+    ]
+  },
+
+  b: {
+    key: 'b', agent: 'compliance-checker', icon: '🧾', role: 'delegated',
+    session: 'sess-9f31c2 / d1-4a71', model: 'gpt-5.3-mini', depth: 1, status: 'completed',
+    started: '10:42:07', duration: '34s', tokens: '7.2k',
+    items: [
+      { type: 'ev', t: '10:42:07', kind: 'SESSION', title: 'delegated_execution_started',
+        detail: 'invoked by policy-auditor · delegation depth 1 of 3' },
+      { type: 'ev', t: '10:42:07', kind: 'RUNTIME', title: 'delegation_context_received',
+        detail: 'task: verify unresolved controls · max depth 3' },
+      { type: 'ev', t: '10:42:08', kind: 'LLM', title: 'llm_request · gpt-5.3-mini',
+        detail: 'iteration 1 · 1,760 prompt tokens' },
+      { type: 'ev', t: '10:42:10', kind: 'TOOL', title: 'tool_call · controls-catalog.fetch',
+        detail: 'ok · 96 ms · 11 controls in scope' },
+      { type: 'ev', t: '10:42:14', kind: 'LLM', title: 'llm_response · 3 controls unresolved',
+        detail: 'plan: request evidence review for the unresolved control set' },
+      { type: 'delegation', childKey: 'c', to: 'evidence-reviewer', childKind: 'Task agent',
+        depth: 2, status: 'completed',
+        lifecycle: [
+          { t: '10:42:16', n: 'delegation_started', pill: 'info', pillText: 'requested' },
+          { t: '10:42:16', n: 'delegated_step_dispatch → evidence-reviewer' },
+          { t: '10:42:17', n: 'status changed to waiting for delegated agent', pill: 'wait', pillText: 'waiting' },
+          { t: '10:42:39', n: 'delegation_resumed · 22 s elapsed', pill: 'resume', pillText: 'resumed' },
+          { t: '10:42:39', n: 'delegated_result_received · 1 result attached' }
+        ],
+        note: 'Allowed because the configured maximum is 3 — this agent is at depth 2 and may delegate one level further. Before this change the platform would have refused the hop.'
+      },
+      { type: 'boundary', text: 'evidence-reviewer\'s steps are not shown here (no grandchild activity is folded in). Open evidence-reviewer\'s log to continue.' },
+      { type: 'ev', t: '10:42:40', kind: 'LLM', title: 'llm_response · combined control assessment',
+        detail: 'iteration 2 · 3,090 prompt tokens' },
+      { type: 'ev', t: '10:42:41', kind: 'SESSION', title: 'delegated_result_returned',
+        detail: 'unresolved-controls list (3 items) returned to policy-auditor' }
+    ]
+  },
+
+  c: {
+    key: 'c', agent: 'evidence-reviewer', icon: '📑', role: 'delegated',
+    session: 'sess-9f31c2 / d2-8c02', model: 'gpt-5.3-mini', depth: 2, status: 'completed',
+    started: '10:42:16', duration: '23s', tokens: '5.1k',
+    items: [
+      { type: 'ev', t: '10:42:16', kind: 'SESSION', title: 'delegated_execution_started',
+        detail: 'invoked by compliance-checker · delegation depth 2 of 3' },
+      { type: 'ev', t: '10:42:17', kind: 'LLM', title: 'llm_request · gpt-5.3-mini',
+        detail: 'iteration 1 · 1,410 prompt tokens' },
+      { type: 'ev', t: '10:42:19', kind: 'TOOL', title: 'tool_call · evidence-store.search',
+        detail: 'ok · 212 ms · 6 evidence records matched' },
+      { type: 'ev', t: '10:42:21', kind: 'LLM', title: 'llm_response · evidence attached, clause review needed',
+        detail: 'plan: route clause-level review to the legal queue agent' },
+      { type: 'delegation', childKey: 'd', to: 'legal-queue-router', childKind: 'Task agent',
+        depth: 3, status: 'completed',
+        lifecycle: [
+          { t: '10:42:23', n: 'delegation_started', pill: 'info', pillText: 'requested' },
+          { t: '10:42:23', n: 'delegated_step_dispatch → legal-queue-router' },
+          { t: '10:42:24', n: 'status changed to waiting for delegated agent', pill: 'wait', pillText: 'waiting' },
+          { t: '10:42:35', n: 'delegation_resumed · 12 s elapsed', pill: 'resume', pillText: 'resumed' },
+          { t: '10:42:35', n: 'delegated_result_received · 1 result attached' }
+        ],
+        note: 'Depth 3 of 3 — this is the last permitted level. Any further delegation from here would be blocked by the configured maximum.'
+      },
+      { type: 'boundary', text: 'legal-queue-router\'s steps are not shown here. Open its log — this is the final hop the configuration allows.' },
+      { type: 'ev', t: '10:42:36', kind: 'SESSION', title: 'delegated_result_returned',
+        detail: 'clause review queued · returned to compliance-checker' }
+    ]
+  },
+
+  d: {
+    key: 'd', agent: 'legal-queue-router', icon: '⚖️', role: 'delegated',
+    session: 'sess-9f31c2 / d3-1f75', model: 'gpt-5.3-mini', depth: 3, status: 'completed',
+    started: '10:42:23', duration: '12s', tokens: '2.6k',
+    items: [
+      { type: 'ev', t: '10:42:23', kind: 'SESSION', title: 'delegated_execution_started',
+        detail: 'invoked by evidence-reviewer · delegation depth 3 of 3' },
+      { type: 'ev', t: '10:42:25', kind: 'TOOL', title: 'tool_call · legal-queue.enqueue',
+        detail: 'ok · 64 ms · ticket LEG-4471 created' },
+      { type: 'ev', t: '10:42:27', kind: 'LLM', title: 'llm_response · clause extraction still required',
+        detail: 'plan: delegate clause extraction to contract-clause-extractor' },
+      { type: 'blocked', attempted: 'contract-clause-extractor', attemptedDepth: 4 },
+      { type: 'ev', t: '10:42:29', kind: 'LLM', title: 'llm_response · continue without clause extraction',
+        detail: 'iteration 2 · returned partial result with the block noted' },
+      { type: 'ev', t: '10:42:35', kind: 'SESSION', title: 'delegated_result_returned',
+        detail: 'outcome: completed with policy block recorded · returned to evidence-reviewer' }
+    ]
+  }
+};
+
+var stack = ['root'];
+
+function agentDepthMax() { return MAX_DEPTH; }
+
+function crumbsHtml() {
+  var html = '<span class="root-label">Execution Logs</span>';
+  for (var i = 0; i < stack.length; i++) {
+    var node = EXEC[stack[i]];
+    var isCurrent = i === stack.length - 1;
+    html += '<span class="crumb-sep">›</span>';
+    html += '<button class="crumb ' + (isCurrent ? 'current' : '') + '" onclick="jumpTo(' + i + ')">'
+      + node.agent + ' <span style="opacity:.65;font-weight:500">· depth ' + node.depth + '</span></button>';
+  }
+  return html;
+}
+
+function jumpTo(index) {
+  if (index < 0 || index >= stack.length) return;
+  if (index === stack.length - 1) return;
+  var returning = index < stack.length - 1;
+  while (stack.length > index + 1) stack.pop();
+  renderLog();
+  if (returning) toast('Returned to ' + EXEC[stack[stack.length - 1]].agent + '\'s log — contents unchanged.', 'info');
+}
+
+function drillIn(key) {
+  stack.push(key);
+  renderLog();
+  toast('Opened ' + EXEC[key].agent + '\'s own execution log (depth ' + EXEC[key].depth + ').', 'info');
+}
+
+function backHop() {
+  if (stack.length <= 1) return;
+  stack.pop();
+  renderLog();
+  toast('Returned to parent log — contents unchanged.', 'info');
+}
+
+function evRow(e) {
+  var kindClass = 'k-' + e.kind.toLowerCase();
+  if (e.kind === 'TOOL') kindClass = 'k-tool';
+  if (e.kind === 'RUNTIME') kindClass = 'k-runtime';
+  return '<div class="log-row">'
+    + '<div class="log-time">' + e.t + '</div>'
+    + '<div><span class="log-kind ' + kindClass + '">' + e.kind + '</span></div>'
+    + '<div><div class="log-desc">' + e.title + '</div>'
+    + (e.detail ? '<div class="log-detail">' + e.detail + '</div>' : '')
+    + '</div></div>';
+}
+
+function delegationHtml(item) {
+  var child = EXEC[item.childKey];
+  var life = '';
+  for (var i = 0; i < item.lifecycle.length; i++) {
+    var ev = item.lifecycle[i];
+    life += '<div class="dlg-ev"><span class="t">' + ev.t + '</span><span class="n">' + ev.n
+      + (ev.pill ? ' <span class="pill pill-' + ev.pill + '">' + ev.pillText + '</span>' : '')
+      + '</span></div>';
+  }
+  return '<div class="delegation-block">'
+    + '<div class="dlg-head">'
+    +   '<div>'
+    +     '<div class="dlg-title"><span class="arrow">↳</span> Delegation to <span class="ent">' + item.to + '</span> <span class="chip chip-gray">' + item.childKind + '</span></div>'
+    +     '<div class="dlg-sub">Direct delegation of ' + EXEC[stack[stack.length - 1]].agent + ' · depth ' + item.depth + ' of ' + agentDepthMax() + ' permitted</div>'
+    +   '</div>'
+    +   '<div class="dlg-actions">'
+    +     '<span class="chip chip-green">✓ ' + item.status + '</span>'
+    +     '<button class="btn btn-primary btn-sm" onclick="drillIn(\'' + item.childKey + '\')">View Execution Logs</button>'
+    +   '</div>'
+    + '</div>'
+    + '<div class="dlg-life">' + life + '</div>'
+    + '<div class="dlg-scope">🔎 ' + item.note + '</div>'
+    + '</div>';
+}
+
+function blockedHtml(item) {
+  return '<div class="delegation-block blocked">'
+    + '<div class="dlg-head">'
+    +   '<div>'
+    +     '<div class="dlg-title"><span class="arrow" style="color:#EF4444">↳</span> Delegation attempt to <span class="ent" style="background:#FEF2F2;border-color:#FECACA;color:#991B1B">' + item.attempted + '</span></div>'
+    +     '<div class="dlg-sub">Attempted at depth ' + item.attemptedDepth + ' · configured maximum ' + agentDepthMax() + ' for ' + EXEC[stack[stack.length - 1]].agent + '</div>'
+    +   '</div>'
+    +   '<div class="dlg-actions"><span class="chip chip-red">⛔ Blocked by guardrail</span></div>'
+    + '</div>'
+    + '<div class="dlg-life">'
+    +   '<div class="dlg-ev"><span class="t">10:42:28</span><span class="n">delegation_attempted → ' + item.attempted + '</span></div>'
+    +   '<div class="dlg-ev"><span class="t">10:42:28</span><span class="n">guardrail_delegation_depth_exceeded</span></div>'
+    + '</div>'
+    + '<div class="dlg-block-alert"><span>⚠️</span><span><strong>Outcome: guardrail_max_delegation_depth.</strong> Depth ' + item.attemptedDepth + ' exceeds the configured Max Delegation Depth of ' + agentDepthMax() + '. This is policy enforcement, not a functional failure — the limit reached is the value set on the agent type. No separate log exists because the delegation never started.</span></div>'
+    + '</div>';
+}
+
+function renderLog() {
+  var key = stack[stack.length - 1];
+  var node = EXEC[key];
+  var isRoot = stack.length === 1;
+  var parent = isRoot ? null : EXEC[stack[stack.length - 2]];
+
+  /* banner */
+  document.getElementById('scopeTitle').textContent =
+    (isRoot ? 'Root execution log' : node.agent + ' execution log') + ' — current agent + direct delegation only';
+  document.getElementById('scopeDesc').textContent =
+    'This log contains ' + node.agent + '\'s own steps and the lifecycle of its direct delegation'
+    + (node.depth > 0 ? '.' : 's.')
+    + ' Activity from deeper agents is never folded in.';
+  document.getElementById('scopeDepthChip').textContent = 'Depth ' + node.depth + ' / ' + agentDepthMax();
+  document.getElementById('logViewDesc').textContent =
+    'Agents › Agent Executions › ' + node.session + ' — ' + node.agent;
+
+  /* crumbs + back */
+  document.getElementById('crumbs').innerHTML = crumbsHtml();
+  var backBtn = document.getElementById('backBtn');
+  backBtn.style.display = isRoot ? 'none' : 'inline-flex';
+  if (!isRoot) backBtn.textContent = '← Back to ' + parent.agent;
+
+  /* header */
+  var statusChip = node.status === 'completed'
+    ? '<span class="chip chip-green">✓ Completed</span>'
+    : '<span class="chip chip-blue">' + node.status + '</span>';
+  document.getElementById('logHeader').innerHTML =
+    '<div class="log-head-left">'
+    + '<div class="log-avatar">' + node.icon + '</div>'
+    + '<div>'
+    +   '<div class="log-agent">' + node.agent
+    +     '<span class="chip ' + (isRoot ? 'chip-blue' : 'chip-purple') + '">' + (isRoot ? 'Root agent' : 'Delegated · depth ' + node.depth) + '</span>'
+    +   '</div>'
+    +   '<div class="log-meta">'
+    +     '<span class="font-mono">' + node.session + '</span>'
+    +     '<span class="sep">·</span><span>' + node.model + '</span>'
+    +     '<span class="sep">·</span><span>started ' + node.started + '</span>'
+    +     '<span class="sep">·</span><span>' + node.duration + '</span>'
+    +     '<span class="sep">·</span><span>' + node.tokens + ' tokens</span>'
+    +   '</div>'
+    + '</div>'
+    + '</div>'
+    + '<div class="log-head-right">'
+    +   '<span class="chip chip-indigo">Delegation depth ' + node.depth + ' / ' + agentDepthMax() + '</span>'
+    +   statusChip
+    + '</div>';
+
+  /* body */
+  var body = '';
+  var delegationCount = 0;
+  for (var i = 0; i < node.items.length; i++) {
+    var item = node.items[i];
+    if (item.type === 'ev') {
+      body += evRow(item);
+    } else if (item.type === 'delegation') {
+      delegationCount++;
+      body += delegationHtml(item);
+    } else if (item.type === 'blocked') {
+      body += blockedHtml(item);
+    } else if (item.type === 'boundary') {
+      body += '<div class="boundary"><span class="b-icon">┄</span><span>' + item.text + '</span></div>';
+    }
+  }
+  document.getElementById('logBody').innerHTML = body;
+
+  /* footer */
+  document.getElementById('logFoot').innerHTML =
+    '<span><strong>Scoped view:</strong> ' + node.agent + '\'s own execution'
+    + (delegationCount > 0 ? ' + ' + delegationCount + ' direct delegation' + (delegationCount === 1 ? '' : 's') : '')
+    + ' · no grandchild events</span>'
+    + '<span>' + node.items.filter(function (x) { return x.type === 'ev'; }).length + ' events shown</span>';
+
+  /* side panel depth */
+  document.getElementById('sideDepthNow').textContent = node.depth;
+  document.getElementById('sideDepthMax').textContent = agentDepthMax();
+  document.getElementById('sideAgentType').textContent = node.agent;
+  document.getElementById('sideConfigured').textContent = agentDepthMax() + ' levels';
+  document.getElementById('sideLimitBy').textContent = node.agent + ' guardrail';
+  document.getElementById('sideSnapshot').textContent = 'Max Delegation Depth ' + agentDepthMax();
+}
+
+/* init */
+selectAgent('policy-auditor', true);
+renderLog();
+go('guardrails');
+</script>
+</body>
+</html>

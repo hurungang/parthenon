@@ -1,6 +1,7 @@
 import { expect, test, type Page, type Route } from '@playwright/test'
 import { FAKE_TOKEN, mockApiCatchAllProxyAware, standardSetup } from './_helpers'
 import { mockPanelWorld, seedAgents } from './_agent_panel_world'
+import { closeChatDialog, optimizerChatDialog } from './_agent_optimizer_world'
 
 /**
  * E2E: the self-healing journey of a separate optimization run.
@@ -11,13 +12,11 @@ import { mockPanelWorld, seedAgents } from './_agent_panel_world'
  *   optimize (dedicated run) → `ready` optimized plan → a later execution
  *   falls back because of that plan (server-side: plan becomes `requires_fix`
  *   + auto-recorded execution-derived feedback) → the operator sees the
- *   requires-fix alert with the auto-recorded feedback when they next open the
- *   agent → Re-optimize from the alert (the new run carries the prior plan +
- *   recorded feedback) → the Optimized Plan tab refreshes automatically to the
- *   new plan without a manual page reload.
+ *   requires-fix alert when they next open the agent → the alert's action opens
+ *   the optimization conversation (the current re-optimization path) → the tab
+ *   re-reads the newly authored plan without a manual page reload.
  *
- * No-optimize-for-a-ready-plan and the manual vs auto-recorded feedback badges
- * are asserted along the way.
+ * No-optimize-for-a-ready-plan is asserted along the way.
  */
 
 test.describe.configure({ timeout: 120_000 })
@@ -197,11 +196,6 @@ async function openAgentDialog(page: Page) {
   return dialog
 }
 
-/** Pins a modal by its heading (never resolves to another open dialog). */
-function dialogWithHeading(page: Page, name: string) {
-  return page.getByRole('dialog').filter({ has: page.getByRole('heading', { name }) })
-}
-
 async function openOptimizedPlanTab(dialog: ReturnType<Page['getByRole']>) {
   await dialog.getByRole('tab', { name: 'Optimized Plan' }).click()
 }
@@ -257,17 +251,13 @@ test.describe('Optimized plan — requires-fix alert and re-optimization journey
     await expect(dialog.getByText(/never produced by a normal run/)).toBeVisible()
 
     // ── 1. Optimize: a dedicated run, separate from Run ────────────────────
+    // No pre-run confirmation dialog: the explanation lives in the tab's help
+    // icon / chat, and the click starts the dedicated optimization run itself.
     const optimizeAction = dialog.getByTestId('optimize-agent-action')
     await expect(optimizeAction).toBeEnabled()
     await optimizeAction.click()
 
-    const optimizeDialog = dialogWithHeading(page, `Optimize Agent — ${AGENT_NAME}`)
-    await expect(optimizeDialog).toBeVisible()
-    await expect(optimizeDialog.getByText(/Optimization is a dedicated run/)).toBeVisible()
-    await expect(optimizeDialog.getByText(/never turns a normal run into an optimization mission/)).toBeVisible()
-    await optimizeDialog.getByTestId('optimize-confirm').click()
-
-    expect(state.optimizeRequests).toHaveLength(1)
+    await expect.poll(() => state.optimizeRequests.length).toBe(1)
     expect(state.optimizeRequests[0]).toEqual({ agent_type_id: AGENT_ID })
 
     // The launched optimization session's execution details open on top.
@@ -296,7 +286,7 @@ test.describe('Optimized plan — requires-fix alert and re-optimization journey
     // The tab re-read the plan after the failed execution was recorded.
     await expect.poll(() => state.planReads).toBeGreaterThan(planReadsBefore)
 
-    // ── 4. The requires-fix alert + auto-recorded feedback render ──────────
+    // ── 4. The requires-fix alert renders (execution-derived copy) ──────────
     await expect(dialog.getByTestId('optimized-plan-status')).toHaveText('requires_fix')
     const alert = dialog.getByTestId('requires-fix-alert')
     await expect(alert).toBeVisible()
@@ -304,43 +294,42 @@ test.describe('Optimized plan — requires-fix alert and re-optimization journey
     await expect(
       alert.getByText(/A later run fell back to the model-driven path because this optimized plan failed/),
     ).toBeVisible()
-    await expect(
-      alert.getByText('Auto-recorded feedback from the failed execution'),
-    ).toBeVisible()
-    // The failure reason recorded from the failed execution is shown.
-    await expect(dialog.getByTestId('requires-fix-feedback-0')).toHaveText(AUTO_FEEDBACK_SUMMARY)
-    // Feedback entries are badged by their source.
-    await expect(dialog.getByTestId('feedback-source-0')).toHaveText('auto-recorded')
-    await expect(dialog.getByTestId('feedback-source-1')).toHaveText('manual')
+    // The per-entry feedback ledger is no longer rendered on this tab: the
+    // alert carries the story (the plan still records the feedback
+    // server-side, and the re-optimization carries it forward).
+    await expect(alert.getByText('Auto-recorded feedback from the failed execution')).toHaveCount(0)
+    await expect(dialog.getByTestId('requires-fix-feedback-0')).toHaveCount(0)
+    await expect(dialog.getByTestId('feedback-source-0')).toHaveCount(0)
 
-    // ── 5. Re-optimize from the alert carries prior plan + feedback ────────
+    // ── 5. Re-optimize from the alert opens the optimization conversation ──
+    // The alert's action is the conversational re-optimization entry (the
+    // one-shot "Re-optimize Agent — …" confirmation dialog no longer exists):
+    // it opens the optimization-mode chat on this agent type and starts no run
+    // on its own.
     await expect(alert.getByTestId('reoptimize-from-alert')).toBeVisible()
     await alert.getByTestId('reoptimize-from-alert').click()
 
-    const reoptimizeDialog = dialogWithHeading(page, `Re-optimize Agent — ${AGENT_NAME}`)
-    await expect(reoptimizeDialog).toBeVisible()
+    const chat = optimizerChatDialog(page)
+    await expect(chat).toBeVisible()
     await expect(
-      reoptimizeDialog.getByText(
-        /this run carries the previous plan plus the feedback recorded from the failed execution/,
-      ),
-    ).toBeVisible()
+      chat.getByTestId('optimization-conversation-dialog-optimization-mode-chip'),
+    ).toContainText(AGENT_NAME)
+    // Opening the conversation starts no optimization run (nothing is launched
+    // without a turn).
+    expect(state.optimizeRequests).toHaveLength(1)
+    await closeChatDialog(chat)
 
-    await reoptimizeDialog.getByTestId('optimize-confirm').click()
-
-    // ── 6. The tab refreshes automatically to the new plan (no reload) ─────
-    expect(state.optimizeRequests).toHaveLength(2)
-    expect(state.optimizeRequests[1]).toEqual({ agent_type_id: AGENT_ID })
-    await expect(reoptimizeDialog).toBeHidden()
+    // ── 6. The conversation's authored plan refreshes the tab (no reload) ──
+    // The re-optimization result arrives server-side; the tab's own refresh
+    // re-reads it — no manual page reload anywhere.
+    state.plan = { ...READY_PLAN_AFTER_REOPTIMIZE }
+    await dialog.getByTestId('reload-agent-dialog').click()
     await expect(dialog.getByTestId('optimized-plan-status')).toHaveText('ready', {
       timeout: 15_000,
     })
     await expect(dialog.getByText('Query pipeline (fixed)')).toBeVisible()
     await expect(dialog.getByTestId('requires-fix-alert')).toHaveCount(0)
     await expect(dialog.getByTestId('reoptimize-from-alert')).toHaveCount(0)
-    // The regenerated plan carries the accumulated feedback (the auto-recorded
-    // entry from the failed execution plus the manual one) into its context.
-    await expect(dialog.getByTestId('feedback-source-0')).toHaveText('auto-recorded')
-    await expect(dialog.getByTestId('feedback-source-1')).toHaveText('manual')
 
     // No manual page reload happened anywhere in the journey.
     await assertNoReload(page)

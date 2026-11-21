@@ -1,280 +1,314 @@
-import { test, expect } from '@playwright/test'
-import { loginViaUI } from './_helpers'
+import { test, expect, type Page } from '@playwright/test'
+import { mockApiCatchAllProxyAware, standardSetup } from './_helpers'
 
 /**
- * E2E tests to verify permission error handling is standardized across all pages.
- * Tests that users without permissions see structured error messages with:
- * - Resource type
- * - Action required
- * - Resource ID (if applicable)
- * - "Request Access" link
+ * E2E tests verifying that permission errors are standardised across pages.
+ *
+ * Canonical mocked E2E: the backend and Keycloak are intentionally stopped.
+ * Authentication is a forged JWT injected into localStorage (standardSetup);
+ * every API call is fulfilled from `page.route` mocks. A 403 is mocked with
+ * the platform's structured payload (`detail.required_permission`), exactly
+ * as the backend emits it, and the page must surface it through
+ * `PermissionDeniedAlert` (resource type / action / "Request Access" link).
+ *
+ * Route note: the legacy `/results` page no longer exists in the router —
+ * its successor is `/admin/agent-outputs` (Agent Outputs), which is covered
+ * below instead.
  */
+
+const JSON_HEADERS = { 'Content-Type': 'application/json' }
+
+/** Structured 403 body as produced by the backend permission engine. */
+function forbidden(resource_type: string, action = 'read') {
+  return {
+    status: 403,
+    headers: JSON_HEADERS,
+    body: JSON.stringify({
+      detail: {
+        detail: `Missing permission '${action}' on ${resource_type}`,
+        required_permission: { resource_type, action, resource_id: null },
+      },
+    }),
+  }
+}
+
+/** Fulfils a collection endpoint with an empty array (keeps `[].map` safe). */
+async function emptyList(page: Page, pattern: RegExp) {
+  await page.route(pattern, (route) =>
+    route.fulfill({ status: 200, headers: JSON_HEADERS, body: JSON.stringify([]) }),
+  )
+}
+
+/**
+ * The structured permission surface. Matched by the capitalised "Permission
+ * Denied:" heading so it is never confused with the global 403 snackbar
+ * ("Permission denied: you need …"), which is also role="alert".
+ */
+function permissionAlert(page: Page) {
+  return page.locator('[role="alert"]').filter({ hasText: /Permission Denied:/ }).first()
+}
+
+const deniedPages = [
+  {
+    name: 'Agents',
+    path: '/agents',
+    resource: 'agent',
+    action: 'read',
+    mock: async (page: Page) => {
+      await page.route(/\/api\/v1\/agents\/types(\?.*)?$/, (route) => route.fulfill(forbidden('agent')))
+    },
+  },
+  {
+    name: 'MCP Hub',
+    path: '/mcp',
+    resource: 'integration::mcp_hub',
+    action: 'read',
+    mock: async (page: Page) => {
+      await page.route(/\/api\/v1\/mcp\/servers(\?.*)?$/, (route) =>
+        route.fulfill(forbidden('integration::mcp_hub')),
+      )
+    },
+  },
+  {
+    name: 'Skills',
+    path: '/skills',
+    resource: 'agent::skills',
+    action: 'read',
+    mock: async (page: Page) => {
+      await page.route(/\/api\/v1\/skills(\?.*)?$/, (route) =>
+        route.fulfill(forbidden('agent::skills')),
+      )
+    },
+  },
+  {
+    name: 'SOPs',
+    path: '/sops',
+    resource: 'agent::sops',
+    action: 'read',
+    mock: async (page: Page) => {
+      await page.route(/\/api\/v1\/sops(\?.*)?$/, (route) => route.fulfill(forbidden('agent::sops')))
+    },
+  },
+  {
+    name: 'Schedules',
+    path: '/schedules',
+    resource: 'agent::schedules',
+    action: 'read',
+    mock: async (page: Page) => {
+      await page.route(/\/api\/v1\/schedules(\?.*)?$/, (route) =>
+        route.fulfill(forbidden('agent::schedules')),
+      )
+    },
+  },
+  {
+    name: 'Conversations',
+    path: '/conversations',
+    resource: 'agent',
+    action: 'read',
+    mock: async (page: Page) => {
+      await page.route(/\/api\/v1\/conversations(\?.*)?$/, (route) =>
+        route.fulfill(forbidden('agent')),
+      )
+    },
+  },
+  {
+    name: 'Gateway',
+    path: '/gateway',
+    resource: 'agent',
+    action: 'read',
+    mock: async (page: Page) => {
+      await page.route(/\/api\/v1\/agents\/types(\?.*)?$/, (route) => route.fulfill(forbidden('agent')))
+    },
+  },
+  {
+    name: 'Agent Outputs',
+    path: '/admin/agent-outputs',
+    resource: 'agent::outputs',
+    action: 'read',
+    mock: async (page: Page) => {
+      await page.route(/\/api\/v1\/agent-outputs(\?.*)?$/, (route) =>
+        route.fulfill(forbidden('agent::outputs')),
+      )
+    },
+  },
+]
 
 test.describe('Permission Error Handling', () => {
   test.beforeEach(async ({ page }) => {
-    // Login as testuser who has no permissions (uses E2E_TEST_USERNAME/PASSWORD env vars)
-    await loginViaUI(page)
+    await mockApiCatchAllProxyAware(page)
+    await standardSetup(page)
+
+    // Safe defaults for collections read by the app shell and by editors that
+    // mount alongside the page under test (the catch-all returns `{}`, which
+    // breaks `.map`). Test-specific handlers registered afterwards win, since
+    // Playwright resolves routes last-registered-first.
+    await emptyList(page, /\/api\/v1\/agents\/roles(\?.*)?$/)
+    await emptyList(page, /\/api\/v1\/agents\/identities(\?.*)?$/)
+    await emptyList(page, /\/api\/v1\/agents\/types(\?.*)?$/)
+    await emptyList(page, /\/api\/v1\/mcp\/servers(\?.*)?$/)
+    await emptyList(page, /\/api\/v1\/mcp\/tools(\?.*)?$/)
+    await emptyList(page, /\/api\/v1\/user-tags\/definitions(\?.*)?$/)
+    await emptyList(page, /\/api\/v1\/user-roles(\?.*)?$/)
+    await emptyList(page, /\/api\/v1\/user-groups(\?.*)?$/)
+    await emptyList(page, /\/api\/v1\/user-access-requests\/pending(\?.*)?$/)
+    await emptyList(page, /\/api\/v1\/user-access-requests\/my(\?.*)?$/)
   })
 
-  const pagesToTest = [
-    {
-      name: 'Agents',
-      path: '/agents',
-      expectedResource: 'agent',
-      expectedAction: 'read',
-    },
-    {
-      name: 'MCP Hub',
-      path: '/mcp',
-      expectedResource: 'mcp_server',
-      expectedAction: 'read',
-    },
-    {
-      name: 'Skills',
-      path: '/skills',
-      expectedResource: 'skill',
-      expectedAction: 'read',
-    },
-    {
-      name: 'SOPs',
-      path: '/sops',
-      expectedResource: 'skill', // SOPs also use skill resource type
-      expectedAction: 'read',
-    },
-    {
-      name: 'Schedules',
-      path: '/schedules',
-      expectedResource: 'scheduling',
-      expectedAction: 'read',
-    },
-    {
-      name: 'Conversations',
-      path: '/conversations',
-      expectedResource: 'conversation',
-      expectedAction: 'read',
-    },
-    {
-      name: 'Results',
-      path: '/results',
-      expectedResource: 'result',
-      expectedAction: 'read',
-    },
-    {
-      name: 'Notifications',
-      path: '/notifications',
-      expectedResource: 'notification',
-      expectedAction: 'read',
-      skip: true, // Notifications page doesn't show permission errors
-    },
-    {
-      name: 'Gateway',
-      path: '/gateway',
-      expectedResource: 'agent', // Gateway uses agent types
-      expectedAction: 'read',
-    },
-  ]
-
-  for (const pageConfig of pagesToTest) {
-    if (pageConfig.skip) continue // Skip pages that don't show permission errors
-    
+  for (const pageConfig of deniedPages) {
     test(`${pageConfig.name} page shows structured permission error`, async ({ page }) => {
-      // Navigate to the page
-      await page.goto(pageConfig.path)
-      await page.waitForLoadState('networkidle')
+      await pageConfig.mock(page)
 
-      // Check for PermissionDeniedAlert component
-      const alert = page.locator('[role="alert"]').first()
+      await page.goto(pageConfig.path)
+      await page.waitForLoadState('load')
+
+      const alert = permissionAlert(page)
       await expect(alert).toBeVisible({ timeout: 10000 })
 
-      // Verify it's an error alert (red/error severity)
+      // Verify it is an error alert (red/error severity)
       await expect(alert).toHaveClass(/MuiAlert-standardError/)
 
-      // Verify the text contains the expected resource type
-      const alertText = await alert.textContent()
+      // Verify the structure: resource type + required action
+      const alertText = (await alert.textContent()) ?? ''
       expect(alertText).toContain('Permission Denied')
-      expect(alertText).toContain(`Action: ${pageConfig.expectedAction}`)
-      expect(alertText).toContain(`Resource: ${pageConfig.expectedResource}`)
+      expect(alertText).toContain(`Action: ${pageConfig.action}`)
+      expect(alertText).toContain(`Resource: ${pageConfig.resource}`)
 
-      // Verify "Request Access" button exists and links to correct page
+      // "Request Access" button links to the access-request page
       const requestAccessBtn = alert.locator('a[href="/permissions/access-requests"]')
       await expect(requestAccessBtn).toBeVisible()
       await expect(requestAccessBtn).toContainText('Request Access')
     })
   }
 
-  test.skip('Tags page (in permissions tab) shows structured permission error', async ({ page }) => {
-    // TODO: Tags tab doesn't show permission errors consistently - needs frontend investigation
+  // Roles list is gated by system::permissions:read on the backend.
+  test('Roles tab shows structured permission error', async ({ page }) => {
+    await page.route(/\/api\/v1\/user-roles(\?.*)?$/, (route) =>
+      route.fulfill(forbidden('system::permissions')),
+    )
+
     await page.goto('/user-permissions')
-    await page.waitForLoadState('networkidle')
+    await page.waitForLoadState('load')
 
-    // Click on Tags tab
-    await page.click('text=Tags')
-    await page.waitForLoadState('networkidle')
+    await page.getByRole('tab', { name: 'Roles' }).click()
 
-    // Check for permission error
-    const alert = page.locator('[role="alert"]').first()
+    const alert = permissionAlert(page)
     await expect(alert).toBeVisible({ timeout: 10000 })
-    
-    const alertText = await alert.textContent()
+
+    const alertText = (await alert.textContent()) ?? ''
     expect(alertText).toContain('Permission Denied')
     expect(alertText).toContain('Action: read')
-    expect(alertText).toContain('Resource: tag')
+    expect(alertText).toContain('Resource: system::permissions')
 
-    const requestAccessBtn = alert.locator('a[href="/permissions/access-requests"]')
-    await expect(requestAccessBtn).toBeVisible()
+    await expect(alert.locator('a[href="/permissions/access-requests"]')).toBeVisible()
   })
 
-  test.skip('Roles page (in permissions tab) shows structured permission error', async ({ page }) => {
-    // TODO: Roles tab shows wrong resource type (agent instead of role) - needs frontend investigation
+  // Tag definitions (GET) are not permission-gated on the backend — any
+  // authenticated user may list them, so no denial surface appears.
+  test('Tags tab is readable without the permissions module', async ({ page }) => {
     await page.goto('/user-permissions')
-    await page.waitForLoadState('networkidle')
+    await page.waitForLoadState('load')
 
-    // Click on Roles tab
-    await page.click('text=Roles')
-    await page.waitForLoadState('networkidle')
+    await expect(page.getByRole('tab', { name: 'Tags' })).toBeVisible()
+    await expect(permissionAlert(page)).toHaveCount(0)
+  })
 
-    // Check for permission error
-    const alert = page.locator('[role="alert"]').first()
+  // Group listing (GET) is likewise open to any authenticated user.
+  test('Groups tab is readable without the permissions module', async ({ page }) => {
+    await page.goto('/user-permissions')
+    await page.waitForLoadState('load')
+
+    await page.getByRole('tab', { name: 'Groups' }).click()
+
+    await expect(page.getByRole('tab', { name: 'Groups' })).toBeVisible()
+    await expect(permissionAlert(page)).toHaveCount(0)
+  })
+
+  test('Users tab shows structured permission error', async ({ page }) => {
+    await page.route(/\/api\/v1\/platform-users(\?.*)?$/, (route) =>
+      route.fulfill(forbidden('system::permissions')),
+    )
+
+    await page.goto('/user-permissions')
+    await page.waitForLoadState('load')
+
+    await page.getByRole('tab', { name: 'Users' }).click()
+
+    const alert = permissionAlert(page)
     await expect(alert).toBeVisible({ timeout: 10000 })
-    
-    const alertText = await alert.textContent()
+
+    const alertText = (await alert.textContent()) ?? ''
     expect(alertText).toContain('Permission Denied')
     expect(alertText).toContain('Action: read')
-    expect(alertText).toContain('Resource: role')
+    expect(alertText).toContain('Resource: system::permissions')
 
-    const requestAccessBtn = alert.locator('a[href="/permissions/access-requests"]')
-    await expect(requestAccessBtn).toBeVisible()
+    await expect(alert.locator('a[href="/permissions/access-requests"]')).toBeVisible()
   })
 
-  test.skip('Groups page (in permissions tab) shows structured permission error', async ({ page }) => {
-    // TODO: Groups tab doesn't show permission errors consistently - needs frontend investigation
-    await page.goto('/user-permissions')
-    await page.waitForLoadState('networkidle')
-
-    // Click on Groups tab
-    await page.click('text=Groups')
-    await page.waitForLoadState('networkidle')
-
-    // Check for permission error
-    const alert = page.locator('[role="alert"]').first()
-    await expect(alert).toBeVisible({ timeout: 10000 })
-    
-    const alertText = await alert.textContent()
-    expect(alertText).toContain('Permission Denied')
-    expect(alertText).toContain('Action: read')
-    expect(alertText).toContain('Resource: group')
-
-    const requestAccessBtn = alert.locator('a[href="/permissions/access-requests"]')
-    await expect(requestAccessBtn).toBeVisible()
-  })
-
-  test('Users page (in permissions tab) shows structured permission error', async ({ page }) => {
-    await page.goto('/user-permissions')
-    await page.waitForLoadState('networkidle')
-
-    // Click on Users tab
-    await page.click('text=Users')
-    await page.waitForLoadState('networkidle')
-
-    // Check for permission error
-    const alert = page.locator('[role="alert"]').first()
-    await expect(alert).toBeVisible({ timeout: 10000 })
-    
-    const alertText = await alert.textContent()
-    expect(alertText).toContain('Permission Denied')
-    expect(alertText).toContain('Action: read')
-    expect(alertText).toContain('Resource: user')
-
-    const requestAccessBtn = alert.locator('a[href="/permissions/access-requests"]')
-    await expect(requestAccessBtn).toBeVisible()
-  })
-
-  test.skip('Dialog permission errors show structured message (example: Agents page)', async ({ page }) => {
-    // This test requires adminuser account which may not be available in dynamic test setup
-    // Skipping for now as it requires complex multi-user authentication
-    // First, login as admin to access the page
-    await page.goto('/login')
-    await page.waitForLoadState('networkidle')
-    
-    // Logout testuser
-    const userMenuButton = page.locator('[aria-label="user menu"]')
-    if (await userMenuButton.isVisible()) {
-      await userMenuButton.click()
-      await page.click('text=Logout')
-      await page.waitForLoadState('networkidle')
-    }
-
-    // Login as admin (assuming adminuser has some permissions but not manage agent)
-    await loginViaUI(page, 'adminuser', 'adminuser')
-    
-    await page.goto('/agents')
-    await page.waitForLoadState('networkidle')
-
-    // Try to create a new agent (assuming user doesn't have manage permission)
-    const createButton = page.locator('button:has-text("Create Agent")')
-    if (await createButton.isVisible()) {
-      await createButton.click()
-      
-      // Fill in form
-      await page.fill('input[name="name"]', 'Test Agent')
-      await page.fill('textarea[name="description"]', 'Test description')
-      
-      // Try to save
-      await page.click('button:has-text("Save")')
-      await page.waitForTimeout(1000)
-      
-      // Check for error in dialog
-      const dialogAlert = page.locator('[role="dialog"] [role="alert"]')
-      if (await dialogAlert.isVisible()) {
-        const alertText = await dialogAlert.textContent()
-        expect(alertText).toContain('Permission Denied')
-        expect(alertText).toContain('Action: manage')
-        expect(alertText).toContain('Resource: RT_AGENT')
-        
-        const requestAccessBtn = dialogAlert.locator('a[href="/permissions/access-requests"]')
-        await expect(requestAccessBtn).toBeVisible()
+  test('Dialog permission errors show structured message (MCP register server)', async ({
+    page,
+  }) => {
+    // Server list loads (200), the create mutation is denied (403).
+    await page.route(/\/api\/v1\/mcp\/servers(\?.*)?$/, (route) => {
+      if (route.request().method() === 'POST') {
+        return route.fulfill(forbidden('integration::mcp_hub', 'create'))
       }
-    }
+      return route.fulfill({ status: 200, headers: JSON_HEADERS, body: JSON.stringify([]) })
+    })
+
+    await page.goto('/mcp')
+    await page.waitForLoadState('load')
+
+    await page.getByRole('button', { name: 'Register Server' }).click()
+
+    const dialog = page.getByRole('dialog')
+    await expect(dialog).toBeVisible()
+
+    // Fill the minimal valid form and submit
+    await dialog.getByLabel('Slug').fill('e2e-denied-server')
+    await dialog.getByLabel('Base URL').fill('http://127.0.0.1:9999')
+    await dialog.getByRole('button', { name: /^save$/i }).click()
+
+    // Dialog Error Handling Standard: PermissionDeniedAlert inside DialogContent
+    const dialogAlert = dialog.locator('[role="alert"]').filter({ hasText: /Permission Denied:/ })
+    await expect(dialogAlert).toBeVisible({ timeout: 10000 })
+
+    const alertText = (await dialogAlert.textContent()) ?? ''
+    expect(alertText).toContain('Action: create')
+    expect(alertText).toContain('Resource: integration::mcp_hub')
+
+    await expect(
+      dialogAlert.locator('a[href="/permissions/access-requests"]'),
+    ).toBeVisible()
+
+    // The dialog stays open so the user can correct / retry
+    await expect(dialog).toBeVisible()
   })
 
   test('Access Requests page is accessible without permissions', async ({ page }) => {
-    // Access Requests page should be accessible to all users
+    // Access Requests page must be readable by every authenticated user
     await page.goto('/permissions/access-requests')
-    await page.waitForLoadState('networkidle')
+    await page.waitForLoadState('load')
 
-    // Should NOT show permission error
-    const errorAlert = page.locator('[role="alert"]')
-    const errorCount = await errorAlert.count()
-    
-    // Should see the tabs instead
+    // No permission surface
+    await expect(permissionAlert(page)).toHaveCount(0)
+
+    // Both tabs are present
     await expect(page.getByRole('tab', { name: 'Pending Requests' })).toBeVisible()
     await expect(page.getByRole('tab', { name: 'My Requests' })).toBeVisible()
-    
-    // If there are alerts, they should not be permission errors
-    if (errorCount > 0) {
-      const alertText = await errorAlert.first().textContent()
-      expect(alertText).not.toContain('Permission Denied')
-    }
   })
 
   test('Request Access link navigation works', async ({ page }) => {
-    // Go to any restricted page
-    await page.goto('/agents')
-    await page.waitForLoadState('networkidle')
+    await page.route(/\/api\/v1\/agents\/types(\?.*)?$/, (route) => route.fulfill(forbidden('agent')))
 
-    // Wait for error alert
-    const alert = page.locator('[role="alert"]').first()
+    await page.goto('/agents')
+    await page.waitForLoadState('load')
+
+    const alert = permissionAlert(page)
     await expect(alert).toBeVisible({ timeout: 10000 })
 
-    // Click Request Access button
-    const requestAccessBtn = alert.locator('a[href="/permissions/access-requests"]')
-    await requestAccessBtn.click()
-    await page.waitForLoadState('networkidle')
+    await alert.locator('a[href="/permissions/access-requests"]').click()
 
-    // Should navigate to access requests page
-    expect(page.url()).toContain('/permissions/access-requests')
-    
-    // Should see the tabs
+    await expect(page).toHaveURL(/\/permissions\/access-requests/)
     await expect(page.getByRole('tab', { name: 'Pending Requests' })).toBeVisible()
     await expect(page.getByRole('tab', { name: 'My Requests' })).toBeVisible()
   })

@@ -3,6 +3,22 @@ import { standardSetup } from './_helpers'
 
 // ── Real backend integration ──────────────────────────────────────────────────
 
+/**
+ * These tests talk to a live stack (port 8000). The canonical E2E environment
+ * runs fully mocked with the backend services stopped, so they skip cleanly
+ * instead of failing (same pattern as the real-Keycloak bootstrap specs).
+ */
+async function backendReachable(
+  request: import('@playwright/test').APIRequestContext,
+): Promise<boolean> {
+  try {
+    const res = await request.get('http://localhost:8000/health', { timeout: 3000 })
+    return res.ok()
+  } catch {
+    return false
+  }
+}
+
 test.describe('Real Backend Integration — Token Refresh Persistence', () => {
   /**
    * Verifies the token refresh endpoint is correctly wired to the backend and
@@ -12,6 +28,7 @@ test.describe('Real Backend Integration — Token Refresh Persistence', () => {
    * It catches migration or wiring issues that unit tests cannot detect.
    */
   test('backend health check confirms API is reachable', async ({ request }) => {
+    test.skip(!(await backendReachable(request)), 'Live backend (port 8000) is not running')
     // Public health endpoint — no auth required
     const response = await request.get('http://localhost:8000/health')
     expect(response.status()).toBe(200)
@@ -20,6 +37,7 @@ test.describe('Real Backend Integration — Token Refresh Persistence', () => {
   })
 
   test('refresh-token endpoint exists and requires authentication (not 404)', async ({ request }) => {
+    test.skip(!(await backendReachable(request)), 'Live backend (port 8000) is not running')
     // Use a non-existent identity UUID — we expect 401 (auth required) or 404 (not found after auth)
     // A 401 proves the endpoint is routed and the backend is handling it
     // A 404 would mean the endpoint doesn't exist at all
@@ -36,6 +54,7 @@ test.describe('Real Backend Integration — Token Refresh Persistence', () => {
   })
 
   test('agent identities endpoint exists and requires authentication', async ({ request }) => {
+    test.skip(!(await backendReachable(request)), 'Live backend (port 8000) is not running')
     const response = await request.get('http://localhost:8000/api/v1/agents/identities')
     // Must exist (not 404) and require auth (401)
     expect(response.status()).not.toBe(404)
@@ -82,7 +101,8 @@ test.describe('Agent Identity — conditional action buttons (mocked)', () => {
   })
 
   test('shows green refresh button for identity with valid refresh token', async ({ page }) => {
-    await page.route('**/api/v1/agents/identities', (route) => {
+    // The list endpoint is paginated (`?limit=&offset=`) — glob stays open-ended.
+    await page.route('**/api/v1/agents/identities**', (route) => {
       if (route.request().method() === 'GET') {
         route.fulfill({
           status: 200,
@@ -106,7 +126,8 @@ test.describe('Agent Identity — conditional action buttons (mocked)', () => {
   })
 
   test('shows red reauth button for identity with no refresh token', async ({ page }) => {
-    await page.route('**/api/v1/agents/identities', (route) => {
+    // The list endpoint is paginated (`?limit=&offset=`) — glob stays open-ended.
+    await page.route('**/api/v1/agents/identities**', (route) => {
       if (route.request().method() === 'GET') {
         route.fulfill({
           status: 200,
@@ -130,7 +151,8 @@ test.describe('Agent Identity — conditional action buttons (mocked)', () => {
   })
 
   test('clicking green refresh button calls refresh-token API', async ({ page }) => {
-    await page.route('**/api/v1/agents/identities', (route) => {
+    // The list endpoint is paginated (`?limit=&offset=`) — glob stays open-ended.
+    await page.route('**/api/v1/agents/identities**', (route) => {
       if (route.request().method() === 'GET') {
         route.fulfill({
           status: 200,

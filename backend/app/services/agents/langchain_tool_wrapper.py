@@ -306,6 +306,18 @@ def _extract_delegation_target_slug(tool_name: str) -> str | None:
     return None
 
 
+def _guardrail_depth(guardrail_state: Any | None, attribute: str) -> int:
+    """Return an int depth from a guardrail state object (0 when absent).
+
+    Keeps the delegation guard robust when a state attribute is missing or not
+    an integer — production states always carry real ints.
+    """
+    if guardrail_state is None:
+        return 0
+    value = getattr(guardrail_state, attribute, 0)
+    return value if isinstance(value, int) else 0
+
+
 def build_langchain_tools_for_ar_path(
     tool_definitions: list[dict[str, Any]],
     comm_hub_client: Any,
@@ -464,6 +476,61 @@ def build_langchain_tools_for_ar_path(
                                 k: v for k, v in kwargs.items() if k != "session_link_id"
                             }
                         session_link_id: str | None = kwargs.get("session_link_id")  # type: ignore[assignment]
+
+                        # ── Delegation depth guard (BEFORE any hop/log/dispatch) ──
+                        # The GuardrailCallback runs before tool execution and
+                        # compares the run's chain depth against the configured
+                        # maximum; this guard applies the same configured maximum
+                        # and the same real chain depth to the HOP itself, so a
+                        # run already at its maximum cannot dispatch an over-depth
+                        # child that would only be stopped when it starts.
+                        if guardrail_state is not None:
+                            _current_depth = max(
+                                _guardrail_depth(guardrail_state, "tree_depth"),
+                                _guardrail_depth(guardrail_state, "delegation_depth"),
+                            )
+                            _next_depth = _current_depth + 1
+                            _max_depth = getattr(
+                                guardrail_state, "max_delegation_depth", None
+                            )
+                            if isinstance(_max_depth, int) and _next_depth > _max_depth:
+                                try:
+                                    await data_client.log_execution_event(
+                                        session_id=_uuid.UUID(session_id),
+                                        event_type="delegation_depth_blocked",
+                                        message=(
+                                            f"Delegation to agent '{slug}' blocked: "
+                                            f"next depth {_next_depth} exceeds the "
+                                            f"configured maximum {_max_depth}"
+                                        ),
+                                        data={
+                                            "delegation_target": slug,
+                                            "current_depth": _current_depth,
+                                            "next_depth": _next_depth,
+                                            "max_depth": _max_depth,
+                                        },
+                                    )
+                                except Exception:
+                                    pass
+                                logger.warning(
+                                    "Delegation to '%s' blocked for session %s: "
+                                    "next depth %d exceeds configured maximum %d",
+                                    slug,
+                                    session_id,
+                                    _next_depth,
+                                    _max_depth,
+                                )
+                                # Policy block, not a functional failure: nothing
+                                # is dispatched and no step/depth counters move.
+                                return json.dumps({
+                                    "blocked": True,
+                                    "reason": (
+                                        f"Delegation depth limit reached: "
+                                        f"delegating from depth {_current_depth} "
+                                        f"would exceed the configured maximum "
+                                        f"delegation depth of {_max_depth}."
+                                    ),
+                                })
 
                         # Log delegation_started
                         try:

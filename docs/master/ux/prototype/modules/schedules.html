@@ -1,0 +1,466 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Agents — Schedules</title>
+<link rel="stylesheet" href="../shared/styles.css">
+</head>
+<body data-page="schedules" data-default-view="schedules">
+
+<div class="app-shell">
+
+<!-- ═══════════════════════════════ SIDEBAR ═══════════════════════════════ -->
+<nav class="sidebar" aria-label="Primary navigation">
+  <div class="sidebar-logo">
+    <h1>⚡ Parthenon</h1>
+    <small>Enterprise AI Harness</small>
+  </div>
+
+  <!-- Dashboard -->
+  <a class="nav-item" data-view="dashboard" href="../index.html#view-dashboard"><span class="nav-icon">🏠</span>Dashboard</a>
+
+  <!-- Project Showcase -->
+  <a class="nav-item" data-view="project-showcase" href="../index.html#view-project-showcase"><span class="nav-icon">🌐</span>Project Showcase</a>
+
+  <div class="nav-parent-group" id="nav-agents" data-group="agents">
+    <a class="nav-parent-group-label" href="agents.html#view-agent-roles" role="button" aria-expanded="true">
+      <span>🤖 Agents</span>
+      <span class="toggle-icon" aria-hidden="true">▼</span>
+    </a>
+    <div class="nav-children">
+      <a class="nav-item sub-item" data-view="agent-roles" data-group="agents" href="agents.html#view-agent-roles"><span class="nav-icon">👤</span>Agent Roles</a>
+      <a class="nav-item sub-item" data-view="agent-identities" data-group="agents" href="agents.html#view-agent-identities"><span class="nav-icon">🆔</span>Agent Identities</a>
+      <a class="nav-item sub-item" data-view="agents" data-group="agents" href="agents.html#view-agents"><span class="nav-icon">🤖</span>Agent Types</a>
+      <a class="nav-item sub-item" data-view="agent-management-panel" data-group="agents" href="agent-panel.html#view-agent-management-panel"><span class="nav-icon">🎛️</span>Agent Management Panel</a>
+      <a class="nav-item sub-item" data-view="agent-executions" data-group="agents" href="executions.html#view-agent-executions"><span class="nav-icon">▶️</span>Agent Executions</a>
+      <a class="nav-item sub-item" data-view="runtime-monitor" data-group="agents" href="executions.html#view-runtime-monitor"><span class="nav-icon">🕸️</span>Agent Runtime Monitor</a>
+      <a class="nav-item sub-item" data-view="agent-trails" data-group="agents" href="executions.html#view-agent-trails"><span class="nav-icon">📋</span>Agent Trails</a>
+      <a class="nav-item sub-item" data-view="skills" data-group="agents" href="skills-sops.html#view-skills"><span class="nav-icon">🔧</span>Skills</a>
+      <a class="nav-item sub-item" data-view="sops" data-group="agents" href="skills-sops.html#view-sops"><span class="nav-icon">📋</span>SOPs</a>
+      <a class="nav-item sub-item" data-view="schedules" data-group="agents" href="#view-schedules"><span class="nav-icon">📅</span>Schedules</a>
+      <a class="nav-item sub-item" data-view="chat" data-group="agents" href="chat.html#view-chat"><span class="nav-icon">💬</span>Chat Sessions</a>
+      <a class="nav-item sub-item" data-view="conversational-intervention" data-group="agents" href="chat.html#view-conversational-intervention"><span class="nav-icon">💬</span>Conversational Intervention</a>
+      <a class="nav-item sub-item" data-view="intervene-requests" data-group="agents" href="chat.html#view-intervene-requests"><span class="nav-icon">🛑</span>Intervene Requests</a>
+      <a class="nav-item sub-item" data-view="data-types" data-group="agents" href="data-results.html#view-data-types"><span class="nav-icon">📐</span>Data Types</a>
+      <a class="nav-item sub-item" data-view="agent-outputs" data-group="agents" href="data-results.html#view-agent-outputs"><span class="nav-icon">📤</span>Agent Outputs</a>
+      <a class="nav-item sub-item" data-view="agent-logs" data-group="agents" href="executions.html#view-agent-logs"><span class="nav-icon">🧾</span>Agent Logs</a>
+    </div>
+  </div>
+
+  <div class="nav-parent-group" id="nav-results" data-group="results">
+    <a class="nav-parent-group-label" href="data-results.html#view-results" role="button" aria-expanded="true">
+      <span>📊 Results</span>
+      <span class="toggle-icon" aria-hidden="true">▼</span>
+    </a>
+    <div class="nav-children">
+      <a class="nav-item sub-item" data-view="results" data-group="results" href="data-results.html#view-results"><span class="nav-icon">📊</span>Result Repository</a>
+    </div>
+  </div>
+
+  <div class="nav-parent-group locked-open" id="nav-integrations" data-group="integrations">
+    <a class="nav-parent-group-label" href="integrations.html#view-mcp-hub" role="button" aria-expanded="true">
+      <span>🌐 Integrations</span>
+      <span class="toggle-icon" aria-hidden="true">▼</span>
+    </a>
+    <div class="nav-children">
+      <a class="nav-item sub-item" data-view="mcp-hub" data-group="integrations" href="integrations.html#view-mcp-hub"><span class="nav-icon">🔌</span>MCP Hub</a>
+      <a class="nav-item sub-item" data-view="notifications" data-group="integrations" href="integrations.html#view-notifications"><span class="nav-icon">🔔</span>Notification Integration</a>
+      <a class="nav-item sub-item" data-view="api-keys" data-group="integrations" href="integrations.html#view-api-keys"><span class="nav-icon">🔑</span>API Keys</a>
+      <a class="nav-item sub-item" data-view="agent-clients" data-group="integrations" href="integrations.html#view-agent-clients"><span class="nav-icon">🤝</span>Agent Client</a>
+      <a class="nav-item sub-item" data-view="gateway" data-group="integrations" href="integrations.html#view-gateway"><span class="nav-icon">🛰️</span>Agent Gateway</a>
+    </div>
+  </div>
+
+  <div class="nav-parent-group" id="nav-system" data-group="system">
+    <a class="nav-parent-group-label" href="system.html#view-observability" role="button" aria-expanded="true">
+      <span>⚙️ System</span>
+      <span class="toggle-icon" aria-hidden="true">▼</span>
+    </a>
+    <div class="nav-children">
+      <a class="nav-item sub-item" data-view="observability" data-group="system" href="system.html#view-observability"><span class="nav-icon">📊</span>Observability</a>
+      <a class="nav-item sub-item" data-view="permissions" data-group="system" href="system.html#view-permissions"><span class="nav-icon">🔐</span>Permissions</a>
+      <a class="nav-item sub-item" data-view="system-config" data-group="system" href="system.html#view-system-config"><span class="nav-icon">⚙️</span>System Config</a>
+      <a class="nav-item sub-item" data-view="model-configs" data-group="system" href="system.html#view-model-configs"><span class="nav-icon">🧩</span>Model Configs</a>
+      <a class="nav-item sub-item" data-view="decision-tools" data-group="system" href="decision.html#view-decision-tools"><span class="nav-icon">⚖️</span>Decision Tools</a>
+      <a class="nav-item sub-item" data-view="sysone-providers" data-group="system" href="decision.html#view-sysone-providers"><span class="nav-icon">🧠</span>Decision Model Providers</a>
+      <a class="nav-item sub-item" data-view="security-audit" data-group="system" href="system.html#view-security-audit"><span class="nav-icon">🛡️</span>Security Audit</a>
+    </div>
+  </div>
+
+  <div class="nav-parent-group" id="nav-tenant-admin" data-group="tenant-admin">
+    <a class="nav-parent-group-label" href="tenancy.html#view-tenant-settings" role="button" aria-expanded="true">
+      <span>🏢 Tenant Admin</span>
+      <span class="toggle-icon" aria-hidden="true">▼</span>
+    </a>
+    <div class="nav-children">
+      <a class="nav-item sub-item" data-view="tenant-settings" data-group="tenant-admin" href="tenancy.html#view-tenant-settings"><span class="nav-icon">⚙️</span>Tenant Settings</a>
+      <a class="nav-item sub-item" data-view="tenant-members" data-group="tenant-admin" href="tenancy.html#view-tenant-members"><span class="nav-icon">👥</span>Members</a>
+      <a class="nav-item sub-item" data-view="tenant-identity-providers" data-group="tenant-admin" href="tenancy.html#view-tenant-identity-providers"><span class="nav-icon">🔑</span>Identity Providers</a>
+    </div>
+  </div>
+
+  <div class="nav-parent-group" id="nav-platform" data-group="platform" style="display:none">
+    <a class="nav-parent-group-label" href="tenancy.html#view-platform-settings" role="button" aria-expanded="true">
+      <span>🛡️ Platform</span>
+      <span class="toggle-icon" aria-hidden="true">▼</span>
+    </a>
+    <div class="nav-children">
+      <a class="nav-item sub-item" data-view="platform-settings" data-group="platform" href="tenancy.html#view-platform-settings"><span class="nav-icon">⚙️</span>Platform Settings</a>
+      <a class="nav-item sub-item" data-view="platform-tenants" data-group="platform" href="tenancy.html#view-platform-tenants"><span class="nav-icon">🏢</span>Tenants</a>
+      <a class="nav-item sub-item" data-view="platform-audit" data-group="platform" href="tenancy.html#view-platform-audit"><span class="nav-icon">🛡️</span>Platform Security Audit</a>
+    </div>
+  </div>
+
+</nav>
+<!-- ═══════════════════════════════ MAIN WRAPPER ═══════════════════════════════ -->
+<div class="main-wrapper">
+  <!-- TOP BAR -->
+  <div class="topbar">
+    <div class="topbar-title" id="topbar-title">Agents</div>
+    <div class="topbar-actions">
+      <span class="chip chip-yellow" id="oidc-sa-indicator" style="display:none">🔑 Super Admin</span>
+      <span class="chip chip-blue" id="tenant-ctx-chip" style="display:none">🏢 <span id="tenant-ctx-name"></span></span>
+      <button class="btn-icon" title="Notifications">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg>
+        <span class="badge">3</span>
+      </button>
+      <div class="avatar" title="Alex Harper — Admin">AH</div>
+    </div>
+  </div>
+
+  <!-- MAIN CONTENT -->
+  <div class="main-content">
+
+<!-- ═══════════════════════════════ VIEW: SCHEDULES ═══════════════════════════════ -->
+<div id="view-schedules" class="view">
+  <div class="view-header">
+    <div>
+      <h2>Schedules</h2>
+      <div class="view-desc">Create and manage cron-based schedules for automated agent execution</div>
+    </div>
+    <button class="btn btn-primary" onclick="schedOpenCreate()">+ Create Schedule</button>
+  </div>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Cron Expression</th>
+          <th>Target Type</th>
+          <th>Status</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody id="sched-table-body">
+        <!-- Populated by JS -->
+      </tbody>
+    </table>
+    <div class="sched-pagination">
+      <span id="sched-pagination-info">1–5 of 5</span>
+      <button disabled id="sched-prev-btn" onclick="schedPrevPage()">‹</button>
+      <button id="sched-next-btn" onclick="schedNextPage()">›</button>
+    </div>
+  </div>
+</div>
+
+  </div><!-- /main-content -->
+</div><!-- /main-wrapper -->
+</div><!-- /app-shell -->
+
+<!-- Create Schedule Modal -->
+<!-- ═══════════════════════════════ SCHEDULE CREATE/EDIT DIALOG ═══════════════════════════════ -->
+<div id="modal-schedule" class="modal-overlay" onclick="schedCloseDialog(event)">
+  <div class="modal modal-lg">
+    <div class="modal-header">
+      <h3 id="sched-dialog-title">Create Schedule</h3>
+      <button class="modal-close" onclick="schedCloseDialog()">✕</button>
+    </div>
+    <div class="modal-body">
+      <!-- Name -->
+      <div class="form-group">
+        <label>Name <span style="color:var(--error)">*</span></label>
+        <input class="form-control" id="sched-input-name" placeholder="e.g., Daily Summary Report">
+      </div>
+
+      <!-- Description -->
+      <div class="form-group">
+        <label>Description</label>
+        <input class="form-control" id="sched-input-desc" placeholder="Optional description">
+      </div>
+
+      <!-- Cron Editor (react-js-cron style) -->
+      <div class="form-group">
+        <label>Cron Expression <span style="color:var(--error)">*</span></label>
+        <div class="react-js-cron">
+          <!-- Text Input -->
+          <input class="form-control font-mono" id="sched-cron-text" value="0 * * * *" style="margin-bottom:10px;font-size:13px" oninput="schedOnCronText(this.value)">
+
+          <!-- Human-readable description -->
+          <div class="cron-human-desc" id="sched-cron-desc">⏰ <strong>Every hour</strong> — Next run: <span id="sched-cron-next">Today, 16:00 UTC</span></div>
+
+          <!-- Shortcuts -->
+          <div class="cron-shortcuts" style="margin-top:10px">
+            <button class="shortcut-btn active" data-cron="0 * * * *" onclick="schedSelectShortcut(this)">Every hour</button>
+            <button class="shortcut-btn" data-cron="0 8 * * *" onclick="schedSelectShortcut(this)">Every day</button>
+            <button class="shortcut-btn" data-cron="0 8 * * 1" onclick="schedSelectShortcut(this)">Every week</button>
+            <button class="shortcut-btn" data-cron="0 8 1 * *" onclick="schedSelectShortcut(this)">Every month</button>
+            <button class="shortcut-btn" data-cron="0 0 1 1 *" onclick="schedSelectShortcut(this)">Every year</button>
+            <button class="shortcut-btn" data-cron="" onclick="schedSelectShortcut(this)">Custom</button>
+          </div>
+
+          <!-- antd-style dropdown selects -->
+          <div class="cron-antd-row">
+            <div class="cron-antd-group">
+              <label>Minute</label>
+              <select class="cron-antd-select" id="sched-cron-minute" onchange="schedOnCronSelect()">
+                <option value="*">Every</option>
+                <option value="0" selected>0</option><option value="5">5</option><option value="10">10</option>
+                <option value="15">15</option><option value="20">20</option><option value="25">25</option>
+                <option value="30">30</option><option value="35">35</option><option value="40">40</option>
+                <option value="45">45</option><option value="50">50</option><option value="55">55</option>
+              </select>
+            </div>
+            <div class="cron-antd-group">
+              <label>Hour</label>
+              <select class="cron-antd-select" id="sched-cron-hour" onchange="schedOnCronSelect()">
+                <option value="*">Every</option>
+                <option value="0">12 AM</option><option value="1">1 AM</option><option value="2">2 AM</option>
+                <option value="3">3 AM</option><option value="4">4 AM</option><option value="5">5 AM</option>
+                <option value="6">6 AM</option><option value="7">7 AM</option><option value="8">8 AM</option>
+                <option value="9">9 AM</option><option value="10">10 AM</option><option value="11">11 AM</option>
+                <option value="12">12 PM</option><option value="13">1 PM</option><option value="14">2 PM</option>
+                <option value="15">3 PM</option><option value="16">4 PM</option><option value="17">5 PM</option>
+                <option value="18">6 PM</option><option value="19">7 PM</option><option value="20">8 PM</option>
+                <option value="21">9 PM</option><option value="22">10 PM</option><option value="23">11 PM</option>
+              </select>
+            </div>
+            <div class="cron-antd-group">
+              <label>Day of Week</label>
+              <div style="display:flex;gap:3px;align-items:center;padding-top:2px">
+                <button class="dow-btn sched-dow" data-day="0" onclick="schedToggleDow(this)">S</button>
+                <button class="dow-btn sched-dow selected" data-day="1" onclick="schedToggleDow(this)">M</button>
+                <button class="dow-btn sched-dow selected" data-day="2" onclick="schedToggleDow(this)">T</button>
+                <button class="dow-btn sched-dow selected" data-day="3" onclick="schedToggleDow(this)">W</button>
+                <button class="dow-btn sched-dow selected" data-day="4" onclick="schedToggleDow(this)">T</button>
+                <button class="dow-btn sched-dow selected" data-day="5" onclick="schedToggleDow(this)">F</button>
+                <button class="dow-btn sched-dow" data-day="6" onclick="schedToggleDow(this)">S</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Target type - Agent only -->
+      <div class="form-group">
+        <label>Agent Type <span style="color:var(--error)">*</span></label>
+        <select class="form-control" id="sched-input-target">
+          <option value="">— Select an Agent Type —</option>
+          <option value="abc-123">Data Analyst Agent</option>
+          <option value="def-456">Report Generator Agent</option>
+          <option value="ghi-789">Health Monitor Agent</option>
+          <option value="jkl-012">PR Reviewer Agent</option>
+          <option value="mno-345">File Manager Agent</option>
+        </select>
+      </div>
+
+      <!-- Input Parameters (PayloadEditor style) -->
+      <div class="form-group">
+        <label>Input Parameters</label>
+        <div class="payload-section">
+          <div class="form-hint" style="margin-top:0;margin-bottom:10px">
+            Key-value pairs passed as the execution payload to the agent.
+          </div>
+          <div id="sched-payload-rows">
+            <div class="payload-row">
+              <input class="key-input" placeholder="Key" value="report_type">
+              <input placeholder="Value" value="daily_summary">
+              <button class="remove-btn" onclick="schedRemovePayload(this)">×</button>
+            </div>
+            <div class="payload-row">
+              <input class="key-input" placeholder="Key" value="format">
+              <input placeholder="Value" value="markdown">
+              <button class="remove-btn" onclick="schedRemovePayload(this)">×</button>
+            </div>
+          </div>
+          <button class="add-payload-btn" onclick="schedAddPayload()">+ Add parameter</button>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="schedCloseDialog()">Cancel</button>
+      <button class="btn btn-primary" id="sched-save-btn" onclick="schedSave()">Create Schedule</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════ EXECUTION HISTORY DIALOG ═══════════════════════════════ -->
+<div id="sched-history-dialog" class="modal-overlay" onclick="schedCloseHistory(event)">
+  <div class="modal modal-lg">
+    <div class="modal-header">
+      <h3 id="sched-history-title">Execution History</h3>
+      <button class="modal-close" onclick="schedCloseHistory()">✕</button>
+    </div>
+    <div class="modal-body" style="padding:16px 24px">
+      <div style="display:flex;align-items:center;gap:16px;margin-bottom:16px;flex-wrap:wrap">
+        <label style="font-size:13px;font-weight:500;">Schedule:</label>
+        <span id="sched-history-name" style="font-weight:600;font-size:14px">—</span>
+        <label style="font-size:13px;font-weight:500;margin-left:8px">Status:</label>
+        <select id="sched-history-filter" style="padding:5px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:12px;outline:none" onchange="schedRenderHistory()">
+          <option value="all">All</option>
+          <option value="success">Success</option>
+          <option value="failure">Failure</option>
+          <option value="running">Running</option>
+        </select>
+      </div>
+      <div class="table-wrap" style="box-shadow:none;border-radius:var(--radius-sm)">
+        <table>
+          <thead>
+            <tr>
+              <th>Started At</th>
+              <th>Finished At</th>
+              <th>Status</th>
+              <th>Agent Session</th>
+              <th>Details</th>
+              <th style="text-align:center">Actions</th>
+            </tr>
+          </thead>
+          <tbody id="sched-history-body">
+            <!-- Populated by JS -->
+          </tbody>
+        </table>
+      </div>
+      <div class="sched-pagination" id="sched-history-pagination" style="padding:8px 0 0;border-top:none">
+        <span id="sched-history-info">0 of 0</span>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="schedCloseHistory()">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════ AGENT EXECUTION DETAILS DIALOG ═══════════════════════════════ -->
+<div id="sched-exec-detail-dialog" class="modal-overlay" onclick="schedCloseExecDetail(event)">
+  <div class="modal" style="max-width:560px">
+    <div class="modal-header">
+      <h3>Agent Execution Details</h3>
+      <button class="modal-close" onclick="schedCloseExecDetail()">✕</button>
+    </div>
+    <div class="modal-body" id="sched-exec-detail-body">
+      <!-- Populated by JS -->
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="schedCloseExecDetail()">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════ SCHEDULE TOAST CONTAINER ═══════════════════════════════ -->
+<div class="sched-toast-container" id="sched-toast-container"></div>
+
+<!-- ═══ CONTROL CENTER ASSISTANT (global floating launcher) ═══ -->
+<button class="asst-fab" id="asst-fab" onclick="asstOpen()" title="Control Center Assistant" aria-label="Control Center Assistant">🤖</button>
+<div class="asst-overlay" id="asst-overlay" onclick="if(event.target===this)asstClose()">
+  <div class="asst-dialog" id="asst-dialog" role="dialog" aria-label="Control Center Assistant conversation">
+    <div class="asst-head">
+      <span style="font-size:20px">🤖</span>
+      <h3 id="asst-title">Control Center Assistant</h3>
+      <span class="chip chip-green" id="asst-conn-chip">Connected</span>
+      <div class="asst-head-right">
+        <button class="btn-icon" id="asst-fs-btn" onclick="asstToggleFullscreen()" title="Toggle fullscreen">⛶</button>
+        <button class="btn-icon" onclick="asstClose()" title="Close">✕</button>
+      </div>
+    </div>
+
+    <div class="asst-body">
+      <div class="asst-alert" id="asst-model-alert" style="display:none">
+        <span>⚠️</span>
+        <div style="flex:1">
+          <b>The assistant needs a model configured for this workspace</b>
+          No model is configured for this workspace yet. An administrator can select one under System Config → Assistant model.
+          <div style="margin-top:8px"><button class="btn btn-secondary btn-sm" onclick="asstGoConfigure()">Configure model</button></div>
+        </div>
+      </div>
+
+      <div class="asst-paper-wrap">
+        <div class="asst-paper" id="asst-messages"></div>
+      </div>
+    </div>
+
+    <div class="asst-input-row">
+      <textarea class="chat-input" id="asst-input" rows="1" placeholder="Type a message… (Enter to send)" onkeydown="asstOnKey(event)" oninput="asstAutoGrow(this)"></textarea>
+      <button class="btn btn-primary" id="asst-send" onclick="asstSend()">Send</button>
+    </div>
+
+    <div class="asst-foot">
+      <button class="btn btn-secondary btn-sm" id="asst-btn-sessions" onclick="asstOpenSessions()">🗂 View All Sessions</button>
+      <button class="btn btn-secondary btn-sm" id="asst-btn-new" onclick="asstNewSession()">＋ New Session</button>
+      <span class="spacer"></span>
+      <button class="btn btn-sm" id="asst-btn-end" style="background:#fff;border:1px solid #FECACA;color:#B91C1C" onclick="asstOpenEnd()">⏹ End Session</button>
+      <button class="btn btn-secondary btn-sm" onclick="asstClose()">Exit</button>
+    </div>
+  </div>
+</div>
+<div class="asst-overlay" id="asst-sessions-overlay" onclick="if(event.target===this)asstCloseSessions()">
+  <div class="asst-dialog" style="width:min(620px,100%);height:auto;max-height:85vh" role="dialog" aria-label="All sessions for this agent">
+    <div class="asst-head">
+      <h3>All sessions for this agent</h3>
+      <div class="asst-head-right"><button class="btn-icon" onclick="asstCloseSessions()" title="Close">✕</button></div>
+    </div>
+    <div class="asst-body" style="overflow-y:auto;padding-bottom:14px">
+      <div class="asst-sess-filters">
+        <label class="toggle"><input type="checkbox" id="asst-show-ended" onchange="asstShowEnded(this.checked)"><span class="toggle-slider"></span><span style="font-size:12px">Show ended sessions</span></label>
+        <label style="display:inline-flex;align-items:center;gap:6px">From <input type="date" class="form-control" id="asst-sess-from" style="width:150px;padding:5px 8px;font-size:12px" onchange="asstDateChange()"></label>
+        <label style="display:inline-flex;align-items:center;gap:6px">To <input type="date" class="form-control" id="asst-sess-to" style="width:150px;padding:5px 8px;font-size:12px" onchange="asstDateChange()"></label>
+      </div>
+      <div id="asst-sessions-list"></div>
+      <div class="asst-pager" style="justify-content:center">
+        <span class="asst-pager-btns" id="asst-sessions-pager"></span>
+      </div>
+    </div>
+    <div class="asst-foot">
+      <span class="spacer"></span>
+      <button class="btn btn-secondary btn-sm" onclick="asstCloseSessions()">Cancel</button>
+    </div>
+  </div>
+</div>
+<div class="asst-overlay" id="asst-preview-overlay" onclick="if(event.target===this)asstClosePreview()">
+  <div class="asst-dialog" style="width:90vw;height:80vh" role="dialog" aria-label="Approval Preview">
+    <div class="asst-head">
+      <h3>Approval Preview</h3>
+      <div class="asst-head-right"><button class="btn-icon" onclick="asstClosePreview()" title="Collapse">⤡</button></div>
+    </div>
+    <div class="asst-body" id="asst-preview-body" style="overflow-y:auto;padding-bottom:14px;display:block;font-size:13px;line-height:1.6"></div>
+    <div class="asst-foot">
+      <button class="btn btn-secondary btn-sm" onclick="asstClosePreview()">Collapse</button>
+      <span class="spacer"></span>
+      <button class="btn btn-sm" style="background:#fff;border:1px solid #FECACA;color:#B91C1C" onclick="asstResolve(false)">✕ Deny</button>
+      <button class="btn btn-sm" style="background:#16A34A;color:#fff" onclick="asstResolve(true)">✓ Approve</button>
+    </div>
+  </div>
+</div>
+<div class="asst-overlay" id="asst-end-overlay" onclick="if(event.target===this)asstCloseEnd()">
+  <div class="asst-dialog" style="width:min(560px,100%);height:auto" role="dialog" aria-label="End Conversation Session">
+    <div class="asst-head">
+      <h3>End Conversation Session</h3>
+      <div class="asst-head-right"><button class="btn-icon" onclick="asstCloseEnd()" title="Close">✕</button></div>
+    </div>
+    <div class="asst-body" style="padding-bottom:16px">
+      <p style="font-size:13px;line-height:1.6">This will close the session. You can still view its history but cannot resume it.</p>
+      <p class="text-sm text-secondary" style="line-height:1.6;margin-top:8px">Any in-flight execution for this session is terminated. The next time you open the assistant it starts a <b>new</b> session instead of resuming this one.</p>
+    </div>
+    <div class="asst-foot">
+      <span class="spacer"></span>
+      <button class="btn btn-secondary btn-sm" onclick="asstCloseEnd()">Cancel</button>
+      <button class="btn btn-sm" style="background:#C62828;color:#fff" onclick="asstConfirmEnd()">End Session</button>
+    </div>
+  </div>
+</div>
+
+<script src="../shared/app.js"></script>
+<script src="../shared/assistant.js"></script>
+<script src="../shared/max-dialog.js"></script>
+<script src="../shared/page-init.js"></script>
+</body>
+</html>

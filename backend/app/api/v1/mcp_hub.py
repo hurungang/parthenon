@@ -824,6 +824,7 @@ async def create_mcp_session(
             server_id=server_id,
             encrypted_credentials=None,
             is_active=True,
+            requires_reauth=False,
             is_default=is_first_session or (body.is_default is True),
             **session_data,
         )
@@ -849,6 +850,7 @@ async def create_mcp_session(
         server_id=server_id,
         encrypted_credentials=encrypted_creds,
         is_active=True,  # Sessions are active by default
+        requires_reauth=False,
         is_default=is_first_session or (body.is_default is True),
         **session_data,
     )

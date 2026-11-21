@@ -1,5 +1,7 @@
 # Licensing & Quota — Entities
 
+[← Data model overview](../../overview.md)
+
 License-based entitlements and per-tenant quota enforcement. Licenses are assigned/changed/removed only by the platform admin and every change is audited in `TenantAuditEvent`.
 
 ```mermaid

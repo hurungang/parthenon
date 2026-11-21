@@ -1,5 +1,7 @@
 # Skills & SOPs — Entities
 
+[← Data model overview](../../overview.md)
+
 ```mermaid
 erDiagram
     Skill {

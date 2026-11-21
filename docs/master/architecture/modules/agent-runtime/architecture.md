@@ -2,7 +2,7 @@
 
 ## Tenant-Bound Execution
 
-Agent Runtime receives a **signed, immutable tenant context** from Control Center over the existing mTLS channels; the context cannot be widened, and Agent Runtime holds no identity tokens or credentials. The signed `X-Internal-Tenant-*` headers are **mandatory** on execution requests — an unverifiable binding is rejected before the run starts (fail-closed). Every execution uses only the owning tenant's skills, tools, model configurations, identities, and permissions. Agent Runtime is database-free and runs **no quota logic** — quota decisions are made entirely in Control Center, which dispatches only quota-cleared executions over the existing signed-header contract. All execution logs and traces carry tenant attribution. See [Multi-Tenancy Architecture](multi-tenancy.md).
+Agent Runtime receives a **signed, immutable tenant context** from Control Center over the existing mTLS channels; the context cannot be widened, and Agent Runtime holds no identity tokens or credentials. The signed `X-Internal-Tenant-*` headers are **mandatory** on execution requests — an unverifiable binding is rejected before the run starts (fail-closed). Every execution uses only the owning tenant's skills, tools, model configurations, identities, and permissions. Agent Runtime is database-free and runs **no quota logic** — quota decisions are made entirely in Control Center, which dispatches only quota-cleared executions over the existing signed-header contract. All execution logs and traces carry tenant attribution. See [Multi-Tenancy Architecture](../multi-tenancy.md).
 
 ### Virtual Tenant Awareness
 
@@ -45,7 +45,7 @@ Injection is dynamic per turn: the inherent tool names are merged into the agent
 Conversational agent types run a **deep-agent turn** in Agent Runtime: the runtime receives the turn from Communication Hub, assembles the agent's context for that turn, streams status events back while the loop runs, and returns the reply with guardrail usage.
 
 - **Context per turn** — allowed tools and skills, guardrail policy, delegation limits, and model binding are resolved from Control Center for the calling tenant; a missing model binding is rejected *before* any model call so the surface can guide configuration instead of failing inside the model.
-- **Streaming status** — thinking, tool use, delegation, and waiting-for-human states are emitted as status events; the hub keep-alives them so long turns stay visibly alive.
+- **Streaming status** — thinking, tool use, delegation, and waiting-for-human states are emitted as status events; the hub keep-alives them so long turns stay visibly alive, and it forwards each transition to Control Center so the authoritative activity state is persisted rather than living only in a live socket.
 - **Layered time bounds** — every model call is bounded; a hang surfaces as a timeout outcome instead of a silent stall. While a human approval is pending, the wait is re-armed up to a longer intervention bound kept below the hub's turn watchdog.
 - **Cancellation** — in-flight conversation turns are registered per session and cancelled when the session ends or an execution is terminated.
 - **Never direct** — all tool, MCP, and delegation traffic leaves through Communication Hub; Agent Runtime holds no credentials and never touches the database.
@@ -54,10 +54,12 @@ Conversational agent types run a **deep-agent turn** in Agent Runtime: the runti
 flowchart LR
     CH[Communication Hub]
     TURN[Conversation Turn Executor]
-    CTX[Agent Context<br/>tools · skills · policy]
+    CTX[Agent Context<br/>tools · skills · policy · mode]
     DA[Deep Agent Loop]
     POL[Guardrail Monitor]
-    RS[In-Process Resume Registry]
+    CKPT[Checkpoint Manager<br/>persist · load]
+    CLAIM[Turn Claim<br/>one resumer at a time]
+    EMIT[Activity Emitter<br/>transitions forwarded]
     HITL[Human Intervention Tool]
     EVT[Status and reply stream]
 
@@ -66,16 +68,32 @@ flowchart LR
     CTX --> DA
     DA --> POL
     DA -->|human_intervene| HITL
-    HITL --> RS
-    RS -->|operator response resumes the turn| HITL
+    HITL --> CKPT
+    CKPT -->|save / load paused state| CH
+    HITL --> CLAIM
+    CH -->|operator response resumes| CLAIM
+    DA --> EMIT
+    EMIT --> EVT
     TURN --> EVT
     EVT --> CH
     POL -->|budget exceeded| EVT
 ```
 
-### In-Process Intervention Resume
+### Durable Turn Checkpointing & Resume
 
-On the conversational path, a human-intervention tool call **suspends inside the tool call** and awaits the operator: the pending request is registered in-process against the conversation session, forwarded through the hub to the chat surface, and resolved by the runtime's resume endpoint when the operator responds. The resume path checks pending conversational interventions *before* the job-relaunch fallback, so a conversation without an execution job resumes correctly. A timeout returns an explicit "not executed" result to the agent — never a silent success. Task (job) agents keep the existing interrupt/resume flow unchanged.
+On the conversational path a human-intervention tool call **pauses the turn**, and the paused state becomes durable instead of process-local:
+
+- **Checkpoint production** — the paused turn's framework state is written as an **opaque payload to Control Center** through the hub, under the conversation session as the resume key. Agent Runtime keeps no checkpoint store of its own and holds no database connection, credentials, or datastore endpoint: it produces and reloads the payload over the existing internal API, so no new infrastructure dependency is introduced.
+- **Instance-independent resume** — a resume carries the authoritative turn reference rather than a process-local handle, so any instance able to load the payload can continue the turn; the instance that paused it does not have to be the one that resumes.
+- **Claim before continue** — an instance claims the paused turn before continuing and renews only its own claim, so two instances never continue the same turn concurrently and a failover instance can take over after the lease expires.
+- **Fail closed** — if the paused payload cannot be persisted, the turn surfaces a failure outcome and never reports waiting-for-human with no resumable state behind it.
+- **Activity emission** — thinking, tool, delegation, and waiting transitions are forwarded for Control Center to persist, so state survives a restart and is hydratable by a reconnecting client.
+
+The resume path checks pending conversational interventions *before* the job-relaunch fallback, so a conversation without an execution job resumes correctly. A timeout returns an explicit "not executed" result to the agent — never a silent success. Task (job) agents keep the existing interrupt/resume flow unchanged.
+
+### Optimization-Mode Conversations
+
+An optimization-mode conversation runs the **conversational loop regardless of the agent type's input type**. For those turns the optimization mission replaces the agent's business instruction and skills and the optimization system tools are injected; the agent's granted tools remain reachable only through an approved live test, never as an unsupervised path. Replay verification against recorded reference data is the default, and a live verification is a single approved script run executed once in the sandbox under the agent's own identity, role, and tenant. Normal business runs (typed or conversational) are unchanged, and no residual mode survives the conversation.
 
 ## Typed Output Handling
 
@@ -184,14 +202,24 @@ Agent Runtime also executes **sandboxed, model-authored Python scripts**
 pre-bound modules; no I/O; MCP-only
 egress via the injected session-bound `CommHubToolClient`; CPU / memory /
 wall-time caps with safe termination). The composition follows a
-**two-layer plan model**: the base implementation plan stays high-level,
-and an opt-in "Run with optimization" step of the Run Agent flow launches a
-command-driven side execution that authors the optimized composition
-(script segments + LLM bridges + decision steps) as a separate
+**two-layer plan model**: the base implementation plan stays high-level, while
+a **separated Optimize action** — not a mode of Run — dispatches a dedicated
+command execution that authors the optimized composition (script segments +
+LLM bridges + decision steps) as a separate
 `OptimizedImplementationPlan` with a `fully_scripted` execution-semantics
-mark; the Script Compiler validates and normalizes the authored scripts (no
-steps are auto-appended). Sandbox violations and cap terminations are
-unconditional LLM-fallback triggers. A first-class **LLM Mock Layer**
-(`LLM_MOCK_MODE` env/config) serves deterministic model responses for
-zero-LLM test runs. See
+mark. The authoring model arrives in the execution context as an
+**identifier only** (no credentials); the agent's own runtime model governs
+normal runs and never authors plans. Verification checks script syntax and
+correct tool invocation rather than identical results, and stops at high
+confidence. The Script Compiler validates and normalizes the authored
+scripts (no steps are auto-appended). Sandbox violations and cap
+terminations are unconditional LLM-fallback triggers; when the fallback is
+attributed to an optimized artifact, Agent Runtime reports it so Control
+Center marks the plan `requires_fix` and the plan is never re-served as
+healthy. A conversation-mode optimization turn may additionally run **one
+explicitly approved live script**, once, inside the same sandbox under the
+agent's own identity and existing grants — the approval is consumed in
+Control Center and no additional credential or privilege reaches the script.
+A first-class **LLM Mock Layer** (`LLM_MOCK_MODE` env/config) serves
+deterministic model responses for zero-LLM test runs. See
 [sandboxed-scripting.md](../sandboxed-scripting.md).

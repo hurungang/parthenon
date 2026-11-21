@@ -182,8 +182,11 @@ test.describe('Schedule Manager — E2E User Journeys', () => {
     // Wait for the schedule list to render
     await expect(page.getByText('Daily Report')).toBeVisible()
 
-    // Pause button has no title/aria-label; filter by data-testid="PauseIcon"
-    const pauseButton = page.locator('button').filter({ has: page.locator('[data-testid="PauseIcon"]') })
+    // Production builds drop MUI's `data-testid` on icons and the action
+    // IconButtons carry no aria-label, so address them by position within the
+    // row: [History, Edit, Pause, Delete].
+    const row = page.getByRole('row').filter({ hasText: 'Daily Report' })
+    const pauseButton = row.getByRole('button').nth(2)
     await expect(pauseButton).toBeVisible()
     await pauseButton.click()
     await page.waitForTimeout(500)
@@ -218,8 +221,10 @@ test.describe('Schedule Manager — E2E User Journeys', () => {
     // Wait for the schedule list to render
     await expect(page.getByText('Weekly Cleanup')).toBeVisible()
 
-    // Resume button has no title/aria-label; filter by data-testid="PlayArrowIcon"
-    const resumeButton = page.locator('button').filter({ has: page.locator('[data-testid="PlayArrowIcon"]') })
+    // Row actions: [History, Edit, Resume, Delete] (no accessible names in
+    // production builds — see the pause test note).
+    const row = page.getByRole('row').filter({ hasText: 'Weekly Cleanup' })
+    const resumeButton = row.getByRole('button').nth(2)
     await expect(resumeButton).toBeVisible()
     await resumeButton.click()
     await page.waitForTimeout(500)
@@ -258,8 +263,9 @@ test.describe('Schedule Manager — E2E User Journeys', () => {
     // Wait for schedule to render
     await expect(page.getByText('Daily Report')).toBeVisible()
 
-    // Delete button has no title/aria-label; filter by data-testid="DeleteIcon"
-    const deleteButton = page.locator('button').filter({ has: page.locator('[data-testid="DeleteIcon"]') })
+    // Delete is the 4th row action: [History, Edit, Pause, Delete].
+    const row = page.getByRole('row').filter({ hasText: 'Daily Report' })
+    const deleteButton = row.getByRole('button').nth(3)
     await expect(deleteButton).toBeVisible()
 
     // Note: handleDelete uses confirm() which Playwright auto-accepts
@@ -332,8 +338,9 @@ test.describe('Schedule Manager — E2E User Journeys', () => {
     // Wait for schedule to render
     await expect(page.getByText('Daily Report')).toBeVisible()
 
-    // Click the Edit button — no title, filter by data-testid="EditIcon"
-    const editButton = page.locator('button').filter({ has: page.locator('[data-testid="EditIcon"]') }).first()
+    // Edit is the 2nd row action: [History, Edit, Pause, Delete].
+    const row = page.getByRole('row').filter({ hasText: 'Daily Report' })
+    const editButton = row.getByRole('button').nth(1)
     await expect(editButton).toBeVisible()
     await editButton.click()
     await page.waitForTimeout(300)

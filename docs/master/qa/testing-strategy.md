@@ -21,6 +21,8 @@ E2E tests are **mocked-first** by default: each suite wires `page.route()` handl
 - **Shared per-change mock worlds**: stateful, suite-scoped route handlers live in an underscore-prefixed sibling file (e.g. `e2e/tests/_agent_panel_world.ts`), providing in-memory CRUD endpoints, reusable locators, and a **request-observer route** that lets tests assert network behavior (e.g. "zero write requests until save") rather than relying on absence-of-visibility timing.
 - **One real-backend variant per domain**: at least one unmocked test per change probes the live stack and **skips cleanly** when the backend or test credentials are unavailable. For changes with DB schema changes this is mandatory (see Database Migration Testing Requirements below); for frontend-only changes it remains a cheap wiring check.
 - **Identifiable, self-cleaning data**: mocked worlds use timestamped test data per test (the per-test world is discarded automatically); real-backend tests use identifiable prefixes with explicit cleanup.
+- **Query-string-aware route patterns**: list endpoints are called with pagination (`?limit=&offset=`) and filters, so a mock registered as `**/api/v1/<collection>` never matches. End collection patterns with `**` (e.g. `'**/api/v1/agents/types**'`), and register specific item/sub-resource routes **after** the generic collection route — Playwright resolves handlers last-registered-first.
+- **Locate controls the way a user would**: prefer role/row-scoped locators (`getByRole('row', { name })` then a named button) over CSS/test-id hooks. MUI `InputLabel` + `Select` pairs in this app are frequently not programmatically associated, so a labelled select is best located through its `.MuiFormControl-root` wrapper; treat that as an accessibility gap to fix at the product level, not as a test-only workaround.
 
 ## Database Migration Testing Requirements
 
@@ -30,6 +32,8 @@ Changes that include database schema changes (`has_db_changes: true`) require ad
 1. Alembic migration generated and committed
 2. `alembic upgrade head` applied locally — verify with `alembic current`
 3. Test database fixture applies migrations via `alembic upgrade head` in setup
+
+The backend session fixture (`backend/tests/conftest.py`) now performs step 3 automatically: when PostgreSQL is reachable it runs `alembic upgrade head` against `parthenon_test` once per session, because request middleware (tenant resolution, root-tenant lookup) uses the real `AsyncSessionLocal` engine and is not covered by FastAPI dependency overrides.
 
 **Backend integration tests must:**
 - Run against a real PostgreSQL database (not in-memory mocks)
@@ -109,7 +113,7 @@ Practices introduced by the `multi-tenant-support` change, applicable to any fut
 - **Environmental-failure classification**: when a suite run reports failures, distinguish real defects from environmental contamination — e.g. stale dev services reachable during the run convert service-dependent skips into live calls against outdated binaries. Re-run with the dependent service URLs unreachable to restore skip semantics before declaring pass/fail (documented in the multi-tenancy Phase 10 verification).
 - **Default-off canary ordering**: for changes behind a platform-mode switch, run the switch-off regression suite FIRST (canary), then the feature suites, then the gated real-backend variants last.
 
-### Strict Tenant Isolation (added by `strict-tenant-isolation`)
+### Strict Tenant Isolation
 
 Multi-tenancy isolation is a **first-class testing dimension** for every change that touches tenant-scoped data or internal service traffic — not an afterthought. Practices introduced by the `strict-tenant-isolation` change, on top of the base practices above:
 
@@ -278,12 +282,12 @@ Refer to `dashboard-test-plan.md` for module-specific coverage and test file ref
 Changes involving the `::`-delimited resource type system, policy authoring with namespaced identifiers, or the Alembic data migration require:
 
 **Pre-test checklist:**
-1. All 17 namespaced identifiers registered in both `backend/app/core/resource_types.py` and `frontend/src/constants/resourceTypes.ts`
-2. Alembic migration generated and reviewed for correct mapping of 15 legacy values to 17 namespaced values
+1. All registered resource types mirrored in both `backend/app/core/resource_types.py` (29 entries, including the bare `agent`) and `frontend/src/constants/resourceTypes.ts` (28 namespaced entries)
+2. Alembic migration generated and reviewed for correct mapping of 15 legacy values to the namespaced identifiers (17 at introduction; the manifest has since grown)
 3. All `require_permission()` call sites updated to use new `RT_*` constants
 
 **Backend tests must:**
-- Verify manifest contains exactly 17 entries across 3 modules (`agent`: 12, `integration`: 2, `system`: 3)
+- Verify the manifest contains every registered resource type across its module groups (currently 29: `agent` 15, `integration` 3, `system` 5, `platform` 3, `tenant` 2, plus the bare `agent`)
 - Test `::` delimiter parsing: correct splitting, flat-value rejection, three-layer rejection, empty-value rejection
 - Test wildcard expansion: `agent::*` → 12 concrete submodules, `*::*` → all 17
 - Verify permission engine `_match_module()` uses manifest-aware expansion (not string prefix matching)
@@ -371,6 +375,38 @@ Agent-execution tests must not depend on real LLM APIs. A deterministic mock lay
 - The same mock-aware path feeds the script generate→test→refine loop (repair generator receives the sandbox capability contract).
 
 Refer to `sandboxed-scripting-test-plan.md` for module-specific coverage and test file references.
+
+### Restart, failover and exactly-once verification (resumable-agent-turn-persistence)
+
+Durable-state behaviour cannot be proven by a single-process test, so these changes add two required
+patterns:
+
+**1. Three-way state agreement.** A pause/resume scenario must assert agreement between (a) the
+durable record (`state`, `outcome`, `write_applied`), (b) the derived/interaction state that drives
+the UI (e.g. `ConversationActivity.state` + `active_resume_id`), and (c) what the operator actually
+sees. Asserting only an HTTP status is insufficient — divergence between the three is the defect
+class this pattern exists for. The same rule applies to activity state: "shown as waiting" must
+equal "actually answerable".
+
+**2. Restart / failover as first-class cases.** Backend end-to-end suites simulate discard-and-resume
+(two store/instance objects, a second simulated runtime instance, claim lease expiry) so
+instance-independence is proven in-process and deterministically; genuine process restarts of each
+service are recorded as **manual drills** with log evidence (see
+`test-plans/resumable-turn-test-plan.md`) because real process lifecycle is not reliably automatable
+in CI. Failover assertions must show the lifecycle state is unchanged by lease expiry.
+
+**3. Exactly-once as a testable invariant.** Duplicate delivery must be generated deliberately at
+every layer — repeated HTTP call, re-delivered WebSocket frame, concurrent submissions and a retry
+after instance change — and each test asserts exactly one execution, one applied write and one
+outcome record. Idempotency keys/markers are verified to commit atomically with the write (rollback
+clears them), and a retry after a *failed* commit must still perform the write (no false
+"already applied").
+
+**4. Durable payload hygiene.** Any persisted resume/checkpoint payload is content-scanned for
+credential-shaped material, and the byte cap is asserted by pushing an oversized payload.
+
+Refer to `resumable-turn-test-plan.md` (durable pause/resume) and
+`conversation-intervention-test-plan.md` §8 (persisted activity state) for module coverage.
 
 ### Live verification of streaming & intervention flows
 

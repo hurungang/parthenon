@@ -2,7 +2,7 @@
 
 ## 1. Epic Overview
 
-Parthenon is positioned as a **Software 3.0 agent framework**: when an agent produces an implementation plan for a workflow, it also attempts to generate a deterministic bridge script between the tools involved. Once that script is generated **and verified** against a real model-driven execution, subsequent executions run the script purely — no model required. The agent is used to create the software; the software then runs without a model whenever a verified script exists, and always degrades to the model-driven path when automation fails — with nothing to configure. This turns recurring agent work from costly, non-deterministic, per-run reasoning into repeatable, low-cost, deterministic execution, while preserving model-driven judgment exactly where deterministic code struggles: semantic bridging (unstructured → structured data) and fast, knowledge-backed decisions (the "System One" decision tools), which remain first-class model-backed steps inside otherwise deterministic workflows. Scripts are owned by the agent type that produced them, governed in the Scripts tab of the Agent Type detail dialog, and always execute under the agent's identities and permissions — never their own.
+Parthenon is positioned as a **Software 3.0 agent framework**: when an agent produces an implementation plan for a workflow, it also attempts to generate a deterministic bridge script between the tools involved. Once that script is generated **and verified** against a real model-driven execution, subsequent executions run the script purely — no model required. The agent is used to create the software; the software then runs without a model whenever a verified script exists, and always degrades to the model-driven path when automation fails — with nothing to configure. This turns recurring agent work from costly, non-deterministic, per-run reasoning into repeatable, low-cost, deterministic execution, while preserving model-driven judgment exactly where deterministic code struggles: semantic bridging (unstructured → structured data) and fast, knowledge-backed decisions (the "System One" decision tools), which remain first-class model-backed steps inside otherwise deterministic workflows. Scripts are owned by the agent type that produced them, governed from the plan surface of the Agent Type detail dialog (a script viewer with version lineage), and always execute under the agent's identities and permissions — never their own.
 
 ## 2. Business Goals
 
@@ -14,7 +14,7 @@ Parthenon is positioned as a **Software 3.0 agent framework**: when an agent pro
 
 ## 3. Users & Personas
 
-- **Platform Administrator** — governs scripts where they live: the Scripts tab of each agent type's detail dialog, reviewing versions, promotion/retirement, verification evidence, lineage, and human-readable descriptions of what each script does.
+- **Platform Administrator** — governs scripts where they live: the script viewer reached from each agent type's plan surface, reviewing versions, verification evidence, lineage, and human-readable descriptions of what each script does.
 - **Agent Operator** — monitors automatic economical execution: fallback events, script health, and agent-driven repair activity.
 - **Enterprise Consumer / Business Owner** — benefits silently: repeated workflows become faster, cheaper, and produce identical results; sees execution provenance (compiled script vs model-driven run).
 - **Compliance / Audit** — inspects script versions, verification evidence, run history, and the reason log for every fallback.
@@ -22,11 +22,13 @@ Parthenon is positioned as a **Software 3.0 agent framework**: when an agent pro
 ## 4. User Stories
 
 - As a business owner, I want recurring agent workflows to run as verified deterministic scripts so that results are faster, cheaper, and identical across runs.
-- As a platform administrator, I want each script owned by its agent type and listed in that agent type's Scripts tab, so that governance lives with the agent rather than in a separate admin module.
+- As a platform administrator, I want each script owned by its agent type and reachable from that agent type's plan surface, so that governance lives with the agent rather than in a separate admin module.
 - As a platform administrator, I want each script's version history, self-improvement lineage, health, and a plain-language description, so that I can judge what a script does and how trustworthy it is.
 - As a compliance officer, I want verification evidence retained for every promoted script, so that I can audit why automation was trusted.
 - As an agent operator, I want any script failure to fall back unconditionally to the model-driven path, so that a run never fails solely because a script failed.
 - As an agent operator, I want the agent to repair defective scripts within existing guardrails, so that script defects resolve themselves without my intervention in the majority of cases.
+- As an agent operator, I want a workflow-level plan that fails later to be marked as requiring a fix with the failure recorded automatically, so that a known-bad optimized plan does not keep failing silently.
+- As a workspace administrator, I want all workflow plan authoring — implementation plans, optimized plans, and Skill/SOP drafts — to use my workspace's approved authoring model, so that plan quality never depends on a small runtime model, and each workspace controls its own choice.
 - As a plan reviewer, I want plan steps that are backed by scripts to link to those scripts, so that I can review their content and lineage during plan review.
 - As a plan reviewer, I want each plan step marked as scriptable or model-backed, so that I can see which parts of a workflow will run deterministically.
 - As a business owner, I want execution records to show provenance (script run vs model run, with version and fallback reasons), so that cost and behaviour reporting is credible.
@@ -38,8 +40,10 @@ Parthenon is positioned as a **Software 3.0 agent framework**: when an agent pro
 - When an agent generates an implementation plan for a workflow, the system also attempts to generate a candidate deterministic bridge script covering the tool-call sequence (query a tool, transform/filter results, feed the next tool, delegate judgment or summarization to model-backed steps).
 - Candidate scripts are derived from the implementation plan and/or the observed tool-call sequence of a successful model-driven execution.
 - At plan time, each step is marked as scriptable (deterministic tool calls plus local data transformation) or model-backed (semantic bridging, decision judgment, or interactive input).
-- A workflow is compilation-eligible only if the agent determines its steps are scriptable; conversational and interactive agents are never compiled.
-- Plan steps backed by a script display a link to that script, opening it in the agent type's Scripts tab for review.
+- A workflow is compilation-eligible only if the agent determines its steps are scriptable; conversational and interactive agents are never compiled into optimized plans.
+- Implementation plans and optimized plans are authored only by the workspace's approved authoring model, on explicit request — never by the agent type's own runtime model, and never as a side effect of saving an agent or changing its configuration.
+- Conversational agent types are never plan-generated or compiled through the standard plan surface: they expose no implementation-plan generation control and no one-shot Optimize action. Plan authoring and optimization reach them only through the interactive optimization conversation, which authors the plan it works from when none exists yet.
+- Plan steps backed by a script display a link to that script, opening the script viewer for review.
 - Workflows whose recent model-driven runs show a stable, repeated tool-call pattern are flagged as good compilation candidates.
 
 ### Verification & Promotion
@@ -51,7 +55,7 @@ Parthenon is positioned as a **Software 3.0 agent framework**: when an agent pro
 
 ### Agent-Owned Scripts (Scripts Tab)
 
-- The Agent Type detail dialog includes a Scripts tab listing all scripts the agent type will use, each with version history and self-improvement lineage, lifecycle state (draft → verified → compiled → retired), health status, and a human-readable description.
+- The Agent Type detail dialog exposes every script the agent type will use from its plan surface, each with version history and self-improvement lineage, lifecycle state (draft → verified → compiled → retired), health status, and a human-readable description.
 - There is no standalone script administration page or navigation entry; script governance lives entirely in the agent type detail dialog.
 - After closing any script management dialog, the parent view automatically refreshes to show updated lifecycle state, health, and counts without a manual page reload.
 
@@ -66,6 +70,8 @@ Parthenon is positioned as a **Software 3.0 agent framework**: when an agent pro
 - When execution fails due to a script defect, the agent repairs the script and retries within existing execution guardrails (permissions, no credentials, no external access) until success or guardrail-bounded exhaustion.
 - Each repair attempt records the defect diagnosis, the change applied, and the retry outcome; exhaustion triggers unconditional fallback.
 - Repeated fallbacks on the same script version degrade its health status.
+- When a run falls back because of the optimized plan itself, the plan is marked **requires a fix** and feedback describing the failure is recorded automatically, alongside any manually entered feedback.
+- Self-improvement remains **human-gated**: the platform records the requires-fix state and alerts the operator the next time they open the agent (with re-optimization available from that alert, carrying the prior plan and the recorded feedback), but it never re-optimizes or rewrites a plan on its own and never runs unattended re-optimization loops.
 
 ### Semantic Bridge & Decision Steps
 
@@ -87,20 +93,22 @@ Every agent — conversational, non-conversational, role-based or not — carrie
 
 - No user action is required to enable them; they are present for every agent from its first run.
 - They never widen an agent's tool permissions — they operate on the agent's own plans, scripts, and execution records.
+- The workflow-optimization capability is offered in two forms on a single agent: a **one-shot Optimize action** and an **interactive optimization conversation** on the agent itself. Both act with exactly the agent's identity and permissions, and both add no new agent type, role, or permission.
 
 ## 6. Out of Scope
 
 - Replacing the model-driven agent loop — it remains always available as the unconditional fallback and the default for un-compiled workflows.
 - Requiring every workflow or agent to compile — compilation is agent-driven and opportunistic; conversational/interactive agents are never compiled.
 - General-purpose programming — scripts are bridge glue between permitted tools, not user-authored applications.
-- Automatic self-healing without governance — script repair produces new candidate versions that must pass verification before promotion.
+- Automatic self-healing without governance — script repair produces new candidate versions that must pass verification before promotion; a plan that requires a fix is recorded and surfaced, never silently rewritten or re-optimized automatically.
 - Any change to the existing security model, identity topology, or tool permission semantics.
 - Standalone script administration surfaces — governance remains in the agent type detail dialog.
 
 ## 7. Dependencies & Constraints
 
 - Builds on existing platform capabilities: the MCP tool hub and permissions, skills and SOPs, the Agent Data Type Registry, System One decision tools, and existing observability.
+- Plan authoring depends on the workspace's approved authoring model (shared with Skill/SOP workflow generation) and on the agent having no plan generated against a runtime model; a missing or unavailable model blocks authoring with a clear message instead of falling back.
 - Must comply with platform top-priority rules: fully segregated backend services; agents and their scripts run only in Agent Runtime; only Control Center touches the database; agents and scripts never hold sensitive data.
 - Script execution is behaviour, not a new permission pathway: no parallel permission system is introduced.
 - The model is always invoked for verification comparisons; compilation targets stable, repeated workflows so verification cost stays proportionate.
-- Related feature: [Sandboxed Scripting & Model-Authored Composition](sandboxed-scripting.md) builds on this framework's script registry, lifecycle, Scripts tab, and invocation contract.
+- Related feature: [Sandboxed Scripting & Model-Authored Composition](sandboxed-scripting.md) builds on this framework's script registry, lifecycle, script viewer, and invocation contract.

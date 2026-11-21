@@ -226,7 +226,7 @@ The API Key management module provides an alternative authentication mechanism f
 
 | Symbol | Type | Description | File |
 |--------|------|-------------|------|
-| `ApiKeyService` | class | Service layer for key generation, hashing, validation, and lifecycle management | `backend/app/services/api_key_service.py` |
+| `api_key_service` | module | Service layer for key generation, hashing, validation, and lifecycle management | `backend/app/services/api_key_service.py` |
 | `generate_api_key` | function | Generates a cryptographically random API key with `phn_sk_` prefix | `backend/app/services/api_key_service.py` |
 | `hash_api_key` | function | SHA-256 hashes a raw API key for storage and lookup | `backend/app/services/api_key_service.py` |
 | `validate_api_key_from_hash` | function | Looks up key by hash, checks status, returns key record or raises | `backend/app/services/api_key_service.py` |

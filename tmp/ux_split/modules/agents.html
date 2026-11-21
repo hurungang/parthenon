@@ -1,0 +1,1499 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Agents — Agent Types, Roles & Identities</title>
+<link rel="stylesheet" href="../shared/styles.css">
+</head>
+<body data-page="agents" data-default-view="agents">
+
+<div class="app-shell">
+
+<!-- ═══════════════════════════════ SIDEBAR ═══════════════════════════════ -->
+<nav class="sidebar" aria-label="Primary navigation">
+  <div class="sidebar-logo">
+    <h1>⚡ Parthenon</h1>
+    <small>Enterprise AI Harness</small>
+  </div>
+
+  <!-- Dashboard -->
+  <a class="nav-item" data-view="dashboard" href="../index.html#view-dashboard"><span class="nav-icon">🏠</span>Dashboard</a>
+
+  <!-- Project Showcase -->
+  <a class="nav-item" data-view="project-showcase" href="../index.html#view-project-showcase"><span class="nav-icon">🌐</span>Project Showcase</a>
+
+  <div class="nav-parent-group" id="nav-agents" data-group="agents">
+    <a class="nav-parent-group-label" href="#view-agent-roles" role="button" aria-expanded="true">
+      <span>🤖 Agents</span>
+      <span class="toggle-icon" aria-hidden="true">▼</span>
+    </a>
+    <div class="nav-children">
+      <a class="nav-item sub-item" data-view="agent-roles" data-group="agents" href="#view-agent-roles"><span class="nav-icon">👤</span>Agent Roles</a>
+      <a class="nav-item sub-item" data-view="agent-identities" data-group="agents" href="#view-agent-identities"><span class="nav-icon">🆔</span>Agent Identities</a>
+      <a class="nav-item sub-item" data-view="agents" data-group="agents" href="#view-agents"><span class="nav-icon">🤖</span>Agent Types</a>
+      <a class="nav-item sub-item" data-view="agent-management-panel" data-group="agents" href="agent-panel.html#view-agent-management-panel"><span class="nav-icon">🎛️</span>Agent Management Panel</a>
+      <a class="nav-item sub-item" data-view="agent-executions" data-group="agents" href="executions.html#view-agent-executions"><span class="nav-icon">▶️</span>Agent Executions</a>
+      <a class="nav-item sub-item" data-view="runtime-monitor" data-group="agents" href="executions.html#view-runtime-monitor"><span class="nav-icon">🕸️</span>Agent Runtime Monitor</a>
+      <a class="nav-item sub-item" data-view="agent-trails" data-group="agents" href="executions.html#view-agent-trails"><span class="nav-icon">📋</span>Agent Trails</a>
+      <a class="nav-item sub-item" data-view="skills" data-group="agents" href="skills-sops.html#view-skills"><span class="nav-icon">🔧</span>Skills</a>
+      <a class="nav-item sub-item" data-view="sops" data-group="agents" href="skills-sops.html#view-sops"><span class="nav-icon">📋</span>SOPs</a>
+      <a class="nav-item sub-item" data-view="schedules" data-group="agents" href="schedules.html#view-schedules"><span class="nav-icon">📅</span>Schedules</a>
+      <a class="nav-item sub-item" data-view="chat" data-group="agents" href="chat.html#view-chat"><span class="nav-icon">💬</span>Chat Sessions</a>
+      <a class="nav-item sub-item" data-view="conversational-intervention" data-group="agents" href="chat.html#view-conversational-intervention"><span class="nav-icon">💬</span>Conversational Intervention</a>
+      <a class="nav-item sub-item" data-view="intervene-requests" data-group="agents" href="chat.html#view-intervene-requests"><span class="nav-icon">🛑</span>Intervene Requests</a>
+      <a class="nav-item sub-item" data-view="data-types" data-group="agents" href="data-results.html#view-data-types"><span class="nav-icon">📐</span>Data Types</a>
+      <a class="nav-item sub-item" data-view="agent-outputs" data-group="agents" href="data-results.html#view-agent-outputs"><span class="nav-icon">📤</span>Agent Outputs</a>
+      <a class="nav-item sub-item" data-view="agent-logs" data-group="agents" href="executions.html#view-agent-logs"><span class="nav-icon">🧾</span>Agent Logs</a>
+    </div>
+  </div>
+
+  <div class="nav-parent-group" id="nav-results" data-group="results">
+    <a class="nav-parent-group-label" href="data-results.html#view-results" role="button" aria-expanded="true">
+      <span>📊 Results</span>
+      <span class="toggle-icon" aria-hidden="true">▼</span>
+    </a>
+    <div class="nav-children">
+      <a class="nav-item sub-item" data-view="results" data-group="results" href="data-results.html#view-results"><span class="nav-icon">📊</span>Result Repository</a>
+    </div>
+  </div>
+
+  <div class="nav-parent-group locked-open" id="nav-integrations" data-group="integrations">
+    <a class="nav-parent-group-label" href="integrations.html#view-mcp-hub" role="button" aria-expanded="true">
+      <span>🌐 Integrations</span>
+      <span class="toggle-icon" aria-hidden="true">▼</span>
+    </a>
+    <div class="nav-children">
+      <a class="nav-item sub-item" data-view="mcp-hub" data-group="integrations" href="integrations.html#view-mcp-hub"><span class="nav-icon">🔌</span>MCP Hub</a>
+      <a class="nav-item sub-item" data-view="notifications" data-group="integrations" href="integrations.html#view-notifications"><span class="nav-icon">🔔</span>Notification Integration</a>
+      <a class="nav-item sub-item" data-view="api-keys" data-group="integrations" href="integrations.html#view-api-keys"><span class="nav-icon">🔑</span>API Keys</a>
+      <a class="nav-item sub-item" data-view="agent-clients" data-group="integrations" href="integrations.html#view-agent-clients"><span class="nav-icon">🤝</span>Agent Client</a>
+      <a class="nav-item sub-item" data-view="gateway" data-group="integrations" href="integrations.html#view-gateway"><span class="nav-icon">🛰️</span>Agent Gateway</a>
+    </div>
+  </div>
+
+  <div class="nav-parent-group" id="nav-system" data-group="system">
+    <a class="nav-parent-group-label" href="system.html#view-observability" role="button" aria-expanded="true">
+      <span>⚙️ System</span>
+      <span class="toggle-icon" aria-hidden="true">▼</span>
+    </a>
+    <div class="nav-children">
+      <a class="nav-item sub-item" data-view="observability" data-group="system" href="system.html#view-observability"><span class="nav-icon">📊</span>Observability</a>
+      <a class="nav-item sub-item" data-view="permissions" data-group="system" href="system.html#view-permissions"><span class="nav-icon">🔐</span>Permissions</a>
+      <a class="nav-item sub-item" data-view="system-config" data-group="system" href="system.html#view-system-config"><span class="nav-icon">⚙️</span>System Config</a>
+      <a class="nav-item sub-item" data-view="model-configs" data-group="system" href="system.html#view-model-configs"><span class="nav-icon">🧩</span>Model Configs</a>
+      <a class="nav-item sub-item" data-view="decision-tools" data-group="system" href="decision.html#view-decision-tools"><span class="nav-icon">⚖️</span>Decision Tools</a>
+      <a class="nav-item sub-item" data-view="sysone-providers" data-group="system" href="decision.html#view-sysone-providers"><span class="nav-icon">🧠</span>Decision Model Providers</a>
+      <a class="nav-item sub-item" data-view="security-audit" data-group="system" href="system.html#view-security-audit"><span class="nav-icon">🛡️</span>Security Audit</a>
+    </div>
+  </div>
+
+  <div class="nav-parent-group" id="nav-tenant-admin" data-group="tenant-admin">
+    <a class="nav-parent-group-label" href="tenancy.html#view-tenant-settings" role="button" aria-expanded="true">
+      <span>🏢 Tenant Admin</span>
+      <span class="toggle-icon" aria-hidden="true">▼</span>
+    </a>
+    <div class="nav-children">
+      <a class="nav-item sub-item" data-view="tenant-settings" data-group="tenant-admin" href="tenancy.html#view-tenant-settings"><span class="nav-icon">⚙️</span>Tenant Settings</a>
+      <a class="nav-item sub-item" data-view="tenant-members" data-group="tenant-admin" href="tenancy.html#view-tenant-members"><span class="nav-icon">👥</span>Members</a>
+      <a class="nav-item sub-item" data-view="tenant-identity-providers" data-group="tenant-admin" href="tenancy.html#view-tenant-identity-providers"><span class="nav-icon">🔑</span>Identity Providers</a>
+    </div>
+  </div>
+
+  <div class="nav-parent-group" id="nav-platform" data-group="platform" style="display:none">
+    <a class="nav-parent-group-label" href="tenancy.html#view-platform-settings" role="button" aria-expanded="true">
+      <span>🛡️ Platform</span>
+      <span class="toggle-icon" aria-hidden="true">▼</span>
+    </a>
+    <div class="nav-children">
+      <a class="nav-item sub-item" data-view="platform-settings" data-group="platform" href="tenancy.html#view-platform-settings"><span class="nav-icon">⚙️</span>Platform Settings</a>
+      <a class="nav-item sub-item" data-view="platform-tenants" data-group="platform" href="tenancy.html#view-platform-tenants"><span class="nav-icon">🏢</span>Tenants</a>
+      <a class="nav-item sub-item" data-view="platform-audit" data-group="platform" href="tenancy.html#view-platform-audit"><span class="nav-icon">🛡️</span>Platform Security Audit</a>
+    </div>
+  </div>
+
+</nav>
+<!-- ═══════════════════════════════ MAIN WRAPPER ═══════════════════════════════ -->
+<div class="main-wrapper">
+  <!-- TOP BAR -->
+  <div class="topbar">
+    <div class="topbar-title" id="topbar-title">Agents</div>
+    <div class="topbar-actions">
+      <span class="chip chip-yellow" id="oidc-sa-indicator" style="display:none">🔑 Super Admin</span>
+      <span class="chip chip-blue" id="tenant-ctx-chip" style="display:none">🏢 <span id="tenant-ctx-name"></span></span>
+      <button class="btn-icon" title="Notifications">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg>
+        <span class="badge">3</span>
+      </button>
+      <div class="avatar" title="Alex Harper — Admin">AH</div>
+    </div>
+  </div>
+
+  <!-- MAIN CONTENT -->
+  <div class="main-content">
+
+<!-- ═══════════════════════════════ VIEW: AGENT TYPES ═══════════════════════════════ -->
+<div id="view-agents" class="view">
+  <div class="view-header">
+    <div><h2>Agent Types</h2><div class="view-desc">Configure, test, and deploy agent types</div></div>
+    <button class="btn btn-primary" onclick="openModal('modal-agent-type')">+ Create Agent Type</button>
+  </div>
+  <div class="tabs">
+    <div class="tab active" onclick="switchTab(this,'agent-types-panel')">📋 Agent Types</div>
+    <div class="tab" onclick="switchTab(this,'agent-instances-panel')">🏃 Active Instances</div>
+  </div>
+
+  <div id="agent-types-panel" class="tab-panel active">
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Name</th><th>Type</th><th>Identity</th><th>Model</th><th>Max</th><th>Active</th><th>Skills / SOP</th><th>Actions</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><strong>pr-reviewer</strong></td>
+            <td><span class="chip chip-blue">sop-agent</span></td>
+            <td><span class="font-mono text-sm">agent-pr-reviewer@parthenon</span></td>
+            <td><span class="chip chip-gray">gpt-4o</span></td>
+            <td>3</td><td><strong>1</strong></td>
+            <td><span class="chip chip-purple">pr-review-workflow</span></td>
+            <td class="actions-cell"><button class="btn btn-xs btn-secondary" onclick="openOptimizedPlan('pr-reviewer')" title="Optimized Plan — compiled workflow scripts">🧩 Plan</button><button class="btn-icon-sm">✏️</button><button class="btn-icon-sm">🗑️</button></td>
+          </tr>
+          <tr>
+            <td><strong>report-generator</strong></td>
+            <td><span class="chip chip-blue">sop-agent</span></td>
+            <td><span class="font-mono text-sm">agent-reporter@parthenon</span></td>
+            <td><span class="chip chip-gray">claude-3-5-sonnet</span></td>
+            <td>2</td><td><strong>2</strong></td>
+            <td><span class="chip chip-purple">daily-report-gen</span></td>
+            <td class="actions-cell"><button class="btn btn-xs btn-secondary" onclick="openOptimizedPlan('report-generator')" title="Optimized Plan — compiled workflow scripts">🧩 Plan</button><button class="btn-icon-sm">✏️</button><button class="btn-icon-sm">🗑️</button></td>
+          </tr>
+          <tr>
+            <td><strong>data-analyst</strong></td>
+            <td><span class="chip chip-green">skillful-agent</span></td>
+            <td><span class="font-mono text-sm">agent-analyst@parthenon</span></td>
+            <td><span class="chip chip-gray">gpt-4o-mini</span></td>
+            <td>5</td><td><strong>3</strong></td>
+            <td><span class="chip chip-blue">read-analyze-file</span> <span class="chip chip-blue">db-report</span></td>
+            <td class="actions-cell"><button class="btn btn-xs btn-secondary" onclick="openOptimizedPlan('data-analyst')" title="Optimized Plan — compiled workflow scripts">🧩 Plan</button><button class="btn-icon-sm">✏️</button><button class="btn-icon-sm">🗑️</button></td>
+          </tr>
+          <tr>
+            <td><strong>file-manager</strong></td>
+            <td><span class="chip chip-green">skillful-agent</span></td>
+            <td><span class="font-mono text-sm">agent-files@parthenon</span></td>
+            <td><span class="chip chip-gray">claude-3-haiku</span></td>
+            <td>4</td><td><strong style="color:var(--text-secondary)">0</strong></td>
+            <td><span class="chip chip-blue">file-organizer</span> <span class="chip chip-blue">read-analyze-file</span></td>
+            <td class="actions-cell"><button class="btn btn-xs btn-secondary" onclick="openOptimizedPlan('file-manager')" title="Optimized Plan — compiled workflow scripts">🧩 Plan</button><button class="btn-icon-sm">✏️</button><button class="btn-icon-sm">🗑️</button></td>
+          </tr>
+          <tr>
+            <td><strong>incident-bot</strong></td>
+            <td><span class="chip chip-blue">sop-agent</span></td>
+            <td><span class="font-mono text-sm">agent-incident@parthenon</span></td>
+            <td><span class="chip chip-gray">gpt-4o</span></td>
+            <td>2</td><td><strong>1</strong></td>
+            <td><span class="chip chip-purple">incident-response</span></td>
+            <td class="actions-cell"><button class="btn btn-xs btn-secondary" onclick="openOptimizedPlan('incident-bot')" title="Optimized Plan — compiled workflow scripts">🧩 Plan</button><button class="btn-icon-sm">✏️</button><button class="btn-icon-sm">🗑️</button></td>
+          </tr>
+          <tr>
+            <td><strong>ledger-auditor</strong></td>
+            <td><span class="chip chip-blue">sop-agent</span></td>
+            <td><span class="font-mono text-sm">agent-ledger@parthenon</span></td>
+            <td><span class="chip chip-gray">gpt-4o</span></td>
+            <td>2</td><td><strong>0</strong></td>
+            <td><span class="chip chip-purple">ledger-reconcile</span></td>
+            <td class="actions-cell"><button class="btn btn-xs btn-secondary" onclick="openOptimizedPlan('ledger-auditor')" title="Optimized Plan — failed run with persisted reason">🧩 Plan</button><button class="btn-icon-sm">✏️</button><button class="btn-icon-sm">🗑️</button></td>
+          </tr>
+          <tr>
+            <td><strong>contract-analyst</strong></td>
+            <td><span class="chip chip-blue">sop-agent</span></td>
+            <td><span class="font-mono text-sm">agent-contracts@parthenon</span></td>
+            <td><span class="chip chip-gray">claude-3-5-sonnet</span></td>
+            <td>2</td><td><strong>1</strong></td>
+            <td><span class="chip chip-purple">contract-extract</span></td>
+            <td class="actions-cell"><button class="btn btn-xs btn-secondary" onclick="openOptimizedPlan('contract-analyst')" title="Optimized Plan — retired plan (nothing to retire)">🧩 Plan</button><button class="btn-icon-sm">✏️</button><button class="btn-icon-sm">🗑️</button></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div id="agent-instances-panel" class="tab-panel">
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Instance ID</th><th>Agent Type</th><th>Status</th><th>Uptime</th><th>Sessions</th><th>Actions</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><span class="font-mono text-sm">inst-1a2b3c</span></td>
+            <td>pr-reviewer</td>
+            <td><span class="chip chip-green">Running</span></td>
+            <td>2h 15m</td>
+            <td>4</td>
+            <td class="actions-cell">
+              <button class="btn btn-xs btn-secondary" onclick="nav(null, 'chat')" title="Chat">💬 Chat</button>
+              <button class="btn-icon-sm" title="Stop">🛑</button>
+            </td>
+          </tr>
+          <tr>
+            <td><span class="font-mono text-sm">inst-4d5e6f</span></td>
+            <td>data-analyst</td>
+            <td><span class="chip chip-green">Running</span></td>
+            <td>5h 10m</td>
+            <td>12</td>
+            <td class="actions-cell">
+              <button class="btn btn-xs btn-secondary" onclick="nav(null, 'chat')" title="Chat">💬 Chat</button>
+              <button class="btn-icon-sm" title="Stop">🛑</button>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════ VIEW: AGENT ROLES ═══════════════════════════════ -->
+<div id="view-agent-roles" class="view">
+  <div class="view-header">
+    <div><h2>Agent Roles</h2><div class="view-desc">Define personas and operating context for agents</div></div>
+    <button class="btn btn-primary" onclick="openModal('modal-role')">+ Create Role</button>
+  </div>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Name</th><th>Description</th><th>Assigned Types</th><th>Allowed Agent Types Preview</th><th style="width:120px">Actions</th></tr></thead>
+      <tbody>
+        <tr>
+          <td><strong>Developer</strong></td>
+          <td>Writes and reviews code</td>
+          <td><span class="chip chip-blue">3 types</span></td>
+          <td>
+            <span class="chip chip-gray">agent-sop</span>
+            <span class="chip chip-gray">agent-skillful</span>
+          </td>
+          <td class="actions-cell"><button class="btn btn-xs btn-secondary" onclick="openModal('modal-agent-role')">Edit</button></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════ VIEW: AGENT IDENTITIES ═══════════════════════════════ -->
+<div id="view-agent-identities" class="view">
+  <div class="view-header">
+    <div><h2>Agent Identities</h2><div class="view-desc">Manage system identities assumed by agents</div></div>
+    <button class="btn btn-primary">+ Create Identity</button>
+  </div>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Name</th><th>Provider</th><th>Status</th></tr></thead>
+      <tbody>
+        <tr><td><strong>GitHub Bot</strong></td><td>GitHub</td><td><span class="chip chip-green">Active</span></td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+  </div><!-- /main-content -->
+</div><!-- /main-wrapper -->
+</div><!-- /app-shell -->
+
+<!-- Create Role Modal -->
+<div id="modal-role" class="modal-overlay" onclick="closeModalIfOverlay(event,'modal-role')">
+  <div class="modal modal-lg">
+    <div class="modal-header">
+      <h3>Create Role</h3>
+      <button class="modal-close" onclick="closeModal('modal-role')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-row">
+        <div class="form-group">
+          <label>Role Name</label>
+          <input class="form-control" placeholder="e.g. agent-reviewer">
+        </div>
+        <div class="form-group">
+          <label>Type</label>
+          <select class="form-control"><option>user</option><option>agent</option><option>both</option></select>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Description</label>
+        <textarea class="form-control" rows="2" placeholder="Describe the purpose of this role..."></textarea>
+      </div>
+      <div class="section-title">Permissions</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+        <div>
+          <div style="font-size:12px;font-weight:600;color:var(--text-secondary);margin-bottom:8px">Platform Admin</div>
+          <div class="checkbox-group">
+            <label class="checkbox-item"><input type="checkbox"> manage_users</label>
+            <label class="checkbox-item"><input type="checkbox"> manage_roles</label>
+            <label class="checkbox-item"><input type="checkbox"> manage_mcp</label>
+            <label class="checkbox-item"><input type="checkbox"> manage_agents</label>
+          </div>
+        </div>
+        <div>
+          <div style="font-size:12px;font-weight:600;color:var(--text-secondary);margin-bottom:8px">MCP Tools</div>
+          <div class="checkbox-group">
+            <label class="checkbox-item"><input type="checkbox"> view_tools</label>
+            <label class="checkbox-item"><input type="checkbox"> enable_tools</label>
+          </div>
+        </div>
+        <div>
+          <div style="font-size:12px;font-weight:600;color:var(--text-secondary);margin-bottom:8px">Skills</div>
+          <div class="checkbox-group">
+            <label class="checkbox-item"><input type="checkbox"> view_skills</label>
+            <label class="checkbox-item"><input type="checkbox"> execute_skills</label>
+            <label class="checkbox-item"><input type="checkbox"> manage_skills</label>
+          </div>
+        </div>
+        <div>
+          <div style="font-size:12px;font-weight:600;color:var(--text-secondary);margin-bottom:8px">SOPs</div>
+          <div class="checkbox-group">
+            <label class="checkbox-item"><input type="checkbox"> view_sops</label>
+            <label class="checkbox-item"><input type="checkbox"> execute_sops</label>
+            <label class="checkbox-item"><input type="checkbox"> manage_sops</label>
+          </div>
+        </div>
+        <div>
+          <div style="font-size:12px;font-weight:600;color:var(--text-secondary);margin-bottom:8px">Conversations</div>
+          <div class="checkbox-group">
+            <label class="checkbox-item"><input type="checkbox"> view_conversations</label>
+            <label class="checkbox-item"><input type="checkbox"> create_conversations</label>
+          </div>
+        </div>
+        <div>
+          <div style="font-size:12px;font-weight:600;color:var(--text-secondary);margin-bottom:8px">Results</div>
+          <div class="checkbox-group">
+            <label class="checkbox-item"><input type="checkbox"> view_results</label>
+            <label class="checkbox-item"><input type="checkbox"> create_results</label>
+          </div>
+        </div>
+        <div>
+          <div style="font-size:12px;font-weight:600;color:var(--text-secondary);margin-bottom:8px">Schedules</div>
+          <div class="checkbox-group">
+            <label class="checkbox-item"><input type="checkbox"> view_schedules</label>
+            <label class="checkbox-item"><input type="checkbox"> manage_schedules</label>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-role')">Cancel</button>
+      <button class="btn btn-primary">Save Role</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════ -->
+<!-- EDIT AGENT ROLE MODAL — with inline MCP session assignment  -->
+<!-- ═══════════════════════════════════════════════════════════════════ -->
+<div id="modal-agent-role" class="modal-overlay" onclick="closeModalIfOverlay(event,'modal-agent-role')">
+  <div class="modal modal-lg">
+    <div class="modal-header">
+      <h3 id="agentRoleModalTitle">Edit Agent Role — Developer</h3>
+      <button class="modal-close" onclick="closeModal('modal-agent-role')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-row">
+        <div class="form-group">
+          <label>Role Name</label>
+          <input class="form-control" value="Developer" placeholder="e.g. agent-reviewer">
+        </div>
+        <div class="form-group">
+          <label>Description</label>
+          <input class="form-control" value="Writes and reviews code" placeholder="Brief description">
+        </div>
+      </div>
+
+      <div class="section-title">Standard Operating Procedures (SOPs)</div>
+      <div class="checkbox-group">
+        <label class="checkbox-item"><input type="checkbox" checked> Customer Inquiry Handler <span class="form-hint" style="margin-top:0;margin-left:4px">— Uses github-mcp, database-mcp</span></label>
+        <label class="checkbox-item"><input type="checkbox" checked> Transaction Processor <span class="form-hint" style="margin-top:0;margin-left:4px">— Uses database-mcp, notification-mcp</span></label>
+        <label class="checkbox-item"><input type="checkbox"> Fraud Detection Routine <span class="form-hint" style="margin-top:0;margin-left:4px">— Uses github-mcp, notification-mcp, database-mcp</span></label>
+      </div>
+
+      <div class="section-title">Skills</div>
+      <div class="checkbox-group">
+        <label class="checkbox-item"><input type="checkbox" checked> Email Sender <span class="form-hint" style="margin-top:0;margin-left:4px">— Uses notification-mcp</span></label>
+        <label class="checkbox-item"><input type="checkbox" checked> Database Query <span class="form-hint" style="margin-top:0;margin-left:4px">— Uses database-mcp</span></label>
+        <label class="checkbox-item"><input type="checkbox"> Log Analyzer <span class="form-hint" style="margin-top:0;margin-left:4px">— Uses github-mcp</span></label>
+      </div>
+
+      <div class="section-title" style="display:flex;align-items:center;justify-content:space-between">
+        <span>Required MCP Session Assignments</span>
+        <span id="mcpCountBadge" class="mcp-count-badge mcp-count-pending">3 servers — 0 unassigned</span>
+      </div>
+      <div style="border:1px solid var(--border);border-radius:4px;overflow:hidden;margin-bottom:4px">
+        <div style="background:#F8FAFC;padding:10px 14px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--border);font-size:12px;font-weight:600;color:#64748B">
+          <span>MCP Servers Requiring Session Assignment</span>
+          <button class="btn btn-xs btn-secondary" onclick="event.stopPropagation()">↻ Refresh All</button>
+        </div>
+        <div>
+          <!-- GitHub MCP row -->
+          <div style="display:flex;align-items:center;gap:8px;padding:12px 14px;border-bottom:1px solid var(--border)">
+            <span style="font-size:16px">🐙</span>
+            <span style="min-width:130px;font-size:13px;font-weight:500">GitHub MCP</span>
+            <select class="form-control" style="flex:1">
+              <option>-- Select session --</option>
+              <option selected>github-admin-session (admin)</option>
+              <option>github-readonly-session (read)</option>
+              <option>github-ci-session (CI bot)</option>
+            </select>
+            <button class="btn-icon-sm" title="Refresh">↻</button>
+          </div>
+          <!-- Database MCP row -->
+          <div style="display:flex;align-items:center;gap:8px;padding:12px 14px;border-bottom:1px solid var(--border)">
+            <span style="font-size:16px">🗄️</span>
+            <span style="min-width:130px;font-size:13px;font-weight:500">Database MCP</span>
+            <select class="form-control" style="flex:1">
+              <option>-- Select session --</option>
+              <option selected>db-readwrite-session (rw)</option>
+              <option>db-readonly-session (ro)</option>
+            </select>
+            <button class="btn-icon-sm" title="Refresh">↻</button>
+          </div>
+          <!-- Notification MCP row (passthrough) -->
+          <div style="display:flex;align-items:center;gap:8px;padding:12px 14px">
+            <span style="font-size:16px">🔔</span>
+            <span style="min-width:130px;font-size:13px;font-weight:500">
+              Notification MCP
+              <span style="display:inline-flex;align-items:center;gap:3px;font-size:10px;font-weight:600;padding:2px 6px;border-radius:10px;background:#EDE9FE;color:#6D28D9;margin-left:4px">⇄ Passthrough</span>
+            </span>
+            <select class="form-control" style="flex:1">
+              <option>-- Select session --</option>
+              <option>notif-email-session (SMTP)</option>
+              <option>notif-slack-session (webhook)</option>
+              <option>notif-passthrough-1 (passthrough)</option>
+            </select>
+            <button class="btn-icon-sm" title="Refresh">↻</button>
+          </div>
+        </div>
+      </div>
+
+      <div style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:#FFF5F5;border:1px solid #FECACA;border-radius:4px;color:#B91C1C;font-size:12.5px">
+        <span>⚠</span>
+        <span>All required MCP servers must have a session selected before saving.</span>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-agent-role')">Cancel</button>
+      <button class="btn btn-primary" disabled title="All required MCP servers must have a session assigned">Save Role</button>
+    </div>
+  </div>
+</div>
+
+<!-- Create Agent Type Modal -->
+<div id="modal-agent-type" class="modal-overlay" onclick="closeModalIfOverlay(event,'modal-agent-type')">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>Create Agent Type</h3>
+      <button class="modal-close" onclick="closeModal('modal-agent-type')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-row">
+        <div class="form-group">
+          <label>Name</label>
+          <input class="form-control" placeholder="e.g. my-reviewer">
+          <div class="form-hint">Use lowercase letters, numbers, and hyphens only.</div>
+        </div>
+        <div class="form-group">
+          <label>Input Type</label>
+          <select class="form-control" id="agent-input-type-select" onchange="toggleAgentTypeFields()">
+            <option value="none">none</option>
+            <option value="typed">typed</option>
+            <option value="conversation">conversation</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Identity</label>
+        <input class="form-control" placeholder="agent-myname@parthenon">
+      </div>
+      <div class="form-group">
+        <label>Role</label>
+        <select class="form-control">
+          <option>Developer</option>
+          <option>Data Analyst</option>
+          <option>Operations</option>
+        </select>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Model</label>
+          <select class="form-control">
+            <option>gpt-4o</option><option>gpt-4o-mini</option>
+            <option>claude-3-5-sonnet</option><option>claude-3-haiku</option><option>gemini-1.5-pro</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Output Type</label>
+          <select class="form-control" id="agent-output-type-select" onchange="toggleAgentOutputTypeFields()">
+            <option value="auto">auto</option>
+            <option value="typed">typed</option>
+            <option value="markdown">markdown</option>
+          </select>
+        </div>
+      </div>
+      <div id="agent-sop-field">
+        <div class="form-group">
+          <label>Default SOP</label>
+          <select class="form-control">
+            <option>pr-review-workflow</option><option>daily-report-gen</option>
+            <option>incident-response</option><option>data-pipeline-audit</option>
+          </select>
+        </div>
+      </div>
+      <div id="agent-input-schema-field" style="display:none">
+        <div class="form-group">
+          <label>Input Schema (JSON)</label>
+          <textarea class="form-control" rows="3" placeholder='{"type":"object","properties":{"query":{"type":"string"}}}'></textarea>
+        </div>
+      </div>
+      <div id="agent-output-schema-field" style="display:none">
+        <div class="form-group">
+          <label>Output Schema (JSON)</label>
+          <textarea class="form-control" rows="3" placeholder='{"type":"object","properties":{"result":{"type":"string"}}}'></textarea>
+        </div>
+      </div>
+
+      <!-- Output Data Type (NEW — enhance-agent-output-system) -->
+      <div id="agent-output-data-type-field" style="display:none">
+        <div class="form-group">
+          <label>Output Data Type <span class="text-secondary" style="font-weight:400">(optional)</span></label>
+          <select class="form-control" id="agent-output-data-type-select" onchange="var v=this.value;var b=document.getElementById('atSelectedDtBadge');var n=document.getElementById('atSelectedDtName');if(b&&n){if(v){n.textContent=v;b.style.display=''}else b.style.display='none'}">
+            <option value="">— None — no data type assigned</option>
+            <option value="IncidentReport">IncidentReport (5 fields)</option>
+            <option value="EnrichmentResult">EnrichmentResult (4 fields)</option>
+            <option value="ComplianceReport">ComplianceReport (4 fields)</option>
+          </select>
+          <div class="form-hint">Assign a data type to validate and structure this agent's outputs. Leave blank for untyped raw JSON output.</div>
+          <div style="margin-top:8px;display:none" id="atSelectedDtBadge">
+            <span class="dt-badge dt-badge-typed">📐 <span id="atSelectedDtName">IncidentReport</span></span>
+            <span style="font-size:11px;color:var(--text-secondary);margin-left:6px">Schema validation will be applied at execution time</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- SOP / Skill Binding Section -->
+      <div class="binding-section">
+        <div class="binding-section-title">📋 SOP & Skill Bindings</div>
+
+        <!-- Orphan Warning Banner (hidden by default) -->
+        <div id="binding-orphan-banner" class="orphan-banner" style="display:none">
+          <span class="orphan-banner-icon">⚠️</span>
+          <div class="orphan-banner-content">
+            <div class="orphan-banner-title">Some bound items are no longer available in the selected role</div>
+            <div class="orphan-banner-items">
+              <strong>SOP:</strong> incident-response<br>
+              <strong>Skill:</strong> code-review
+            </div>
+            <button onclick="document.getElementById('binding-orphan-banner').style.display='none'">Remove All</button>
+          </div>
+        </div>
+
+        <!-- Binding List -->
+        <div class="binding-list">
+          <div class="binding-item">
+            <span class="binding-order">1</span>
+            <span class="binding-type-badge">SOP</span>
+            <span class="binding-name">pr-review-workflow</span>
+            <div class="binding-controls">
+              <button disabled title="Move up">▲</button>
+              <button title="Move down">▼</button>
+              <button class="binding-remove" title="Remove">✕</button>
+            </div>
+          </div>
+          <div class="binding-item">
+            <span class="binding-order">2</span>
+            <span class="binding-type-badge skill">Skill</span>
+            <span class="binding-name">code-review-skill</span>
+            <div class="binding-controls">
+              <button title="Move up">▲</button>
+              <button disabled title="Move down">▼</button>
+              <button class="binding-remove" title="Remove">✕</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Empty State (shown when no bindings) -->
+        <div class="binding-empty-hint" style="display:none">At least one SOP or Skill binding is required. Add a binding before saving.</div>
+
+        <!-- Add Binding Row -->
+        <div class="binding-add-row">
+          <select onchange="this.nextElementSibling.disabled=!this.value">
+            <option value="">— Select type —</option>
+            <option value="sop">SOP</option>
+            <option value="skill">Skill</option>
+          </select>
+          <select disabled>
+            <option value="">— Choose item —</option>
+            <option>pr-review-workflow</option>
+            <option>daily-report-gen</option>
+            <option>data-pipeline-audit</option>
+          </select>
+          <button disabled>Add</button>
+        </div>
+      </div>
+
+      <details style="margin-top:8px;border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px 12px;">
+        <summary style="font-weight:600;cursor:pointer;">Guardrails</summary>
+        <div class="form-hint" style="margin-top:6px">Collapsed by default. Values mirror the Agent Type guardrail profile.</div>
+        <div class="form-row" style="margin-top:12px">
+          <div class="form-group">
+            <label>Max Iterations</label>
+            <input class="form-control" type="number" value="10" min="1" max="1000">
+          </div>
+          <div class="form-group">
+            <label>Execution Timeout (seconds)</label>
+            <input class="form-control" type="number" value="300" min="1" max="86400">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Max Delegation Depth</label>
+            <input class="form-control" type="number" value="3" min="0" max="32">
+          </div>
+          <div class="form-group">
+            <label>Max Delegated Steps</label>
+            <input class="form-control" type="number" value="20" min="0" max="5000">
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Token Budget</label>
+          <div style="display:flex;gap:8px;align-items:center;">
+            <input class="form-control" type="number" value="1000" min="1" style="max-width:180px;">
+            <span class="text-secondary text-sm">k tokens</span>
+          </div>
+        </div>
+
+        <div id="agent-guardrail-non-conversation">
+          <div class="form-row">
+            <div class="form-group">
+              <label>Token Enforcement Mode</label>
+              <select class="form-control">
+                <option>observe</option>
+                <option>enforce</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Token Fallback Mode</label>
+              <select class="form-control">
+                <option>observe_and_log</option>
+                <option>stop_on_next_hard_guardrail</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <div id="agent-guardrail-conversation" style="display:none">
+          <div class="form-row">
+            <div class="form-group">
+              <label>Conversational Visibility Mode</label>
+              <select class="form-control">
+                <option>enabled</option>
+                <option>disabled</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Conversational Continuation Policy</label>
+              <select class="form-control">
+                <option>allow</option>
+              </select>
+            </div>
+          </div>
+        </div>
+      </details>
+    </div>
+    <div class="modal-footer" style="display:flex;justify-content:flex-end;gap:8px;">
+      <button class="btn btn-secondary" onclick="closeModal('modal-agent-type')">Cancel</button>
+      <button class="btn btn-primary" disabled style="opacity:0.5;cursor:not-allowed;" title="Add at least one SOP or Skill binding before saving">Create Agent Type</button>
+    </div>
+  </div>
+</div>
+
+<!-- AGENT TYPE DETAILS DIALOG -->
+<div class="modal-overlay" id="agentTypeDetailsModal" onclick="closeModalIfOverlay(event,'agentTypeDetailsModal')">
+  <div class="modal modal-lg" style="max-width:960px;">
+    <div class="modal-header" style="justify-content:flex-start; gap:16px;">
+      <h3>Agent Type: pr-reviewer</h3>
+      <button class="btn btn-primary btn-sm" style="margin-left:auto;">Run Agent</button>
+      <button class="modal-close" onclick="closeModal('agentTypeDetailsModal')">×</button>
+    </div>
+    <div class="tabs" style="margin-bottom:0; padding:0 24px;">
+      <div class="tab active" onclick="atdTab(this,'atd-details-panel')">Details</div>
+      <div class="tab" onclick="atdTab(this,'atd-topo-panel');UT.ensure()">Topology</div>
+      <div class="tab" onclick="atdTab(this,'atd-plan-panel')">Plan Preview</div>
+      <div class="tab" onclick="atdTab(this,'atd-logs-panel')">Execution Logs</div>
+      <div class="tab" onclick="atdTab(this,'atd-clients-panel');acRenderAtdClients()">Clients</div>
+    </div>
+    
+    <div class="modal-body" style="padding-top:16px;">
+      <div id="atd-details-panel" class="tab-panel active">
+        <div class="form-row" style="margin-bottom:16px">
+          <div><div class="summary-key">Name</div><div class="summary-value">pr-reviewer</div></div>
+          <div><div class="summary-key">Status</div><div class="summary-value"><span class="chip chip-green">Active</span></div></div>
+        </div>
+        <div class="form-row" style="margin-bottom:16px">
+          <div><div class="summary-key">Description</div><div class="summary-value" style="font-weight:normal;font-family:inherit">Automatically reviews pull requests based on SOP.</div></div>
+        </div>
+        <div class="form-row" style="margin-bottom:16px">
+          <div><div class="summary-key">Role</div><div class="summary-value"><a href="#" style="color:var(--primary);text-decoration:underline" onclick="openRoleView()">Developer</a></div></div>
+          <div><div class="summary-key">Identity</div><div class="summary-value"><a href="#" style="color:var(--primary);text-decoration:underline" onclick="openIdentityView()">GitHub Bot</a></div></div>
+        </div>
+        <div class="form-row" style="margin-bottom:16px">
+          <div><div class="summary-key">LLM Model</div><div class="summary-value">gpt-4-turbo</div></div>
+          <div><div class="summary-key">Default SOP</div><div class="summary-value">github-pr-workflow</div></div>
+        </div>
+        <div class="form-row">
+          <div><div class="summary-key">Input Type</div><div class="summary-value">typed · AnalysisRequest</div></div>
+          <div><div class="summary-key">Output Type</div><div class="summary-value">Auto</div></div>
+        </div>
+        <div class="ut-note"><span>★</span><span><b>Unified topology:</b> the topology tab is the <b>same PanelTopologyCanvas</b> used in the Agent Management Panel — contract slots are labelled like this editor dialog ("None" / "Conversation" / "Auto" as solid nodes; only genuinely unfilled slots stay dashed placeholders).</span></div>
+      </div>
+
+      <!-- Topology tab — unified PanelTopologyCanvas (all agent types) -->
+      <div id="atd-topo-panel" class="tab-panel">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;gap:10px;flex-wrap:wrap">
+          <span class="chip chip-blue">Shared component · PanelTopologyCanvas</span>
+          <span class="text-xs" style="color:var(--text-secondary)">Fullscreen zoom 0.5×–3× · fonts plateau at the 1.6× cap — zooming reveals more content</span>
+        </div>
+        <div style="height:480px;position:relative" id="atd-topo-canvas"></div>
+        <div class="ut-note"><span>ℹ</span><span>Click a Role / Skill / SOP / Tool node to open its entity view. Hub and placeholder clicks are no-ops. For typed agents the plan steps remain below the canvas (Plan Preview tab); the old plan-based topology diagram has been removed.</span></div>
+      </div>
+      
+      <div id="atd-plan-panel" class="tab-panel">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;gap:10px;flex-wrap:wrap">
+          <div class="h6" style="margin:0">Implementation Steps</div>
+          <button class="btn btn-secondary btn-sm" onclick="UT.regeneratePlan()" title="Generate a fresh plan from the agent type configuration">↻ Regenerate plan</button>
+        </div>
+        <ul class="plan-list" style="margin-bottom:16px;">
+          <li class="plan-item">
+            <div class="plan-item-num">1.</div>
+            <div class="plan-item-content">
+              <div class="plan-item-header">
+                <span class="chip chip-blue chip-border">sop_invocation</span>
+                <span class="plan-item-title">Execute PR Review</span>
+                <a class="plan-script" onclick="showToast('Opens script: sop/github_pr_workflow.md','info')">📜 github_pr_workflow.md</a>
+              </div>
+              <span class="plan-item-desc">Load SOP context and required steps.</span>
+            </div>
+          </li>
+          <li class="plan-item">
+            <div class="plan-item-num">2.</div>
+            <div class="plan-item-content">
+              <div class="plan-item-header">
+                <span class="chip chip-purple chip-border">skill_invocation</span>
+                <span class="plan-item-title">Apply PR Analysis Skill</span>
+                <a class="plan-script" onclick="showToast('Opens script: skills/pr_analysis.py','info')">📜 pr_analysis.py</a>
+              </div>
+              <span class="plan-item-desc">Analyze recent github changes data.</span>
+            </div>
+          </li>
+          <li class="plan-item">
+            <div class="plan-item-num">3.</div>
+            <div class="plan-item-content">
+              <div class="plan-item-header">
+                <span class="chip chip-yellow chip-border">agent_delegation</span>
+                <span class="plan-item-title">Delegate Risk Analysis</span>
+              </div>
+              <span class="plan-item-desc">Target agent type: agent-sop</span>
+            </div>
+          </li>
+        </ul>
+        <div class="ut-note"><span>ℹ</span><span>The plan-based topology diagram that used to render here has been <b>removed</b> (<span class="font-mono">hideTopology</span>) — the unified canvas in the <b>Topology</b> tab is the single diagram for all agent types. This matches <span class="font-mono">AgentPlanContent</span> inside <span class="font-mono">AgentTypeDetailsDialog</span>; <span class="font-mono">PlanPreviewModal</span> (opened from elsewhere) keeps its own plan topology.</span></div>
+      </div>
+      
+      <div id="atd-logs-panel" class="tab-panel">
+        <div style="display:flex; justify-content:flex-end; margin-bottom:16px;">
+          <button class="btn btn-secondary btn-sm" onclick="openAllExecutions()">View All Executions</button>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Session ID</th><th>Status</th><th>Started</th><th>Actions</th></tr></thead>
+            <tbody>
+              <tr>
+                <td><span class="font-mono text-sm">sess-1234</span></td>
+                <td><span class="chip chip-green">completed</span></td>
+                <td class="text-secondary">10 mins ago</td>
+                <td><button class="btn btn-xs btn-secondary" onclick="openExecutionDetails()">View</button></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div id="atd-clients-panel" class="tab-panel">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;gap:10px">
+          <span class="text-sm" style="color:var(--text-secondary)">Clients granted access to this agent type's input interface. Same <span class="font-mono">AgentClientsPanel</span> as the global <b>Agent Client</b> page (Integrations menu).</span>
+          <button class="btn btn-primary btn-sm" onclick="acOpenCreate('pr-reviewer')">+ New Client</button>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Client</th><th>Credential</th><th>Allowed Origins</th><th>Rate Limit</th><th>Status</th><th>Actions</th></tr></thead>
+            <tbody id="atdAcTbody"></tbody>
+          </table>
+        </div>
+        <div class="ut-note"><span>ℹ</span><span>Clients are a credential class separate from API keys: a client invokes this agent type's input interface only and is never an identity. The agent type always runs with its own identity + role.</span></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ROLE VIEW MODAL -->
+<div class="modal-overlay" id="roleViewModal" onclick="closeModalIfOverlay(event,'roleViewModal')">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>Agent Role: Developer</h3>
+      <button class="modal-close" onclick="closeModal('roleViewModal')">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="summary-row"><span class="summary-key">Name</span><span class="summary-value">Developer</span></div>
+      <div class="summary-row"><span class="summary-key">Description</span><span class="summary-value">Writes and reviews code</span></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-primary" onclick="closeModal('roleViewModal')">Edit</button>
+      <button class="btn btn-secondary" onclick="closeModal('roleViewModal')">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- IDENTITY VIEW MODAL -->
+<div class="modal-overlay" id="identityViewModal" onclick="closeModalIfOverlay(event,'identityViewModal')">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>Agent Identity: GitHub Bot</h3>
+      <button class="modal-close" onclick="closeModal('identityViewModal')">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="summary-row"><span class="summary-key">Name</span><span class="summary-value">GitHub Bot</span></div>
+      <div class="summary-row"><span class="summary-key">Status</span><span class="summary-value">Active</span></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-primary" onclick="closeModal('identityViewModal')">Edit</button>
+      <button class="btn btn-secondary" onclick="closeModal('identityViewModal')">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- PLAN PREVIEW MODAL -->
+<div class="modal-overlay" id="planModal" onclick="closeModalIfOverlay(event,'planModal')">
+  <div class="modal" style="max-width:960px;">
+    <div class="modal-header">
+      <h3>Agent Implementation Plan: pr-reviewer</h3>
+      <button class="modal-close" onclick="closeModal('planModal')">×</button>
+    </div>
+    
+    <div class="modal-body" id="successState" style="display:flex; flex-direction:column;">
+      <div class="h6">Implementation Steps</div>
+      
+      <ul class="plan-list">
+        <li class="plan-item">
+          <div class="plan-item-num">1.</div>
+          <div class="plan-item-content">
+            <div class="plan-item-header">
+              <span class="chip chip-blue chip-border">sop_invocation</span>
+              <span class="plan-item-title">Execute PR Review Workflow SOP</span>
+            </div>
+            <span class="plan-item-desc">Load the SOP instructions defining the outline and sections of the PR review</span>
+          </div>
+        </li>
+        <li class="plan-item">
+          <div class="plan-item-num">2.</div>
+          <div class="plan-item-content">
+            <div class="plan-item-header">
+              <span class="chip chip-purple chip-border">skill_invocation</span>
+              <span class="plan-item-title">Apply PR Analysis Skill</span>
+            </div>
+            <span class="plan-item-desc">Analyze recent github changes data</span>
+          </div>
+        </li>
+        <li class="plan-item">
+          <div class="plan-item-num">3.</div>
+          <div class="plan-item-content">
+            <div class="plan-item-header">
+              <span class="chip chip-green chip-border">tool_call</span>
+              <span class="plan-item-title">Read GitHub PR</span>
+            </div>
+            <span class="plan-item-desc">Use github.read_pr to extract details</span>
+          </div>
+        </li>
+        <li class="plan-item">
+          <div class="plan-item-num">4.</div>
+          <div class="plan-item-content">
+            <div class="plan-item-header">
+              <span class="chip chip-yellow chip-border">agent_delegation</span>
+              <span class="plan-item-title">Delegate Compliance Check</span>
+            </div>
+            <span class="plan-item-desc">Target agent type: agent-sop</span>
+          </div>
+        </li>
+      </ul>
+
+      <div class="divider"></div>
+
+      <div class="h6">Topology Diagram</div>
+      <div class="topology-container">
+        <svg viewBox="0 0 700 260" width="100%" height="260" aria-label="plan topology">
+          <rect x="20" y="24" width="130" height="40" rx="6" fill="#fce4ec" stroke="#d32f2f" stroke-width="1.5"></rect>
+          <text x="85" y="49" text-anchor="middle" font-size="12">pr-reviewer</text>
+
+          <rect x="190" y="24" width="150" height="40" rx="6" fill="#EDE9FE" stroke="#6D28D9" stroke-width="1.5"></rect>
+          <text x="265" y="49" text-anchor="middle" font-size="12">PR Review Flow</text>
+
+          <rect x="190" y="98" width="150" height="40" rx="6" fill="#DBEAFE" stroke="#1D4ED8" stroke-width="1.5"></rect>
+          <text x="265" y="123" text-anchor="middle" font-size="12">github-pr-workflow</text>
+
+          <rect x="380" y="98" width="130" height="40" rx="6" fill="#DCFCE7" stroke="#15803D" stroke-width="1.5"></rect>
+          <text x="445" y="123" text-anchor="middle" font-size="12">github.read_pr</text>
+
+          <rect x="540" y="98" width="130" height="40" rx="6" fill="#ECEFF1" stroke="#455a64" stroke-width="1.5"></rect>
+          <text x="605" y="123" text-anchor="middle" font-size="12">agent-sop</text>
+
+          <line x1="150" y1="44" x2="190" y2="44" stroke="#64748B" stroke-width="2"></line>
+          <line x1="265" y1="64" x2="265" y2="98" stroke="#64748B" stroke-width="2"></line>
+          <line x1="340" y1="118" x2="380" y2="118" stroke="#64748B" stroke-width="2"></line>
+          <line x1="510" y1="118" x2="540" y2="118" stroke="#64748B" stroke-width="2" stroke-dasharray="4 3"></line>
+        </svg>
+      </div>
+    </div>
+    
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('planModal')">CLOSE</button>
+    </div>
+  </div>
+</div>
+
+<div id="modal-optimized-plan" class="modal-overlay" onclick="closeModalIfOverlay(event,'modal-optimized-plan')">
+  <div class="modal modal-lg">
+    <div class="modal-header">
+      <h3 id="opt-title">Optimized Plan — report-generator</h3>
+      <button class="modal-close" onclick="closeModal('modal-optimized-plan')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:12px">
+        <span class="text-secondary" style="font-size:12px">Status</span>
+        <span id="opt-status-chip" class="chip chip-green">ready</span>
+        <span id="opt-mode-chip" class="chip chip-blue">fully scripted</span>
+        <span style="flex:1"></span>
+        <button id="opt-retire-btn" class="btn btn-xs btn-secondary" onclick="optRetirePlan()">Retire plan</button>
+      </div>
+      <div id="opt-retire-success" class="alert alert-success" style="display:none">Optimized plan retired — the next run will offer optimization again.</div>
+      <div id="opt-nothing-to-retire" class="alert alert-info" style="display:none" data-testid="nothing-to-retire">Nothing to retire</div>
+      <div id="opt-error-alert" class="alert alert-warning" style="display:none" data-testid="plan-error"></div>
+      <div id="opt-needs-feedback" class="alert alert-info" style="display:none" data-testid="needs-feedback-prompt">Verification could not produce a passing workflow script. Describe what to change below and submit feedback — it will guide the next regeneration.</div>
+      <div id="opt-flow" class="flow-map" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:12px;margin:8px 0 4px"></div>
+      <h4 style="font-size:13px;margin:14px 0 4px">Composition Steps</h4>
+      <div id="opt-steps"></div>
+      <hr style="border:none;border-top:1px solid var(--border);margin:16px 0">
+      <h4 style="font-size:13px;margin-bottom:6px">Feedback</h4>
+      <div id="opt-feedback-list"></div>
+      <textarea id="opt-feedback-input" class="form-control" rows="2" style="margin-top:8px" placeholder="Describe what to change about this optimized plan…"></textarea>
+      <div style="display:flex;gap:8px;align-items:center;margin-top:8px">
+        <button class="btn btn-xs btn-secondary" onclick="optSubmitFeedback()">✈ Submit feedback</button>
+        <span id="opt-feedback-saved" class="text-sm" style="color:var(--success);display:none">Feedback saved — it will be incorporated when the plan is regenerated.</span>
+      </div>
+      <div class="alert alert-info" style="margin:14px 0 0">Scripts run inside Agent Runtime under the agent's dual identities; MCP tool calls are the only external access. Any script failure unconditionally falls back to the LLM path and triggers bounded self-repair.</div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════ MODAL: SCRIPT VIEWER (Software 3.0) ═══════════════════════════════ -->
+<div id="modal-opt-script" class="modal-overlay" onclick="closeModalIfOverlay(event,'modal-opt-script')">
+  <div class="modal">
+    <div class="modal-header">
+      <h3 id="opt-script-title">Script version v4</h3>
+      <button class="modal-close" onclick="closeModal('modal-opt-script')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px">
+        <span id="opt-script-name" class="chip chip-gray"></span>
+        <span id="opt-script-version" class="chip chip-green">Serving Version: v4</span>
+      </div>
+      <p id="opt-script-desc" class="text-secondary text-sm" style="margin-bottom:10px"></p>
+      <pre id="opt-script-source" style="background:#F1F5F9;border:1px solid var(--border);border-radius:4px;padding:12px;font-family:'SF Mono','Roboto Mono',monospace;font-size:12px;white-space:pre-wrap;word-break:break-word;overflow:auto;max-height:420px;line-height:1.6"></pre>
+    </div>
+    <div class="modal-actions"><button class="btn btn-secondary" onclick="closeModal('modal-opt-script')">Close</button></div>
+  </div>
+</div>
+
+<!-- ═══ CONTROL CENTER ASSISTANT (global floating launcher) ═══ -->
+<button class="asst-fab" id="asst-fab" onclick="asstOpen()" title="Control Center Assistant" aria-label="Control Center Assistant">🤖</button>
+<div class="asst-overlay" id="asst-overlay" onclick="if(event.target===this)asstClose()">
+  <div class="asst-dialog" id="asst-dialog" role="dialog" aria-label="Control Center Assistant conversation">
+    <div class="asst-head">
+      <span style="font-size:20px">🤖</span>
+      <h3 id="asst-title">Control Center Assistant</h3>
+      <span class="chip chip-green" id="asst-conn-chip">Connected</span>
+      <div class="asst-head-right">
+        <button class="btn-icon" id="asst-fs-btn" onclick="asstToggleFullscreen()" title="Toggle fullscreen">⛶</button>
+        <button class="btn-icon" onclick="asstClose()" title="Close">✕</button>
+      </div>
+    </div>
+
+    <div class="asst-body">
+      <div class="asst-alert" id="asst-model-alert" style="display:none">
+        <span>⚠️</span>
+        <div style="flex:1">
+          <b>The assistant needs a model configured for this workspace</b>
+          No model is configured for this workspace yet. An administrator can select one under System Config → Assistant model.
+          <div style="margin-top:8px"><button class="btn btn-secondary btn-sm" onclick="asstGoConfigure()">Configure model</button></div>
+        </div>
+      </div>
+
+      <div class="asst-paper-wrap">
+        <div class="asst-paper" id="asst-messages"></div>
+      </div>
+    </div>
+
+    <div class="asst-input-row">
+      <textarea class="chat-input" id="asst-input" rows="1" placeholder="Type a message… (Enter to send)" onkeydown="asstOnKey(event)" oninput="asstAutoGrow(this)"></textarea>
+      <button class="btn btn-primary" id="asst-send" onclick="asstSend()">Send</button>
+    </div>
+
+    <div class="asst-foot">
+      <button class="btn btn-secondary btn-sm" id="asst-btn-sessions" onclick="asstOpenSessions()">🗂 View All Sessions</button>
+      <button class="btn btn-secondary btn-sm" id="asst-btn-new" onclick="asstNewSession()">＋ New Session</button>
+      <span class="spacer"></span>
+      <button class="btn btn-sm" id="asst-btn-end" style="background:#fff;border:1px solid #FECACA;color:#B91C1C" onclick="asstOpenEnd()">⏹ End Session</button>
+      <button class="btn btn-secondary btn-sm" onclick="asstClose()">Exit</button>
+    </div>
+  </div>
+</div>
+<div class="asst-overlay" id="asst-sessions-overlay" onclick="if(event.target===this)asstCloseSessions()">
+  <div class="asst-dialog" style="width:min(620px,100%);height:auto;max-height:85vh" role="dialog" aria-label="All sessions for this agent">
+    <div class="asst-head">
+      <h3>All sessions for this agent</h3>
+      <div class="asst-head-right"><button class="btn-icon" onclick="asstCloseSessions()" title="Close">✕</button></div>
+    </div>
+    <div class="asst-body" style="overflow-y:auto;padding-bottom:14px">
+      <div class="asst-sess-filters">
+        <label class="toggle"><input type="checkbox" id="asst-show-ended" onchange="asstShowEnded(this.checked)"><span class="toggle-slider"></span><span style="font-size:12px">Show ended sessions</span></label>
+        <label style="display:inline-flex;align-items:center;gap:6px">From <input type="date" class="form-control" id="asst-sess-from" style="width:150px;padding:5px 8px;font-size:12px" onchange="asstDateChange()"></label>
+        <label style="display:inline-flex;align-items:center;gap:6px">To <input type="date" class="form-control" id="asst-sess-to" style="width:150px;padding:5px 8px;font-size:12px" onchange="asstDateChange()"></label>
+      </div>
+      <div id="asst-sessions-list"></div>
+      <div class="asst-pager" style="justify-content:center">
+        <span class="asst-pager-btns" id="asst-sessions-pager"></span>
+      </div>
+    </div>
+    <div class="asst-foot">
+      <span class="spacer"></span>
+      <button class="btn btn-secondary btn-sm" onclick="asstCloseSessions()">Cancel</button>
+    </div>
+  </div>
+</div>
+<div class="asst-overlay" id="asst-preview-overlay" onclick="if(event.target===this)asstClosePreview()">
+  <div class="asst-dialog" style="width:90vw;height:80vh" role="dialog" aria-label="Approval Preview">
+    <div class="asst-head">
+      <h3>Approval Preview</h3>
+      <div class="asst-head-right"><button class="btn-icon" onclick="asstClosePreview()" title="Collapse">⤡</button></div>
+    </div>
+    <div class="asst-body" id="asst-preview-body" style="overflow-y:auto;padding-bottom:14px;display:block;font-size:13px;line-height:1.6"></div>
+    <div class="asst-foot">
+      <button class="btn btn-secondary btn-sm" onclick="asstClosePreview()">Collapse</button>
+      <span class="spacer"></span>
+      <button class="btn btn-sm" style="background:#fff;border:1px solid #FECACA;color:#B91C1C" onclick="asstResolve(false)">✕ Deny</button>
+      <button class="btn btn-sm" style="background:#16A34A;color:#fff" onclick="asstResolve(true)">✓ Approve</button>
+    </div>
+  </div>
+</div>
+<div class="asst-overlay" id="asst-end-overlay" onclick="if(event.target===this)asstCloseEnd()">
+  <div class="asst-dialog" style="width:min(560px,100%);height:auto" role="dialog" aria-label="End Conversation Session">
+    <div class="asst-head">
+      <h3>End Conversation Session</h3>
+      <div class="asst-head-right"><button class="btn-icon" onclick="asstCloseEnd()" title="Close">✕</button></div>
+    </div>
+    <div class="asst-body" style="padding-bottom:16px">
+      <p style="font-size:13px;line-height:1.6">This will close the session. You can still view its history but cannot resume it.</p>
+      <p class="text-sm text-secondary" style="line-height:1.6;margin-top:8px">Any in-flight execution for this session is terminated. The next time you open the assistant it starts a <b>new</b> session instead of resuming this one.</p>
+    </div>
+    <div class="asst-foot">
+      <span class="spacer"></span>
+      <button class="btn btn-secondary btn-sm" onclick="asstCloseEnd()">Cancel</button>
+      <button class="btn btn-sm" style="background:#C62828;color:#fff" onclick="asstConfirmEnd()">End Session</button>
+    </div>
+  </div>
+</div>
+
+<script src="../shared/app.js"></script>
+<script src="../shared/assistant.js"></script>
+<script src="../shared/max-dialog.js"></script>
+<!-- ═══ plan-preview ═══ -->
+<script>
+  function openPlanPreview() {
+    const modal = document.getElementById('planModal');
+    modal.classList.add('open');
+  }
+</script>
+<!-- ═══ ut-topology ═══ -->
+<script>
+/* ═══════════════════════════════════════════════════════════════
+   UT — Unified topology canvas for the Agent Type Details dialog.
+   Mirrors PanelTopologyCanvas + TopologyDiagramRenderer: shared with
+   the Agent Management Panel, zoom 0.5×–3× (step 1.2) with the 1.6×
+   font-size cap (TOPOLOGY_MAX_FONT_SCALE) in fullscreen, contract
+   slots labelled "None" / "Conversation" / "Auto" as solid nodes,
+   dashed placeholders only for genuinely unfilled slots. Node clicks
+   open entity views; hub & placeholder clicks are no-ops.
+   ═══════════════════════════════════════════════════════════════ */
+var UT = (function(){
+  var FONT_CAP = 1.6, ZOOM_MIN = 0.5, ZOOM_MAX = 3, ZOOM_STEP = 1.2, NODE_H = 52;
+  var mounted = false, zoom = 1, tx = 24, ty = 24, fs = false, host = null;
+
+  /* pr-reviewer composition: hub → agent → role/SOP → skills → tools → output
+     Input slot deliberately set to typed schema (solid); output type unset → "Auto" (solid). */
+  var NODES = [
+    {id:'hub',   x:20,  y:200, w:120, label:'Communication Hub', sub:'Hub', kind:'hub', color:'#475569', noClick:true},
+    {id:'input', x:190, y:200, w:180, label:'AnalysisRequest',   sub:'Input · typed schema', kind:'input', color:'#0E7490'},
+    {id:'agent', x:430, y:200, w:180, label:'pr-reviewer',       sub:'Agent Type', kind:'agent', color:'#2563EB'},
+    {id:'role',  x:680, y:80,  w:190, label:'Developer',         sub:'Agent Role', kind:'role', color:'#7C3AED', entity:'role'},
+    {id:'sop',   x:680, y:320, w:190, label:'github-pr-workflow',sub:'SOP', kind:'sop', color:'#0E7490', entity:'sop'},
+    {id:'sk1',   x:930, y:80,  w:180, label:'pr-analysis',       sub:'Skill', kind:'skill', color:'#B45309', entity:'skill'},
+    {id:'sk2',   x:930, y:320, w:180, label:'github-reader',     sub:'Skill', kind:'skill', color:'#B45309', entity:'skill'},
+    {id:'t1',    x:1170,y:80,  w:170, label:'github.read_pr',    sub:'MCP Tool', kind:'tool', color:'#15803D', entity:'tool'},
+    {id:'t2',    x:1170,y:320, w:170, label:'repo.comment',      sub:'MCP Tool', kind:'tool', color:'#15803D', entity:'tool'},
+    {id:'output',x:1400,y:200, w:180, label:'Auto',              sub:'Output', kind:'output', color:'#DB2777'}
+  ];
+  var EDGES = [
+    ['hub','agent'],['input','agent'],['agent','role'],['agent','sop'],
+    ['role','sk1'],['sop','sk2'],['sk1','t1'],['sk2','t2'],['t1','output']
+  ];
+  var KIND_LABEL = {hub:'Hub', input:'Input Slot', agent:'Agent Type', role:'Agent Role', sop:'SOP', skill:'Skill', tool:'MCP Tool', output:'Output Slot'};
+
+  function ensure(){
+    if(mounted) return;
+    host = document.getElementById('atd-topo-canvas');
+    if(!host) return;
+    host.innerHTML =
+      '<div class="ut-wrap">' +
+        '<div class="ut-fs-head"><b>pr-reviewer</b><span>fullscreen · zoom reveals more content — text plateaus at 160%</span></div>' +
+        '<svg class="ut-svg" width="1700" height="600"><g class="ut-edges"></g><g class="ut-nodes"></g></svg>' +
+        '<div class="ut-toolbar">' +
+          '<button class="ut-btn" data-a="in" title="Zoom in">+</button>' +
+          '<button class="ut-btn" data-a="out" title="Zoom out">−</button>' +
+          '<button class="ut-btn" data-a="fit" title="Fit to view">⛶</button>' +
+          '<button class="ut-btn" data-a="reset" title="Reset zoom">1:1</button>' +
+          '<button class="ut-btn" data-a="fs" title="Fullscreen (Esc exits)">⬜</button>' +
+        '</div>' +
+        '<div class="ut-zoom">100%</div>' +
+        '<div class="ut-legend">' +
+          '<span><i style="background:#2563EB"></i>Agent</span>' +
+          '<span><i style="background:#7C3AED"></i>Role</span>' +
+          '<span><i style="background:#0E7490"></i>SOP</span>' +
+          '<span><i style="background:#B45309"></i>Skill</span>' +
+          '<span><i style="background:#15803D"></i>Tool</span>' +
+          '<span><i style="background:#DB2777"></i>Output</span>' +
+          '<span><i style="background:#fff;border:1.5px dashed #94A3B8"></i>Unfilled slot</span>' +
+        '</div>' +
+      '</div>';
+    var wrap = host.querySelector('.ut-wrap');
+    var svg = host.querySelector('svg');
+    var zoomEl = host.querySelector('.ut-zoom');
+    var NS = 'http://www.w3.org/2000/svg';
+
+    EDGES.forEach(function(e){
+      var A = NODES.find(function(n){return n.id===e[0];}), B = NODES.find(function(n){return n.id===e[1];});
+      var x1=A.x+A.w, y1=A.y+NODE_H/2, x2=B.x, y2=B.y+NODE_H/2, mx=(x1+x2)/2;
+      var p = document.createElementNS(NS,'path');
+      p.setAttribute('d','M '+x1+' '+y1+' C '+mx+' '+y1+', '+mx+' '+y2+', '+x2+' '+y2);
+      p.setAttribute('class','ut-edge'+(B.placeholder?' dashed':''));
+      p.setAttribute('stroke', B.color || A.color);
+      svg.querySelector('.ut-edges').appendChild(p);
+    });
+
+    NODES.forEach(function(n){
+      var g = document.createElementNS(NS,'g');
+      g.setAttribute('class','ut-node'+(n.placeholder?' placeholder':''));
+      g.setAttribute('transform','translate('+n.x+','+n.y+')');
+      var rect = document.createElementNS(NS,'rect');
+      rect.setAttribute('class','n-box');
+      rect.setAttribute('width',n.w); rect.setAttribute('height',NODE_H); rect.setAttribute('rx',9);
+      rect.setAttribute('stroke', n.placeholder ? '#94A3B8' : n.color);
+      var dot = document.createElementNS(NS,'rect');
+      dot.setAttribute('x',14); dot.setAttribute('y',14); dot.setAttribute('width',24); dot.setAttribute('height',24); dot.setAttribute('rx',7);
+      if(n.placeholder){ dot.setAttribute('fill','none'); dot.setAttribute('stroke','#94A3B8'); dot.setAttribute('stroke-dasharray','3 2'); }
+      else dot.setAttribute('fill', n.color);
+      var kt = document.createElementNS(NS,'text');
+      kt.setAttribute('x',48); kt.setAttribute('y',22);
+      kt.setAttribute('style','font-weight:700;letter-spacing:.6px;text-transform:uppercase;fill:'+(n.placeholder?'#94A3B8':n.color));
+      kt.textContent = n.sub; kt.dataset.fs = 8.5;
+      var lt = document.createElementNS(NS,'text');
+      lt.setAttribute('x',48); lt.setAttribute('y',38);
+      lt.setAttribute('style','font-weight:600;fill:#212121');
+      lt.textContent = n.label; lt.dataset.fs = 12;
+      g.append(rect,dot,kt,lt);
+      g.addEventListener('click', function(ev){
+        ev.stopPropagation();
+        if(n.noClick || n.placeholder) return; /* hub & placeholder clicks are no-ops */
+        host.querySelectorAll('.ut-node').forEach(function(x){x.classList.remove('selected');});
+        g.classList.add('selected');
+        if(n.entity==='role'){ openRoleView(); return; }
+        var detail = {
+          agent:'Agent Type · pr-reviewer — full configuration stays on the Details tab.',
+          sop:'SOP · github-pr-workflow — 4 sequenced steps open in the SOP entity view.',
+          skill:'Skill · '+n.label+' — resolves its MCP tools (see connected nodes).',
+          tool:'MCP Tool · '+n.label+' — invoked under the tenant-namespaced hub slug.',
+          input:'Input slot · AnalysisRequest — deliberately set typed schema (solid node).',
+          output:'Output slot · Auto — deliberately set / unset output renders as the editor dialog\u2019s \u201cAuto\u201d label (solid node, not a dashed placeholder).'
+        }[n.kind];
+        showToast(detail, 'info');
+      });
+      svg.querySelector('.ut-nodes').appendChild(g);
+    });
+
+    function applyFontCap(){
+      var factor = zoom > FONT_CAP ? FONT_CAP/zoom : 1;
+      svg.querySelectorAll('text').forEach(function(t){ t.style.fontSize=(parseFloat(t.dataset.fs)*factor)+'px'; });
+    }
+    function apply(){
+      svg.style.transform = 'translate('+tx+'px,'+ty+'px) scale('+zoom+')';
+      zoomEl.textContent = Math.round(zoom*100)+'%' + (zoom > FONT_CAP ? ' · text capped at 160%' : '');
+      zoomEl.classList.toggle('capped', zoom > FONT_CAP);
+      host.querySelector('[data-a="in"]').disabled = zoom >= ZOOM_MAX;
+      host.querySelector('[data-a="out"]').disabled = zoom <= ZOOM_MIN;
+      applyFontCap();
+    }
+    function clamp(z){ return Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, z)); }
+    function setZoom(z, cx, cy){
+      z = clamp(z);
+      var r = wrap.getBoundingClientRect();
+      cx = cx==null ? r.width/2 : cx; cy = cy==null ? r.height/2 : cy;
+      tx = cx-(cx-tx)*(z/zoom); ty = cy-(cy-ty)*(z/zoom);
+      zoom = z; apply();
+    }
+    function fit(){
+      var r = wrap.getBoundingClientRect();
+      var maxX = Math.max.apply(null, NODES.map(function(n){return n.x+n.w;}))+30;
+      var maxY = Math.max.apply(null, NODES.map(function(n){return n.y+NODE_H;}))+30;
+      zoom = clamp(Math.min(r.width/maxX, r.height/maxY, 1.4));
+      tx = (r.width-maxX*zoom)/2; ty = (r.height-maxY*zoom)/2;
+      apply();
+    }
+    host.querySelector('[data-a="in"]').onclick = function(){ setZoom(zoom*ZOOM_STEP); };
+    host.querySelector('[data-a="out"]').onclick = function(){ setZoom(zoom/ZOOM_STEP); };
+    host.querySelector('[data-a="fit"]').onclick = fit;
+    host.querySelector('[data-a="reset"]').onclick = function(){ zoom=1; tx=24; ty=24; apply(); };
+    host.querySelector('[data-a="fs"]').onclick = function(){
+      fs = !fs;
+      wrap.classList.toggle('ut-fs', fs);
+      document.body.style.overflow = fs ? 'hidden' : '';
+      this.textContent = fs ? '✕' : '⬜';
+      if(fs){ zoom = 1; fit(); showToast('Fullscreen — zoom past 160% and fonts stop growing while more content is revealed.','info'); }
+      else fit();
+    };
+    document.addEventListener('keydown', function(e){ if(e.key==='Escape' && fs){ host.querySelector('[data-a="fs"]').click(); } });
+    wrap.addEventListener('wheel', function(e){
+      e.preventDefault();
+      var r = wrap.getBoundingClientRect();
+      if(e.ctrlKey || e.metaKey){ setZoom(zoom*(e.deltaY<0?1.1:0.9), e.clientX-r.left, e.clientY-r.top); }
+      else { tx -= e.deltaX; ty -= e.deltaY; apply(); }
+    }, {passive:false});
+    var pan = null;
+    wrap.addEventListener('mousedown', function(e){ if(e.target.closest('.ut-node'))return; pan={x:e.clientX,y:e.clientY,tx:tx,ty:ty}; });
+    window.addEventListener('mousemove', function(e){ if(!pan)return; tx=pan.tx+e.clientX-pan.x; ty=pan.ty+e.clientY-pan.y; apply(); });
+    window.addEventListener('mouseup', function(){ pan=null; });
+
+    apply();
+    requestAnimationFrame(fit);
+    mounted = true;
+  }
+
+  function regeneratePlan(){
+    showToast('Plan regeneration requested — a fresh plan will be generated from the agent type configuration.','success');
+  }
+
+  return { ensure: ensure, regeneratePlan: regeneratePlan };
+})();
+</script>
+<!-- ═══ optimized-plan ═══ -->
+<script>
+// ═══════════════════════ OPTIMIZED PLAN — Software 3.0 workflow compilation ═══════════════════════
+var OPT_PLANS = {
+  'report-generator': {
+    status: 'ready', fullyScripted: true,
+    flow: ['plan','MCP: query-metrics','transform / filter','MCP: post-report','Semantic Bridge'],
+    steps: [
+      { name: 'Query metrics', desc: 'MCP tool call — query-metrics (permissions inherited from agent identity, dual identities per call)', modelBacked: false,
+        script: { name: 'daily-report-gen', version: 'v4', desc: 'Queries the operations metrics store, filters the last 24h window, and posts the formatted daily report to the operations channel.',
+          source: 'def run(ctx):\n    metrics = ctx.tools["query-metrics"](window="24h")\n    recent = ops.select_keys(metrics, ["latency", "errors", "throughput"])\n    summary = ctx.tools["post-report"](template=REPORT_TPL, data=recent)\n    return ops.passthrough(summary)' } },
+      { name: 'Filter & aggregate', desc: 'Local data processing — select_keys / count / sum transforms (no external I/O)', modelBacked: false,
+        script: { name: 'daily-report-gen', version: 'v4', desc: 'Same compiled script — inline transform inside the step graph.',
+          source: 'recent = ops.select_keys(metrics, ["latency", "errors", "throughput"])\ntotals = ops.merge(ops.count(recent["errors"]), ops.sum(recent["throughput"]))' } },
+      { name: 'Post report', desc: 'MCP tool call — post-report', modelBacked: false,
+        script: { name: 'daily-report-gen', version: 'v4', desc: 'Same compiled script — final output step.',
+          source: 'summary = ctx.tools["post-report"](template=REPORT_TPL, data=totals)\nreturn ops.passthrough(summary)' } },
+      { name: 'Executive summary', desc: 'Semantic Bridge sub-agent — model-backed step (unstructured → structured)', modelBacked: true, script: null }
+    ],
+    feedback: [ { summary: 'Keep the executive summary generated by the Semantic Bridge — do not script it.', date: 'Oct 24, 2026, 14:02' } ]
+  },
+  'data-analyst': {
+    status: 'needs_feedback', fullyScripted: false,
+    error: 'Verification failed after 3 repair attempts — step 2 (Aggregate by region) raised NameError: name \'_unpack_sequence_\' is not defined. The compiled script could not be verified against the last 10 executions.',
+    flow: ['plan','MCP: read-analyze-file','System One decision'],
+    steps: [
+      { name: 'Read dataset', desc: 'MCP tool call — read-analyze-file', modelBacked: false,
+        script: { name: 'db-report', version: 'v2 (draft)', desc: 'Reads the analysis dataset and computes per-group aggregates. Verification mismatch recorded — repair pending.',
+          source: 'def run(ctx):\n    rows = ctx.tools["read-analyze-file"](path=ctx.input["dataset"])\n    return ops.merge(ops.count(rows), ops.pluck(rows, "region"))' } },
+      { name: 'Interpret results', desc: 'System One decision tool — model-backed judgment step (confidence carried downstream)', modelBacked: true, script: null }
+    ],
+    feedback: [ { summary: 'Aggregation must respect the region filter from the input, not all rows.', date: 'Oct 26, 2026, 10:41' } ]
+  },
+  'file-manager': { status: 'none', fullyScripted: false, flow: [], steps: [], feedback: [] },
+  'incident-bot': { status: 'ready', fullyScripted: true,
+    flow: ['plan','MCP: fetch-alerts','transform','MCP: page-oncall'],
+    steps: [
+      { name: 'Fetch alerts', desc: 'MCP tool call — fetch-alerts', modelBacked: false,
+        script: { name: 'incident-response', version: 'v1', desc: 'Fetches unresolved alerts, deduplicates, and pages the on-call engineer for critical severities.',
+          source: 'def run(ctx):\n    alerts = ctx.tools["fetch-alerts"](state="unresolved")\n    critical = [a for a in alerts if a["severity"] == "critical"]\n    return ctx.tools["page-oncall"](alerts=critical)' } },
+      { name: 'Deduplicate & page', desc: 'Local dedup transform + MCP tool call — page-oncall', modelBacked: false,
+        script: { name: 'incident-response', version: 'v1', desc: 'Same compiled script — dedup and paging steps.',
+          source: 'critical = [a for a in alerts if a["severity"] == "critical"]\nreturn ctx.tools["page-oncall"](alerts=critical)' } }
+    ],
+    feedback: []
+  },
+  'pr-reviewer': { status: 'none', fullyScripted: false, flow: [], steps: [], feedback: [] },
+  'ledger-auditor': {
+    status: 'failed', fullyScripted: false,
+    error: 'Optimization run failed: the authoring model returned no scripts for 2 of 3 steps and verification aborted after the retry budget was exhausted. No plan was saved.',
+    flow: ['plan','MCP: fetch-ledger','MCP: reconcile'],
+    steps: [
+      { name: 'Fetch ledger entries', desc: 'MCP tool call — fetch-ledger', modelBacked: false,
+        script: { name: 'ledger-reconcile', version: 'v1 (failed)', desc: 'Draft only — never verified.',
+          source: 'def run(ctx):\n    rows = ctx.tools["fetch-ledger"](period=ctx.input["period"])\n    return rows' } },
+      { name: 'Reconcile balances', desc: 'MCP tool call — reconcile (no script authored)', modelBacked: true, script: null }
+    ],
+    feedback: []
+  },
+  'contract-analyst': {
+    status: 'retired', fullyScripted: true,
+    error: null,
+    flow: ['plan','MCP: read-contract','transform / extract'],
+    steps: [
+      { name: 'Read contract', desc: 'MCP tool call — read-contract', modelBacked: false,
+        script: { name: 'contract-extract', version: 'v2', desc: 'Reads the contract and extracts obligations and renewal dates.',
+          source: 'def run(ctx):\n    doc = ctx.tools["read-contract"](id=ctx.input["contract_id"])\n    return ops.extract(doc, ["obligations", "renewal_date"])' } },
+      { name: 'Extract obligations', desc: 'Local transform — extract clauses and dates', modelBacked: false,
+        script: { name: 'contract-extract', version: 'v2', desc: 'Same compiled script — extraction step.',
+          source: 'return ops.extract(doc, ["obligations", "renewal_date"])' } }
+    ],
+    feedback: [ { summary: 'Keep termination clauses out of the scripted path.', date: 'Oct 22, 2026, 09:15' } ]
+  }
+};
+var optCurrentKey = 'report-generator';
+var optRetireSucceeded = false;
+
+function openOptimizedPlan(key) {
+  if (typeof key !== 'string') return; // guard against stray handlers
+  if (!OPT_PLANS[key]) { showToast('No optimized plan for "' + key + '" yet — the next run offers optimization.', 'info'); return; }
+  optCurrentKey = key;
+  optRetireSucceeded = false;
+  optRenderPlan();
+  openModal('modal-optimized-plan');
+}
+
+function optRenderPlan() {
+  var plan = OPT_PLANS[optCurrentKey];
+  document.getElementById('opt-title').textContent = 'Optimized Plan — ' + optCurrentKey;
+  var statusChip = document.getElementById('opt-status-chip');
+  var modeChip = document.getElementById('opt-mode-chip');
+  var colors = {
+    ready: ['chip-green','ready'],
+    needs_feedback: ['chip-orange','needs_feedback'],
+    failed: ['chip-red','failed'],
+    retired: ['chip-blue','retired'],
+    generating: ['chip-blue','generating'],
+    none: ['chip-gray','none']
+  };
+  var c = colors[plan.status] || colors.none;
+  statusChip.className = 'chip ' + c[0];
+  statusChip.textContent = c[1];
+
+  /* Plan content stays visible in every state — a retired plan is kept for reference. */
+  modeChip.style.display = '';
+  modeChip.className = 'chip ' + (plan.fullyScripted ? 'chip-blue' : 'chip-gray');
+  modeChip.textContent = plan.fullyScripted ? 'fully scripted' : 'tool mode';
+
+  /* Retire is never hidden — it is disabled when there is nothing left to retire. */
+  var retireBtn = document.getElementById('opt-retire-btn');
+  var canRetire = plan.status !== 'retired' && plan.status !== 'none';
+  retireBtn.style.display = '';
+  retireBtn.disabled = !canRetire;
+  retireBtn.style.opacity = canRetire ? '1' : '0.45';
+  retireBtn.style.cursor = canRetire ? 'pointer' : 'not-allowed';
+  retireBtn.title = canRetire ? '' : 'Nothing to retire';
+
+  document.getElementById('opt-retire-success').style.display = optRetireSucceeded ? 'block' : 'none';
+  document.getElementById('opt-nothing-to-retire').style.display = (plan.status === 'retired') ? 'block' : 'none';
+
+  /* Failure reason persisted on the plan — error severity when the run failed, warning otherwise. */
+  var errEl = document.getElementById('opt-error-alert');
+  var showError = (plan.status === 'failed' || plan.status === 'needs_feedback') && plan.error;
+  errEl.className = 'alert ' + (plan.status === 'failed' ? 'alert-error' : 'alert-warning');
+  errEl.innerHTML = showError
+    ? '<span style="font-size:15px">⚠️</span><div><strong>Optimization could not complete</strong><div style="margin-top:2px">' + plan.error + '</div></div>'
+    : '';
+  errEl.style.display = showError ? 'flex' : 'none';
+
+  document.getElementById('opt-needs-feedback').style.display = (plan.status === 'needs_feedback') ? 'block' : 'none';
+  var flowEl = document.getElementById('opt-flow');
+  flowEl.innerHTML = plan.flow.length
+    ? plan.flow.map(function(n, i){ return '<span class="flow-node" style="background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:4px 10px;font-weight:500">' + n + '</span>' + (i < plan.flow.length - 1 ? '<span style="color:var(--text-secondary)">→</span>' : ''); }).join('')
+    : '';
+  flowEl.style.display = plan.flow.length ? 'flex' : 'none';
+  var wrap = document.getElementById('opt-steps');
+  wrap.innerHTML = '';
+  if (!plan.steps.length) {
+    wrap.innerHTML = '<p class="text-secondary text-sm">No verified optimized plan exists. The next time you run this agent, you will be offered the option to run with optimization — that run authors and verifies workflow scripts against real executions and saves the plan for reuse.</p>';
+  } else {
+    plan.steps.forEach(function(s, i) {
+      var row = document.createElement('div');
+      row.style.cssText = 'display:flex;align-items:flex-start;gap:12px;padding:10px 4px;border-bottom:1px solid var(--border)';
+      var kind = s.modelBacked ? '<span class="chip chip-purple" style="font-size:11px">model-backed</span>' : '<span class="chip chip-blue" style="font-size:11px">scriptable</span>';
+      var link = s.script ? '<button class="btn btn-xs btn-secondary" onclick="optOpenScript(' + i + ')">View script</button>' : '';
+      row.innerHTML = '<div style="width:24px;height:24px;border-radius:50%;background:var(--primary-light);color:var(--primary-dark);font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:2px">' + (i + 1) + '</div>' +
+        '<div style="flex:1"><div style="font-size:13px;font-weight:600">' + s.name + '</div><div class="text-sm text-secondary">' + s.desc + '</div></div>' + kind + link;
+      wrap.appendChild(row);
+    });
+  }
+  var fb = document.getElementById('opt-feedback-list');
+  fb.innerHTML = '';
+  (plan.feedback || []).forEach(function(cm) {
+    var d = document.createElement('div');
+    d.style.cssText = 'padding:8px 0;border-bottom:1px solid var(--border);font-size:13px';
+    d.innerHTML = '<div style="font-weight:500">' + cm.summary + '</div><div class="text-sm text-secondary">' + cm.date + '</div>';
+    fb.appendChild(d);
+  });
+}
+
+function optOpenScript(i) {
+  var s = OPT_PLANS[optCurrentKey].steps[i].script;
+  if (!s) return;
+  document.getElementById('opt-script-title').textContent = 'Script version ' + s.version.split(' ')[0];
+  document.getElementById('opt-script-name').textContent = s.name;
+  document.getElementById('opt-script-version').textContent = 'Serving Version: ' + s.version;
+  document.getElementById('opt-script-desc').textContent = s.desc;
+  document.getElementById('opt-script-source').textContent = s.source;
+  openModal('modal-opt-script');
+}
+
+function optRetirePlan() {
+  var plan = OPT_PLANS[optCurrentKey];
+  if (!plan || plan.status === 'retired' || plan.status === 'none') return; // never a silent no-op
+  /* Shipped behaviour: the plan is MARKED retired (kept for reference) so the next
+     Run Agent flow finds no ready plan and offers the opt-in optimization dialog again.
+     The same tab re-renders with the success hint and the "Nothing to retire" state. */
+  plan.status = 'retired';
+  optRetireSucceeded = true;
+  optRenderPlan();
+  mcpToast('Optimized plan retired — the next run will offer optimization again.', 'success');
+}
+
+function optSubmitFeedback() {
+  var input = document.getElementById('opt-feedback-input');
+  if (!input.value.trim()) return;
+  OPT_PLANS[optCurrentKey].feedback.unshift({ summary: input.value.trim(), date: 'just now (LLM-summarized)' });
+  input.value = '';
+  document.getElementById('opt-feedback-saved').style.display = 'inline';
+  optRenderPlan();
+  setTimeout(function(){ document.getElementById('opt-feedback-saved').style.display = 'none'; }, 3500);
+}
+</script>
+<script src="../shared/page-init.js"></script>
+</body>
+</html>

@@ -8,7 +8,22 @@ import { test, expect } from "@playwright/test"
 
 const BASE_URL = process.env.PLAYWRIGHT_BASE_URL || "http://localhost:5173"
 
+// Live-deployment migration checks — skip in the canonical mocked E2E run.
+const API_HEALTH = 'http://localhost:8000/api/v1/health'
+
+async function stackIsUp(request: import('@playwright/test').APIRequestContext): Promise<boolean> {
+  try {
+    return (await request.get(API_HEALTH, { timeout: 2000 })).status() === 200
+  } catch {
+    return false
+  }
+}
+
 test.describe("Namespace Migration Visibility", () => {
+
+  test.beforeEach(async ({ request }) => {
+    test.skip(!(await stackIsUp(request)), 'Live stack not reachable — migration visibility checks need a running backend')
+  })
 
   test("dashboard remains accessible without specific permission", async ({ page }) => {
     // Dashboard should NOT require any resource type permission

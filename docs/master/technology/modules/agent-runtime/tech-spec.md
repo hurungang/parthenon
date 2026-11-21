@@ -46,9 +46,36 @@ The Communication Hub's Name Resolver routes calls:
 
 ## Explicit Result Saving
 
-The Agent Runtime does **not** automatically call `save_result` at agent completion. Results are persisted only when the agent explicitly calls `system____save_result` as instructed by its SOP. This ensures result records are intentional and traceable to a specific SOP step.
+The Agent Runtime does **not** automatically call a `save_result` tool at agent completion. Intermediate named saves go through the `system____save_data` tool; the final typed result is persisted by the runtime completion flow through Control Center (`save_output` / typed-output persistence). This keeps saved data intentional and traceable to a specific step while guaranteeing the singular final output.
 
-**`ResultStore`** (`backend/app/services/results/store.py`): Single persistence point for result records. Called by the `system____save_result` tool handler and by the AR result-submit path.
+**`ResultStore`** (`backend/app/services/results/store.py`): persistence point for legacy result records, called by the AR result-submit path.
+
+## Conversation Turn Durability and Activity
+
+Conversational turns are no longer process-local state. AR keeps executing turns, but a paused turn is durable and instance-independent (full details: [conversations module](../conversations/tech-spec.md)).
+
+| Component | Description |
+|-----------|-------------|
+| `DurableCheckpointSaver` | LangGraph checkpointer backed by CC's payload store through the transport client; coalesces intermediate super-step writes to the latest checkpoint, provides an explicit flush, and maps load/deserialization failures to a typed unavailable error |
+| `CheckpointTransportClient` | AR's only path to pause state: save/load checkpoint, save resume index, claim, release, complete — all issued to CH over `internal_httpx_client` with the AR certificate. Courier only |
+| Durable pause in the executor | The conversational turn builds the agent with the durable checkpointer, registers the resume index when a pause is detected, **flushes before reporting waiting**, and returns a pause result instead of awaiting an in-process future |
+| `resume_conversation_turn` | `POST /internal/conversation/resume`: claim, load checkpoint, rebuild the agent, emit `thinking`, resume with the operator's value, stream status and a final (or another) `paused` chunk |
+| `resume_session` (delegating) | Legacy job resume keeps the job path; conversation-scoped ids delegate to the conversational handler |
+| Activity emission | Each transition (thinking / using_tool / delegating / waiting / waiting_for_human / timeout_or_failed / delegation_resumed) is emitted **only inside the NDJSON response stream** returned to CH; AR originates no outbound activity call and never touches the CC activity endpoints or the database (structurally enforced) |
+| Claim identity | Process-unique (`<base>-<process-token>`) so two AR processes never share a lease holder; the holder may renew its own live lease |
+| Live-test endpoint | `POST /internal/live-test/run` executes one approved saved script end to end in the real sandbox with the live session-bound CH client (`provenance="live_test"`), under the subject's own identity and grants, with a hard per-run wall clock; no LLM is involved and there is no per-operation execution |
+
+## Sandboxed Scripting (replay and live-test)
+
+Agent Runtime hosts the ONLY sandboxed script execution surface (full details: [sandboxed-scripting module](../sandboxed-scripting/tech-spec.md)).
+
+| Component | Description |
+|-----------|-------------|
+| Sandbox engine + caps | RestrictedPython compile+exec, audited `safe_builtins` baseline, guarded attribute/write access, wall-time/memory caps, fail-closed typed errors, MCP-only `SandboxToolFacade` with tenant-header parity |
+| Script runner / dispatcher / fallback | `execute_python_source` (optional per-call sink), optimized-plan preference, `initial_context` binding, `sandbox_violation` / `resource_limit_exceeded` fallbacks |
+| Replay client | `ReplayToolClient` answers `tools.call` from the recorded transcript when `replay_required`; a miss is a typed error, never a live fallback |
+| AR script-tool endpoint | `POST /internal/script-tools/execute` — session-bound live client for `script____<name>`; replay client for verification |
+| Command toolset wiring | `_command_tool_schemas(command)` injects optimization tools; repeat-identical-tool-call guard enabled for command and optimization turns |
 
 ---
 
@@ -149,7 +176,7 @@ Agent Runtime is tenant-bound via signed headers since the multi-tenant support 
 | `ControlCenterDataClient` (AR) | class (modified) | Forwards signed tenant headers to CC (`_get`/`_post`/`_patch`) | `backend/app/agent_runtime/data_client.py` |
 | execute / terminate endpoints | routers (reference) | Unchanged — the runtime loader resolves configuration only within the middleware-bound tenant context; no widening path exists and agents still hold no tokens or credentials | `backend/app/agent_runtime/api/execute.py`, `backend/app/agent_runtime/api/terminate.py` |
 
-## Strict Tenant Isolation (as-built — strict-tenant-isolation change)
+## Strict Tenant Isolation
 
 Agent Runtime is a virtual tenant: it resolves the calling tenant once from the signed context on the execution request and applies it to all tool/MCP/A2A resolution and every downstream internal call during the run.
 
@@ -157,7 +184,7 @@ Agent Runtime is a virtual tenant: it resolves the calling tenant once from the 
 - All AR→CC data calls go through `ControlCenterDataClient` (`backend/app/agent_runtime/data_client.py`) and the global egress hook `internal_httpx_client` / `attach_forwarded_tenant_headers` (`backend/app/core/internal_http.py`), which stamp the run's forwarded signed headers on every request — including the `agent_data` context fetch, decision toolset registration, and `save_data`/`get_data` hops.
 - The LangChain tool wrapper carries the tenant through the run so `server____tool` and `agent____<slug>` names resolve only within the run's tenant; the runtime executor's MCP tool lookup is tenant-filtered and fails closed.
 
-### As-built Code Reference Map additions
+### Strict Tenant Isolation — Code Reference Map
 
 | Symbol | Type | Description | File |
 |--------|------|-------------|------|
@@ -170,13 +197,27 @@ Agent Runtime is a virtual tenant: it resolves the calling tenant once from the 
 
 ---
 
-## Sandboxed Scripting Integration (sandboxed-scripting-and-llm-mocking change)
-
-Agent Runtime hosts the ONLY sandboxed script execution surface (full details: [sandboxed-scripting module](../sandboxed-scripting/tech-spec.md)).
+## Code Reference Map — conversation durability, activity and live test
 
 | Symbol | Type | Description | File |
 |--------|------|-------------|------|
-| Sandbox engine + resource caps | module (new) | RestrictedPython compile+exec, allowlisted builtins (no `import`), guarded attribute/write access, wall-time/memory caps, fail-closed typed errors, MCP-only `SandboxToolFacade` with tenant-header parity | `backend/app/agent_runtime/scripts/sandbox.py` |
-| Script runner / dispatcher / fallback | modules (modified) | `execute_python_source` sandbox path, humanized logs, optimized-plan preference, `sandbox_violation`/`resource_limit_exceeded` fallback triggers | `backend/app/agent_runtime/scripts/runner.py`, `dispatch.py`, `fallback.py` |
-| AR script-tool endpoint | endpoint (new) | `POST /internal/script-tools/execute` — runs a `script____<name>` tool's `python_source` in the sandbox with a session-bound client | `backend/app/agent_runtime/api/script_tools.py` |
-| Command toolset wiring | function (new) | `_command_tool_schemas(command)` injects the optimization system tools into command-execution LLM loops | `backend/app/services/agents/runtime_executor.py` |
+| `DurableCheckpointSaver` | class | LangGraph checkpointer backed by the CC-owned payload store; coalescing writes, explicit flush, typed unavailable error | `backend/app/agent_runtime/durable_checkpointer.py` |
+| `CheckpointTransportClient` | class | AR → CH courier for checkpoint/index/claim/complete calls | `backend/app/agent_runtime/checkpoint_transport.py` |
+| `ConversationTurnResumeService` | class | Orchestrates claim → checkpoint load → resume for a paused conversational turn; produces `ConversationResumeOutcome` | `backend/app/agent_runtime/turn_resume_service.py` |
+| `resume_conversation_turn` | endpoint | `POST /internal/conversation/resume` (claim, load, `Command(resume=…)`, stream final/paused) | `backend/app/agent_runtime/api/conversation.py` |
+| `resume_session` | endpoint | `POST /internal/resume`; delegates conversation-scoped resumes | `backend/app/agent_runtime/api/intervene.py` |
+| `ResumeRequest` | schema | Resume body (`session_id`, `response_value`) | `backend/app/agent_runtime/api/intervene.py` |
+| `LangChainHumanInterveneTool` | class | `human_intervene` tool; conversational path uses LangGraph `interrupt()` with an idempotent registration key | `backend/app/services/agents/langchain_system_tools.py` |
+| `conversation_resume` | module | In-process resume registry, retained only as the legacy fallback — retired from production conversational paths | `backend/app/agent_runtime/conversation_resume.py` |
+| `AgentRuntimeExecutor.execute_conversation_turn_from_context` | method | Conversational turn entry (suppression wrapper) | `backend/app/services/agents/runtime_executor.py` |
+| `AgentRuntimeExecutor._execute_conversation_turn_from_context_inner` | method | Builds the agent, swaps in the durable checkpointer, detects pauses | `backend/app/services/agents/runtime_executor.py` |
+| `AgentRuntimeExecutor._handle_conversational_pause` | method | Flushes the checkpoint, registers the resume index and reports waiting; a refused flush becomes `persistence_failed`, never `waiting_for_human` | `backend/app/services/agents/runtime_executor.py` |
+| Activity transition emission | behaviour | `using_tool` / `delegating` / `waiting` / `waiting_for_human` transitions emitted on the NDJSON stream only | `backend/app/services/agents/runtime_executor.py`, `backend/app/services/agents/langchain_tool_wrapper.py` |
+| `POST /internal/live-test/run` | endpoint | One approved-script sandbox run under the subject's identity/grants; grant pre-check; per-call ledger recording; hard wall clock | `backend/app/agent_runtime/api/live_test.py` |
+| `JSON+ checkpoint serializer` | external dependency | LangGraph payload encoding used by the saver | `langgraph.checkpoint.serde.jsonplus` |
+| `Command` | external dependency | LangGraph resume command carrying the operator response | `langgraph.types` |
+| `test_durable_checkpointer` | test module | Saver round-trip, flush-before-waiting, fail-closed flush on a refused write | `backend/tests/agent_runtime/test_durable_checkpointer.py` |
+| `test_conversational_resume_from_checkpoint` | test module | Resume on a second instance, contention, re-pause | `backend/tests/agent_runtime/test_conversational_resume_from_checkpoint.py` |
+| `test_resume_registry_miss_orphan` | test module | Durable-state semantics replacing the legacy registry-miss orphan test | `backend/tests/agent_runtime/test_resume_registry_miss_orphan.py` |
+| `test_live_test_execute` | test module | Live-test capability check, one end-to-end run, ledger pointer, run-record shape, hard cap | `backend/tests/agent_runtime/test_live_test_execute.py` |
+| `test_ar_activity_persistence_boundaries` | test module | Structural guard: AR emits activity only on the response stream; no CC activity calls, no DB | `backend/tests/agent_runtime/test_ar_activity_persistence_boundaries.py` |

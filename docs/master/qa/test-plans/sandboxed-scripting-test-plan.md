@@ -20,16 +20,18 @@
 
 ### 3. Optimized Plan
 - Base plan stays high-level (no composition in prompt/parsed plan).
-- Opt-in launch flow (`optimize: true/false`; ready plan → no dialog); retire marks rows `retired` (kept, one active record, never gates execution) and retires serving versions.
+- Optimization is a **separate, gated action** (no "run with optimization" mode): `POST /agents/sessions` carries no `optimize` field, a normal run never injects `__command`, and the dedicated `POST /agents/sessions/optimize` enforces the compound gate (authoring model → executions → non-conversational) server-side. See `optimizer-test-plan.md`.
+- Retire marks rows `retired` (kept, one active record, never gates execution) and retires serving versions.
 - Authored-plan normalization: consecutive scripted segments collapse into ONE chained step; empty steps dropped; duplicates merged; verification-gated chaining splits at the first failing segment (demote to tool mode; `needs_feedback` only when even split segments fail).
-- Feedback memory: one-shot summarization + accumulation; ALL stored feedback included in regeneration prompts; feedback survives regeneration.
+- Feedback memory: one-shot summarization + accumulation; ALL stored feedback included in regeneration prompts; feedback survives regeneration and carries a `source` (`manual` vs `execution_derived`).
+- Fallback attribution: a fallback on an optimized artifact marks the plan `requires_fix` (never re-served) and appends execution-derived feedback; the requires-fix alert and re-optimize are covered in `optimizer-test-plan.md` and `agents-test-plan.md`.
 - Tool-name validation: literal `tools.call('name', ...)` AST-checked against actual allowed tools (structured `validation_error` lists valid names); runtime tool-not-found → `ExecutionError` → LLM fallback; "Final answer" mission section (business result, no meta-commentary).
 
 ### 4. Allowlist Coverage Guard
 - Static scan asserts every (method, path) pair issued by AR/CH callers to `/api/v1/internal/...` exists in the CC-side allowlists (`_AR_ALLOWLIST`/`_CH_ALLOWLIST`); reverse cross-check enumerates CC internal routes (scripts/llm-mock routers, `SystemToolRegistry` map) and asserts allowlisting. Fails on any future `403 endpoint_not_allowlisted` bug of this class.
 
 ### 5. Command Execution
-- `_command_tool_schemas` returns the optimization tools for command runs (empty for non-command); command `tool_definitions` include the full optimization toolset; `__command` marker threads from the launch flag through `trigger_execution` → dispatcher; command runs get at least `COMMAND_TOKEN_BUDGET`.
+- `_command_tool_schemas` returns the optimization tools for command runs (empty for non-command); command `tool_definitions` include the full optimization toolset; the `__command` marker is set only by the dedicated optimize trigger and threads through `trigger_execution` → dispatcher; command runs get at least `COMMAND_TOKEN_BUDGET` and execute on the workspace authoring model.
 
 ### 6. LLM Mock Layer
 - Scripted/record/replay modes; determinism (identical inputs + mock scripts → identical runs); prompt assertions; record/replay round-trip through the CC internal mock API (AR never touches the DB; missing key → typed error); credential-shaped recording fields rejected 422; semantic-bridge steps run zero-LLM in mock mode.
@@ -83,7 +85,7 @@
 | `test_llm_mock_layer.py` | Scripted/record/replay, determinism, prompt assertions, provider selection |
 | `test_script_refinement_loop.py` | Generate→test→refine loop convergence/exhaustion |
 | `test_model_authored_composition.py` | Model-authored composition execution verbatim |
-| `test_optimized_plan.py` | Base-plan prompt/parse, optimize generation, chaining/split, verification log, feedback memory, retire endpoint, launch `optimize` injection, optimization system tools + self-reflection |
+| `test_optimized_plan.py` | Base-plan prompt/parse, optimize generation, chaining/split, verification log, feedback memory, retire endpoint, optimization system tools + self-reflection; `requires_fix` narrowing (`mark_requires_fix`, feedback `source`, never re-served) and the removal of the `optimize` launch injection |
 | `test_script_first_dispatcher.py` | Composition validation, optimized-plan preference, legacy-script precedence, retire freshness, command-execution bypass |
 | `test_command_execution.py` | `_command_tool_schemas` wiring, "Final answer" mission, mocked command run produces the business result |
 | `test_script_runner.py` | Sandboxed execution path, humanized logs, MCP envelope unwrapping, tenant-context propagation, accounting fields |
@@ -104,7 +106,7 @@
 |---|---|
 | `AgentOptimizedPlanTab.test.tsx` | Steps, "View script" → `ScriptViewDialog` (`onViewScript`), feedback submit, retire call, absent/retired hint, `needs_feedback` surfacing |
 | `AgentTypeDetailsDialog.test.tsx` | 4 tabs (Scripts tab removed), "View agent" header link, retire flow |
-| `AgentSessionLaunchDialog.test.tsx` | Opt-in dialog flow, `optimize: true/false` passthrough, ready-plan direct launch |
+| `AgentSessionLaunchDialog.test.tsx` | Execution-only Run: no optimization opt-in dialog, no `optimize` field in the payload, no `regenerate-plan` trigger, informational stale/optimized-plan note pointing at Plan Preview |
 | `ScriptViewDialog.test.tsx` | Inline python_source viewer |
 
 ### E2E (`e2e/tests/`)

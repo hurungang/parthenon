@@ -1,6 +1,6 @@
 # MCP Demo App Test Plan
 
-> Last updated: dual-identity tools (`mcp-dual-identity-tools` change)
+> Last updated: airline booking tools (`airline-booking-demo` change, 2026-11)
 
 ## What to Test
 
@@ -78,6 +78,24 @@
 - Hub unreachable at startup — app fails with a clear error
 - Tool sync called after successful registration; three-tool manifest synced via unchanged registration logic
 
+### Airline Booking Tools (airline-booking-demo, 2026-11)
+Seven booking tools (`searchFlights`, `bookTicket`, `generatePaymentLink`, `checkTicketStatus`, `checkInPassenger`, `selectSeat`, `cancelBooking`) join the three greeting tools, backed by an in-memory booking store seeded deterministically at startup. The greeting tools are unchanged (dual demo mode).
+
+- **Seed determinism / reset**: a restart produces identical flights, seat map and an empty booking set; PNRs are deterministic after reset; seed-held seats are never re-bookable; search for an arbitrary route generates deterministic, non-duplicated flights that are bookable and carry a fresh seat map.
+- **Ticket lifecycle**: `booked → paid → checked-in → cancelled` is enforced per tool — check-in before payment is rejected, seat selection before check-in is rejected, cancelling twice is rejected, and status reads report the accurate stage.
+- **Domain rule (child/infant needs an adult)**: booking only children/infants is rejected with a structured error naming the rule; any booking containing an adult is accepted with per-passenger seats and bag counts.
+- **Seat occupancy**: one seat is reserved per passenger at booking; selecting an already-held seat returns a structured "seat occupied" error; cancel frees the seats of **all** passengers so the same flight/seat can be re-booked (proves real state change).
+- **Input/lifecycle errors**: unknown flight, unknown PNR, empty/duplicate passenger names, invalid passenger type, negative bags and seat exhaustion all return the same consistent error shape (no exceptions escaping the tool layer).
+- **Registry/manifest**: `tools/list` advertises all ten tools; every booking tool's schema declares its required fields and describes dynamic flight generation.
+- **Identity & platform story** (validated live, not in this suite): booking tools resolve the agent identity from the forwarded JWT and never receive tokens/credentials; ungranted tools return an access-denied result the agent relays; confirm-before-write gating means a rejected/timed-out booking or cancellation leaves the store untouched; the scripted check-in flow (`checkTicketStatus → checkInPassenger → selectSeat`) executes in the Agent Runtime sandbox with zero intermediate LLM reasoning and falls back to the base plan if triggered.
+- **No persistence / no external calls**: nothing survives a restart and no external system is contacted; no Parthenon DB changes.
+
+**Test files:**
+- `mcp-demo-app/tests/unit/test_booking_store.py` — seed determinism, reset, PNR format, search/generation, lifecycle transitions, seat availability, domain rule, cancel-and-rebook
+- `mcp-demo-app/tests/unit/test_booking_tools.py` — per-tool happy/error paths, lifecycle violations, registry + manifest completeness, consistent error shape
+- `mcp-demo-app/tests/unit/test_mcp_router_booking.py` — `POST /mcp` dispatch of booking tools, `tools/list` including all ten tools, identity extraction
+- `mcp-demo-app/tests/unit/test_tools.py`, `test_mcp_router.py` — greeting-tool regression against the expanded registry
+
 ## Critical Scenarios
 
 ### Dual-Identity Core Flows
@@ -101,7 +119,7 @@
 - Valid agent JWT (any `mcp_role`, including none) → `tools/call` (helloWorld) → greeting with agent identity, no role gating
 - `helloWorld` response structure unchanged from pre-change behavior
 - `helloWorld` unaffected by presence or absence of user identity headers
-- `tools/list` returns exactly three tools with correct schemas
+- `tools/list` returns exactly ten tools (three greeting + seven booking) with correct schemas
 
 ### System-Level Flows
 - All required env vars present → app starts, obtains token, completes hub registration before serving traffic
@@ -145,11 +163,13 @@
 
 ## Test File References
 
+> Tool counts in the tables below describe the original three-tool demo; the airline booking tools add seven more (see **Airline Booking Tools** and its test files above).
+
 ### Unit
 - `mcp-demo-app/tests/unit/test_config.py` — `AppSettings` env-var loading, defaults, missing required fields, user-realm optional fields (6 tests)
 - `mcp-demo-app/tests/unit/test_auth.py` — `KeycloakClient` JWKS/token caching, `verify_agent_jwt`, `verify_user_jwt` valid/expired/wrong-issuer/bad-sig, cross-realm rejection, single-realm fallback, `get_agent_identity`, `get_user_identity`, header parsing (Bearer stripping, missing/empty) (20 tests)
-- `mcp-demo-app/tests/unit/test_tools.py` — `hello_world_tool`, `hello_agent_tool`, `hello_user_tool` handler functions (success, access-denied, missing identity, wrong role, edge-case claim types), `tool_registry` (3 entries), `TOOL_MANIFEST` (3 entries) content and schema (29 tests)
-- `mcp-demo-app/tests/unit/test_mcp_router.py` — JSON-RPC dispatch: `initialize`, `tools/list` (3 tools), `tools/call` for all three tools with auth/role-gating/access-denied/identity-isolation, unknown method, id echo, null id, access-denied wrapping (23 tests)
+- `mcp-demo-app/tests/unit/test_tools.py` — `hello_world_tool`, `hello_agent_tool`, `hello_user_tool` handler functions (success, access-denied, missing identity, wrong role, edge-case claim types), `tool_registry` (10 entries), `TOOL_MANIFEST` (10 entries) content and schema (29 tests)
+- `mcp-demo-app/tests/unit/test_mcp_router.py` — JSON-RPC dispatch: `initialize`, `tools/list` (10 tools), `tools/call` for the greeting tools with auth/role-gating/access-denied/identity-isolation, unknown method, id echo, null id, access-denied wrapping (23 tests)
 - `mcp-demo-app/tests/unit/test_registration.py` — `register_with_hub`: success, 409 (list + paginated), slug-missing error, 500 error, sync failure (7 tests)
 - `mcp-demo-app/tests/unit/test_health.py` — `GET /health`: status 200, body fields, slug value, no auth required (5 tests)
 
@@ -169,13 +189,13 @@
 | AC-5 | `helloUser` returns access-denied when user JWT lacks `mcp_role: demo_user` | `test_tools.py`; `test_mcp_router.py`; `test_agent_flow.py` |
 | AC-6 | `helloUser` returns auth error when no user JWT forwarded | `test_mcp_router.py`; `test_agent_flow.py` |
 | AC-7 | `helloWorld` continues to work — surfaces agent identity, no role gating | `test_tools.py`; `test_mcp_router.py`; `test_agent_flow.py` |
-| AC-8 | `tools/list` returns three tools with correct descriptions and input schemas | `test_tools.py`; `test_mcp_router.py`; `test_agent_flow.py` |
+| AC-8 | `tools/list` returns ten tools with correct descriptions and input schemas | `test_tools.py`; `test_mcp_router.py`; `test_agent_flow.py` |
 | AC-9 | Each tool validates only its required identity's claims (helloAgent ignores user, helloUser ignores agent) | `test_tools.py`; `test_mcp_router.py`; `test_agent_flow.py` |
 | AC-10 | Identity JWTs validated for signature, expiry, issuer before claim inspection; invalid JWTs produce auth error | `test_auth.py`; `test_mcp_router.py`; `test_agent_flow.py` |
 | AC-11 | User JWT rejected when signed by wrong realm's key (cross-realm rejection) | `test_auth.py` (cross-realm rejection) |
 | AC-12 | Single-realm backward compatibility — app works when `KEYCLOAK_USER_REALM` is unset | `test_auth.py` (fallback) |
 | AC-13 | App authenticates using Keycloak agent identity (client credentials) | `test_startup.py`; `test_auth.py` (client credentials grant) |
 | AC-14 | App registers with Parthenon MCP Hub under unique slug; all tools synced | `test_registration.py`; `test_hub_registration.py` |
-| AC-15 | All three tools available through existing MCP interface | `test_tools.py`; `test_mcp_router.py`; `test_agent_flow.py` |
+| AC-15 | All ten tools available through the existing MCP interface | `test_tools.py`; `test_mcp_router.py`; `test_agent_flow.py` |
 | AC-16 | No changes to Communication Hub or Control Center | E2E regression suite (no dedicated MCP demo E2E; integration tests cover the full flow) |
 | AC-17 | Documentation provided for dual-identity setup | Manual review of README (out of automated test scope) |

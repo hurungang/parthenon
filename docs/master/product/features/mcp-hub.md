@@ -20,6 +20,8 @@ The MCP Hub enables Parthenon to connect with external tool servers, synchronize
 - Maps sessions or passthrough configuration to agent identities or roles for secure tool access
 - Exposes proxied MCP server tools to external MCP clients over the standard MCP protocol (initialize / tools/list / tools/call), in addition to internal Agent Runtime tool calls — both governed by the same role-based permission resolution
 - Exposes user-defined [decision tools](decision-tools.md) as MCP tools under the same permission model; decision tools carry a reserved "decision" naming prefix (mirroring the "system" prefix) and "decision" is reserved as an MCP slug namespace word so no registered server slug can conflict with it
+- Server registration and update can also be performed conversationally through the [Control Center Assistant](control-center-assistant.md), covering the same create/read/update capability set as this module (with the slug fixed after creation and credentials never echoed) — under the same permission, preview-and-approve, and no-deletion rules
+- The [MCP Demo App](mcp-demo-app.md) airline scenario adds a second fictional toolset that registers, syncs, and is governed through this existing flow; it changes no MCP Hub behaviour, and slug/tool namespacing, sessions, and permission resolution are exactly as described here
 
 
 

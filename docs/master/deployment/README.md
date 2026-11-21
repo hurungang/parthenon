@@ -22,7 +22,9 @@ This section contains all deployment documentation for the Parthenon platform. G
 | [environment-variables.md](environment-variables.md) | Master reference table of all environment variables for every service; update whenever new services are added or variables change |
 | [services.md](services.md) | Master inventory of all containers and pods with their roles; update whenever services are added, removed, or renamed |
 | [operational-runbooks.md](operational-runbooks.md) | Targeted runbooks for specific operational tasks including permission rollout, service-segregation allowlist cutover, deny-event triage, and certificate failure response |
-| [rollback.md](rollback.md) | Runbook for rolling back a failed deployment to the last known-good state, including service-segregation policy rollback sequence and the multi-tenancy disable-first rollback |
+| [rollback.md](rollback.md) | Runbook for rolling back a failed deployment to the last known-good state — general seven-step procedure, stateless-service rollback, and the index of change-specific procedures |
+| [rollback-change-specific.md](rollback-change-specific.md) | Per-change rollback procedures: trigger conditions, ordered steps, completion conditions, and guardrails (gateway, segregation policy, guardrails, API keys, production config, resource types, OIDC, multi-tenancy, strict tenant isolation) |
+| [rollback-conversational-durability.md](rollback-conversational-durability.md) | Rollback for the conversational-durability changes — code-only rollback first, in-flight paused-turn handling (drain or let the TTL expire), destructive schema rollback in AR → CH → CC order |
 | [configuration-files.md](configuration-files.md) | Reference for platform-managed configuration files (e.g., `config/telemetry.yaml`); covers resolution order, Docker Compose bind-mounts, and Kubernetes ConfigMap mounting |
 | [database-migrations.md](database-migrations.md) | Chronological log of all Alembic migration revisions applied to production; update whenever a migration is promoted |
 | [github-pages-showcase.md](github-pages-showcase.md) | Deployment guide for the GitHub Pages static showcase site — trigger, setup, rollback, and custom domain configuration |
@@ -72,7 +74,25 @@ Use this sequence for the `multi-tenant-support` change (mirrors [first-time-dep
 5. Wildcard DNS/TLS verification — test subdomain resolves, serves a valid certificate, and reaches the platform
 6. Enable switch — enable `multi_tenancy_enabled` via Platform Settings; the one-time root-tenant (workspace `root`) adoption runs automatically and is audited
 7. Adopt/verify — root tenant accessible, second tenant isolated, per-tenant OIDC config via `/system/identity-providers` (shared config via `/platform/identity-providers`)
-8. If issues occur, execute the rollback sequence in [rollback.md](rollback.md) Change-Specific Rollback: Multi-Tenant Support
+8. If issues occur, execute the rollback sequence in [rollback-change-specific.md](rollback-change-specific.md) Change-Specific Rollback: Multi-Tenant Support
+
+---
+
+## Persistent Activity State and Conversational Turn Recovery Rollout Order
+
+Use this sequence for the two sequential conversational-durability epics: **persistent agent activity state** (CC-owned `conversation_activities`, reaper) followed by **resumable agent turn persistence** (CC-owned resume index + checkpoint payload, durable AR checkpointing, single CH dispatch).
+
+1. Pre-flight — back up PostgreSQL and record `alembic current`; confirm the database is at the pre-change head (see [database-migrations.md](database-migrations.md))
+2. Migrate on Control Center — apply `7127b840ae80` (activity state) and `992bbc77bf6a` (durable resume) to head before any new build starts
+3. Deploy Control Center — owns both migrations, the internal activity/resume/checkpoint routes, the reaper/Terminal Resolver, and the tenant-scoped resume TTL
+4. Deploy Communication Hub — serves the AR-facing checkpoint relay, activity forwarding/hydration, activity heartbeat touch, and the de-duplicated conversation-scoped resume dispatch
+5. Deploy Agent Runtime — durable checkpointer (flush before reporting waiting), instance-independent resume; **never ahead of CH** (a pause with no relay cannot persist and resolves terminally)
+6. Deploy the Web UI — recovery vocabulary, terminal card, session badges (tolerates absent optional fields, so it may ship after the backend)
+7. Verify — pause a turn, restart AR, confirm the confirmation is still actionable, approve once, confirm exactly one reply and one applied write; repeat across a CH restart and a second AR instance; see [operational-runbooks.md](operational-runbooks.md) §12
+8. Watch the new signals for one full answerable window (≥ `CONVERSATION_TURN_RESUME_TTL_SECONDS`, default 900 s) before declaring the rollout complete
+9. If issues occur, execute [rollback-conversational-durability.md](rollback-conversational-durability.md)
+
+Restart guidance: on Windows use `parthenon.ps1 restart -Services backend -Force`; on macOS use `./scripts/restart-backend.sh`. The platform's standard bootstrap order is CC → AR → CH; a full-stack restart accepts a short AR-before-CH window, so schedule releases outside active approvals (turns pausing in that window resolve terminally with a clear message, never silently).
 
 ---
 

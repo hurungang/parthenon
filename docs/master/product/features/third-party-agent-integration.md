@@ -15,6 +15,7 @@ Third-Party Agent Integration lets a third-party system use a Parthenon agent *a
 - Grants access **only** to the target agent type's input interface — never to tools, the MCP hub, or any agent identity; the invoked agent type runs with its own identity and role exactly as configured
 - Powers an **embeddable white-label chatbot** for conversational agent types via a publishable client: configurable name, avatar, and colors, zero Parthenon branding, and anonymous end-user chat
 - Supports **stateful conversations**: a client starts a conversation session, sends multiple messages that share the same conversation context, and ends the session — matching the platform's in-product chat experience
+- Gives conversational client sessions the same durable behaviour as in-product chat: a turn that pauses for human input remains answerable across a service restart or an instance hand-off, with identical tenant and permission scoping, and applies a confirmed action exactly once
 - Provides a **request/response flow** for typed (non-conversational) agent types: submit input → receive a validated, typed response with validation status and raw-output fallback
 - Enables **server-to-server integration** with a secret client that never leaves the third party's servers; when the third party and tenant share an identity provider, the backend may optionally pass its end user's identity (dual identity, server-to-server only, validated and tenant-matched)
 - Requires every **publishable** client to declare at least one allowed serving origin (wildcards supported); requests from non-allowlisted origins are rejected
@@ -49,6 +50,7 @@ Third-Party Agent Integration lets a third-party system use a Parthenon agent *a
 ### Conversational & Typed Invocation
 - End users can hold multi-turn conversations through the embedded widget without any Parthenon account; the widget honors the white-label theme with no Parthenon branding
 - Conversations are stateful: start, multiple context-sharing messages, and end; failures surface as clear error turns, not endless spinners
+- A conversational client session that pauses for human input keeps its pending request answerable across a restart or instance change, and its resumption stays inside the client's tenant with the same permission scoping as any other turn
 - Typed agents follow submit-input → typed-response, with validation status and raw-output fallback; invalid submissions are rejected with a clear description of the expected input shape
 
 ### Audit & SDKs

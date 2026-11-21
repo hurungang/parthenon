@@ -26,6 +26,7 @@ The Agent Data Type Registry provides a centralized catalogue where platform adm
 - Agent types that reference a data type display the data type name as an output type badge in list and detail views.
 - Conversational agent types cannot be assigned an output data type — the output type field is only available for non-conversational agent types.
 - Data type creation is also available inline from the Agent Management Panel when configuring an agent's input/output type; inline creation follows the same registry rules — conversational agent types cannot be assigned typed outputs, and data types referenced by agent types cannot be deleted.
+- Data types can also be created and updated conversationally through the [Control Center Assistant](control-center-assistant.md), which covers the same create/read/update capability set as this page (including the field-set rules and duplicate-name rejection) — with the same permission enforcement, preview-and-approve step, and no deletion.
 
 ## User Stories
 - As a **Platform Administrator**, I want to create a new data type with named, typed fields, so that I can define a reusable output schema for my agent types.

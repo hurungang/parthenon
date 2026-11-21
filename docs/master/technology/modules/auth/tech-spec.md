@@ -69,7 +69,7 @@ flowchart TD
 | Symbol | Type | Description | File |
 |--------|------|-------------|------|
 | `create_group_membership_mapper` | method | Adds OIDC group membership mapper to a Keycloak client (idempotent); configures `groups` claim for ID, access, and userinfo tokens | `backend/app/services/identity/keycloak_admin_client.py` |
-| `_get_client_uuid` | private method | Helper to fetch Keycloak internal UUID for a client by clientId | `backend/app/services/identity/keycloak_admin_client.py` |
+| `client_exists` | method | Lists realm clients by `clientId` and resolves the Keycloak internal UUID used for mapper/secret calls | `backend/app/services/identity/keycloak_admin_client.py` |
 | `provision_bundled_keycloak` | method | Calls `create_group_membership_mapper` after client creation during first-run setup | `backend/app/services/identity/bootstrap_service.py` |
 
 ### Group Claim Processing

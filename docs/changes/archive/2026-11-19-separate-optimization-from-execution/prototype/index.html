@@ -1,0 +1,1470 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Parthenon — Separate Optimization from Execution</title>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --primary:#2563EB;--primary-dark:#1D4ED8;--primary-light:#DBEAFE;
+  --violet:#7C3AED;--violet-dark:#6D28D9;--violet-light:#EDE9FE;
+  --sidebar-bg:#FFFFFF;--sidebar-text:#424242;--sidebar-active-bg:rgba(0,0,0,0.06);
+  --sidebar-hover-bg:rgba(0,0,0,0.03);--sidebar-active-text:#2563EB;
+  --surface:#FFFFFF;--bg:#FAFAFA;--border:#E0E0E0;
+  --success:#4CAF50;--warning:#FF9800;--error:#F44336;--info:#2196F3;
+  --text-primary:#212121;--text-secondary:#757575;
+  --shadow:0 1px 2px 0 rgba(60,64,67,0.3),0 1px 3px 1px rgba(60,64,67,0.15);
+  --shadow-md:0 4px 6px 0 rgba(60,64,67,0.3),0 4px 8px 3px rgba(60,64,67,0.15);
+  --radius:8px;--radius-sm:4px;--radius-lg:12px;
+  --sidebar-w:236px;--topbar-h:60px;
+  --transition:0.2s ease;
+}
+html,body{height:100%;font-family:'Inter','Roboto',system-ui,sans-serif;background:var(--bg);color:var(--text-primary);font-size:14px;line-height:1.5}
+a{color:inherit;text-decoration:none}
+button{cursor:pointer;font-family:inherit;font-size:14px}
+input,select,textarea{font-family:inherit;font-size:14px}
+
+/* ── APP SHELL ── */
+.app-shell{display:flex;height:100vh;overflow:hidden}
+.sidebar{width:var(--sidebar-w);background:var(--sidebar-bg);color:var(--sidebar-text);display:flex;flex-direction:column;flex-shrink:0;overflow-y:auto;border-right:1px solid var(--border)}
+.sidebar-logo{padding:18px 18px 14px;border-bottom:1px solid var(--border)}
+.sidebar-logo h1{font-size:17px;font-weight:700;color:var(--text-primary);letter-spacing:-.5px}
+.sidebar-logo small{font-size:11px;color:var(--text-secondary);letter-spacing:.5px;text-transform:uppercase}
+.nav-item{display:flex;align-items:center;gap:8px;padding:8px 14px;cursor:pointer;border-radius:var(--radius);margin:1px 6px;color:var(--sidebar-text);font-size:13px;user-select:none;white-space:nowrap}
+.nav-item:hover{background:var(--sidebar-hover-bg)}
+.nav-item.active{background:var(--sidebar-active-bg);color:var(--sidebar-active-text);font-weight:500}
+.nav-item .nav-icon{font-size:14px;width:18px;text-align:center;flex-shrink:0;line-height:1}
+.main-wrapper{flex:1;display:flex;flex-direction:column;overflow:hidden}
+.topbar{height:var(--topbar-h);background:var(--surface);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 24px;gap:16px;flex-shrink:0}
+.topbar-title{font-size:17px;font-weight:600;flex:1;color:var(--text-primary)}
+.main-content{flex:1;overflow-y:auto;overflow-x:hidden;padding:24px}
+.main-content::-webkit-scrollbar{width:6px}.main-content::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+
+/* ── BUTTONS ── */
+.btn{display:inline-flex;align-items:center;gap:6px;padding:8px 16px;border-radius:var(--radius-sm);border:none;font-weight:500;transition:all var(--transition);white-space:nowrap;letter-spacing:.25px}
+.btn-primary{background:var(--primary);color:#fff;box-shadow:var(--shadow)}.btn-primary:hover{background:var(--primary-dark);box-shadow:var(--shadow-md)}
+.btn-secondary{background:var(--surface);color:var(--text-primary);border:1px solid var(--border)}.btn-secondary:hover{background:var(--bg)}
+.btn-sm{padding:5px 12px;font-size:12px}
+.btn-xs{padding:3px 9px;font-size:11px;border-radius:var(--radius-sm)}
+.btn:disabled{opacity:.45;cursor:not-allowed;box-shadow:none}
+.btn-violet{background:var(--violet);color:#fff;box-shadow:var(--shadow)}.btn-violet:hover{background:var(--violet-dark)}
+.btn-outline-violet{background:var(--surface);color:var(--violet-dark);border:1px solid #C4B5FD}.btn-outline-violet:hover{background:var(--violet-light)}
+
+/* ── CHIPS ── */
+.chip{display:inline-flex;align-items:center;gap:4px;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:600;white-space:nowrap}
+.chip-blue{background:#DBEAFE;color:#1D4ED8}
+.chip-green{background:#DCFCE7;color:#15803D}
+.chip-red{background:#FEE2E2;color:#B91C1C}
+.chip-yellow{background:#FEF3C7;color:#92400E}
+.chip-purple{background:#EDE9FE;color:#6D28D9}
+.chip-gray{background:#F1F5F9;color:#475569}
+.chip-orange{background:#FED7AA;color:#C2410C}
+.chip-violet{background:#EDE9FE;color:#6D28D9}
+.status-dot{width:8px;height:8px;border-radius:50%;display:inline-block;flex-shrink:0}
+.dot-green{background:var(--success)}.dot-yellow{background:var(--warning)}.dot-red{background:var(--error)}.dot-gray{background:#94A3B8}
+
+/* ── CARDS ── */
+.card{background:var(--surface);border-radius:var(--radius);border:1px solid var(--border);box-shadow:var(--shadow)}
+.card-header{padding:14px 18px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
+.card-header h3{font-size:14px;font-weight:600}
+.card-body{padding:16px 18px}
+
+/* ── TABLES ── */
+.table-wrap{background:var(--surface);border-radius:var(--radius);border:1px solid var(--border);box-shadow:var(--shadow);overflow:hidden}
+table{width:100%;border-collapse:collapse}
+thead{background:#F8FAFC}
+thead th{padding:10px 16px;text-align:left;font-size:11px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.5px;white-space:nowrap;border-bottom:1px solid var(--border)}
+tbody tr{border-bottom:1px solid var(--border);transition:background var(--transition)}
+tbody tr:hover{background:#F8FAFC}
+tbody tr:last-child{border-bottom:none}
+tbody td{padding:12px 16px;vertical-align:middle}
+.actions-cell{display:flex;align-items:center;gap:6px;white-space:nowrap}
+
+/* ── ALERTS ── */
+.alert{border-radius:6px;padding:12px 16px;font-size:13px;line-height:1.5;margin-bottom:16px;display:flex;gap:10px;align-items:flex-start}
+.alert-info{background:#EFF6FF;color:#1E40AF;border-left:4px solid #3B82F6}
+.alert-warning{background:#FFFBEB;color:#92400E;border-left:4px solid #F59E0B}
+.alert-success{background:#F0FDF4;color:#166534;border-left:4px solid #22C55E}
+.alert-error{background:#FEF2F2;color:#991B1B;border-left:4px solid #EF4444}
+
+/* ── CHANGE BANNER ── */
+.change-banner{display:flex;align-items:flex-start;gap:14px;padding:14px 18px;border:1px solid #BBD8F0;background:#E8F1FB;border-left:4px solid var(--primary);border-radius:var(--radius);margin-bottom:16px}
+.change-banner .cb-icon{width:32px;height:32px;border-radius:50%;background:var(--primary);color:#fff;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:700;flex-shrink:0}
+.change-banner .cb-body{flex:1}
+.change-banner h4{font-size:14px;margin-bottom:4px;color:var(--primary-dark)}
+.change-banner p{font-size:12.5px;color:var(--text-secondary);line-height:1.5}
+
+/* ── MODALS ── */
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(15,23,42,.5);z-index:1000;align-items:center;justify-content:center;backdrop-filter:blur(2px)}
+.modal-overlay.open{display:flex}
+.modal{background:var(--surface);border-radius:var(--radius-lg);box-shadow:var(--shadow-md);width:100%;max-width:520px;max-height:88vh;display:flex;flex-direction:column;overflow:hidden}
+.modal-lg{max-width:700px}
+.modal-header{padding:18px 22px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
+.modal-header h3{font-size:16px;font-weight:600}
+.modal-close{background:none;border:none;padding:6px;border-radius:var(--radius-sm);color:var(--text-secondary);cursor:pointer;font-size:18px;line-height:1;transition:background var(--transition)}.modal-close:hover{background:var(--bg)}
+.modal-body{padding:22px;overflow-y:auto;flex:1}
+.modal-body::-webkit-scrollbar{width:4px}.modal-body::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
+.modal-footer{padding:14px 22px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:10px;flex-shrink:0}
+
+/* ── FORMS ── */
+.form-group{margin-bottom:16px}
+.form-group label{display:block;font-size:13px;font-weight:500;color:var(--text-primary);margin-bottom:6px}
+.form-control{width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface);color:var(--text-primary);transition:border-color var(--transition);outline:none}
+.form-control:focus{border-color:var(--primary);box-shadow:0 0 0 3px var(--primary-light)}
+textarea.form-control{resize:vertical;min-height:80px}
+.form-hint{font-size:11px;color:var(--text-secondary);margin-top:4px}
+
+/* ── TOAST ── */
+.toast-wrap{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);z-index:3000;display:flex;flex-direction:column;gap:8px;align-items:center}
+@keyframes toastIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+.toast{padding:11px 18px;border-radius:var(--radius);color:#fff;font-size:13px;font-weight:500;box-shadow:var(--shadow-md);animation:toastIn .28s ease;max-width:520px}
+.toast-info{background:#1565C0}.toast-success{background:#2E7D32}.toast-error{background:#C62828}.toast-warning{background:#B45309}
+
+/* ── TOOLTIP (works around disabled-button hover) ── */
+.tooltip-wrap{position:relative;display:inline-flex}
+.tooltip-wrap:hover .tooltip{display:block}
+.tooltip-wrap .tooltip{display:none;position:absolute;bottom:calc(100% + 8px);left:50%;transform:translateX(-50%);background:#1E293B;color:#fff;font-size:11px;padding:6px 10px;border-radius:6px;white-space:nowrap;z-index:500;pointer-events:none;max-width:280px;white-space:normal;text-align:center;line-height:1.45}
+.tooltip-wrap .tooltip::after{content:'';position:absolute;top:100%;left:50%;transform:translateX(-50%);border:5px solid transparent;border-top-color:#1E293B}
+
+/* ── SECTION / ANNOTATION ── */
+.section-title{font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:var(--text-secondary);margin-bottom:10px;margin-top:22px;padding-bottom:6px;border-bottom:1px solid var(--border)}
+.section-title:first-child{margin-top:0}
+.annotate{display:flex;gap:10px;padding:12px 14px;border:1px dashed #C7D2FE;background:#F5F8FF;border-radius:var(--radius);font-size:12.5px;color:#3730A3;line-height:1.5;margin:12px 0}
+.annotate .a-icon{flex-shrink:0;font-size:16px;margin-top:1px}
+.annotate strong{color:#3730A3}
+
+/* ── FLOW GUIDE ── */
+.flow-guide{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px}
+@media(max-width:1200px){.flow-guide{grid-template-columns:repeat(2,1fr)}}
+.fg-step{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:12px 14px;display:flex;flex-direction:column;gap:8px;position:relative;transition:box-shadow var(--transition),border-color var(--transition)}
+.fg-step:hover{box-shadow:var(--shadow)}
+.fg-step.hot{border-color:var(--violet);box-shadow:0 0 0 3px var(--violet-light)}
+.fg-num{width:22px;height:22px;border-radius:50%;background:var(--primary);color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.fg-step.hot .fg-num{background:var(--violet)}
+.fg-title{font-size:12.5px;font-weight:600;line-height:1.35}
+.fg-desc{font-size:11.5px;color:var(--text-secondary);line-height:1.45;flex:1}
+.fg-do{align-self:flex-start;background:none;border:1px solid var(--primary);color:var(--primary);padding:4px 10px;border-radius:20px;font-size:11px;font-weight:600;transition:all var(--transition)}
+.fg-do:hover{background:var(--primary);color:#fff}
+.fg-step.hot .fg-do{border-color:var(--violet);color:var(--violet-dark)}
+.fg-step.hot .fg-do:hover{background:var(--violet);color:#fff}
+
+/* ── RUN / OPTIMIZE STEPPER ── */
+.stepper{display:flex;flex-direction:column;gap:0;margin:8px 0}
+.step-row{display:flex;align-items:flex-start;gap:12px;padding:11px 4px;border-bottom:1px solid #F1F5F9;position:relative}
+.step-row:last-child{border-bottom:none}
+.step-dot{width:22px;height:22px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;margin-top:1px}
+.step-dot.pending{background:var(--border);color:var(--text-secondary)}
+.step-dot.active{background:var(--primary);color:#fff;box-shadow:0 0 0 4px var(--primary-light)}
+.step-dot.done{background:var(--success);color:#fff}
+.step-dot.fail{background:var(--error);color:#fff}
+.step-dot.warn{background:var(--warning);color:#fff}
+.step-dot.violet{background:var(--violet);color:#fff}
+.step-main{flex:1;min-width:0}
+.step-title{font-size:13px;font-weight:600}
+.step-sub{font-size:12px;color:var(--text-secondary);margin-top:2px;line-height:1.45}
+.step-tag{margin-left:auto;flex-shrink:0}
+.spinner-sm{width:15px;height:15px;border-radius:50%;border:2px solid #E2E8F0;border-top-color:var(--primary);animation:spin .8s linear infinite;display:inline-block;vertical-align:-2px}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* ── REQUIRES-FIX BANNER (plan) ── */
+.requiresfix{display:flex;align-items:flex-start;gap:12px;padding:14px 16px;background:#FFF5F5;border:1px solid #FECACA;border-left:4px solid var(--error);border-radius:var(--radius);margin-bottom:14px}
+.requiresfix .rf-icon{width:32px;height:32px;border-radius:50%;background:var(--error);color:#fff;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0}
+.requiresfix h4{font-size:13.5px;font-weight:700;color:#B91C1C;margin-bottom:3px}
+.requiresfix p{font-size:12.5px;color:#7F1D1D;line-height:1.5}
+
+/* ── FEEDBACK LIST ── */
+.fb-item{padding:10px 0;border-bottom:1px solid var(--border)}
+.fb-item:last-child{border-bottom:none}
+.fb-summary{font-size:13px;font-weight:500}
+.fb-meta{font-size:11.5px;color:var(--text-secondary);margin-top:3px;display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.fb-source{display:inline-flex;align-items:center;gap:4px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;padding:1px 7px;border-radius:10px}
+.fb-source.auto{background:#FEE2E2;color:#B91C1C}
+.fb-source.manual{background:#EDE9FE;color:#6D28D9}
+.fb-source.prior{background:#DBEAFE;color:#1D4ED8}
+
+/* ── FLOW MAP (plan) ── */
+.flow-map{display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:12px;margin:8px 0 4px}
+.flow-node{background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:4px 10px;font-weight:500}
+
+/* ── DEMO RESET STRIP ── */
+.demo-strip{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:8px 14px;border:1px dashed var(--border);border-radius:var(--radius);background:#F8FAFC;font-size:12px;color:var(--text-secondary);margin-bottom:14px}
+.demo-btn{background:#fff;border:1px solid var(--border);color:var(--text-primary);padding:4px 12px;border-radius:4px;font-size:11.5px;cursor:pointer;transition:all var(--transition);font-weight:500}
+.demo-btn:hover{border-color:var(--primary);color:var(--primary)}
+
+/* ── ROW REQUIRES-FIX ── */
+.row-fix td{background:#FFFBEB}
+.row-fix .fix-badge{display:inline-flex;align-items:center;gap:5px;font-size:10.5px;font-weight:700;color:#B91C1C;background:#FEE2E2;padding:2px 9px;border-radius:20px;white-space:nowrap}
+.row-gate{font-size:10.5px;color:#B45309;margin-top:5px;line-height:1.35;max-width:230px}
+
+/* ── VIEWS ── */
+.view{display:block}
+.view.is-hidden{display:none}
+
+/* ── SYSTEM CONFIG: AUTHORING MODEL ── */
+.cfg-card{max-width:820px;margin-bottom:16px}
+.cfg-scope{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:600;color:#3730A3;background:#EEF2FF;border:1px solid #C7D2FE;padding:2px 9px;border-radius:20px;white-space:nowrap}
+.use-list{display:flex;flex-direction:column;gap:8px;margin:12px 0 14px}
+.use-row{display:flex;gap:10px;align-items:flex-start;padding:9px 12px;background:#F8FAFC;border:1px solid var(--border);border-radius:var(--radius-sm)}
+.use-row .u-ico{font-size:14px;line-height:1.3;flex-shrink:0}
+.use-row .u-t{font-size:12.5px;font-weight:600}
+.use-row .u-d{font-size:12px;color:var(--text-secondary);line-height:1.45}
+.cfg-model-row{display:flex;gap:8px;align-items:center}
+.cfg-model-row select{flex:1}
+#cfg-state-line{font-size:12px;margin-top:8px;display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.nav-alert{width:7px;height:7px;border-radius:50%;background:var(--error);margin-left:auto;flex-shrink:0;display:none}
+.nav-item.has-alert .nav-alert{display:block}
+
+/* ── EMPTY / GATE / STALE STATES ── */
+.empty-state{border:1px dashed #CBD5E1;background:#F8FAFC;border-radius:var(--radius);padding:26px 22px;text-align:center;margin-bottom:14px}
+.empty-state .es-ico{font-size:26px;margin-bottom:8px;line-height:1}
+.empty-state h4{font-size:14px;font-weight:600;margin-bottom:5px}
+.empty-state p{font-size:12.5px;color:var(--text-secondary);line-height:1.55;max-width:470px;margin:0 auto}
+.gate-banner{display:flex;gap:12px;align-items:flex-start;padding:14px 16px;border-radius:var(--radius);border:1px solid #FCD34D;background:#FFFBEB;margin-bottom:14px}
+.gate-banner .g-ico{width:30px;height:30px;border-radius:50%;background:var(--warning);color:#fff;display:flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0}
+.gate-banner h4{font-size:13.5px;font-weight:700;color:#92400E;margin-bottom:3px}
+.gate-banner p{font-size:12.5px;color:#78350F;line-height:1.5}
+.stale-banner{display:flex;gap:12px;align-items:flex-start;padding:12px 14px;border-radius:var(--radius);border:1px solid #FDBA74;background:#FFF7ED;margin-bottom:14px}
+.stale-banner .s-ico{font-size:16px;line-height:1.3;flex-shrink:0}
+.stale-banner h4{font-size:13px;font-weight:700;color:#9A3412;margin-bottom:2px}
+.stale-banner p{font-size:12.5px;color:#7C2D12;line-height:1.5}
+.plan-step{display:flex;align-items:flex-start;gap:12px;padding:10px 4px;border-bottom:1px solid var(--border)}
+.plan-step:last-of-type{border-bottom:none}
+.plan-step .ps-num{width:24px;height:24px;border-radius:50%;background:var(--violet-light);color:var(--violet-dark);font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:2px}
+.plan-step .ps-name{font-size:13px;font-weight:600}
+.plan-step .ps-desc{font-size:12px;color:var(--text-secondary);line-height:1.45}
+
+.code{background:#0F172A;border-radius:var(--radius);padding:12px 14px;font-family:'SF Mono','Roboto Mono',monospace;font-size:12px;line-height:1.7;color:#E2E8F0;overflow-x:auto;white-space:pre}
+.mono{font-family:'SF Mono','Roboto Mono',monospace}
+.text-sm{font-size:12px}.text-xs{font-size:11px}.text-secondary{color:var(--text-secondary)}
+.flex{display:flex}.items-center{align-items:center}.gap-2{gap:8px}.gap-3{gap:12px}.justify-between{justify-content:space-between}
+.mt-2{margin-top:8px}.mt-3{margin-top:12px}.mt-4{margin-top:16px}.mb-3{margin-bottom:12px}.mb-4{margin-bottom:16px}
+.w-full{width:100%}.muted{color:var(--text-secondary)}
+strong{font-weight:600}
+hr{display:block;height:1px;border:none;border-top:1px solid var(--border);margin:16px 0}
+</style>
+</head>
+<body>
+<div class="app-shell">
+
+  <!-- ══════════ SIDEBAR ══════════ -->
+  <aside class="sidebar">
+    <div class="sidebar-logo">
+      <h1>Parthenon</h1>
+      <small>Enterprise AI Harness</small>
+    </div>
+    <div class="nav-item active" id="nav-agents" onclick="showView('agents')"><span class="nav-icon">🤖</span>Agent Types</div>
+    <div class="nav-item" onclick="toast('The dashboard is outside this prototype.','info')"><span class="nav-icon">📊</span>Dashboard</div>
+    <div class="nav-item" id="nav-config" onclick="showView('config')"><span class="nav-icon">⚙️</span>System Config<span class="nav-alert"></span></div>
+    <div style="margin-top:auto;padding:14px 18px;border-top:1px solid var(--border)">
+      <div class="text-xs text-secondary">Prototype —<br><span class="mono">separate-optimization-from-execution</span></div>
+    </div>
+  </aside>
+
+  <!-- ══════════ MAIN ══════════ -->
+  <div class="main-wrapper">
+    <div class="topbar">
+      <div class="topbar-title" id="topbar-title">Agent Types</div>
+      <button class="btn btn-sm btn-secondary" onclick="resetDemo()">↺ Reset demo</button>
+    </div>
+
+    <div class="main-content">
+      <div id="view-agents" class="view">
+
+      <!-- Change banner -->
+      <div class="change-banner">
+        <div class="cb-icon">↔</div>
+        <div class="cb-body">
+          <h4>Separate Optimization from Execution</h4>
+          <p>Running an agent now <strong>only runs the agent</strong> — it never turns into an optimization mission.
+          Optimization is its own explicit, preconditioned action that stays realistic, bounded, and human-gated.
+          Plans are authored <strong>only when you ask</strong>, by one workspace-level authoring model.
+          This prototype walks the 11 key flows below.</p>
+        </div>
+      </div>
+
+      <!-- Visible reminder when no authoring model is configured -->
+      <div id="model-reminder" class="alert alert-warning" style="display:none">
+        <span style="font-size:15px">⚠️</span>
+        <div>
+          <strong>No plan authoring model configured for this workspace.</strong>
+          Plan generation and ✦ Optimize are unavailable until an administrator chooses one — no other model is used as a fallback.
+          <button class="btn btn-xs btn-secondary" style="margin-left:8px" onclick="showView('config')">Open System Config</button>
+        </div>
+      </div>
+
+      <!-- Flow guide -->
+      <div class="flow-guide" id="flow-guide">
+        <div class="fg-step" data-fg="1">
+          <div class="fg-num">1</div>
+          <div class="fg-title">Run is execution-only</div>
+          <div class="fg-desc">The Run dialog carries the agent's own task — no "run with optimization" toggle.</div>
+          <button class="fg-do" onclick="flowRun('report-generator')">▶ Run report-generator</button>
+        </div>
+        <div class="fg-step" data-fg="2">
+          <div class="fg-num">2</div>
+          <div class="fg-title">Separate Optimize action</div>
+          <div class="fg-desc">A dedicated ✦ Optimize sits beside ▶ Run — a separate action, not a run option.</div>
+          <button class="fg-do" onclick="flowFocus('report-generator')">Point at it</button>
+        </div>
+        <div class="fg-step" data-fg="3">
+          <div class="fg-num">3</div>
+          <div class="fg-title">Precondition: success first</div>
+          <div class="fg-desc">Optimize is disabled until one successful run. Click to see the explanation.</div>
+          <button class="fg-do" onclick="flowOptimizeGate('report-generator')">See why it's disabled</button>
+        </div>
+        <div class="fg-step" data-fg="4">
+          <div class="fg-num">4</div>
+          <div class="fg-title">Optimization run → ready</div>
+          <div class="fg-desc">Optimize authors &amp; verifies scripts from the latest run, then lands "ready".</div>
+          <button class="fg-do" onclick="flowOptimize('report-generator')">✦ Optimize</button>
+        </div>
+        <div class="fg-step" data-fg="5">
+          <div class="fg-num">5</div>
+          <div class="fg-title">Bounded: no confidence</div>
+          <div class="fg-desc">No high confidence → stops with <em>needs_feedback</em>. Never loops forever.</div>
+          <button class="fg-do" onclick="flowOptimize('booking-lookup')">✦ Optimize booking-lookup</button>
+        </div>
+        <div class="fg-step" data-fg="6">
+          <div class="fg-num">6</div>
+          <div class="fg-title">Plan flagged "requires fix"</div>
+          <div class="fg-desc">A later run falls back to the model path → plan flagged + alert shown.</div>
+          <button class="fg-do" onclick="flowSimulateFallback('pr-reviewer')">▶ Simulate fallback run</button>
+        </div>
+        <div class="fg-step" data-fg="7">
+          <div class="fg-num">7</div>
+          <div class="fg-title">Re-optimize w/ feedback</div>
+          <div class="fg-desc">Re-optimize carries the prior plan + auto feedback; manual feedback still works.</div>
+          <button class="fg-do" onclick="flowPlan('pr-reviewer')">Open plan → re-optimize</button>
+        </div>
+        <div class="fg-step" data-fg="8">
+          <div class="fg-num">8</div>
+          <div class="fg-title">System Config — authoring model</div>
+          <div class="fg-desc">One workspace model authors Skill/SOP workflows, implementation plans and optimization plans. A larger model is recommended — smaller ones can still be saved.</div>
+          <button class="fg-do" onclick="flowConfig()">⚙️ Open System Config</button>
+        </div>
+        <div class="fg-step" data-fg="9">
+          <div class="fg-num">9</div>
+          <div class="fg-title">Plans only on request</div>
+          <div class="fg-desc">Saving or creating an agent never authors a plan. Plan Preview shows "no plan yet" with an explicit ✨ Generate plan.</div>
+          <button class="fg-do" onclick="flowPlanGen()">📋 Open Plan Preview</button>
+        </div>
+        <div class="fg-step" data-fg="10">
+          <div class="fg-num">10</div>
+          <div class="fg-title">No model → authoring blocked</div>
+          <div class="fg-desc">Clear the model, then try to generate a plan or optimize: both are blocked with a pointer to System Config.</div>
+          <button class="fg-do" onclick="flowMissingModel()">Simulate missing model</button>
+        </div>
+        <div class="fg-step" data-fg="11">
+          <div class="fg-num">11</div>
+          <div class="fg-title">Conversational agents excluded</div>
+          <div class="fg-desc">Plan generation and optimization are unavailable for conversational agents, with a plain explanation.</div>
+          <button class="fg-do" onclick="flowConv()">Open support-assistant</button>
+        </div>
+      </div>
+
+      <!-- Agent table -->
+      <div class="flex items-center justify-between" style="margin:22px 0 10px">
+        <div class="section-title" style="margin:0;border-bottom:none;padding-bottom:0">Agent Types</div>
+        <button class="btn btn-sm btn-primary" onclick="openCreate()">＋ New agent</button>
+      </div>
+      <div class="annotate">
+        <span class="a-icon">ℹ️</span>
+        <span>Each row shows <strong>two distinct actions</strong>: <strong>▶ Run</strong> (execute the task) and <strong>✦ Optimize</strong> (author a better plan). Optimize stays disabled until the agent has a successful run <em>and</em> the workspace has an authoring model.
+        <strong>📋 Plan</strong> opens <strong>Plan Preview</strong> — the implementation plan, which is only ever written when you ask for it. <strong>🧩 Optimized</strong> opens the optimized plan, which only exists after an optimization run.</span>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Name</th><th>Type</th><th>Successful runs</th><th>Implementation plan</th><th>Optimized plan</th><th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="agent-rows"></tbody>
+        </table>
+      </div>
+
+      <div class="annotate" style="margin-top:14px">
+        <span class="a-icon">ℹ️</span>
+        <span><strong>How to click through:</strong> follow the numbered guide above. The state of each agent updates live as you run, generate plans and optimize — no page reload needed.</span>
+      </div>
+
+      </div><!-- /view-agents -->
+
+      <!-- ══════════════ VIEW: SYSTEM CONFIG ══════════════ -->
+      <div id="view-config" class="view is-hidden">
+        <div class="section-title">Workspace Settings</div>
+
+        <div id="cfg-missing" class="alert alert-warning" style="display:none">
+          <span style="font-size:15px">⚠️</span>
+          <div id="cfg-missing-text"></div>
+        </div>
+
+        <div class="card cfg-card">
+          <div class="card-header">
+            <h3>Agent Plan Authoring Model</h3>
+            <span class="cfg-scope">🏢 Applies to this workspace only</span>
+          </div>
+          <div class="card-body">
+            <div class="form-hint" style="margin-top:0;font-size:12.5px;line-height:1.55">
+              One model per workspace authors everything the platform generates on your behalf:
+            </div>
+            <div class="use-list">
+              <div class="use-row">
+                <span class="u-ico">🧭</span>
+                <div><div class="u-t">Skill / SOP workflow generation</div>
+                  <div class="u-d">Drafts the workflow when you generate a Skill or SOP from the tool catalogue.</div></div>
+              </div>
+              <div class="use-row">
+                <span class="u-ico">📋</span>
+                <div><div class="u-t">Implementation-plan generation</div>
+                  <div class="u-d">Writes the agent's plan when you explicitly ask for it from Plan Preview.</div></div>
+              </div>
+              <div class="use-row">
+                <span class="u-ico">✦</span>
+                <div><div class="u-t">Optimization-plan generation</div>
+                  <div class="u-d">Authors the optimized plan when you trigger ✦ Optimize on an agent.</div></div>
+              </div>
+            </div>
+
+            <div class="alert alert-info" style="margin:0 0 16px">
+              <span style="font-size:15px">💡</span>
+              <div>
+                <strong>We recommend a larger, higher-end model.</strong>
+                Plan authoring quality depends on this choice — a small, cheap model produces weaker plans.
+                This is advice, not a restriction: any enabled model can be saved.
+                Agents keep their own runtime model, which is a separate choice and is never used to author plans.
+              </div>
+            </div>
+
+            <div class="form-group" style="margin-bottom:6px">
+              <label for="cfg-authoring-select">Authoring model</label>
+              <div class="cfg-model-row">
+                <select class="form-control" id="cfg-authoring-select"></select>
+                <button class="btn btn-primary btn-sm" onclick="saveAuthoringModel()">Save</button>
+              </div>
+              <div class="form-hint">Only models enabled in this workspace's model catalogue can be chosen. One setting governs every authoring surface — there is no second setting to keep in sync.</div>
+            </div>
+            <div id="cfg-state-line"></div>
+          </div>
+        </div>
+
+        <div class="annotate" style="max-width:820px">
+          <span class="a-icon">🏢</span>
+          <span><strong>Workspace scope.</strong> This choice applies to the current workspace only — changing it here never affects plan generation in another workspace. When multi-tenancy is off, the deployment's single default workspace uses this setting.</span>
+        </div>
+
+        <div class="demo-strip" style="max-width:820px">
+          <span>Demo:</span>
+          <button class="demo-btn" onclick="simulateModelRemoved()">Simulate: model removed from catalogue</button>
+          <button class="demo-btn" onclick="setAuthoringModel(null,'not_set')">Simulate: no model configured</button>
+          <button class="demo-btn" onclick="setAuthoringModel('claude-3-5-sonnet')">Restore model</button>
+        </div>
+      </div><!-- /view-config -->
+
+    </div>
+  </div>
+</div>
+
+<!-- ══════════ MODAL: RUN AGENT ══════════ -->
+<div id="modal-run" class="modal-overlay" onclick="closeModalIfOverlay(event,'modal-run')">
+  <div class="modal">
+    <div class="modal-header">
+      <h3 id="run-title">Run Agent</h3>
+      <button class="modal-close" onclick="closeModal('modal-run')">✕</button>
+    </div>
+    <div class="modal-body" id="run-body"></div>
+    <div class="modal-footer" id="run-footer"></div>
+  </div>
+</div>
+
+<!-- ══════════ MODAL: OPTIMIZE RUN ══════════ -->
+<div id="modal-optimize" class="modal-overlay" onclick="closeModalIfOverlay(event,'modal-optimize')">
+  <div class="modal modal-lg">
+    <div class="modal-header">
+      <h3 id="opt-run-title">Optimize Agent</h3>
+      <button class="modal-close" onclick="closeModal('modal-optimize')">✕</button>
+    </div>
+    <div class="modal-body" id="opt-run-body"></div>
+    <div class="modal-footer" id="opt-run-footer"></div>
+  </div>
+</div>
+
+<!-- ══════════ MODAL: OPTIMIZED PLAN ══════════ -->
+<div id="modal-plan" class="modal-overlay" onclick="closeModalIfOverlay(event,'modal-plan')">
+  <div class="modal modal-lg">
+    <div class="modal-header">
+      <h3 id="plan-title">Optimized Plan</h3>
+      <button class="modal-close" onclick="closeModal('modal-plan')">✕</button>
+    </div>
+    <div class="modal-body" id="plan-body"></div>
+    <div class="modal-footer" id="plan-footer"></div>
+  </div>
+</div>
+
+<!-- ══════════ MODAL: IMPLEMENTATION PLAN PREVIEW ══════════ -->
+<div id="modal-implplan" class="modal-overlay" onclick="closeModalIfOverlay(event,'modal-implplan')">
+  <div class="modal modal-lg">
+    <div class="modal-header">
+      <h3 id="implplan-title">Plan Preview</h3>
+      <button class="modal-close" onclick="closeModal('modal-implplan')">✕</button>
+    </div>
+    <div class="modal-body" id="implplan-body"></div>
+    <div class="modal-footer" id="implplan-footer"></div>
+  </div>
+</div>
+
+<!-- ══════════ MODAL: NEW AGENT ══════════ -->
+<div id="modal-create" class="modal-overlay" onclick="closeModalIfOverlay(event,'modal-create')">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>New Agent</h3>
+      <button class="modal-close" onclick="closeModal('modal-create')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="annotate" style="margin-top:0">
+        <span class="a-icon">ℹ️</span>
+        <span><strong>Saving never authors a plan.</strong> No model work, no spend and no plan overwrite happens when you create or update an agent. Generate the plan later from Plan Preview, when you want it.</span>
+      </div>
+      <div class="form-group">
+        <label for="create-name">Name</label>
+        <input class="form-control" id="create-name" value="weekly-digest">
+      </div>
+      <div class="form-group">
+        <label for="create-type">Agent type</label>
+        <select class="form-control" id="create-type" onchange="updateCreateHint()">
+          <option value="sop-agent">SOP agent — has a plan and can be optimized</option>
+          <option value="conversational">Conversational agent — no plan, no optimization</option>
+        </select>
+        <div class="form-hint" id="create-type-hint">Plan generation and optimization are available for this agent type.</div>
+      </div>
+      <div class="form-group">
+        <label for="create-skill">Skill / SOP</label>
+        <select class="form-control" id="create-skill">
+          <option value="weekly-digest-sop">weekly-digest-sop</option>
+          <option value="daily-report-gen">daily-report-gen</option>
+          <option value="booking-search">booking-search</option>
+        </select>
+      </div>
+      <div class="form-group" style="margin-bottom:0">
+        <label for="create-model">Runtime model (agent's own)</label>
+        <select class="form-control" id="create-model">
+          <option value="gpt-4o-mini">gpt-4o-mini — cheap, fast</option>
+          <option value="gpt-4o">gpt-4o</option>
+          <option value="claude-3-5-sonnet">claude-3-5-sonnet</option>
+        </select>
+        <div class="form-hint">Used only to run the agent. Plans are always authored by the workspace's authoring model.</div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-create')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveNewAgent()">Save agent</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast-wrap" id="toast-wrap"></div>
+
+<script>
+/* ═══════════════════════════ STATE ═══════════════════════════ */
+
+function planReady(){ return {
+  status:'ready', fullyScripted:true, error:null, requiresFix:null,
+  flow:['plan','read-analyze-file','transform','db-report'],
+  steps:[
+    {name:'Read dataset', desc:'tool call — read-analyze-file', modelBacked:false,
+      script:{name:'db-report', version:'v1', desc:'Reads the analysis dataset and computes per-group aggregates.',
+        source:'def run(ctx):\n    rows = ctx.tools["read-analyze-file"](path=ctx.input["dataset"])\n    return ops.merge(ops.count(rows), ops.pluck(rows, "region"))'}},
+    {name:'Aggregate by region', desc:'Local transform — group and count', modelBacked:false,
+      script:{name:'db-report', version:'v1', desc:'Same compiled script — aggregation step.',
+        source:'return ops.merge(ops.count(rows), ops.pluck(rows, "region"))'}},
+    {name:'Interpret results', desc:'Model-backed judgment step (confidence carried downstream)', modelBacked:true, script:null}
+  ],
+  feedback:[]
+};}
+
+function planRequiresFix(){ return {
+  status:'requires_fix', fullyScripted:true, error:null,
+  requiresFix:{
+    reason:'A later run fell back to the model-driven path because this optimized plan failed. It will keep falling back until you re-optimize — behavior never degrades silently.',
+    autoFeedback:'Auto-recorded from the failed run: script "pr-review" errored on an empty diff — fetch-pr returned no changed files but the script referenced the missing key files[0].'
+  },
+  flow:['plan','fetch-pr','post-review'],
+  steps:[
+    {name:'Fetch PR diff', desc:'tool call — fetch-pr', modelBacked:false,
+      script:{name:'pr-review', version:'v2', desc:'Fetches the pull request diff and reads files[0].',
+        source:'def run(ctx):\n    pr = ctx.tools["fetch-pr"](id=ctx.input["pr_id"])\n    return pr["files"][0]["diff"]   # fails when diff is empty'}},
+    {name:'Analyze changes', desc:'Model-backed review judgment', modelBacked:true, script:null},
+    {name:'Post review', desc:'tool call — post-review', modelBacked:false,
+      script:{name:'pr-review', version:'v2', desc:'Same compiled script — posts the review.',
+        source:'return ctx.tools["post-review"](pr_id=ctx.input["pr_id"], body=review)'}}
+  ],
+  feedback:[
+    {summary:'Keep empty-diff handling in the model path — it needs judgment, not a script.', source:'manual', date:'Oct 24, 2026, 09:15'}
+  ]
+};}
+
+var AGENTS = {
+  'report-generator': {
+    name:'report-generator', type:'sop-agent', skill:'daily-report-gen',
+    identity:'agent-reporter@parthenon', model:'claude-3-5-sonnet',
+    successfulRuns:0, plan:null, implPlan:null, everOptimized:false
+  },
+  'booking-lookup': {
+    name:'booking-lookup', type:'sop-agent', skill:'booking-search',
+    identity:'agent-booking@parthenon', model:'gpt-4o',
+    successfulRuns:1, plan:null, implPlan:null, everOptimized:false,
+    note:'The reference run returned a legitimately empty result (no booking found) — tool results vary between calls.'
+  },
+  'pr-reviewer': {
+    name:'pr-reviewer', type:'sop-agent', skill:'pr-review-workflow',
+    identity:'agent-pr-reviewer@parthenon', model:'gpt-4o',
+    successfulRuns:2, plan:null, implPlan:null, everOptimized:true,
+    // starts with a READY optimized plan so flow 6 can flag it requires_fix
+  },
+  'support-assistant': {
+    name:'support-assistant', type:'conversational', skill:null,
+    identity:'agent-support@parthenon', model:'gpt-4o-mini',
+    successfulRuns:0, plan:null, implPlan:null, everOptimized:false,
+    note:'Conversational agent — chats with users. It keeps its own instructions and has no implementation plan.'
+  }
+};
+AGENTS['pr-reviewer'].plan = planReady();
+
+/* ═══════════════════════════ WORKSPACE CONFIG ═══════════════════════════
+   The single workspace-level authoring model. Used for Skill/SOP workflow
+   generation, implementation plans and optimization plans. */
+var MODELS = [
+  {id:'claude-3-5-sonnet', label:'claude-3-5-sonnet (Anthropic)', tier:'high'},
+  {id:'gpt-4o',            label:'gpt-4o (OpenAI Production)',   tier:'high'},
+  {id:'deepseek-chat',     label:'deepseek-chat (DeepSeek)',     tier:'smaller'},
+  {id:'llama-3.1-8b',      label:'llama-3.1-8b (Self-hosted)',   tier:'smaller'}
+];
+var CONFIG = { authoringModel:'claude-3-5-sonnet', reason:null };
+var implBlocked = false;   // true after a blocked Generate-plan attempt
+
+function isAuthoringConfigured(){ return !!CONFIG.authoringModel; }
+function modelLabel(id){
+  var m=MODELS.filter(function(x){ return x.id===id; })[0];
+  return m ? m.label : id;
+}
+function modelMeta(id){
+  return MODELS.filter(function(x){ return x.id===id; })[0] || null;
+}
+function setAuthoringModel(id, reason){
+  CONFIG.authoringModel = id || null;
+  CONFIG.reason = id ? null : (reason || 'not_set');
+  implBlocked = false;
+  renderTable();
+  renderConfig();
+  renderModelReminder();
+}
+function simulateModelRemoved(){
+  CONFIG.reason = 'removed';
+  CONFIG.authoringModel = null;
+  implBlocked = false;
+  renderTable(); renderConfig(); renderModelReminder();
+  toast('The previously selected model is no longer in the catalogue — plan generation and optimization are unavailable.','warning');
+}
+function renderModelReminder(){
+  var el = document.getElementById('model-reminder');
+  if(el) el.style.display = isAuthoringConfigured() ? 'none' : 'flex';
+  var nav = document.getElementById('nav-config');
+  if(nav) nav.classList.toggle('has-alert', !isAuthoringConfigured());
+}
+
+/* ═══════════════════════════ VIEWS ═══════════════════════════ */
+function showView(v){
+  document.getElementById('view-agents').classList.toggle('is-hidden', v!=='agents');
+  document.getElementById('view-config').classList.toggle('is-hidden', v!=='config');
+  document.getElementById('nav-agents').classList.toggle('active', v==='agents');
+  document.getElementById('nav-config').classList.toggle('active', v==='config');
+  document.getElementById('topbar-title').textContent = (v==='config') ? 'System Config' : 'Agent Types';
+  var mc=document.querySelector('.main-content'); if(mc) mc.scrollTop=0;
+  if(v==='config') renderConfig();
+}
+
+/* ═══════════════════════════ SYSTEM CONFIG ═══════════════════════════ */
+function renderConfig(){
+  var sel=document.getElementById('cfg-authoring-select');
+  if(!sel) return;
+  var opts='<option value="">Not configured</option>';
+  MODELS.forEach(function(m){
+    opts+='<option value="'+m.id+'"'+(CONFIG.authoringModel===m.id?' selected':'')+'>'+esc(m.label)+(m.tier==='smaller'?' — smaller model':'')+'</option>';
+  });
+  sel.innerHTML=opts;
+
+  var missing=document.getElementById('cfg-missing');
+  var mt=document.getElementById('cfg-missing-text');
+  if(!isAuthoringConfigured()){
+    missing.style.display='flex';
+    mt.innerHTML = (CONFIG.reason==='removed')
+      ? '<strong>The model previously chosen for this workspace is no longer available in its model catalogue.</strong> Plan generation and optimization are unavailable until you re-select a valid model. Agents keep running normally.'
+      : '<strong>No plan authoring model is configured for this workspace.</strong> Plan generation and optimization are unavailable until one is chosen. There is no fallback to an agent\'s runtime model. Agents keep running normally.';
+  } else {
+    missing.style.display='none';
+  }
+
+  var state=document.getElementById('cfg-state-line');
+  if(isAuthoringConfigured()){
+    var m=modelMeta(CONFIG.authoringModel);
+    var adv = (m && m.tier==='smaller')
+      ? '<span class="chip chip-yellow">smaller model — advisory only</span><span class="text-secondary">Plan quality may be lower than with a higher-end model.</span>'
+      : '<span class="text-secondary">Higher-end model recommended — this choice looks good.</span>';
+    state.innerHTML='<span style="color:var(--success);font-weight:600">✓ Configured:</span><strong>'+esc(modelLabel(CONFIG.authoringModel))+'</strong>'+adv;
+  } else {
+    state.innerHTML='<span style="color:#B45309;font-weight:600">⚠ Not configured</span><span class="text-secondary">Plan generation and optimization are unavailable in this workspace.</span>';
+  }
+}
+
+function saveAuthoringModel(){
+  var sel=document.getElementById('cfg-authoring-select');
+  var v=sel ? sel.value : '';
+  if(!v){
+    setAuthoringModel(null,'not_set');
+    toast('Authoring model cleared — plan generation and optimization are now unavailable.','warning');
+  } else {
+    setAuthoringModel(v);
+    var m=modelMeta(v);
+    if(m && m.tier==='smaller'){
+      toast('Saved. This is a smaller model — it is allowed, but plan quality may be lower than a higher-end model.','info');
+    } else {
+      toast('Authoring model saved for this workspace.','success');
+    }
+  }
+}
+
+/* ═══════════════════════════ HELPERS ═══════════════════════════ */
+function openModal(id){ var m=document.getElementById(id); if(m) m.classList.add('open'); }
+function closeModal(id){ var m=document.getElementById(id); if(m) m.classList.remove('open'); }
+function closeModalIfOverlay(e,id){ if(e.target===e.currentTarget) closeModal(id); }
+function toast(msg,type){ var w=document.getElementById('toast-wrap'); var t=document.createElement('div');
+  t.className='toast toast-'+(type||'info'); t.textContent=msg; w.appendChild(t);
+  setTimeout(function(){ if(t.parentNode) t.parentNode.removeChild(t); },3400); }
+function esc(s){ return String(s).replace(/[&<>"]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];}); }
+function hot(step){ document.querySelectorAll('.fg-step').forEach(function(s){s.classList.toggle('hot',s.dataset.fg===String(step));}); }
+
+/* ═══════════════════════════ RENDER TABLE ═══════════════════════════ */
+function planChip(a){
+  var p=a.plan;
+  if(!p) return '<span class="chip chip-gray">none</span>';
+  var map={ready:['chip-green','ready'],needs_feedback:['chip-orange','needs_feedback'],requires_fix:['chip-red','requires fix'],failed:['chip-red','failed'],optimizing:['chip-blue','optimizing']};
+  var c=map[p.status]||['chip-gray',p.status];
+  return '<span class="chip '+c[0]+'">'+c[1]+'</span>';
+}
+function implChip(a){
+  if(a.type==='conversational') return '<span class="chip chip-gray">not available</span>';
+  if(a.implPlan){
+    if(a.implPlan.error) return '<span class="chip chip-red">generation failed</span>';
+    if(a.implPlan.stale) return '<span class="chip chip-orange">may be out of date</span>';
+    return '<span class="chip chip-green">generated</span>';
+  }
+  return '<span class="chip chip-gray">none yet</span>';
+}
+function renderTable(){
+  var tb=document.getElementById('agent-rows');
+  var keys=Object.keys(AGENTS);
+  tb.innerHTML='';
+  keys.forEach(function(k){
+    var a=AGENTS[k];
+    var conv = a.type==='conversational';
+    var fix = a.plan && a.plan.status==='requires_fix';
+    var optBtn;
+    if(conv){
+      optBtn='<span class="tooltip-wrap"><button class="btn btn-xs btn-outline-violet" disabled style="opacity:.5">✦ Optimize</button><span class="tooltip">Plan generation and optimization are not available for conversational agents. They keep their own instructions and are never compiled into an optimized plan.</span></span>';
+    } else if(!isAuthoringConfigured()){
+      optBtn='<span class="tooltip-wrap"><button class="btn btn-xs btn-outline-violet" disabled style="opacity:.5">✦ Optimize</button><span class="tooltip">No plan authoring model is configured for this workspace.<br>Choose one in System Config to enable optimization.</span></span>';
+    } else if(a.successfulRuns<1){
+      optBtn='<span class="tooltip-wrap"><button class="btn btn-xs btn-outline-violet" disabled style="opacity:.5">✦ Optimize</button><span class="tooltip">Optimization needs a real reference run first.<br>Run this agent successfully at least once to enable it.</span></span>';
+    } else {
+      optBtn='<button class="btn btn-xs btn-violet" onclick="openOptimize(\''+k+'\')" title="Author and verify an optimized plan for this agent">✦ Optimize</button>';
+    }
+    var fixBadge = fix
+      ? '<span class="fix-badge">⚠ requires fix</span>'
+      : '';
+    var implBtn = conv
+      ? '<span class="tooltip-wrap"><button class="btn btn-xs btn-secondary" disabled style="opacity:.45">📋 Plan</button><span class="tooltip">Conversational agents have no implementation plan — plan generation is unavailable for this agent type.</span></span>'
+      : '<button class="btn btn-xs btn-secondary" onclick="openImplPlan(\''+k+'\')" title="Plan Preview — implementation plan (generated only when you ask)">📋 Plan</button>';
+    var planBtn = a.plan
+      ? '<button class="btn btn-xs btn-secondary" onclick="openPlan(\''+k+'\')" title="Optimized plan">🧩 Optimized</button>'
+      : '<button class="btn btn-xs btn-secondary" disabled style="opacity:.45" title="No optimized plan yet">🧩 Optimized</button>';
+    var typeChip = conv ? '<span class="chip chip-purple">conversational</span>' : '<span class="chip chip-blue">'+esc(a.type)+'</span>';
+    var runsCell = conv ? '<span class="text-secondary">—</span>' : '<strong>'+a.successfulRuns+'</strong>';
+    var gateNote = '';
+    if(conv) gateNote = 'Plan generation and optimization are not available for conversational agents';
+    else if(!isAuthoringConfigured()) gateNote = 'No authoring model configured — choose one in System Config';
+    else if(a.successfulRuns<1) gateNote = 'Optimize needs one successful run first';
+    var row = '<tr'+(fix?' class="row-fix"':'')+'>'+
+      '<td><strong>'+esc(a.name)+'</strong>'+fixBadge+
+        (a.note?'<div class="text-xs text-secondary mt-2" style="max-width:250px">'+esc(a.note)+'</div>':'')+'</td>'+
+      '<td>'+typeChip+'</td>'+
+      '<td>'+runsCell+'</td>'+
+      '<td>'+implChip(a)+'</td>'+
+      '<td>'+planChip(a)+'</td>'+
+      '<td><div class="actions-cell">'+
+        '<button class="btn btn-xs btn-primary" onclick="openRun(\''+k+'\')">'+(conv?'💬 Chat':'▶ Run')+'</button>'+
+        optBtn+
+        implBtn+
+        planBtn+
+      '</div>'+
+      (gateNote?'<div class="row-gate">⚠ '+gateNote+'</div>':'')+
+      '</td></tr>';
+    tb.insertAdjacentHTML('beforeend',row);
+  });
+}
+
+/* ═══════════════════════════ FLOW 1 + 3 : RUN ═══════════════════════════ */
+function openRun(key){
+  var a=AGENTS[key];
+  var conv = a.type==='conversational';
+  document.getElementById('run-title').textContent=(conv?'Chat — ':'Run Agent — ')+a.name;
+  var body=document.getElementById('run-body');
+  var hasReadyPlan = a.plan && a.plan.status==='ready';
+  body.innerHTML =
+    (conv
+      ? '<div class="annotate" style="margin-top:0"><span class="a-icon">ℹ️</span><span><strong>Conversational agent.</strong> This opens a conversation that uses the agent\'s own instructions. Conversational agents have no implementation plan and are never optimized — nothing about this conversation is authoring a plan.</span></div>'
+      : '<div class="annotate" style="margin-top:0"><span class="a-icon">ℹ️</span><span><strong>Run is execution-only.</strong> This dialog runs the agent on its own task using its own instructions. There is no "run with optimization" option — a normal run never doubles as an optimization mission.</span></div>')+
+    '<div class="form-group"><label>'+(conv?'Message':'Task / input')+'</label>'+
+    '<textarea class="form-control" id="run-input" rows="3">'+
+      (key==='pr-reviewer' ? 'Review PR #4821 for correctness and comment on any issues.' :
+       key==='booking-lookup' ? 'Find my booking for confirmation number BKG-9912.' :
+       conv ? 'Where can I find my invoice for last month?' :
+       'Generate the daily sales report for region "west".')+
+    '</textarea>'+
+    '<div class="form-hint">The agent will use its own system and skill instructions.</div></div>'+
+    (conv
+      ? '<div class="alert alert-info" style="margin-bottom:0"><span style="font-size:15px">💬</span><div><strong>No plan involved.</strong> Nothing here generates or optimizes a plan.</div></div>'
+      : hasReadyPlan
+        ? '<div class="alert alert-info" style="margin-bottom:0"><span style="font-size:15px">⚡</span><div><strong>Optimized plan present.</strong> This run will try the optimized plan first, and fall back to the model path if it fails — with no change to your task.</div></div>'
+        : '<div class="alert alert-info" style="margin-bottom:0"><span style="font-size:15px">🧠</span><div><strong>Model path.</strong> No ready optimized plan, so this run proceeds on the model-driven path.</div></div>');
+  document.getElementById('run-footer').innerHTML=
+    '<button class="btn btn-secondary" onclick="closeModal(\'modal-run\')">Cancel</button>'+
+    '<button class="btn btn-primary" onclick="startRun(\''+key+'\')">'+(conv?'💬 Send':'▶ Run now')+'</button>';
+  hot(1);
+  openModal('modal-run');
+}
+
+function startRun(key){
+  var a=AGENTS[key];
+  var hasReadyPlan = a.plan && a.plan.status==='ready';
+  // pr-reviewer ready plan is the "later run that falls back"
+  var willFallback = (key==='pr-reviewer' && a.plan && a.plan.status==='ready');
+  var body=document.getElementById('run-body');
+  var steps = [
+    {t:'Submitting execution', s:'The agent begins executing the task.'},
+    hasReadyPlan ? {t:'Running optimized plan (script-first)', s:'Trying the compiled script path for fastest, cheapest execution.'} : null,
+    willFallback ? {t:'Optimized plan failed', s:'The compiled script errored — the framework records this and falls back.'} : null,
+    hasReadyPlan && !willFallback ? {t:'Optimized plan succeeded', s:'Script completed; result produced.'} : null,
+    {t:'Producing result', s:'Final output is returned to you.'}
+  ].filter(Boolean);
+
+  renderRunSteps(body, steps, function(){
+    // completion
+    if(willFallback){
+      a.plan = planRequiresFix();
+      a.successfulRuns+=1;
+      renderTable();
+      document.getElementById('run-footer').innerHTML='<button class="btn btn-primary" onclick="closeModal(\'modal-run\');openPlan(\''+key+'\')">View flagged plan</button>';
+      hot(6);
+      toast('Run fell back to the model path — the optimized plan is now flagged "requires fix".','warning');
+    } else {
+      a.successfulRuns+=1;
+      renderTable();
+      var canNow = a.successfulRuns>=1;
+      document.getElementById('run-footer').innerHTML='<button class="btn btn-primary" onclick="closeModal(\'modal-run\')">Done</button>';
+      if(!a.everOptimized && !a.plan){
+        toast('Run completed successfully — ✦ Optimize is now enabled.','success');
+        hot(3);
+      } else {
+        toast('Run completed successfully.','success');
+      }
+    }
+  });
+}
+
+function renderRunSteps(body, steps, done){
+  var i=0;
+  function draw(){
+    body.innerHTML = '<div class="stepper">'+steps.map(function(s,idx){
+      var st = idx<i ? 'done' : (idx===i ? 'active' : 'pending');
+      var dot = idx<i ? '<span class="step-dot done">✓</span>' : (idx===i ? '<span class="step-dot active"><span class="spinner-sm" style="border-top-color:#fff"></span></span>' : '<span class="step-dot pending">•</span>');
+      return '<div class="step-row"><div class="step-main"><div class="step-title">'+s.t+'</div><div class="step-sub">'+s.s+'</div></div>'+dot+'</div>';
+    }).join('')+'</div>';
+    document.getElementById('run-footer').innerHTML='<button class="btn btn-secondary" disabled style="opacity:.5">Running…</button>';
+  }
+  function next(){
+    i++;
+    if(i<=steps.length){ draw(); }
+    if(i===steps.length){ setTimeout(done, 700); }
+    else setTimeout(next, 700);
+  }
+  draw();
+  setTimeout(next, 700);
+}
+
+/* ═══════════════════════════ FLOW 4 + 5 : OPTIMIZE ═══════════════════════════ */
+function openOptimize(key){
+  var a=AGENTS[key];
+  document.getElementById('opt-run-title').textContent='Optimize Agent — '+a.name;
+
+  if(a.type==='conversational'){
+    hot(11);
+    renderOptimizeBlocked(key,'conv');
+    return;
+  }
+  if(!isAuthoringConfigured()){
+    hot(10);
+    renderOptimizeBlocked(key,'model');
+    return;
+  }
+  if(a.successfulRuns<1){
+    hot(3);
+    renderOptimizeBlocked(key,'run');
+    return;
+  }
+
+  var reopt = a.plan && (a.plan.status==='requires_fix' || a.plan.status==='needs_feedback');
+  var body=document.getElementById('opt-run-body');
+  body.innerHTML =
+    '<div class="annotate" style="margin-top:0"><span class="a-icon">ℹ️</span><span><strong>Optimization is a dedicated run</strong> — it uses the agent\'s optimization instructions, the current plan, and the <strong>latest successful execution</strong> as its reference. It never hijacks a normal run. The optimized plan is authored by <strong>'+esc(modelLabel(CONFIG.authoringModel))+'</strong>, this workspace\'s authoring model.</span></div>'+
+    (reopt
+      ? '<div class="alert alert-info" style="margin-bottom:12px"><span style="font-size:15px">🔁</span><div><strong>Re-optimization with context.</strong> This run carries the previous plan plus the feedback recorded from the failed execution (and any manual feedback).</div></div>'
+      : '<div class="alert alert-info" style="margin-bottom:12px"><span style="font-size:15px">📎</span><div><strong>Reference:</strong> latest execution (the most recent successful run) — not an unbounded fetch of old logs.</div></div>');
+  document.getElementById('opt-run-footer').innerHTML='<button class="btn btn-secondary" onclick="closeModal(\'modal-optimize\')">Cancel</button>';
+  hot(reopt?7:4);
+  openModal('modal-optimize');
+  runOptimize(key, reopt);
+}
+
+/* Blocked states — no optimization run is started. */
+function renderOptimizeBlocked(key, reason){
+  var a=AGENTS[key];
+  var body=document.getElementById('opt-run-body');
+  var html='';
+  if(reason==='conv'){
+    html='<div class="gate-banner" style="border-color:#C7D2FE;background:#F5F8FF">'+
+        '<div class="g-ico" style="background:#7C3AED">💬</div><div>'+
+        '<h4 style="color:#3730A3">Optimization and plan generation are not available for conversational agents</h4>'+
+        '<p style="color:#3730A3">Conversational agents keep their own instructions and are never compiled into an optimized plan. There is no implementation plan to optimize, so nothing can be generated or optimized here.</p>'+
+      '</div></div>'+
+      '<div class="annotate" style="margin-top:0"><span class="a-icon">ℹ️</span><span>This is by design — the same applies to Plan Preview. Any plan authored before an agent was converted to conversational is kept for reference only and is not used again while the agent stays conversational.</span></div>';
+    document.getElementById('opt-run-footer').innerHTML=
+      '<button class="btn btn-secondary" onclick="closeModal(\'modal-optimize\')">Close</button>';
+  } else if(reason==='model'){
+    html='<div class="gate-banner">'+
+        '<div class="g-ico">⚠</div><div>'+
+        '<h4>No optimization run was started</h4>'+
+        '<p><strong>No authoring model is configured for this workspace.</strong> Select one in System Config before generating plans or optimizing — plans are authored by that one workspace model and there is no fallback to the agent\'s runtime model.</p>'+
+        '<div class="mt-2"><button class="btn btn-sm btn-primary" onclick="closeModal(\'modal-optimize\');showView(\'config\')">⚙️ Open System Config</button></div>'+
+      '</div></div>'+
+      '<div class="annotate" style="margin-top:0"><span class="a-icon">ℹ️</span><span>Your agent, its runs and its existing plans are unaffected — this only blocks authoring.</span></div>';
+    document.getElementById('opt-run-footer').innerHTML=
+      '<button class="btn btn-secondary" onclick="closeModal(\'modal-optimize\')">Close</button>';
+  } else {
+    html='<div class="gate-banner">'+
+        '<div class="g-ico">▶</div><div>'+
+        '<h4>Optimization requires at least one successful execution</h4>'+
+        '<p>Optimization requires at least one successful execution of this agent. Run <strong>'+esc(a.name)+'</strong> successfully first so the optimizer has a real reference execution.</p>'+
+        '<div class="mt-2"><button class="btn btn-sm btn-primary" onclick="closeModal(\'modal-optimize\');openRun(\''+key+'\')">▶ Run this agent</button></div>'+
+      '</div></div>';
+    document.getElementById('opt-run-footer').innerHTML=
+      '<button class="btn btn-secondary" onclick="closeModal(\'modal-optimize\')">Close</button>';
+  }
+  body.innerHTML=html;
+  openModal('modal-optimize');
+  toast(reason==='conv' ? 'Optimization and plan generation are not available for conversational agents.' : (reason==='model' ? 'No authoring model is configured for this workspace. Select one in System Config before generating plans or optimizing.' : 'Optimization requires at least one successful execution of this agent. Run it successfully first so the optimizer has a real reference execution.'),'warning');
+}
+
+function runOptimize(key, reopt){
+  var a=AGENTS[key];
+  var bounded = key==='booking-lookup';
+  var body=document.getElementById('opt-run-body');
+  var steps = [
+    {t:'Gather context', s:'Optimization instructions + current implementation plan + agent info.'},
+    {t:'Load latest execution as reference', s:'Prefers the most recent run — focused on current reality, not old logs.'},
+    {t:'Author scripts', s:'Write sandboxed scripts for the scriptable steps of the workflow.'},
+    {t:'Verify scripts', s:'Real execution via the script tool; aim for correct syntax &amp; proper tool invocation — not an identical result.'}
+  ];
+  var i=0;
+  function draw(){
+    var html='<div class="stepper">'+steps.map(function(s,idx){
+      var st = idx<i ? 'done' : (idx===i ? 'active' : 'pending');
+      var dot = idx<i ? '<span class="step-dot done">✓</span>' : (idx===i ? '<span class="step-dot violet"><span class="spinner-sm" style="border-top-color:#fff"></span></span>' : '<span class="step-dot pending">•</span>');
+      return '<div class="step-row"><div class="step-main"><div class="step-title">'+s.t+'</div><div class="step-sub">'+s.s+'</div></div>'+dot+'</div>';
+    }).join('')+'</div>';
+    body.innerHTML = buildOptHeader(reopt) + html;
+    document.getElementById('opt-run-footer').innerHTML='<button class="btn btn-secondary" disabled style="opacity:.5">Optimizing…</button>';
+  }
+  function buildOptHeader(reopt){
+    return '<div class="annotate" style="margin-top:0"><span class="a-icon">ℹ️</span><span><strong>'+(reopt?'Re-optimization':'Optimization')+' is a dedicated run</strong> — it uses the agent\'s optimization instructions, the current plan, and the <strong>latest successful execution</strong> as its reference. It never hijacks a normal run.</span></div>'+
+      (reopt ? '<div class="alert alert-info" style="margin-bottom:12px"><span style="font-size:15px">🔁</span><div><strong>Re-optimization with context.</strong> This run carries the previous plan plus the feedback recorded from the failed execution (and any manual feedback).</div></div>'
+             : '<div class="alert alert-info" style="margin-bottom:12px"><span style="font-size:15px">📎</span><div><strong>Reference:</strong> latest execution (the most recent successful run) — not an unbounded fetch of old logs.</div></div>');
+  }
+  function next(){
+    i++;
+    if(i<=steps.length){ draw(); }
+    if(i===steps.length){ setTimeout(function(){ finish(); }, 800); }
+    else setTimeout(next, 800);
+  }
+  function finish(){
+    if(bounded){
+      // FLOW 5 — bounded stop, needs_feedback
+      a.plan = {
+        status:'needs_feedback', fullyScripted:false,
+        error:'Optimization stopped: no high-confidence result. Tool results vary between calls (some lookups legitimately return nothing), so a passing script could not be verified. The run ended and recorded this outcome — it did not loop.',
+        requiresFix:null,
+        flow:['plan','search-booking','transform'],
+        steps:[
+          {name:'Look up booking', desc:'tool call — search-booking (result varies / can be empty)', modelBacked:false, script:null}
+        ],
+        feedback:[]
+      };
+      a.everOptimized=true;
+      body.innerHTML = buildOptHeader(reopt) +
+        '<div class="stepper">'+
+        '<div class="step-row"><div class="step-main"><div class="step-title">Author scripts</div><div class="step-sub">Scripts drafted for the booking lookup step.</div></div><span class="step-dot done">✓</span></div>'+
+        '<div class="step-row"><div class="step-main"><div class="step-title">Verify scripts</div><div class="step-sub">Verification could not reach high confidence — results differ run-to-run.</div></div><span class="step-dot warn">!</span></div>'+
+        '<div class="step-row"><div class="step-main"><div class="step-title">Stop (bounded)</div><div class="step-sub">No high-confidence result → the run <strong>stops</strong> and records the outcome.</div></div><span class="step-dot fail">✕</span></div>'+
+        '</div>'+
+        '<div class="alert alert-warning"><span style="font-size:15px">🛑</span><div><strong>Optimization stopped — no dead loop.</strong> '+esc(a.plan.error)+'</div></div>';
+      document.getElementById('opt-run-footer').innerHTML='<button class="btn btn-primary" onclick="closeModal(\'modal-optimize\');openPlan(\''+key+'\')">View plan (needs_feedback)</button>';
+      renderTable();
+      hot(5);
+      toast('Optimization stopped with needs_feedback — bounded, no loop.','warning');
+    } else {
+      // FLOW 4 — ready
+      a.plan = planReady();
+      a.everOptimized=true;
+      body.innerHTML = buildOptHeader(reopt) +
+        '<div class="stepper">'+
+        '<div class="step-row"><div class="step-main"><div class="step-title">Author scripts</div><div class="step-sub">Scripts authored for the scriptable steps.</div></div><span class="step-dot done">✓</span></div>'+
+        '<div class="step-row"><div class="step-main"><div class="step-title">Verify scripts</div><div class="step-sub">Verification passed — correct syntax and proper tool invocation.</div></div><span class="step-dot done">✓</span></div>'+
+        '<div class="step-row"><div class="step-main"><div class="step-title">Plan ready</div><div class="step-sub">An optimized plan is saved and ready to be preferred by the next run.</div></div><span class="step-dot done">✓</span></div>'+
+        '</div>'+
+        '<div class="alert alert-success"><span style="font-size:15px">✅</span><div><strong>Optimization complete.</strong> The next execution will try this optimized plan first (script-first), with safe fallback.</div></div>';
+      document.getElementById('opt-run-footer').innerHTML='<button class="btn btn-primary" onclick="closeModal(\'modal-optimize\');openPlan(\''+key+'\')">View optimized plan</button>';
+      renderTable();
+      hot(4);
+      toast('Optimization complete — optimized plan is ready.','success');
+    }
+  }
+  draw();
+  setTimeout(next, 800);
+}
+
+/* ═══════════════════════════ FLOW 6 + 7 : PLAN ═══════════════════════════ */
+function openPlan(key){
+  var a=AGENTS[key];
+  if(!a.plan){ toast('No optimized plan for "'+key+'" yet.','info'); return; }
+  renderPlan(key);
+  openModal('modal-plan');
+  if(a.plan.status==='requires_fix') hot(6); else if(a.plan.status==='needs_feedback') hot(5);
+}
+
+function renderPlan(key){
+  var a=AGENTS[key];
+  var p=a.plan;
+  planViewKey = key;
+  document.getElementById('plan-title').textContent='Optimized Plan — '+a.name;
+
+  var statusMap={ready:['chip-green','ready'],needs_feedback:['chip-orange','needs_feedback'],requires_fix:['chip-red','requires fix'],failed:['chip-red','failed']};
+  var sc=statusMap[p.status]||['chip-gray',p.status];
+  var statusChip='<span class="chip '+sc[0]+'">'+sc[1]+'</span>';
+  var modeChip='<span class="chip '+(p.fullyScripted?'chip-blue':'chip-gray')+'">'+(p.fullyScripted?'fully scripted':'tool mode')+'</span>';
+
+  var fixBanner='';
+  if(p.requiresFix){
+    fixBanner='<div class="requiresfix"><div class="rf-icon">⚠</div><div style="flex:1">'+
+      '<h4>This optimized plan requires a fix</h4>'+
+      '<p>'+esc(p.requiresFix.reason)+'</p>'+
+      '<div class="mt-2 flex items-center gap-2" style="flex-wrap:wrap">'+
+        '<button class="btn btn-sm btn-violet" onclick="closeModal(\'modal-plan\');openOptimize(\''+key+'\')">✦ Re-optimize now</button>'+
+        '<span class="text-xs text-secondary">Re-optimization carries the prior plan + recorded feedback.</span>'+
+      '</div></div></div>';
+  } else if(p.status==='needs_feedback'){
+    fixBanner='<div class="alert alert-warning"><span style="font-size:15px">🛑</span><div><strong>Optimization stopped — needs_feedback.</strong> '+esc(p.error||'No high-confidence result.')+' Add feedback below or re-optimize.</div></div>';
+  }
+
+  var errorBanner='';
+  if(p.status==='failed' && p.error){ errorBanner='<div class="alert alert-error"><span style="font-size:15px">⚠️</span><div><strong>Optimization failed.</strong> '+esc(p.error)+'</div></div>'; }
+
+  var flowMap = p.flow.length
+    ? '<div class="flow-map">'+p.flow.map(function(n,i){return '<span class="flow-node">'+esc(n)+'</span>'+(i<p.flow.length-1?'<span style="color:var(--text-secondary)">→</span>':'');}).join('')+'</div>'
+    : '<p class="text-secondary text-sm">No verified steps yet.</p>';
+
+  var stepsHtml='';
+  if(p.steps.length){
+    p.steps.forEach(function(s,i){
+      var kind=s.modelBacked?'<span class="chip chip-purple" style="font-size:11px">model-backed</span>':'<span class="chip chip-blue" style="font-size:11px">scriptable</span>';
+      var link=s.script?'<button class="btn btn-xs btn-secondary" onclick="viewScript('+i+')">View script</button>':'';
+      stepsHtml+='<div style="display:flex;align-items:flex-start;gap:12px;padding:10px 4px;border-bottom:1px solid var(--border)">'+
+        '<div style="width:24px;height:24px;border-radius:50%;background:var(--violet-light);color:var(--violet-dark);font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:2px">'+(i+1)+'</div>'+
+        '<div style="flex:1"><div style="font-size:13px;font-weight:600">'+esc(s.name)+'</div><div class="text-sm text-secondary">'+esc(s.desc)+'</div></div>'+kind+link+'</div>';
+    });
+  } else {
+    stepsHtml='<p class="text-secondary text-sm">No verified steps were authored for this plan.</p>';
+  }
+
+  var fbHtml='';
+  if(p.requiresFix){
+    fbHtml+='<div class="fb-item"><div class="fb-summary">'+esc(p.requiresFix.autoFeedback)+'</div><div class="fb-meta"><span class="fb-source auto">auto-recorded</span><span>Oct 30, 2026, 10:12</span></div></div>';
+  }
+  (p.feedback||[]).forEach(function(cm){
+    fbHtml+='<div class="fb-item"><div class="fb-summary">'+esc(cm.summary)+'</div><div class="fb-meta"><span class="fb-source '+(cm.source==='auto'?'auto':'manual')+'">'+(cm.source==='auto'?'auto-recorded':'manual')+'</span><span>'+esc(cm.date)+'</span></div></div>';
+  });
+  if(!fbHtml){ fbHtml='<p class="text-secondary text-sm">No feedback recorded yet.</p>'; }
+
+  document.getElementById('plan-body').innerHTML =
+    '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:12px">'+
+      '<span class="text-secondary" style="font-size:12px">Status</span>'+statusChip+modeChip+'<span style="flex:1"></span></div>'+
+    fixBanner+errorBanner+
+    '<h4 style="font-size:13px;margin:6px 0 4px">Workflow</h4>'+flowMap+
+    '<h4 style="font-size:13px;margin:14px 0 4px">Composition steps</h4>'+stepsHtml+
+    '<hr>'+
+    '<h4 style="font-size:13px;margin-bottom:6px">Feedback</h4>'+
+    '<div id="plan-fb-list">'+fbHtml+'</div>'+
+    '<textarea id="plan-fb-input" class="form-control" rows="2" style="margin-top:10px" placeholder="Describe what to change about this optimized plan…"></textarea>'+
+    '<div style="display:flex;gap:8px;align-items:center;margin-top:8px">'+
+      '<button class="btn btn-xs btn-secondary" onclick="addManualFeedback(\''+key+'\')">✈ Submit feedback</button>'+
+      '<span id="plan-fb-saved" class="text-sm" style="color:var(--success);display:none">Feedback saved — it will steer the next re-optimization.</span></div>'+
+    '<div class="alert alert-info" style="margin:14px 0 0"><span style="font-size:15px">🔒</span><div>Sandboxed and safe — if a script fails, your task still completes via the standard fallback with no change to your result.</div></div>';
+
+  document.getElementById('plan-footer').innerHTML=
+    (p.status==='requires_fix'
+      ? '<button class="btn btn-secondary" onclick="closeModal(\'modal-plan\')">Close</button><button class="btn btn-violet" onclick="closeModal(\'modal-plan\');openOptimize(\''+key+'\')">✦ Re-optimize with feedback</button>'
+      : (p.status==='needs_feedback'
+          ? '<button class="btn btn-secondary" onclick="closeModal(\'modal-plan\')">Close</button><button class="btn btn-violet" onclick="closeModal(\'modal-plan\');openOptimize(\''+key+'\')">✦ Re-optimize</button>'
+          : '<button class="btn btn-secondary" onclick="closeModal(\'modal-plan\')">Close</button>'));
+}
+
+var planViewKey=null;
+function viewScript(i){
+  var s=AGENTS[planViewKey||'report-generator'].plan.steps[i].script;
+  if(!s) return;
+  document.getElementById('plan-body').insertAdjacentHTML('beforeend',
+    '<hr><h4 style="font-size:13px;margin-bottom:6px">Script — '+esc(s.name)+' ('+esc(s.version)+')</h4>'+
+    '<div class="text-xs text-secondary mb-3">'+esc(s.desc)+'</div>'+
+    '<pre class="code">'+esc(s.source)+'</pre>');
+  document.getElementById('plan-body').scrollTop=document.getElementById('plan-body').scrollHeight;
+}
+
+function addManualFeedback(key){
+  var input=document.getElementById('plan-fb-input');
+  var v=input.value.trim();
+  if(!v){ input.focus(); return; }
+  var a=AGENTS[key];
+  a.plan.feedback = a.plan.feedback || [];
+  a.plan.feedback.push({summary:v, source:'manual', date:'Nov 11, 2026, ' + new Date().toTimeString().slice(0,5)});
+  renderPlan(key);
+  var saved=document.getElementById('plan-fb-saved');
+  if(saved){ saved.style.display='inline'; setTimeout(function(){ saved.style.display='none'; },2600); }
+  toast('Feedback saved — it will steer the next re-optimization.','success');
+}
+
+/* ═══════════════════════════ FLOW 9 + 10 + 11 : IMPLEMENTATION PLAN PREVIEW ═══════════════════════════ */
+var implViewKey=null;
+
+function implPlanFor(key){
+  var a=AGENTS[key];
+  var skill=a.skill||'the agent workflow';
+  return {
+    date:'Nov 12, 2026, 14:02',
+    model:CONFIG.authoringModel,
+    stale:false, error:null,
+    steps:[
+      {kind:'sop_invocation', name:'Load '+skill, desc:'Read the SOP outline that defines the sections and their order.'},
+      {kind:'skill_invocation', name:'Apply the agent\'s primary skill', desc:'Wrap the skills this agent is allowed to use so every step has the tools it needs.'},
+      {kind:'tool_call', name:'Read the task input', desc:'Invoke the read tool once with the task input and keep the result.'},
+      {kind:'model_step', name:'Compose the result', desc:'Model-backed judgement: interpret what was gathered and produce the final output.'}
+    ]
+  };
+}
+
+function openImplPlan(key){
+  implViewKey=key;
+  var a=AGENTS[key];
+  document.getElementById('implplan-title').textContent='Plan Preview — '+a.name;
+  renderImplPlan(key);
+  openModal('modal-implplan');
+}
+
+function renderImplPlan(key){
+  var a=AGENTS[key];
+  var conv = a.type==='conversational';
+  var p=a.implPlan;
+  var body=document.getElementById('implplan-body');
+  var footer=document.getElementById('implplan-footer');
+
+  var chip;
+  if(conv) chip='<span class="chip chip-gray">not available</span>';
+  else if(!isAuthoringConfigured()) chip='<span class="chip chip-yellow">authoring model missing</span>';
+  else if(p && p.error) chip='<span class="chip chip-red">generation failed</span>';
+  else if(p && p.stale) chip='<span class="chip chip-orange">may be out of date</span>';
+  else if(p) chip='<span class="chip chip-green">generated</span>';
+  else chip='<span class="chip chip-gray">no plan yet</span>';
+
+  var head='<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:14px">'+
+    '<span class="text-secondary" style="font-size:12px">Implementation plan</span>'+chip+
+    '</div>';
+
+  /* ── conversational: no plan generation at all ── */
+  if(conv){
+    body.innerHTML = head+
+      '<div class="gate-banner" style="border-color:#C7D2FE;background:#F5F8FF">'+
+        '<div class="g-ico" style="background:var(--violet)">💬</div>'+
+        '<div><h4 style="color:#3730A3">Implementation plans are not available for conversational agents</h4>'+
+        '<p style="color:#3730A3">This agent chats with users, keeps its own instructions, and is never compiled into an optimized plan. There is nothing to generate or optimize here.</p></div>'+
+      '</div>'+
+      '<div class="annotate" style="margin-top:0"><span class="a-icon">ℹ️</span><span>If a plan was authored before this agent was converted to conversational, it is kept for reference only and is not used to generate or optimize again while the agent stays conversational.</span></div>';
+    footer.innerHTML='<button class="btn btn-secondary" onclick="closeModal(\'modal-implplan\')">Close</button>'+
+      '<button class="btn btn-primary" disabled style="opacity:.45">✨ Generate plan</button>';
+    return;
+  }
+
+  /* ── authoring model missing: blocked ── */
+  if(!isAuthoringConfigured()){
+    body.innerHTML = head+
+      (implBlocked
+        ? '<div class="alert alert-error" style="margin-bottom:12px"><span style="font-size:15px">⛔</span><div><strong>Plan generation blocked — no plan was created.</strong> This workspace has no plan authoring model configured, and there is no fallback to the agent\'s runtime model. Ask a workspace administrator to choose one in System Config.</div></div>'
+        : '')+
+      '<div class="gate-banner">'+
+        '<div class="g-ico">⚠</div>'+
+        '<div><h4>Plan generation is unavailable</h4>'+
+        '<p>'+(CONFIG.reason==='removed'
+            ? 'The model previously chosen for this workspace is no longer in its model catalogue. '
+            : 'No plan authoring model is configured for this workspace. ')+
+          'Implementation plans are authored by that one workspace model, and no other model is used as a fallback. Choose a valid model in System Config to enable generation.</p>'+
+          '<div class="mt-2"><button class="btn btn-sm btn-primary" onclick="closeModal(\'modal-implplan\');showView(\'config\')">⚙️ Open System Config</button></div>'+
+        '</div>'+
+      '</div>'+
+      (p ? '<h4 style="font-size:13px;margin:14px 0 4px">Last generated plan (kept for reference)</h4>'+implStepsHtml(p) : '')+
+      '<div class="annotate" style="margin-top:14px"><span class="a-icon">ℹ️</span><span>This plan was not created by saving the agent — plans exist only when someone asks for one.</span></div>';
+    footer.innerHTML='<button class="btn btn-secondary" onclick="closeModal(\'modal-implplan\')">Close</button>'+
+      '<button class="btn btn-primary" onclick="blockedGenerate(\''+key+'\')">✨ Generate plan</button>';
+    return;
+  }
+
+  /* ── no plan yet ── */
+  if(!p){
+    body.innerHTML = head+
+      '<div class="empty-state">'+
+        '<div class="es-ico">🧩</div>'+
+        '<h4>No implementation plan yet</h4>'+
+        '<p>This agent has no plan. Generating one is an explicit action — creating or saving an agent never produces a plan. Ask for one when you are ready.</p>'+
+        '<div style="margin-top:14px"><button class="btn btn-primary" onclick="generateImplPlan(\''+key+'\')">✨ Generate plan</button></div>'+
+        '<div class="text-xs text-secondary" style="margin-top:10px">Authored by '+esc(modelLabel(CONFIG.authoringModel))+' — this workspace\'s authoring model.</div>'+
+      '</div>'+
+      '<div class="annotate" style="margin-top:0"><span class="a-icon">ℹ️</span><span>The finished plan appears here automatically — no page reload needed. Your agent\'s runtime model stays whatever you chose for it.</span></div>';
+    footer.innerHTML='<button class="btn btn-secondary" onclick="closeModal(\'modal-implplan\')">Close</button>'+
+      '<button class="btn btn-primary" onclick="generateImplPlan(\''+key+'\')">✨ Generate plan</button>';
+    return;
+  }
+
+  /* ── generated / stale / failed ── */
+  var banners='';
+  if(p.stale){
+    banners+='<div class="stale-banner"><span class="s-ico">🕓</span><div style="flex:1">'+
+      '<h4>This plan may be out of date</h4>'+
+      '<p>The agent\'s configuration changed after this plan was generated on '+esc(p.date)+'. It was <strong>not</strong> regenerated automatically — regenerate when you are ready.</p>'+
+      '<div class="mt-2"><button class="btn btn-xs btn-secondary" onclick="generateImplPlan(\''+key+'\')">✨ Regenerate plan</button></div>'+
+      '</div></div>';
+  }
+  if(p.error){
+    banners+='<div class="alert alert-error"><span style="font-size:15px">⚠️</span><div><strong>The last generation attempt failed.</strong> '+esc(p.error)+' Your previous plan below is kept and still in use — a failed attempt never discards it.</div></div>';
+  }
+
+  var meta='<div class="text-xs text-secondary" style="margin-bottom:10px">Generated '+esc(p.date)+' by <strong>'+esc(modelLabel(p.model))+'</strong></div>';
+
+  body.innerHTML = head+banners+meta+
+    '<h4 style="font-size:13px;margin:6px 0 4px">Steps</h4>'+implStepsHtml(p)+
+    '<div class="demo-strip" style="margin-top:14px"><span>Demo:</span>'+
+      '<button class="demo-btn" onclick="simulateImplStale(\''+key+'\')">Simulate a config change</button>'+
+      '<button class="demo-btn" onclick="simulateImplFailure(\''+key+'\')">Simulate a failed attempt</button>'+
+    '</div>'+
+    '<div class="annotate" style="margin-top:0"><span class="a-icon">ℹ️</span><span>Regeneration is always manual. Nothing is re-authored when you save the agent, change its configuration, or on a schedule.</span></div>';
+
+  footer.innerHTML='<button class="btn btn-secondary" onclick="closeModal(\'modal-implplan\')">Close</button>'+
+    '<button class="btn '+(p.stale||p.error?'btn-primary':'btn-secondary')+'" onclick="generateImplPlan(\''+key+'\')">✨ '+((p.stale||p.error)?'Regenerate plan':'Regenerate plan')+'</button>';
+}
+
+function implStepsHtml(p){
+  var chipMap={
+    sop_invocation:['chip-blue','sop_invocation'],
+    skill_invocation:['chip-purple','skill_invocation'],
+    tool_call:['chip-green','tool_call'],
+    model_step:['chip-yellow','model judgment']
+  };
+  return p.steps.map(function(s,i){
+    var c=chipMap[s.kind]||['chip-gray',s.kind];
+    return '<div class="plan-step">'+
+      '<div class="ps-num">'+(i+1)+'</div>'+
+      '<div style="flex:1"><div class="ps-name">'+esc(s.name)+'</div><div class="ps-desc">'+esc(s.desc)+'</div></div>'+
+      '<span class="chip '+c[0]+'" style="font-size:11px">'+c[1]+'</span></div>';
+  }).join('');
+}
+
+function generateImplPlan(key){
+  var a=AGENTS[key];
+  if(a.type==='conversational'){ toast('Plan generation is not available for conversational agents.','warning'); return; }
+  if(!isAuthoringConfigured()){ blockedGenerate(key); return; }
+  implBlocked=false;
+  var body=document.getElementById('implplan-body');
+  var footer=document.getElementById('implplan-footer');
+  var steps=[
+    {t:'Collect agent configuration', s:'Skill, instructions, input and output, available tools.'},
+    {t:'Author the plan', s:'Writing the implementation plan with '+esc(modelLabel(CONFIG.authoringModel))+' — this workspace\'s authoring model.'},
+    {t:'Save the plan', s:'Attach the plan to the agent and show it here without a reload.'}
+  ];
+  footer.innerHTML='<button class="btn btn-secondary" disabled style="opacity:.5">Generating plan…</button>';
+  var i=0;
+  function draw(){
+    body.innerHTML='<div class="stepper">'+steps.map(function(s,idx){
+      var dot = idx<i ? '<span class="step-dot done">✓</span>'
+        : (idx===i ? '<span class="step-dot violet"><span class="spinner-sm" style="border-top-color:#fff"></span></span>' : '<span class="step-dot pending">•</span>');
+      return '<div class="step-row"><div class="step-main"><div class="step-title">'+s.t+'</div><div class="step-sub">'+s.s+'</div></div>'+dot+'</div>';
+    }).join('')+'</div>';
+  }
+  function tick(){
+    i++; if(i<=steps.length) draw();
+    if(i===steps.length){ setTimeout(finish, 700); } else { setTimeout(tick, 700); }
+  }
+  function finish(){
+    a.implPlan=implPlanFor(key);
+    renderImplPlan(key);
+    renderTable();
+    hot(9);
+    toast('Implementation plan generated by '+modelLabel(CONFIG.authoringModel)+'.','success');
+  }
+  draw();
+  setTimeout(tick, 700);
+}
+
+function blockedGenerate(key){
+  implBlocked=true;
+  renderImplPlan(key);
+  hot(10);
+  toast('Plan generation blocked — no authoring model is configured for this workspace.','warning');
+}
+
+function simulateImplStale(key){
+  var a=AGENTS[key];
+  if(!a.implPlan) return;
+  a.implPlan.stale=true;
+  renderImplPlan(key);
+  renderTable();
+  toast('Simulated a configuration change — the plan now shows as possibly out of date, and was not regenerated.','warning');
+}
+function simulateImplFailure(key){
+  var a=AGENTS[key];
+  if(!a.implPlan) return;
+  a.implPlan.error='The authoring model stopped before finishing the plan and reported no high-confidence result. No plan was written this time.';
+  renderImplPlan(key);
+  renderTable();
+  toast('Simulated a failed generation attempt — the previous plan was kept.','warning');
+}
+
+/* ═══════════════════════════ CREATE / SAVE AGENT ═══════════════════════════ */
+function updateCreateHint(){
+  var t=document.getElementById('create-type').value;
+  var h=document.getElementById('create-type-hint');
+  if(!h) return;
+  h.textContent = (t==='conversational')
+    ? 'Conversational agents have no implementation plan and cannot be optimized — this is by design.'
+    : 'Plan generation and optimization are available for this agent type.';
+}
+function openCreate(){
+  var base='weekly-digest', name=base, n=1;
+  while(AGENTS[name]){ n++; name=base+'-'+n; }
+  document.getElementById('create-name').value=name;
+  document.getElementById('create-type').value='sop-agent';
+  updateCreateHint();
+  openModal('modal-create');
+  hot(9);
+}
+function saveNewAgent(){
+  var name=(document.getElementById('create-name').value||'').trim();
+  var type=document.getElementById('create-type').value;
+  var skill=document.getElementById('create-skill').value;
+  var model=document.getElementById('create-model').value;
+  if(!name){ toast('Give the agent a name first.','warning'); return; }
+  if(AGENTS[name]){ toast('An agent named "'+name+'" already exists — pick another name.','warning'); return; }
+  AGENTS[name]={
+    name:name, type:type, skill:(type==='conversational'?null:skill),
+    identity:'agent-'+name+'@parthenon', model:model,
+    successfulRuns:0, plan:null, implPlan:null, everOptimized:false,
+    note:(type==='conversational' ? 'Conversational agent — chats with users. It keeps its own instructions and has no implementation plan.' : 'Newly saved — no plan was generated.')
+  };
+  renderTable();
+  closeModal('modal-create');
+  hot(9);
+  toast('Agent saved — no plan was generated. Open Plan Preview when you want one.','success');
+  setTimeout(function(){ openImplPlan(name); }, 420);
+}
+
+/* ═══════════════════════════ FLOW GUIDE ACTIONS ═══════════════════════════ */
+function flowRun(key){ openRun(key); }
+function flowOptimize(key){ openOptimize(key); }
+function flowOptimizeGate(key){ openOptimize(key); }
+function flowPlan(key){ openPlan(key); }
+function flowFocus(key){
+  hot(2);
+  toast('Look at the "'+key+'" row: ▶ Run and ✦ Optimize are now separate actions.','info');
+}
+function flowSimulateFallback(key){
+  var a=AGENTS[key];
+  a.plan = planReady(); // ensure it starts ready
+  renderTable();
+  openRun(key); // run will fall back and flag requires_fix
+  toast('Simulating a later run that falls back to the model path…','info');
+}
+function flowConfig(){
+  showView('config');
+  hot(8);
+  toast('One workspace model authors workflows, implementation plans and optimization plans.','info');
+}
+function flowPlanGen(){
+  showView('agents');
+  implBlocked=false;
+  openImplPlan('report-generator');
+  hot(9);
+}
+function flowMissingModel(){
+  showView('agents');
+  setAuthoringModel(null,'not_set');
+  openImplPlan('report-generator');
+  hot(10);
+  toast('Authoring model cleared. Try ✨ Generate plan or ✦ Optimize — both are blocked.','warning');
+}
+function flowConv(){
+  showView('agents');
+  openImplPlan('support-assistant');
+  hot(11);
+}
+
+function resetDemo(){
+  AGENTS = {};
+  AGENTS['report-generator']={name:'report-generator',type:'sop-agent',skill:'daily-report-gen',identity:'agent-reporter@parthenon',model:'claude-3-5-sonnet',successfulRuns:0,plan:null,implPlan:null,everOptimized:false};
+  AGENTS['booking-lookup']={name:'booking-lookup',type:'sop-agent',skill:'booking-search',identity:'agent-booking@parthenon',model:'gpt-4o',successfulRuns:1,plan:null,implPlan:null,everOptimized:false,note:'The reference run returned a legitimately empty result (no booking found) — tool results vary between calls.'};
+  AGENTS['pr-reviewer']={name:'pr-reviewer',type:'sop-agent',skill:'pr-review-workflow',identity:'agent-pr-reviewer@parthenon',model:'gpt-4o',successfulRuns:2,plan:null,implPlan:null,everOptimized:true};
+  AGENTS['pr-reviewer'].plan=planReady();
+  AGENTS['support-assistant']={name:'support-assistant',type:'conversational',skill:null,identity:'agent-support@parthenon',model:'gpt-4o-mini',successfulRuns:0,plan:null,implPlan:null,everOptimized:false,note:'Conversational agent — chats with users. It keeps its own instructions and has no implementation plan.'};
+  CONFIG.authoringModel='claude-3-5-sonnet';
+  CONFIG.reason=null;
+  implBlocked=false;
+  renderTable();
+  renderConfig();
+  renderModelReminder();
+  showView('agents');
+  hot(1);
+  closeModal('modal-run'); closeModal('modal-optimize'); closeModal('modal-plan');
+  closeModal('modal-implplan'); closeModal('modal-create');
+  toast('Demo reset.','info');
+}
+
+/* ═══════════════════════════ INIT ═══════════════════════════ */
+renderTable();
+renderConfig();
+renderModelReminder();
+</script>
+</body>
+</html>

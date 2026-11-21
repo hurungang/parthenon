@@ -1,5 +1,7 @@
 # MCP Hub — Entities
 
+[← Data model overview](../../overview.md)
+
 ```mermaid
 erDiagram
     McpServer {

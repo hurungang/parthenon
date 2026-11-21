@@ -1,0 +1,1604 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>System — Config, Model Configs, Permissions & Observability</title>
+<link rel="stylesheet" href="../shared/styles.css">
+</head>
+<body data-page="system" data-default-view="system-config">
+
+<div class="app-shell">
+
+<!-- ═══════════════════════════════ SIDEBAR ═══════════════════════════════ -->
+<nav class="sidebar" aria-label="Primary navigation">
+  <div class="sidebar-logo">
+    <h1>⚡ Parthenon</h1>
+    <small>Enterprise AI Harness</small>
+  </div>
+
+  <!-- Dashboard -->
+  <a class="nav-item" data-view="dashboard" href="../index.html#view-dashboard"><span class="nav-icon">🏠</span>Dashboard</a>
+
+  <!-- Project Showcase -->
+  <a class="nav-item" data-view="project-showcase" href="../index.html#view-project-showcase"><span class="nav-icon">🌐</span>Project Showcase</a>
+
+  <div class="nav-parent-group" id="nav-agents" data-group="agents">
+    <a class="nav-parent-group-label" href="agents.html#view-agent-roles" role="button" aria-expanded="true">
+      <span>🤖 Agents</span>
+      <span class="toggle-icon" aria-hidden="true">▼</span>
+    </a>
+    <div class="nav-children">
+      <a class="nav-item sub-item" data-view="agent-roles" data-group="agents" href="agents.html#view-agent-roles"><span class="nav-icon">👤</span>Agent Roles</a>
+      <a class="nav-item sub-item" data-view="agent-identities" data-group="agents" href="agents.html#view-agent-identities"><span class="nav-icon">🆔</span>Agent Identities</a>
+      <a class="nav-item sub-item" data-view="agents" data-group="agents" href="agents.html#view-agents"><span class="nav-icon">🤖</span>Agent Types</a>
+      <a class="nav-item sub-item" data-view="agent-management-panel" data-group="agents" href="agent-panel.html#view-agent-management-panel"><span class="nav-icon">🎛️</span>Agent Management Panel</a>
+      <a class="nav-item sub-item" data-view="agent-executions" data-group="agents" href="executions.html#view-agent-executions"><span class="nav-icon">▶️</span>Agent Executions</a>
+      <a class="nav-item sub-item" data-view="runtime-monitor" data-group="agents" href="executions.html#view-runtime-monitor"><span class="nav-icon">🕸️</span>Agent Runtime Monitor</a>
+      <a class="nav-item sub-item" data-view="agent-trails" data-group="agents" href="executions.html#view-agent-trails"><span class="nav-icon">📋</span>Agent Trails</a>
+      <a class="nav-item sub-item" data-view="skills" data-group="agents" href="skills-sops.html#view-skills"><span class="nav-icon">🔧</span>Skills</a>
+      <a class="nav-item sub-item" data-view="sops" data-group="agents" href="skills-sops.html#view-sops"><span class="nav-icon">📋</span>SOPs</a>
+      <a class="nav-item sub-item" data-view="schedules" data-group="agents" href="schedules.html#view-schedules"><span class="nav-icon">📅</span>Schedules</a>
+      <a class="nav-item sub-item" data-view="chat" data-group="agents" href="chat.html#view-chat"><span class="nav-icon">💬</span>Chat Sessions</a>
+      <a class="nav-item sub-item" data-view="conversational-intervention" data-group="agents" href="chat.html#view-conversational-intervention"><span class="nav-icon">💬</span>Conversational Intervention</a>
+      <a class="nav-item sub-item" data-view="intervene-requests" data-group="agents" href="chat.html#view-intervene-requests"><span class="nav-icon">🛑</span>Intervene Requests</a>
+      <a class="nav-item sub-item" data-view="data-types" data-group="agents" href="data-results.html#view-data-types"><span class="nav-icon">📐</span>Data Types</a>
+      <a class="nav-item sub-item" data-view="agent-outputs" data-group="agents" href="data-results.html#view-agent-outputs"><span class="nav-icon">📤</span>Agent Outputs</a>
+      <a class="nav-item sub-item" data-view="agent-logs" data-group="agents" href="executions.html#view-agent-logs"><span class="nav-icon">🧾</span>Agent Logs</a>
+    </div>
+  </div>
+
+  <div class="nav-parent-group" id="nav-results" data-group="results">
+    <a class="nav-parent-group-label" href="data-results.html#view-results" role="button" aria-expanded="true">
+      <span>📊 Results</span>
+      <span class="toggle-icon" aria-hidden="true">▼</span>
+    </a>
+    <div class="nav-children">
+      <a class="nav-item sub-item" data-view="results" data-group="results" href="data-results.html#view-results"><span class="nav-icon">📊</span>Result Repository</a>
+    </div>
+  </div>
+
+  <div class="nav-parent-group locked-open" id="nav-integrations" data-group="integrations">
+    <a class="nav-parent-group-label" href="integrations.html#view-mcp-hub" role="button" aria-expanded="true">
+      <span>🌐 Integrations</span>
+      <span class="toggle-icon" aria-hidden="true">▼</span>
+    </a>
+    <div class="nav-children">
+      <a class="nav-item sub-item" data-view="mcp-hub" data-group="integrations" href="integrations.html#view-mcp-hub"><span class="nav-icon">🔌</span>MCP Hub</a>
+      <a class="nav-item sub-item" data-view="notifications" data-group="integrations" href="integrations.html#view-notifications"><span class="nav-icon">🔔</span>Notification Integration</a>
+      <a class="nav-item sub-item" data-view="api-keys" data-group="integrations" href="integrations.html#view-api-keys"><span class="nav-icon">🔑</span>API Keys</a>
+      <a class="nav-item sub-item" data-view="agent-clients" data-group="integrations" href="integrations.html#view-agent-clients"><span class="nav-icon">🤝</span>Agent Client</a>
+      <a class="nav-item sub-item" data-view="gateway" data-group="integrations" href="integrations.html#view-gateway"><span class="nav-icon">🛰️</span>Agent Gateway</a>
+    </div>
+  </div>
+
+  <div class="nav-parent-group" id="nav-system" data-group="system">
+    <a class="nav-parent-group-label" href="#view-observability" role="button" aria-expanded="true">
+      <span>⚙️ System</span>
+      <span class="toggle-icon" aria-hidden="true">▼</span>
+    </a>
+    <div class="nav-children">
+      <a class="nav-item sub-item" data-view="observability" data-group="system" href="#view-observability"><span class="nav-icon">📊</span>Observability</a>
+      <a class="nav-item sub-item" data-view="permissions" data-group="system" href="#view-permissions"><span class="nav-icon">🔐</span>Permissions</a>
+      <a class="nav-item sub-item" data-view="system-config" data-group="system" href="#view-system-config"><span class="nav-icon">⚙️</span>System Config</a>
+      <a class="nav-item sub-item" data-view="model-configs" data-group="system" href="#view-model-configs"><span class="nav-icon">🧩</span>Model Configs</a>
+      <a class="nav-item sub-item" data-view="decision-tools" data-group="system" href="decision.html#view-decision-tools"><span class="nav-icon">⚖️</span>Decision Tools</a>
+      <a class="nav-item sub-item" data-view="sysone-providers" data-group="system" href="decision.html#view-sysone-providers"><span class="nav-icon">🧠</span>Decision Model Providers</a>
+      <a class="nav-item sub-item" data-view="security-audit" data-group="system" href="#view-security-audit"><span class="nav-icon">🛡️</span>Security Audit</a>
+    </div>
+  </div>
+
+  <div class="nav-parent-group" id="nav-tenant-admin" data-group="tenant-admin">
+    <a class="nav-parent-group-label" href="tenancy.html#view-tenant-settings" role="button" aria-expanded="true">
+      <span>🏢 Tenant Admin</span>
+      <span class="toggle-icon" aria-hidden="true">▼</span>
+    </a>
+    <div class="nav-children">
+      <a class="nav-item sub-item" data-view="tenant-settings" data-group="tenant-admin" href="tenancy.html#view-tenant-settings"><span class="nav-icon">⚙️</span>Tenant Settings</a>
+      <a class="nav-item sub-item" data-view="tenant-members" data-group="tenant-admin" href="tenancy.html#view-tenant-members"><span class="nav-icon">👥</span>Members</a>
+      <a class="nav-item sub-item" data-view="tenant-identity-providers" data-group="tenant-admin" href="tenancy.html#view-tenant-identity-providers"><span class="nav-icon">🔑</span>Identity Providers</a>
+    </div>
+  </div>
+
+  <div class="nav-parent-group" id="nav-platform" data-group="platform" style="display:none">
+    <a class="nav-parent-group-label" href="tenancy.html#view-platform-settings" role="button" aria-expanded="true">
+      <span>🛡️ Platform</span>
+      <span class="toggle-icon" aria-hidden="true">▼</span>
+    </a>
+    <div class="nav-children">
+      <a class="nav-item sub-item" data-view="platform-settings" data-group="platform" href="tenancy.html#view-platform-settings"><span class="nav-icon">⚙️</span>Platform Settings</a>
+      <a class="nav-item sub-item" data-view="platform-tenants" data-group="platform" href="tenancy.html#view-platform-tenants"><span class="nav-icon">🏢</span>Tenants</a>
+      <a class="nav-item sub-item" data-view="platform-audit" data-group="platform" href="tenancy.html#view-platform-audit"><span class="nav-icon">🛡️</span>Platform Security Audit</a>
+    </div>
+  </div>
+
+</nav>
+<!-- ═══════════════════════════════ MAIN WRAPPER ═══════════════════════════════ -->
+<div class="main-wrapper">
+  <!-- TOP BAR -->
+  <div class="topbar">
+    <div class="topbar-title" id="topbar-title">System</div>
+    <div class="topbar-actions">
+      <span class="chip chip-yellow" id="oidc-sa-indicator" style="display:none">🔑 Super Admin</span>
+      <span class="chip chip-blue" id="tenant-ctx-chip" style="display:none">🏢 <span id="tenant-ctx-name"></span></span>
+      <button class="btn-icon" title="Notifications">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg>
+        <span class="badge">3</span>
+      </button>
+      <div class="avatar" title="Alex Harper — Admin">AH</div>
+    </div>
+  </div>
+
+  <!-- MAIN CONTENT -->
+  <div class="main-content">
+
+<!-- ═══════════════════════════════ VIEW: SYSTEM CONFIG ═══════════════════════════════ -->
+<div id="view-system-config" class="view">
+  <div class="view-header">
+    <div><h2>System Configuration</h2><div class="view-desc">Manage identity providers, authentication, and platform settings</div></div>
+    <button class="btn btn-primary" onclick="mcFlashToast('Configuration saved to database.')">💾 Save All Changes</button>
+  </div>
+
+  <!-- Per-workspace model selection (workflow generation + Control Center Assistant) -->
+  <div class="cfg-model-grid">
+    <div class="card cfg-model-card">
+      <div class="card-body">
+        <h4>Workflow Generation Model</h4>
+        <div class="cfg-hint">Select the model used for AI workflow generation (Skills and SOPs) in this workspace. Each workspace configures its own model.</div>
+        <div class="cfg-model-row">
+          <select class="form-control" id="cfg-workflow-model">
+            <option value="">Not configured</option>
+            <option value="gpt-4o" selected>gpt-4o (OpenAI Production)</option>
+            <option value="deepseek-chat">deepseek-chat (DeepSeek)</option>
+            <option value="claude-3-5-sonnet">claude-3-5-sonnet (Anthropic)</option>
+          </select>
+          <button class="btn btn-primary btn-sm" onclick="mcFlashToast('Workflow generation model saved for this workspace.')">Save</button>
+        </div>
+      </div>
+    </div>
+    <div class="card cfg-model-card">
+      <div class="card-body">
+        <h4>Assistant Model</h4>
+        <div class="cfg-hint">Select the model used by the Control Center Assistant for your workspace. The choice is per tenant and only applies to this workspace.</div>
+        <div class="cfg-model-row">
+          <select class="form-control" id="cfg-assistant-model" onchange="asstOnModelChange(this.value)">
+            <option value="">Not configured (assistant cannot converse until a model is selected)</option>
+            <option value="gpt-4o" selected>gpt-4o (OpenAI Production)</option>
+            <option value="deepseek-chat">deepseek-chat (DeepSeek)</option>
+            <option value="claude-3-5-sonnet">claude-3-5-sonnet (Anthropic)</option>
+          </select>
+          <button class="btn btn-primary btn-sm" onclick="asstSaveModel()">Save</button>
+        </div>
+        <div class="form-hint" id="cfg-assistant-model-state" style="margin-top:8px;color:#15803D">✓ Configured — the assistant can converse in this workspace.</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="alert alert-info" style="margin-bottom:20px">
+    <div>
+      <strong style="display:block;margin-bottom:2px">Assistant tool loading</strong>
+      <p class="text-sm" style="margin:0">The assistant context always loads a small constant set of meta tools — <code>invoke_management_tool</code>, <code>get_management_tool_schema</code>, <code>list_management_tools</code>, <code>search_assistant_knowledge</code>, <code>human_intervene</code> — and discovers management tools on demand, so each turn carries a small token payload.</p>
+    </div>
+  </div>
+
+  <!-- OIDC Setup Instructions -->
+  <div class="alert alert-info">
+    <div>
+      <strong style="display:block;margin-bottom:2px">OIDC Client Setup</strong>
+      <p class="text-sm" style="margin:0"><strong>Root URL:</strong> <code>http://localhost:3000</code> &bull; <strong>Home URL:</strong> <code>http://localhost:3000/dashboard</code> &bull; <strong>Redirect URIs:</strong> <code>http://localhost:3000/callback</code> (PKCE login) and <code>http://localhost:3000/*</code> (dev wildcard). User identity: register a <strong>public</strong> OIDC client for PKCE — no secret needed (UI Client ID). Agent identity: register a single OIDC client for the agent realm.</p>
+    </div>
+  </div>
+
+  <div class="change-banner">
+    <div class="cb-icon">i</div>
+    <div class="cb-body"><h4>Independent Provider Configuration</h4><p>User identity and agent identity can be sourced from <strong>separate, independent</strong> OIDC providers. Configurations are persisted to the database — no YAML editing.</p></div>
+  </div>
+
+  <div class="tabs" id="oidc-config-tabs">
+    <div class="tab active" onclick="oidcSwitchConfigTab(this,'oidc-panel-user')">👤 User Identity Provider</div>
+    <div class="tab" onclick="oidcSwitchConfigTab(this,'oidc-panel-agent')">🤖 Agent Identity Provider</div>
+    <div class="tab" onclick="oidcSwitchConfigTab(this,'oidc-panel-general')">⚙️ General Settings</div>
+  </div>
+
+  <!-- USER IDENTITY PROVIDER TAB -->
+  <div id="oidc-panel-user" class="tab-panel active">
+    <div class="card">
+      <div class="card-body">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+          <div style="display:flex;align-items:center;gap:8px">
+            <span style="font-size:18px">👤</span><span style="font-weight:600;font-size:15px">User Identity Provider</span>
+            <span class="config-badge not-configured" id="oidc-user-badge">Not Configured</span>
+          </div>
+          <label class="toggle" style="font-size:12px"><span>Enabled</span><input type="checkbox" id="oidc-user-enabled" checked><span class="toggle-slider"></span></label>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Provider Type</label>
+            <select class="form-control" id="oidc-user-type" onchange="oidcUpdateBadges()">
+              <option value="">-- Select --</option><option value="oidc_generic">Generic OIDC</option><option value="keycloak">Keycloak</option><option value="azure_entraid">Azure EntraID</option>
+            </select>
+          </div>
+          <div class="form-group"><label>Display Name</label><input class="form-control" id="oidc-user-name" placeholder="User Provider"></div>
+        </div>
+        <div class="form-group"><label>Issuer URL <span style="color:var(--error)">*</span></label><input type="url" class="form-control" id="oidc-user-issuer" placeholder="https://auth.example.com/realms/my-realm"></div>
+        <div class="form-group"><label>UI Client ID (Public) <span style="color:var(--error)">*</span></label><input class="form-control" id="oidc-user-ui-client" placeholder="parthenon-api-ui"><div class="form-hint">Public client ID for browser PKCE login. No client secret needed.</div></div>
+        <div class="form-group"><label>Scopes</label><input class="form-control" id="oidc-user-scopes" value="openid profile email" disabled><div class="form-hint">Scopes are fixed to ensure correct OIDC claims.</div></div>
+
+        <button class="advanced-toggle" onclick="oidcToggleAdvanced('oidc-user-advanced')" id="oidc-user-advanced-toggle">▼ Advanced Options</button>
+        <div class="advanced-panel open" id="oidc-user-advanced">
+          <div style="font-weight:600;font-size:13px;margin-bottom:12px">Confidential Client (Backend)</div>
+          <div class="form-group"><label>Client ID (Confidential)</label><input class="form-control" id="oidc-user-client-id" placeholder="parthenon-user-client"></div>
+          <div class="form-group"><label>Client Secret</label><div style="display:flex;gap:6px"><input type="password" class="form-control" id="oidc-user-secret" placeholder="(unchanged if left empty)" style="flex:1"><button class="btn btn-secondary btn-sm" onclick="oidcTogglePw('oidc-user-secret',this)">👁️</button></div></div>
+          <div class="form-group"><label>Claims Mapping</label><textarea class="form-control" id="oidc-user-claims" rows="3" placeholder="email:email&#10;name:display_name&#10;groups:roles" style="font-family:monospace;font-size:12px"></textarea><div class="form-hint">Key:value pairs, one per line. Maps OIDC claims to Parthenon attributes.</div></div>
+        </div>
+      </div>
+      <div class="card-footer" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+        <button class="btn btn-primary btn-sm" onclick="oidcSaveProvider('user')">💾 Save Provider</button>
+        <button class="btn btn-secondary btn-sm" onclick="oidcTestConfig('user')">🔍 Test Configuration</button>
+        <button class="btn btn-secondary btn-sm" onclick="oidcTestLogin('user')">🔑 Test Login</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- AGENT IDENTITY PROVIDER TAB -->
+  <div id="oidc-panel-agent" class="tab-panel">
+    <div class="card">
+      <div class="card-body">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+          <div style="display:flex;align-items:center;gap:8px">
+            <span style="font-size:18px">🤖</span><span style="font-weight:600;font-size:15px">Agent Identity Provider</span>
+            <span class="config-badge not-configured" id="oidc-agent-badge">Not Configured</span>
+          </div>
+          <label class="toggle" style="font-size:12px"><span>Enabled</span><input type="checkbox" id="oidc-agent-enabled" checked><span class="toggle-slider"></span></label>
+        </div>
+        <div class="form-group">
+          <label class="toggle"><input type="checkbox" id="oidc-agent-same" onchange="oidcSyncAgent()"><span class="toggle-slider"></span><span style="font-size:13px;font-weight:500">Same as User Provider</span></label>
+          <div class="form-hint">When enabled, uses the same configuration as the User Identity Provider.</div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Provider Type</label>
+            <select class="form-control" id="oidc-agent-type" onchange="oidcUpdateAgentBadge()">
+              <option value="">-- Select --</option><option value="oidc_generic">Generic OIDC</option><option value="keycloak">Keycloak</option><option value="azure_entraid">Azure EntraID</option>
+            </select>
+          </div>
+          <div class="form-group"><label>Display Name</label><input class="form-control" id="oidc-agent-name" placeholder="Agent Provider"></div>
+        </div>
+        <div class="form-group"><label>Issuer URL <span style="color:var(--error)">*</span></label><input type="url" class="form-control" id="oidc-agent-issuer" placeholder="https://auth.example.com/realms/agent-realm"></div>
+        <div class="form-group"><label>UI Client ID</label><input class="form-control" id="oidc-agent-ui-client" placeholder="parthenon-agent-ui"><div class="form-hint">Client ID for agent realm OAuth flows.</div></div>
+        <div class="form-group"><label>Scopes</label><input class="form-control" id="oidc-agent-scopes" value="openid profile email offline_access" disabled></div>
+
+        <button class="advanced-toggle" onclick="oidcToggleAdvanced('oidc-agent-advanced')" id="oidc-agent-advanced-toggle">▶ Advanced Options</button>
+        <div class="advanced-panel" id="oidc-agent-advanced">
+          <div style="font-weight:600;font-size:13px;margin-bottom:12px">Confidential Client</div>
+          <div class="form-group"><label>Client ID (Confidential)</label><input class="form-control" id="oidc-agent-client-id" placeholder="parthenon-agent-client"></div>
+          <div class="form-group"><label>Client Secret</label><div style="display:flex;gap:6px"><input type="password" class="form-control" id="oidc-agent-secret" placeholder="(unchanged if left empty)" style="flex:1"><button class="btn btn-secondary btn-sm" onclick="oidcTogglePw('oidc-agent-secret',this)">👁️</button></div></div>
+          <div class="form-group"><label>Claims Mapping</label><textarea class="form-control" id="oidc-agent-claims" rows="3" placeholder="agent_name:client_name&#10;agent_type:agent_type&#10;permissions:roles" style="font-family:monospace;font-size:12px"></textarea></div>
+        </div>
+      </div>
+      <div class="card-footer" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+        <button class="btn btn-primary btn-sm" onclick="oidcSaveProvider('agent')">💾 Save Provider</button>
+        <button class="btn btn-secondary btn-sm" onclick="oidcTestConfig('agent')">🔍 Test Configuration</button>
+        <button class="btn btn-secondary btn-sm" onclick="oidcTestLogin('agent')">🔑 Test Login</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- GENERAL SETTINGS TAB -->
+  <div id="oidc-panel-general" class="tab-panel">
+    <!-- Super Admin -->
+    <div class="card">
+      <div class="card-header"><h3>Super Admin Configuration</h3></div>
+      <div class="card-body">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;padding:12px;background:#FAFBFC;border-radius:6px">
+          <span style="font-size:13px;color:var(--text-secondary)">Status:</span>
+          <span class="chip chip-green" id="oidc-sa-chip">Enabled</span>
+          <span style="font-size:13px;color:var(--text-secondary)">&mdash; Username:</span>
+          <strong style="font-size:13px">admin</strong>
+        </div>
+        <div class="form-group">
+          <label class="toggle" style="display:inline-flex;align-items:center;gap:8px;cursor:pointer">
+            <input type="checkbox" id="oidc-toggle-sa" checked onchange="oidcToggleSA()"><span class="toggle-slider"></span>
+            <span style="font-size:13px;font-weight:500">Enable Super Admin Login</span>
+          </label>
+          <div class="form-hint" style="margin-left:44px;margin-top:6px">When enabled, the super admin can log in regardless of OIDC status. Disable in production once OIDC is confirmed working.</div>
+        </div>
+        <div id="oidc-sa-warn-disabled" class="alert alert-warning" style="display:none"><div><strong style="display:block;margin-bottom:4px">⚠️ Super Admin Disabled</strong><p class="text-sm">Only OIDC-authenticated users can access the platform. If OIDC becomes unreachable, re-enable via <code>PARTHENON_SUPER_ADMIN_ENABLED=true</code> or DB access.</p></div></div>
+        <div id="oidc-sa-warn-enabled" class="alert alert-info"><div><strong style="display:block;margin-bottom:4px">Super Admin is Enabled</strong><p class="text-sm">Provides disaster recovery fallback. Disable once OIDC auth is confirmed working in production.</p></div></div>
+      </div>
+    </div>
+
+    <!-- Platform Settings (preserved from original) -->
+    <div class="card">
+      <div class="card-header"><h3>Platform Settings</h3></div>
+      <div class="card-body">
+        <div class="form-row">
+          <div class="form-group"><label>Platform Name</label><input class="form-control" value="Parthenon"></div>
+          <div class="form-group"><label>Default Agent Timeout (seconds)</label><input class="form-control" type="number" value="300"></div>
+          <div class="form-group"><label>Max Concurrent Executions</label><input class="form-control" type="number" value="50"></div>
+          <div class="form-group"><label>Log Retention (days)</label><input class="form-control" type="number" value="90"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Feature Flags -->
+    <div class="card">
+      <div class="card-header"><h3>Feature Flags</h3></div>
+      <div class="card-body">
+        <div class="form-group"><label class="toggle"><input type="checkbox" checked><span class="toggle-slider"></span> Enable Agent Delegation</label></div>
+        <div class="form-group"><label class="toggle"><input type="checkbox" checked><span class="toggle-slider"></span> Enable MCP Passthrough Auth</label></div>
+        <div class="form-group"><label class="toggle"><input type="checkbox"><span class="toggle-slider"></span> Enable Audit Trail</label></div>
+        <div class="form-group" style="margin-bottom:0"><label class="toggle"><input type="checkbox"><span class="toggle-slider"></span> Enable Experimental Providers</label></div>
+      </div>
+    </div>
+
+    <!-- Dev/Demo Setup Wizard -->
+    <div class="card">
+      <div class="card-header"><h3>💻 Dev/Demo Setup Wizard</h3></div>
+      <div class="card-body">
+        <div class="alert alert-info" style="margin-bottom:0">
+          <div><strong style="display:block;margin-bottom:4px">Setup Wizard Preserved</strong>
+            <p class="text-sm">The first-run setup wizard is preserved for dev/demo environments. On fresh deployments with no OIDC configured and no super admin enabled, the guided wizard appears automatically. Supports bundled Keycloak and external OIDC (Keycloak, Azure EntraID). Wizard output is now saved to the <strong>database system config</strong> instead of <code>config/identity.yaml</code>.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════ VIEW: MODEL CONFIGS ═══════════════════════════════ -->
+<div id="view-model-configs" class="view">
+  <div class="view-header">
+    <div><h2>Model Configs</h2><div class="view-desc">Configure LLM provider credentials and endpoints. 12 providers supported with distinct chip colours.</div></div>
+    <button class="btn btn-primary" onclick="mcOpenCreate()">+ Create Model Config</button>
+  </div>
+
+  <!-- Change banner -->
+  <div class="change-banner">
+    <div class="cb-icon">i</div>
+    <div class="cb-body">
+      <h4>8 new LLM providers added to the catalogue <span class="cb-tag">expand-model-config-providers</span></h4>
+      <p>The dropdown now offers twelve providers: the four incumbent ones (<strong>openai, anthropic, litellm_proxy, azure_openai</strong>) and eight new ones (<strong>gemini, mistral, cohere, groq, together, fireworks, perplexity, deepseek</strong>). Each has a distinct chip colour.</p>
+    </div>
+  </div>
+
+  <!-- Chip legend -->
+  <div class="legend-strip">
+    <strong>Provider chips</strong>
+    <span class="legend-item"><span class="chip chip-blue">openai</span></span>
+    <span class="legend-item"><span class="chip chip-purple">anthropic</span></span>
+    <span class="legend-item"><span class="chip chip-teal">litellm_proxy</span></span>
+    <span class="legend-item"><span class="chip chip-orange">azure_openai</span></span>
+    <span class="legend-item text-secondary">— new —</span>
+    <span class="legend-item"><span class="chip chip-pink">gemini</span></span>
+    <span class="legend-item"><span class="chip chip-indigo">mistral</span></span>
+    <span class="legend-item"><span class="chip chip-cyan">cohere</span></span>
+    <span class="legend-item"><span class="chip chip-red-dark">groq</span></span>
+    <span class="legend-item"><span class="chip chip-amber">together</span></span>
+    <span class="legend-item"><span class="chip chip-violet">fireworks</span></span>
+    <span class="legend-item"><span class="chip chip-green-dark">perplexity</span></span>
+    <span class="legend-item"><span class="chip chip-slate">deepseek</span></span>
+  </div>
+
+  <!-- Model configs table -->
+  <div class="card" style="margin-bottom:16px">
+    <div class="card-header">
+      <h3>Configured LLM Providers <span class="text-secondary" style="font-size:12px;font-weight:400">12 rows &middot; 4 incumbent &middot; 8 new</span></h3>
+      <div style="display:flex;gap:6px;align-items:center">
+        <input class="form-control" style="width:200px;padding:6px 10px;font-size:12px" placeholder="Filter by name or provider…">
+        <button class="btn btn-secondary btn-sm">Refresh</button>
+      </div>
+    </div>
+    <div class="card-body" style="padding:0">
+      <div class="table-wrap" style="border:none;border-radius:0;box-shadow:none">
+        <table class="mc-table">
+          <thead>
+            <tr>
+              <th>Name</th><th>Provider</th><th>API Base URL</th>
+              <th>Credentials</th><th>Enabled Models</th>
+              <th>Status</th><th style="text-align:right">Actions</th>
+            </tr>
+          </thead>
+          <tbody id="mcConfigTable">
+            <!-- Injected by JS -->
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- System Configuration card -->
+  <div style="display:grid;grid-template-columns:1.2fr .8fr;gap:16px;align-items:start">
+    <div class="card">
+      <div class="card-header"><h3>Vendor Disable Cascade</h3></div>
+      <div class="card-body">
+        <div class="cascade-card" id="mcCascadeCard">
+          <div class="cascade-intro">
+            <div>
+              <strong style="color:var(--text-primary)">Cohere &rarr; 3 models &rarr; 5 guardrails</strong>
+              <span class="text-secondary"> &middot; Same semantics for all 12 providers.</span>
+            </div>
+            <div>
+              <span id="mcCascadeState" class="chip chip-green">Enabled</span>
+              <button class="cascade-toggle-btn" id="mcCascadeToggleBtn" onclick="mcToggleCascade()">
+                <span class="ct-dot"></span> <span id="mcCascadeToggleLabel">Disable vendor</span>
+              </button>
+            </div>
+          </div>
+          <div id="mcCascadeTree"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header"><h3>System Configuration</h3></div>
+      <div class="card-body">
+        <div class="form-group" style="margin-bottom:10px">
+          <label>Workflow Generation</label>
+          <div class="form-hint" style="margin-top:0">Select the AI model used for Skill and SOP workflow generation and preview.</div>
+        </div>
+        <div class="form-group">
+          <label>Generation Model</label>
+          <select id="wf-system-model" class="form-control" onchange="wfSetModelFromSelect(this.value)"></select>
+          <div class="form-hint">Options are loaded from configured model providers.</div>
+        </div>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-primary" onclick="wfSaveSystemModel()">Save</button>
+          <button class="btn btn-secondary" onclick="wfSyncPreviewHeader()">Refresh Preview Header</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;margin-top:16px">
+    <div class="card">
+      <div class="card-header"><h3>Skill Workflow Authoring</h3></div>
+      <div class="card-body">
+        <div class="text-secondary text-sm" style="margin-bottom:10px">Create, edit, and preview workflow text with AI from selected MCP tools.</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn btn-primary btn-sm" onclick="wfOpenEditor('skill')">Open Skill Editor</button>
+          <button class="btn btn-secondary btn-sm" onclick="wfOpenPreviewOnly('skill')">Open Preview</button>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-header"><h3>SOP Workflow Authoring</h3></div>
+      <div class="card-body">
+        <div class="text-secondary text-sm" style="margin-bottom:10px">Create, edit, and preview workflow text with AI from ordered SOP steps, including delegation.</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn btn-primary btn-sm" onclick="wfOpenEditor('sop')">Open SOP Editor</button>
+          <button class="btn btn-secondary btn-sm" onclick="wfOpenPreviewOnly('sop')">Open Preview</button>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-header"><h3>Agent Types Default SOP</h3></div>
+      <div class="card-body">
+        <div class="text-secondary text-sm" style="margin-bottom:10px">Default SOP is available for all input types and required only for no-input agents.</div>
+        <button class="btn btn-secondary btn-sm" onclick="openModal('modal-agent-type')">Open Agent Type Form</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════ VIEW: PERMISSIONS ═══════════════════════════════ -->
+<div id="view-permissions" class="view">
+  <div class="view-header">
+    <div><h2>Permissions & Access</h2><div class="view-desc">Manage Roles, Groups, Users, and Tags</div></div>
+  </div>
+  <div class="tabs">
+    <div class="tab active" onclick="switchTab(this,'perm-tags-panel')">🏷️ Tags</div>
+    <div class="tab" onclick="switchTab(this,'perm-roles-panel')">🎭 Roles</div>
+    <div class="tab" onclick="switchTab(this,'perm-groups-panel')">👥 Groups</div>
+    <div class="tab" onclick="switchTab(this,'perm-users-panel')">👤 Users</div>
+    <div class="tab" onclick="switchTab(this,'perm-access-req-panel')">🔑 Access Requests</div>
+  </div>
+
+  <div id="perm-tags-panel" class="tab-panel active">
+    <!-- Tag Matrix / Content placeholder -->
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Tag</th><th>Description</th><th>Assigned Resources</th></tr></thead>
+        <tbody>
+          <tr><td><strong>environment:production</strong></td><td>Production resources</td><td>14</td></tr>
+          <tr><td><strong>environment:staging</strong></td><td>Staging resources</td><td>8</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div id="perm-roles-panel" class="tab-panel">
+    <div style="margin-bottom: 16px;">
+    <button class="btn btn-primary" onclick="openModal('modal-agent-role')">+ Create Role</button>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr>
+          <th>Name</th><th>Type</th><th>Description</th><th>Permissions</th><th>Actions</th>
+        </tr></thead>
+        <tbody>
+          <tr>
+            <td><strong>admin-user</strong></td>
+            <td><span class="chip chip-purple">both</span></td>
+            <td>Platform administrators with full access</td>
+            <td><span class="chip chip-blue">24 permissions</span></td>
+            <td class="actions-cell"><button class="btn-icon-sm" title="Edit">✏️</button><button class="btn-icon-sm" title="Delete">🗑️</button></td>
+          </tr>
+          <tr>
+            <td><strong>analyst</strong></td>
+            <td><span class="chip chip-blue">user</span></td>
+            <td>Read-only analytics and reporting access</td>
+            <td><span class="chip chip-blue">8 permissions</span></td>
+            <td class="actions-cell"><button class="btn-icon-sm">✏️</button><button class="btn-icon-sm">🗑️</button></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div id="perm-groups-panel" class="tab-panel">
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Group Name</th><th>Members</th><th>Roles</th></tr></thead>
+        <tbody>
+          <tr><td><strong>Admin Group</strong></td><td>3 Users</td><td>admin-user</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div id="perm-users-panel" class="tab-panel">
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>User</th><th>Email</th><th>Status</th></tr></thead>
+        <tbody>
+          <tr><td><strong>Alex Harper</strong></td><td>alex@example.com</td><td><span class="chip chip-green">Active</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div id="perm-access-req-panel" class="tab-panel">
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>User</th><th>Resource</th><th>Status</th><th>Actions</th></tr></thead>
+        <tbody>
+          <tr><td><strong>Sam Smith</strong></td><td>Role: analyst</td><td><span class="chip chip-yellow">Pending</span></td>
+          <td><button class="btn-icon-sm" title="Approve">✅</button></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════ VIEW: OBSERVABILITY ═══════════════════════════════ -->
+<div id="view-observability" class="view">
+  <div class="view-header">
+    <div><h2>Observability</h2><div class="view-desc">Real-time metrics, distributed traces, and log streams</div></div>
+  </div>
+  <div class="tabs">
+    <div class="tab active" onclick="switchTab(this,'obs-metrics')">📊 Metrics</div>
+    <div class="tab" onclick="switchTab(this,'obs-traces')">🔍 Traces</div>
+    <div class="tab" onclick="switchTab(this,'obs-logs')">📜 Logs</div>
+  </div>
+
+  <!-- METRICS TAB -->
+  <div id="obs-metrics" class="tab-panel active">
+    <div class="metrics-grid">
+      <div class="metric-card">
+        <div class="metric-label">Active Agent Instances</div>
+        <div class="metric-value">7</div>
+        <div class="metric-delta delta-up">↑ from 4 &nbsp;<span style="color:var(--text-secondary);font-weight:400">(+75%)</span></div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-label">Requests / min</div>
+        <div class="metric-value">23.4</div>
+        <div class="metric-delta delta-up">↑ 12% vs last hour</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-label">Error Rate</div>
+        <div class="metric-value" style="color:var(--success)">0.8%</div>
+        <div class="metric-delta delta-down">↓ Healthy</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-label">Avg Latency</div>
+        <div class="metric-value" style="color:var(--warning)">1.24s</div>
+        <div class="metric-delta" style="color:var(--warning)">↑ +0.18s vs baseline</div>
+      </div>
+    </div>
+
+    <div class="card mb-4" style="margin-bottom:20px">
+      <div class="card-header"><h3>Request Volume — Last 30 minutes</h3></div>
+      <div class="card-body" style="padding:0">
+        <div class="chart-placeholder" style="height:200px;border:none;border-radius:0">
+          <div style="text-align:center">
+            <div style="font-size:32px;margin-bottom:8px">📈</div>
+            <div>Request Volume — Last 30 minutes</div>
+            <div style="font-size:12px;margin-top:4px;color:var(--text-secondary)">Peak: 34.2 req/min at 14:15 · Avg: 21.8 req/min</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
+      <div class="card">
+        <div class="card-header"><h3>Top Agent Types by Request</h3></div>
+        <div class="card-body" style="padding:0">
+          <div class="chart-placeholder" style="height:180px;border:none;border-radius:0">
+            <div style="width:80%;padding:0 16px">
+              <div style="margin-bottom:12px">
+                <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px"><span>data-analyst</span><span>42%</span></div>
+                <div style="height:10px;background:#E2E8F0;border-radius:5px;overflow:hidden"><div style="width:42%;height:100%;background:var(--primary);border-radius:5px"></div></div>
+              </div>
+              <div style="margin-bottom:12px">
+                <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px"><span>pr-reviewer</span><span>28%</span></div>
+                <div style="height:10px;background:#E2E8F0;border-radius:5px;overflow:hidden"><div style="width:28%;height:100%;background:#3B82F6;border-radius:5px"></div></div>
+              </div>
+              <div style="margin-bottom:12px">
+                <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px"><span>report-generator</span><span>18%</span></div>
+                <div style="height:10px;background:#E2E8F0;border-radius:5px;overflow:hidden"><div style="width:18%;height:100%;background:#8B5CF6;border-radius:5px"></div></div>
+              </div>
+              <div>
+                <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px"><span>incident-bot</span><span>12%</span></div>
+                <div style="height:10px;background:#E2E8F0;border-radius:5px;overflow:hidden"><div style="width:12%;height:100%;background:#F59E0B;border-radius:5px"></div></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-header"><h3>Tool Call Success Rate</h3></div>
+        <div class="card-body" style="padding:0">
+          <div class="chart-placeholder" style="height:180px;border:none;border-radius:0">
+            <div style="text-align:center">
+              <div style="font-size:36px;font-weight:700;color:var(--success)">97.3%</div>
+              <div style="font-size:12px;color:var(--text-secondary);margin-top:4px">Tool Calls Succeeded</div>
+              <div style="display:flex;justify-content:center;gap:16px;margin-top:12px;font-size:12px">
+                <span><span class="status-dot dot-green"></span> Success: 1,847</span>
+                <span><span class="status-dot dot-red"></span> Failed: 51</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TRACES TAB -->
+  <div id="obs-traces" class="tab-panel">
+    <div class="filter-bar">
+      <input placeholder="🔍 Trace ID..." style="width:200px">
+      <select style="width:180px"><option>All Agent Types</option><option>pr-reviewer</option><option>data-analyst</option><option>report-generator</option></select>
+      <select style="width:160px"><option>Last 30 min</option><option>Last hour</option><option>Last 24h</option></select>
+      <select style="width:140px"><option>All Status</option><option>Success</option><option>Error</option></select>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Trace ID</th><th>Agent</th><th>Duration</th><th>Spans</th><th>Status</th><th>Timestamp</th><th>Actions</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><span class="font-mono text-sm">a3f2c1b9e4d7...</span></td>
+            <td>pr-reviewer</td>
+            <td>2.34s</td>
+            <td>8 spans</td>
+            <td><span class="chip chip-green">Success</span></td>
+            <td class="text-secondary">2 min ago</td>
+            <td><button class="btn btn-xs btn-secondary">View</button></td>
+          </tr>
+          <tr>
+            <td><span class="font-mono text-sm">b7e9d4a2c5f1...</span></td>
+            <td>data-analyst</td>
+            <td>0.89s</td>
+            <td>3 spans</td>
+            <td><span class="chip chip-green">Success</span></td>
+            <td class="text-secondary">5 min ago</td>
+            <td><button class="btn btn-xs btn-secondary">View</button></td>
+          </tr>
+          <tr>
+            <td><span class="font-mono text-sm">c1d5f7e3a8b2...</span></td>
+            <td>report-generator</td>
+            <td>5.12s</td>
+            <td>14 spans</td>
+            <td><span class="chip chip-green">Success</span></td>
+            <td class="text-secondary">8 min ago</td>
+            <td><button class="btn btn-xs btn-secondary">View</button></td>
+          </tr>
+          <tr>
+            <td><span class="font-mono text-sm">d9a2b3c6e1f4...</span></td>
+            <td>incident-bot</td>
+            <td>1.45s</td>
+            <td>6 spans</td>
+            <td><span class="chip chip-red">Error</span></td>
+            <td class="text-secondary">12 min ago</td>
+            <td><button class="btn btn-xs btn-secondary">View</button></td>
+          </tr>
+          <tr>
+            <td><span class="font-mono text-sm">e4f8c2d7b9a3...</span></td>
+            <td>data-analyst</td>
+            <td>0.76s</td>
+            <td>3 spans</td>
+            <td><span class="chip chip-green">Success</span></td>
+            <td class="text-secondary">15 min ago</td>
+            <td><button class="btn btn-xs btn-secondary">View</button></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- LOGS TAB -->
+  <div id="obs-logs" class="tab-panel">
+    <div class="filter-bar">
+      <select style="width:130px"><option>ALL Levels</option><option>DEBUG</option><option>INFO</option><option>WARN</option><option>ERROR</option></select>
+      <select style="width:180px"><option>All Components</option><option>gateway</option><option>agent-executor</option><option>mcp-client</option><option>scheduler</option></select>
+      <input placeholder="🔍 Search logs..." style="flex:1;max-width:300px">
+    </div>
+    <div class="log-stream">
+<div class="log-line log-info"><span>[2025-04-23 14:36:12.341]</span> <span class="lvl">[INFO ]</span>  [gateway         ] Agent pr-reviewer initialized session sess-a3f2c1b9 for user:alex.harper</div>
+<div class="log-line log-info"><span>[2025-04-23 14:36:12.358]</span> <span class="lvl">[INFO ]</span>  [agent-executor   ] Executing SOP pr-review-workflow step 1/4: read-analyze-file</div>
+<div class="log-line log-info"><span>[2025-04-23 14:36:12.421]</span> <span class="lvl">[INFO ]</span>  [mcp-client       ] Calling tool filesystem.read_file with args {path: "/repo/src/auth.py"}</div>
+<div class="log-line log-warn"><span>[2025-04-23 14:36:13.105]</span> <span class="lvl">[WARN ]</span>  [mcp-client       ] Tool response latency exceeded 500ms threshold (812ms) for filesystem.read_file</div>
+<div class="log-line log-info"><span>[2025-04-23 14:36:13.110]</span> <span class="lvl">[INFO ]</span>  [agent-executor   ] Step 1 complete. Advancing to step 2: github-pr-workflow</div>
+<div class="log-line log-info"><span>[2025-04-23 14:36:13.145]</span> <span class="lvl">[INFO ]</span>  [mcp-client       ] Calling tool github.list_issues with args {repo: "company/auth-service"}</div>
+<div class="log-line log-error"><span>[2025-04-23 14:36:14.892]</span> <span class="lvl">[ERROR]</span>  [scheduler        ] Schedule incident-scan failed: agent incident-bot has no active instances (max=2, active=0)</div>
+<div class="log-line log-info"><span>[2025-04-23 14:36:15.002]</span> <span class="lvl">[INFO ]</span>  [agent-executor   ] SOP pr-review-workflow completed in 2.34s with 8 tool calls. Session closed.</div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════ VIEW: SERVICE SEGREGATION SECURITY AUDIT ═══════════════════════════════ -->
+<div id="view-security-audit" class="view">
+  <div class="view-header">
+    <div><h2>Service Segregation Security Audit</h2><div class="view-desc">Boundary evidence for API and WebSocket transport, caller-scoped allowlists, and deny-by-default enforcement.</div></div>
+    <span class="chip chip-green">Controls Active</span>
+  </div>
+
+  <div class="metrics-grid" style="margin-bottom:16px">
+    <div class="metric-card">
+      <div class="metric-label">UI Boundary</div>
+      <div class="metric-value">API + WS</div>
+      <div class="metric-delta delta-neutral">From API_CONFIG and useChatSession</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-label">Internal Access</div>
+      <div class="metric-value">Caller Scoped</div>
+      <div class="metric-delta delta-neutral">Agent Runtime and Communication Hub partitioned</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-label">Policy Mode</div>
+      <div class="metric-value" style="color:var(--error)">Deny Default</div>
+      <div class="metric-delta delta-neutral">Non-allowlisted routes are blocked</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-label">Revocation Contract</div>
+      <div class="metric-value" style="font-size:20px">revoked/{serial}</div>
+      <div class="metric-delta delta-neutral">Fail-closed on client errors</div>
+    </div>
+  </div>
+
+  <div class="tabs">
+    <div class="tab active" onclick="switchTab(this,'sec-audit-ui')">UI Boundary</div>
+    <div class="tab" onclick="switchTab(this,'sec-audit-policy')">Internal Policy</div>
+    <div class="tab" onclick="switchTab(this,'sec-audit-evidence')">Evidence</div>
+  </div>
+
+  <div id="sec-audit-ui" class="tab-panel active">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
+      <div class="card">
+        <div class="card-header"><h3>Frontend Transport Configuration</h3></div>
+        <div class="card-body">
+          <div style="margin-bottom:10px"><strong>API_CONFIG.BASE_URL</strong><div class="font-mono mt-2">/api/v1</div></div>
+          <div style="margin-bottom:10px"><strong>API_CONFIG.WS_BASE_URL</strong><div class="font-mono mt-2">/ws</div></div>
+          <div><strong>apiClient</strong><div class="text-secondary mt-2">All REST requests are sent through the shared axios client with bearer token injection.</div></div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-header"><h3>useChatSession WebSocket Builder</h3></div>
+        <div class="card-body">
+          <div class="form-row" style="margin-bottom:10px">
+            <div class="form-group" style="margin-bottom:0">
+              <label>Session ID</label>
+              <input id="sec-audit-session-id" class="form-control" value="session-123" oninput="updateSecurityAuditWsUrl()">
+            </div>
+            <div class="form-group" style="margin-bottom:0">
+              <label>Conversation ID</label>
+              <input id="sec-audit-conv-id" class="form-control" value="conv-999" oninput="updateSecurityAuditWsUrl()">
+            </div>
+          </div>
+          <div class="form-group" style="margin-bottom:0">
+            <label>Access Token</label>
+            <input id="sec-audit-token" class="form-control" value="segregation-token" oninput="updateSecurityAuditWsUrl()">
+          </div>
+          <div class="mt-4">
+            <div class="text-sm text-secondary">Computed URL</div>
+            <div id="sec-audit-ws-url" class="font-mono" style="word-break:break-all;margin-top:6px;background:#F8FAFC;border:1px solid var(--border);padding:10px;border-radius:var(--radius-sm)"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="sec-audit-policy" class="tab-panel">
+    <div class="table-wrap" style="margin-bottom:16px">
+      <table>
+        <thead><tr><th>Caller</th><th>Endpoint</th><th>Expected</th><th>Reason</th></tr></thead>
+        <tbody>
+          <tr>
+            <td>Agent Runtime</td>
+            <td><span class="font-mono text-sm">GET /api/v1/internal/data/sessions/{session_id}</span></td>
+            <td><span class="chip chip-green">Allowed</span></td>
+            <td class="text-secondary">Runtime-essential data fetch</td>
+          </tr>
+          <tr>
+            <td>Communication Hub</td>
+            <td><span class="font-mono text-sm">POST /api/v1/internal/system-tools/save-result</span></td>
+            <td><span class="chip chip-green">Allowed</span></td>
+            <td class="text-secondary">Service-certificate-authenticated internal call</td>
+          </tr>
+          <tr>
+            <td>Unknown Caller</td>
+            <td><span class="font-mono text-sm">POST /api/v1/internal/authorize/tool-call</span></td>
+            <td><span class="chip chip-red">Denied</span></td>
+            <td class="text-secondary">Not allowlisted and missing trusted caller identity</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
+        <h3>Deny-By-Default Probe</h3>
+        <button class="btn btn-primary" onclick="runSecurityAuditProbe()">Run Probe</button>
+      </div>
+      <div class="card-body">
+        <span id="sec-audit-probe-status" class="chip chip-blue">Waiting for probe...</span>
+        <div id="sec-audit-probe-note" class="text-secondary mt-3">Simulates internal endpoint access without a valid service certificate.</div>
+      </div>
+    </div>
+  </div>
+
+  <div id="sec-audit-evidence" class="tab-panel">
+    <div class="card" style="margin-bottom:16px">
+      <div class="card-header"><h3>Evidence from Shipped Verification</h3></div>
+      <div class="card-body">
+        <div class="session-item"><div class="session-info"><div class="session-name">Frontend boundary test</div><div class="session-binding">Confirms API and WS config paths only; rejects direct DB transport hints.</div></div><span class="chip chip-green">Pass</span></div>
+        <div class="session-item"><div class="session-info"><div class="session-name">Internal authorize deny path</div><div class="session-binding">Rejects missing service certificate with 401/403 behavior.</div></div><span class="chip chip-green">Pass</span></div>
+        <div class="session-item"><div class="session-info"><div class="session-name">System-tools service-certificate enforcement</div><div class="session-binding">Internal system-tools endpoint rejects unauthenticated internal caller.</div></div><span class="chip chip-green">Pass</span></div>
+        <div class="session-item"><div class="session-info"><div class="session-name">Revocation endpoint contract</div><div class="session-binding">Calls /api/v1/internal/certificates/revoked/{serial_number} path.</div></div><span class="chip chip-green">Pass</span></div>
+      </div>
+    </div>
+
+    <div class="log-stream">
+<div class="log-line log-info"><span>[2026-05-22 09:11:18.204]</span> <span class="lvl">[INFO ]</span>  [frontend.boundary ] API_CONFIG.BASE_URL=/api/v1 ; WS_BASE_URL=/ws</div>
+<div class="log-line log-info"><span>[2026-05-22 09:11:18.418]</span> <span class="lvl">[INFO ]</span>  [chat.session      ] Built ws URL with token and conv_session_id query params</div>
+<div class="log-line log-warn"><span>[2026-05-22 09:11:18.829]</span> <span class="lvl">[WARN ]</span>  [internal.policy   ] Caller endpoint not in allowlist; deny_by_default=true</div>
+<div class="log-line log-error"><span>[2026-05-22 09:11:18.833]</span> <span class="lvl">[ERROR]</span>  [system-tools      ] Missing service certificate; request rejected with 403</div>
+    </div>
+  </div>
+</div>
+
+  </div><!-- /main-content -->
+</div><!-- /main-wrapper -->
+</div><!-- /app-shell -->
+
+<!-- ════════════════════════════════════════════════════════════════ -->
+<!-- MODEL CONFIG CREATE/EDIT DIALOG — 12 providers                    -->
+<!-- ════════════════════════════════════════════════════════════════ -->
+<div id="modal-model-config" class="modal-overlay" onclick="closeModalIfOverlay(event,'modal-model-config')">
+  <div class="modal modal-lg" style="max-width:780px">
+    <div class="modal-header">
+      <h3 id="mcDialogTitle">Create Model Configuration</h3>
+      <button class="modal-close" onclick="closeModal('modal-model-config')">×</button>
+    </div>
+    <div class="modal-body">
+      <div id="mcDialogError" class="alert alert-warning" style="display:none"></div>
+
+      <div class="alert alert-info">
+        The provider catalogue supports 12 LLM providers. The dropdown is grouped into <strong>Existing (validated)</strong> and <strong>New (this change)</strong>.
+      </div>
+
+      <div class="form-group">
+        <label>Display Name <span style="color:var(--error)">*</span></label>
+        <input class="form-control" id="mcName" placeholder="e.g. Gemini 2.5 Pro Production">
+      </div>
+
+      <!-- Custom provider dropdown -->
+      <div class="form-group">
+        <label>Provider Type <span style="color:var(--error)">*</span></label>
+        <div class="provider-select-shell" id="mcProviderShell">
+          <div class="provider-select" id="mcProviderSelect" onclick="mcToggleProviderDropdown(event)">
+            <span class="chip chip-blue">openai</span>
+            <span>OpenAI</span>
+            <span class="ps-caret">▾</span>
+          </div>
+          <div class="provider-dropdown" id="mcProviderDropdown" style="display:none">
+            <div class="pd-group-label">Existing (validated)</div>
+            <div class="pd-item selected" onclick="mcPickProvider(this,'openai','OpenAI','chip-blue')">
+              <span class="chip chip-blue">openai</span>
+              <div class="pd-meta"><strong>OpenAI</strong><small>Flagship OpenAI chat-completions</small></div>
+            </div>
+            <div class="pd-item" onclick="mcPickProvider(this,'anthropic','Anthropic','chip-purple')">
+              <span class="chip chip-purple">anthropic</span>
+              <div class="pd-meta"><strong>Anthropic</strong><small>Claude native messages API</small></div>
+            </div>
+            <div class="pd-item" onclick="mcPickProvider(this,'litellm_proxy','LiteLLM Proxy','chip-teal')">
+              <span class="chip chip-teal">litellm_proxy</span>
+              <div class="pd-meta"><strong>LiteLLM Proxy</strong><small>Aggregator gateway</small></div>
+            </div>
+            <div class="pd-item" onclick="mcPickProvider(this,'azure_openai','Azure OpenAI','chip-orange')">
+              <span class="chip chip-orange">azure_openai</span>
+              <div class="pd-meta"><strong>Azure OpenAI</strong><small>Azure-hosted OpenAI</small></div>
+            </div>
+            <div class="pd-divider"></div>
+            <div class="pd-group-label new">New in this change · +8</div>
+            <div class="pd-item" onclick="mcPickProvider(this,'gemini','Google Gemini','chip-pink')">
+              <span class="chip chip-pink">gemini</span>
+              <div class="pd-meta"><strong>Google Gemini</strong><small>Hyperscaler — native generateContent API</small></div>
+            </div>
+            <div class="pd-item" onclick="mcPickProvider(this,'mistral','Mistral AI','chip-indigo')">
+              <span class="chip chip-indigo">mistral</span>
+              <div class="pd-meta"><strong>Mistral AI</strong><small>European cloud — OpenAI-compatible</small></div>
+            </div>
+            <div class="pd-item" onclick="mcPickProvider(this,'cohere','Cohere','chip-cyan')">
+              <span class="chip chip-cyan">cohere</span>
+              <div class="pd-meta"><strong>Cohere</strong><small>Enterprise chat — native /chat endpoint</small></div>
+            </div>
+            <div class="pd-item" onclick="mcPickProvider(this,'groq','Groq','chip-red-dark')">
+              <span class="chip chip-red-dark">groq</span>
+              <div class="pd-meta"><strong>Groq</strong><small>Specialty fast inference — OpenAI-compatible</small></div>
+            </div>
+            <div class="pd-item" onclick="mcPickProvider(this,'together','Together AI','chip-amber')">
+              <span class="chip chip-amber">together</span>
+              <div class="pd-meta"><strong>Together AI</strong><small>Open-weights hosting — OpenAI-compatible</small></div>
+            </div>
+            <div class="pd-item" onclick="mcPickProvider(this,'fireworks','Fireworks AI','chip-violet')">
+              <span class="chip chip-violet">fireworks</span>
+              <div class="pd-meta"><strong>Fireworks AI</strong><small>Open-weights hosting — OpenAI-compatible</small></div>
+            </div>
+            <div class="pd-item" onclick="mcPickProvider(this,'perplexity','Perplexity','chip-green-dark')">
+              <span class="chip chip-green-dark">perplexity</span>
+              <div class="pd-meta"><strong>Perplexity</strong><small>Search-augmented chat — OpenAI-compatible</small></div>
+            </div>
+            <div class="pd-item" onclick="mcPickProvider(this,'deepseek','DeepSeek','chip-slate')">
+              <span class="chip chip-slate">deepseek</span>
+              <div class="pd-meta"><strong>DeepSeek</strong><small>Chinese open-weights — OpenAI-compatible</small></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label>API Base URL</label>
+          <input class="form-control" id="mcBaseUrl" placeholder="Optional — leave blank to use provider default">
+          <div class="form-hint">Leave blank to use the provider's default endpoint.</div>
+        </div>
+        <div class="form-group">
+          <label>API Key <span style="color:var(--error)">*</span></label>
+          <input type="password" class="form-control" id="mcApiKey" placeholder="Paste the provider's API key">
+          <div class="form-hint" id="mcApiKeyHint">Encrypted with platform vault before storage. Never returned to client.</div>
+        </div>
+      </div>
+
+      <!-- Enabled models + Fetch Models (edit only) -->
+      <div id="mcEditModelsSection" style="display:none;margin-top:14px">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+          <div>
+            <div class="section-title" style="margin-bottom:2px">Enabled Models</div>
+            <div class="form-hint" style="margin:0"><span id="mcEnabledCount">0</span> model(s) currently enabled</div>
+          </div>
+          <div style="display:flex;gap:8px;align-items:center">
+            <span id="mcFetchStatus" class="chip chip-green" style="display:none">Loaded</span>
+            <button class="btn btn-secondary btn-sm" onclick="mcFetchModels()">
+              <span id="mcFetchSpinner" style="display:none">⟳</span>
+              <span>Fetch Models</span>
+            </button>
+          </div>
+        </div>
+        <div class="model-chip-list" id="mcEnabledChips" style="margin-bottom:8px"></div>
+        <div id="mcFetchHintText" class="form-hint" style="margin-bottom:6px">Click <strong>Fetch Models</strong> to load the curated list of well-known model identifiers for this provider.</div>
+        <div class="model-fetch-wrap" id="mcFetchList" style="display:none"></div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-danger" id="mcDeleteBtn" style="display:none" onclick="closeModal('modal-model-config');openModal('modal-model-config-delete')">Delete</button>
+      <div style="flex:1"></div>
+      <button class="btn btn-secondary" onclick="closeModal('modal-model-config')">Cancel</button>
+      <button class="btn btn-primary" onclick="mcSave()">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════════ -->
+<!-- MODEL CONFIG DELETE CONFIRMATION                                 -->
+<!-- ════════════════════════════════════════════════════════════════ -->
+<div id="modal-model-config-delete" class="modal-overlay" onclick="closeModalIfOverlay(event,'modal-model-config-delete')">
+  <div class="modal" style="max-width:520px">
+    <div class="modal-header">
+      <h3>Delete model config &ldquo;<span id="mcDeleteName">Mistral AI Production</span>&rdquo;?</h3>
+      <button class="modal-close" onclick="closeModal('modal-model-config-delete')">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="alert alert-warning">
+        This will permanently remove the configuration and the encrypted API key from the platform vault. Agent types that reference one of the enabled models will lose access on their next invocation.
+      </div>
+      <div class="form-group" style="margin-bottom:0">
+        <label style="font-size:12px;text-transform:uppercase;letter-spacing:.4px;color:var(--text-secondary)">References detected (safety guard)</label>
+        <div class="table-wrap" style="margin:6px 0 0;border-radius:6px">
+          <table>
+            <thead><tr><th>Agent Type</th><th>Model</th><th>Status</th></tr></thead>
+            <tbody>
+              <tr>
+                <td>procurement-orchestrator</td>
+                <td><span class="font-mono text-sm">mistral-large-latest</span></td>
+                <td><span class="chip chip-red">Blocks deletion</span></td>
+              </tr>
+              <tr>
+                <td>contract-reviewer</td>
+                <td><span class="font-mono text-sm">mistral-small-latest</span></td>
+                <td><span class="chip chip-red">Blocks deletion</span></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <div class="alert alert-warning" style="margin-top:14px;margin-bottom:0;background:#FFEBEE;color:#8E0000;border-left:4px solid var(--error)">
+        <strong>Deletion blocked</strong>: 2 agent type(s) still reference enabled models on this configuration. Reassign or remove those references first, then retry.
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-model-config-delete')">Close</button>
+      <button class="btn btn-danger" disabled>Delete anyway</button>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════════ -->
+<!-- MODEL CONFIG ERROR PATTERN DIALOG (403)                          -->
+<!-- ════════════════════════════════════════════════════════════════ -->
+<div id="modal-model-config-error" class="modal-overlay" onclick="closeModalIfOverlay(event,'modal-model-config-error')">
+  <div class="modal" style="max-width:600px">
+    <div class="modal-header">
+      <h3>Create Model Configuration</h3>
+      <button class="modal-close" onclick="closeModal('modal-model-config-error')">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="alert alert-warning" style="background:#FFEBEE;color:#8E0000;border-left:4px solid var(--error)">
+        <strong>Permission denied (HTTP 403)</strong>
+        Your role does not include <span class="font-mono text-sm" style="background:#F1F5F9;padding:1px 4px;border-radius:3px">agents:model_configs:create</span>. Ask a platform administrator to grant this permission.
+      </div>
+      <div class="form-group">
+        <label>Display Name</label>
+        <input class="form-control" value="Cohere Command R Plus Production" readonly>
+      </div>
+      <div class="form-group">
+        <label>Provider Type</label>
+        <input class="form-control" value="cohere" readonly>
+      </div>
+      <div class="form-group" style="margin-bottom:0">
+        <label>API Key</label>
+        <input type="password" class="form-control" value="••••••••••" readonly>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-model-config-error')">Close</button>
+      <button class="btn btn-primary" disabled>Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════════ -->
+<!-- MODEL CONFIG CASCADE MODAL (enlarged view)                       -->
+<!-- ════════════════════════════════════════════════════════════════ -->
+<div id="modal-model-config-cascade" class="modal-overlay" onclick="closeModalIfOverlay(event,'modal-model-config-cascade')">
+  <div class="modal" style="max-width:780px">
+    <div class="modal-header">
+      <h3>Disabled-Vendor Cascade</h3>
+      <button class="modal-close" onclick="closeModal('modal-model-config-cascade')">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="alert alert-info">
+        Toggling a vendor's <strong>is_disabled</strong> flag cascades to every model and guardrail under it. The same semantics apply to all twelve providers, including the eight new ones.
+      </div>
+      <div class="cascade-card" id="mcCascadeModalCard" style="margin-top:6px">
+        <div class="cascade-intro">
+          <div>
+            <strong style="color:var(--text-primary)">Cohere &rarr; 3 models &rarr; 5 guardrails</strong>
+            <span class="text-secondary"> &middot; Toggle the vendor to see the cascade.</span>
+          </div>
+          <div>
+            <span id="mcCascadeModalState" class="chip chip-green">Enabled</span>
+            <button class="cascade-toggle-btn" id="mcCascadeModalToggleBtn" onclick="mcToggleCascade()">
+              <span class="ct-dot"></span> <span id="mcCascadeModalToggleLabel">Disable vendor</span>
+            </button>
+          </div>
+        </div>
+        <div id="mcCascadeModalTree"></div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-model-config-cascade')">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- Test OIDC Configuration Modal -->
+<div id="oidc-modal-test-config" class="modal-overlay" onclick="closeModalIfOverlay(event,'oidc-modal-test-config')">
+  <div class="modal modal-lg">
+    <div class="modal-header">
+      <h3 id="oidc-test-config-title">🔍 Test OIDC Configuration</h3>
+      <button class="modal-close" onclick="closeModal('oidc-modal-test-config')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div id="oidc-test-config-pre">
+        <p class="text-secondary" style="margin-bottom:16px">Testing connectivity for: <strong id="oidc-test-config-target">User Identity Provider</strong></p>
+        <div class="divider"></div>
+        <div style="display:grid;grid-template-columns:auto 1fr;gap:8px 12px;margin-top:12px;font-size:13px">
+          <span style="color:var(--text-secondary)">Issuer URL:</span><span class="font-mono" id="oidc-test-issuer">—</span>
+          <span style="color:var(--text-secondary)">Client ID:</span><span class="font-mono" id="oidc-test-client-id">—</span>
+        </div>
+        <button class="btn btn-primary" onclick="oidcRunTestConfig()" id="oidc-btn-run-test" style="margin-top:16px">▶ Run Test</button>
+      </div>
+      <div id="oidc-test-config-running" style="display:none;text-align:center;padding:20px 0">
+        <div class="spinner" style="width:48px;height:48px;border-width:4px"></div>
+        <h4 style="margin-bottom:8px;font-weight:600">Testing Configuration...</h4>
+        <p class="text-secondary">Validating OIDC provider connectivity</p>
+        <div style="text-align:left;margin-top:24px;max-width:400px;margin:24px auto 0">
+          <div class="test-step active" id="oidc-step-1"><span class="step-icon"><span class="mini-spinner"></span></span><span>Fetching OIDC Discovery document...</span></div>
+          <div class="test-step" id="oidc-step-2"><span class="step-icon">○</span><span>Validating issuer match...</span></div>
+          <div class="test-step" id="oidc-step-3"><span class="step-icon">○</span><span>Verifying JWKS endpoint...</span></div>
+          <div class="test-step" id="oidc-step-4"><span class="step-icon">○</span><span>Validating client credentials...</span></div>
+        </div>
+      </div>
+      <div id="oidc-test-config-result" style="display:none"><div id="oidc-test-config-result-content"></div></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('oidc-modal-test-config')">Close</button>
+      <button class="btn btn-primary" id="oidc-btn-retry-test" onclick="oidcRunTestConfig()" style="display:none">🔄 Retry</button>
+    </div>
+  </div>
+</div>
+
+<!-- Test OIDC Login Modal -->
+<div id="oidc-modal-test-login" class="modal-overlay" onclick="closeModalIfOverlay(event,'oidc-modal-test-login')">
+  <div class="modal modal-lg">
+    <div class="modal-header">
+      <h3 id="oidc-test-login-title">🔑 Test OIDC Login</h3>
+      <button class="modal-close" onclick="closeModal('oidc-modal-test-login')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div id="oidc-test-login-pre">
+        <div class="alert alert-warning"><div><strong style="display:block;margin-bottom:4px">Full Authorization Code Flow</strong><p class="text-sm">Initiates a real OIDC authorization code flow with the configured provider. Validates the full authentication flow and claims response.</p></div></div>
+        <p class="text-secondary">Testing login for: <strong id="oidc-test-login-target">User Identity Provider</strong></p>
+        <div style="display:grid;grid-template-columns:auto 1fr;gap:8px 12px;margin-top:12px;font-size:13px">
+          <span style="color:var(--text-secondary)">Auth Endpoint:</span><span class="font-mono">https://auth.example.com/.../auth</span>
+          <span style="color:var(--text-secondary)">Redirect URI:</span><span class="font-mono">http://localhost:3000/callback</span>
+        </div>
+        <button class="btn btn-primary" onclick="oidcRunTestLogin()" id="oidc-btn-run-login" style="margin-top:16px">▶ Initiate Test Login</button>
+      </div>
+      <div id="oidc-test-login-running" style="display:none;text-align:center;padding:20px 0">
+        <div class="spinner" style="width:48px;height:48px;border-width:4px"></div>
+        <h4 style="margin-bottom:8px;font-weight:600">Performing OIDC Login...</h4>
+        <p class="text-secondary">Redirecting to provider, completing callback, validating tokens</p>
+        <div style="text-align:left;margin-top:24px;max-width:400px;margin:24px auto 0">
+          <div class="test-step active" id="oidc-login-step-1"><span class="step-icon"><span class="mini-spinner"></span></span><span>Initiating authorization code flow...</span></div>
+          <div class="test-step" id="oidc-login-step-2"><span class="step-icon">○</span><span>Completing callback and exchanging code...</span></div>
+          <div class="test-step" id="oidc-login-step-3"><span class="step-icon">○</span><span>Validating ID token and access token...</span></div>
+          <div class="test-step" id="oidc-login-step-4"><span class="step-icon">○</span><span>Resolving user identity from claims...</span></div>
+        </div>
+      </div>
+      <div id="oidc-test-login-result" style="display:none"><div id="oidc-test-login-result-content"></div></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('oidc-modal-test-login')">Close</button>
+      <button class="btn btn-primary" id="oidc-btn-retry-login" onclick="oidcRunTestLogin()" style="display:none">🔄 Retry</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ CONTROL CENTER ASSISTANT (global floating launcher) ═══ -->
+<button class="asst-fab" id="asst-fab" onclick="asstOpen()" title="Control Center Assistant" aria-label="Control Center Assistant">🤖</button>
+<div class="asst-overlay" id="asst-overlay" onclick="if(event.target===this)asstClose()">
+  <div class="asst-dialog" id="asst-dialog" role="dialog" aria-label="Control Center Assistant conversation">
+    <div class="asst-head">
+      <span style="font-size:20px">🤖</span>
+      <h3 id="asst-title">Control Center Assistant</h3>
+      <span class="chip chip-green" id="asst-conn-chip">Connected</span>
+      <div class="asst-head-right">
+        <button class="btn-icon" id="asst-fs-btn" onclick="asstToggleFullscreen()" title="Toggle fullscreen">⛶</button>
+        <button class="btn-icon" onclick="asstClose()" title="Close">✕</button>
+      </div>
+    </div>
+
+    <div class="asst-body">
+      <div class="asst-alert" id="asst-model-alert" style="display:none">
+        <span>⚠️</span>
+        <div style="flex:1">
+          <b>The assistant needs a model configured for this workspace</b>
+          No model is configured for this workspace yet. An administrator can select one under System Config → Assistant model.
+          <div style="margin-top:8px"><button class="btn btn-secondary btn-sm" onclick="asstGoConfigure()">Configure model</button></div>
+        </div>
+      </div>
+
+      <div class="asst-paper-wrap">
+        <div class="asst-paper" id="asst-messages"></div>
+      </div>
+    </div>
+
+    <div class="asst-input-row">
+      <textarea class="chat-input" id="asst-input" rows="1" placeholder="Type a message… (Enter to send)" onkeydown="asstOnKey(event)" oninput="asstAutoGrow(this)"></textarea>
+      <button class="btn btn-primary" id="asst-send" onclick="asstSend()">Send</button>
+    </div>
+
+    <div class="asst-foot">
+      <button class="btn btn-secondary btn-sm" id="asst-btn-sessions" onclick="asstOpenSessions()">🗂 View All Sessions</button>
+      <button class="btn btn-secondary btn-sm" id="asst-btn-new" onclick="asstNewSession()">＋ New Session</button>
+      <span class="spacer"></span>
+      <button class="btn btn-sm" id="asst-btn-end" style="background:#fff;border:1px solid #FECACA;color:#B91C1C" onclick="asstOpenEnd()">⏹ End Session</button>
+      <button class="btn btn-secondary btn-sm" onclick="asstClose()">Exit</button>
+    </div>
+  </div>
+</div>
+<div class="asst-overlay" id="asst-sessions-overlay" onclick="if(event.target===this)asstCloseSessions()">
+  <div class="asst-dialog" style="width:min(620px,100%);height:auto;max-height:85vh" role="dialog" aria-label="All sessions for this agent">
+    <div class="asst-head">
+      <h3>All sessions for this agent</h3>
+      <div class="asst-head-right"><button class="btn-icon" onclick="asstCloseSessions()" title="Close">✕</button></div>
+    </div>
+    <div class="asst-body" style="overflow-y:auto;padding-bottom:14px">
+      <div class="asst-sess-filters">
+        <label class="toggle"><input type="checkbox" id="asst-show-ended" onchange="asstShowEnded(this.checked)"><span class="toggle-slider"></span><span style="font-size:12px">Show ended sessions</span></label>
+        <label style="display:inline-flex;align-items:center;gap:6px">From <input type="date" class="form-control" id="asst-sess-from" style="width:150px;padding:5px 8px;font-size:12px" onchange="asstDateChange()"></label>
+        <label style="display:inline-flex;align-items:center;gap:6px">To <input type="date" class="form-control" id="asst-sess-to" style="width:150px;padding:5px 8px;font-size:12px" onchange="asstDateChange()"></label>
+      </div>
+      <div id="asst-sessions-list"></div>
+      <div class="asst-pager" style="justify-content:center">
+        <span class="asst-pager-btns" id="asst-sessions-pager"></span>
+      </div>
+    </div>
+    <div class="asst-foot">
+      <span class="spacer"></span>
+      <button class="btn btn-secondary btn-sm" onclick="asstCloseSessions()">Cancel</button>
+    </div>
+  </div>
+</div>
+<div class="asst-overlay" id="asst-preview-overlay" onclick="if(event.target===this)asstClosePreview()">
+  <div class="asst-dialog" style="width:90vw;height:80vh" role="dialog" aria-label="Approval Preview">
+    <div class="asst-head">
+      <h3>Approval Preview</h3>
+      <div class="asst-head-right"><button class="btn-icon" onclick="asstClosePreview()" title="Collapse">⤡</button></div>
+    </div>
+    <div class="asst-body" id="asst-preview-body" style="overflow-y:auto;padding-bottom:14px;display:block;font-size:13px;line-height:1.6"></div>
+    <div class="asst-foot">
+      <button class="btn btn-secondary btn-sm" onclick="asstClosePreview()">Collapse</button>
+      <span class="spacer"></span>
+      <button class="btn btn-sm" style="background:#fff;border:1px solid #FECACA;color:#B91C1C" onclick="asstResolve(false)">✕ Deny</button>
+      <button class="btn btn-sm" style="background:#16A34A;color:#fff" onclick="asstResolve(true)">✓ Approve</button>
+    </div>
+  </div>
+</div>
+<div class="asst-overlay" id="asst-end-overlay" onclick="if(event.target===this)asstCloseEnd()">
+  <div class="asst-dialog" style="width:min(560px,100%);height:auto" role="dialog" aria-label="End Conversation Session">
+    <div class="asst-head">
+      <h3>End Conversation Session</h3>
+      <div class="asst-head-right"><button class="btn-icon" onclick="asstCloseEnd()" title="Close">✕</button></div>
+    </div>
+    <div class="asst-body" style="padding-bottom:16px">
+      <p style="font-size:13px;line-height:1.6">This will close the session. You can still view its history but cannot resume it.</p>
+      <p class="text-sm text-secondary" style="line-height:1.6;margin-top:8px">Any in-flight execution for this session is terminated. The next time you open the assistant it starts a <b>new</b> session instead of resuming this one.</p>
+    </div>
+    <div class="asst-foot">
+      <span class="spacer"></span>
+      <button class="btn btn-secondary btn-sm" onclick="asstCloseEnd()">Cancel</button>
+      <button class="btn btn-sm" style="background:#C62828;color:#fff" onclick="asstConfirmEnd()">End Session</button>
+    </div>
+  </div>
+</div>
+
+<script src="../shared/app.js"></script>
+<script src="../shared/assistant.js"></script>
+<script src="../shared/max-dialog.js"></script>
+<script src="../shared/oidc.js"></script>
+<script src="../shared/workflow.js"></script>
+<!-- ═══ model-configs ═══ -->
+<script>
+// ════════════════════════════════════════════════════════════════
+var MC_PROVIDERS = [
+  { key:'openai',        label:'OpenAI',         chip:'chip-blue',       isNew:false, status:'enabled',  creds:true,  models:['gpt-4.1','gpt-4.1-mini','o3-mini'], url:'https://api.openai.com/v1' },
+  { key:'anthropic',     label:'Anthropic',      chip:'chip-purple',    isNew:false, status:'enabled',  creds:true,  models:['claude-opus-4','claude-sonnet-4','claude-3-haiku'], url:'https://api.anthropic.com' },
+  { key:'litellm_proxy', label:'LiteLLM Proxy',  chip:'chip-teal',      isNew:false, status:'enabled',  creds:true,  models:['gpt-4.1','claude-sonnet-4','gemini-2.5-pro'], url:'http://litellm-proxy:4000' },
+  { key:'azure_openai',  label:'Azure OpenAI',   chip:'chip-orange',    isNew:false, status:'enabled',  creds:false, models:[], url:'https://acme-openai.openai.azure.com' },
+  { key:'gemini',        label:'Google Gemini',  chip:'chip-pink',      isNew:true,  status:'enabled',  creds:true,  models:['gemini-2.5-pro','gemini-2.5-flash','gemini-2.0-flash'], url:'https://generativelanguage.googleapis.com/v1beta' },
+  { key:'mistral',       label:'Mistral AI',     chip:'chip-indigo',    isNew:true,  status:'enabled',  creds:true,  models:['mistral-large-latest','mistral-medium-latest','mistral-small-latest'], url:'https://api.mistral.ai/v1' },
+  { key:'cohere',        label:'Cohere',         chip:'chip-cyan',      isNew:true,  status:'enabled',  creds:true,  models:['command-r-plus','command-r','command-light'], url:'https://api.cohere.com/v1' },
+  { key:'groq',          label:'Groq',           chip:'chip-red-dark',  isNew:true,  status:'disabled', creds:true,  models:['llama-3.3-70b-versatile','llama-3.1-8b-instant','mixtral-8x7b-32768'], url:'https://api.groq.com/openai/v1' },
+  { key:'together',      label:'Together AI',    chip:'chip-amber',     isNew:true,  status:'enabled',  creds:true,  models:['meta-llama/Llama-3.3-70B-Instruct-Turbo','Qwen/Qwen2.5-72B-Instruct-Turbo'], url:'https://api.together.xyz/v1' },
+  { key:'fireworks',     label:'Fireworks AI',   chip:'chip-violet',    isNew:true,  status:'enabled',  creds:false, models:[], url:'https://api.fireworks.ai/inference/v1' },
+  { key:'perplexity',    label:'Perplexity',     chip:'chip-green-dark',isNew:true,  status:'enabled',  creds:true,  models:['sonar-pro','sonar','llama-3.1-sonar-small-128k-online'], url:'https://api.perplexity.ai' },
+  { key:'deepseek',      label:'DeepSeek',       chip:'chip-slate',     isNew:true,  status:'enabled',  creds:true,  models:['deepseek-chat','deepseek-reasoner'], url:'https://api.deepseek.com/v1' }
+];
+
+var mcSelectedProvider = 'openai';
+var mcEditingKey = null;
+var mcCascadeDisabled = false;
+var mcFetchedModels = [];
+
+// Render the model configs table
+function mcRenderTable() {
+  var html = '';
+  MC_PROVIDERS.forEach(function(p) {
+    var rowStyle = '';
+    if (p.status === 'disabled') rowStyle = 'opacity:.55;background:#F8F8F8';
+    var statusChip = p.status === 'enabled'
+      ? '<span class="chip chip-green">Enabled</span>'
+      : '<span class="chip chip-yellow">Disabled</span>';
+    var credsChip = p.creds
+      ? '<span class="chip chip-green">✓ Credentials set</span>'
+      : '<span class="chip chip-gray">No credentials</span>';
+    var modelsCell = p.models.length === 0
+      ? '<span class="text-secondary font-mono text-sm">—</span>'
+      : '<div class="model-chip-list">' + p.models.map(function(m){return '<span class="model-chip-inline">'+m+'</span>';}).join('') + '</div>';
+    var editBtn = p.status !== 'disabled'
+      ? ' <button class="btn-icon-sm" title="Edit" onclick="mcOpenEdit(\''+p.key+'\')">✎</button>'
+      : ' <button class="btn-icon-sm" title="Re-enable" onclick="mcReEnable(\''+p.key+'\')">↻</button>';
+    html += '<tr style="'+rowStyle+'">'+
+      '<td><strong>'+p.label+' Production</strong><div class="text-secondary font-mono" style="font-size:11px">cfg_'+p.key.replace(/_/g,'')+'_001</div></td>'+
+      '<td><span class="chip '+p.chip+'">'+p.key+'</span>'+(p.isNew?' <span class="chip-new-badge">NEW</span>':'')+'</td>'+
+      '<td class="font-mono text-sm">'+p.url+'</td>'+
+      '<td>'+credsChip+'</td>'+
+      '<td style="max-width:220px">'+modelsCell+'</td>'+
+      '<td>'+statusChip+'</td>'+
+      '<td class="actions-cell" style="text-align:right">'+
+        '<button class="btn-icon-sm" title="View cascade" onclick="openModal(\'modal-model-config-cascade\')">⛨</button>'+
+        editBtn+
+        ' <button class="btn-icon-sm" title="Delete" onclick="mcOpenDelete(\''+p.key+'\')">🗑</button>'+
+      '</td>'+
+    '</tr>';
+  });
+  var tbl = document.getElementById('mcConfigTable');
+  if (tbl) tbl.innerHTML = html;
+}
+
+// ── Cascade visualisation ──
+function mcRenderCascade(targetId) {
+  var node = document.getElementById(targetId);
+  if (!node) return;
+  var vState = mcCascadeDisabled ? 'disabled' : 'enabled';
+  var vClass = mcCascadeDisabled ? 'disabled' : '';
+  var models = [
+    { id:'command-r-plus', label:'command-r-plus', enabled:true, guardrails:[
+      { label:'Hourly — 200 requests', enabled:true }, { label:'Daily — 5,000 requests', enabled:true }
+    ]},
+    { id:'command-r', label:'command-r', enabled:true, guardrails:[
+      { label:'Hourly — 300 requests', enabled:true }
+    ]},
+    { id:'command-light', label:'command-light', enabled:false, guardrails:[
+      { label:'Daily — 10,000 requests', enabled:false }
+    ]}
+  ];
+  var html = '<div class="cascade-level vendor"><div class="cascade-row">'+
+    '<span class="cascade-chevron" onclick="mcToggleCascadeLevel(this)">▾</span>'+
+    '<div style="display:flex;align-items:center;gap:10px">'+
+      '<span class="chip chip-cyan">cohere</span>'+
+      '<span class="cascade-name">Cohere</span>'+
+      '<span class="cascade-state-badge '+vClass+'">'+vState+'</span>'+
+    '</div>'+
+    '<div class="text-secondary text-sm">'+models.length+' models &middot; '+models.reduce(function(a,m){return a+m.guardrails.length;},0)+' guardrails</div>'+
+  '</div><div class="cascade-children">';
+  models.forEach(function(m) {
+    var mClass = (mcCascadeDisabled || !m.enabled) ? 'disabled' : '';
+    var mState = (mcCascadeDisabled || !m.enabled) ? 'disabled' : 'enabled';
+    var effect = mcCascadeDisabled ? '<div class="cascade-effect-line"><span class="arrow">↳</span> <strong>cascade:</strong> vendor disabled — all calls blocked</div>' : '';
+    html += '<div class="cascade-level model"><div class="cascade-row">'+
+      '<span class="cascade-chevron" onclick="mcToggleCascadeLevel(this)">▾</span>'+
+      '<div style="display:flex;align-items:center;gap:10px">'+
+        '<span class="model-chip-inline">'+m.label+'</span>'+
+        '<span class="cascade-state-badge '+mClass+'">'+mState+'</span>'+
+      '</div>'+
+      '<div class="text-secondary text-sm">'+m.guardrails.length+' guardrail'+(m.guardrails.length===1?'':'s')+'</div>'+
+    '</div>'+effect+'<div class="cascade-children">';
+    m.guardrails.forEach(function(g) {
+      var gClass = (mcCascadeDisabled || !m.enabled || !g.enabled) ? 'disabled' : '';
+      var gState = (mcCascadeDisabled || !m.enabled || !g.enabled) ? 'disabled' : 'enabled';
+      html += '<div class="cascade-level effect"><div class="cascade-row">'+
+        '<span class="cascade-chevron" style="visibility:hidden">▾</span>'+
+        '<div style="display:flex;align-items:center;gap:10px">'+
+          '<span class="font-mono text-sm">⛨ '+g.label+'</span>'+
+          '<span class="cascade-state-badge '+gClass+'">'+gState+'</span>'+
+        '</div>'+
+        '<div style="font-size:11px;color:var(--text-secondary)">'+(mcCascadeDisabled?'inherited disabled':(m.enabled?(g.enabled?'enforced':'paused'):'parent disabled'))+'</div>'+
+      '</div></div>';
+    });
+    html += '</div></div>';
+  });
+  html += '</div></div>';
+  node.innerHTML = html;
+}
+function mcToggleCascadeLevel(chevron) {
+  chevron.parentElement.parentElement.classList.toggle('collapsed');
+}
+function mcToggleCascade() {
+  mcCascadeDisabled = !mcCascadeDisabled;
+  function update(id, stateElId, toggleBtnId, toggleLabelId) {
+    var st = document.getElementById(stateElId);
+    if (st) { st.textContent = mcCascadeDisabled ? 'Disabled' : 'Enabled'; st.className = mcCascadeDisabled ? 'chip chip-yellow' : 'chip chip-green'; }
+    var btn = document.getElementById(toggleBtnId);
+    if (btn) btn.classList.toggle('disabled', mcCascadeDisabled);
+    var lbl = document.getElementById(toggleLabelId);
+    if (lbl) lbl.textContent = mcCascadeDisabled ? 'Re-enable vendor' : 'Disable vendor';
+    mcRenderCascade(id);
+  }
+  update('mcCascadeTree', 'mcCascadeState', 'mcCascadeToggleBtn', 'mcCascadeToggleLabel');
+  update('mcCascadeModalTree', 'mcCascadeModalState', 'mcCascadeModalToggleBtn', 'mcCascadeModalToggleLabel');
+}
+function mcReEnable(key) {
+  var p = MC_PROVIDERS.find(function(x){return x.key===key;});
+  if (p) { p.status = 'enabled'; mcRenderTable(); }
+}
+
+// ── Dialog: Create ──
+function mcOpenCreate() {
+  mcEditingKey = null;
+  mcFetchedModels = [];
+  document.getElementById('mcDialogTitle').textContent = 'Create Model Configuration';
+  document.getElementById('mcName').value = '';
+  document.getElementById('mcBaseUrl').value = '';
+  document.getElementById('mcApiKey').value = '';
+  document.getElementById('mcApiKeyHint').textContent = 'Encrypted with platform vault before storage. Never returned to client.';
+  document.getElementById('mcDialogError').style.display = 'none';
+  document.getElementById('mcEditModelsSection').style.display = 'none';
+  document.getElementById('mcDeleteBtn').style.display = 'none';
+  mcSelectedProvider = 'openai';
+  mcUpdateProviderSelect('openai', 'OpenAI', 'chip-blue');
+  document.getElementById('mcProviderDropdown').style.display = 'none';
+  openModal('modal-model-config');
+}
+
+// ── Dialog: Edit ──
+function mcOpenEdit(key) {
+  var p = MC_PROVIDERS.find(function(x){return x.key===key;}) || MC_PROVIDERS[0];
+  mcEditingKey = key;
+  mcFetchedModels = [];
+  document.getElementById('mcDialogTitle').textContent = 'Edit Model Configuration — ' + p.label + ' Production';
+  document.getElementById('mcName').value = p.label + ' Production';
+  document.getElementById('mcBaseUrl').value = p.url;
+  document.getElementById('mcApiKey').value = p.creds ? '••••••••••••••••' : '';
+  document.getElementById('mcApiKeyHint').textContent = p.creds ? '✓ API key is currently set. Clear and type a new key to update.' : 'No API key set. Provide one to enable this provider.';
+  document.getElementById('mcDialogError').style.display = 'none';
+  document.getElementById('mcEditModelsSection').style.display = 'block';
+  document.getElementById('mcDeleteBtn').style.display = 'inline-flex';
+  document.getElementById('mcFetchStatus').style.display = 'none';
+  document.getElementById('mcFetchList').style.display = 'none';
+  document.getElementById('mcFetchHintText').innerHTML = 'Click <strong>Fetch Models</strong> to load the curated list of well-known model identifiers for this provider.';
+  mcSelectedProvider = key;
+  mcUpdateProviderSelect(key, p.label, p.chip);
+  document.getElementById('mcProviderDropdown').style.display = 'none';
+  // Render enabled model chips
+  var chipsHtml = '';
+  p.models.forEach(function(m){ chipsHtml += '<span class="model-chip-inline">'+m+' <span style="opacity:.55">✓</span></span>'; });
+  document.getElementById('mcEnabledChips').innerHTML = chipsHtml || '<span class="text-secondary text-sm">None</span>';
+  document.getElementById('mcEnabledCount').textContent = p.models.length;
+  openModal('modal-model-config');
+}
+
+// ── Dialog: Delete ──
+function mcOpenDelete(key) {
+  var p = MC_PROVIDERS.find(function(x){return x.key===key;}) || MC_PROVIDERS[0];
+  document.getElementById('mcDeleteName').textContent = p.label + ' Production';
+  openModal('modal-model-config-delete');
+}
+
+// ── Dialog: Save ──
+function mcSave() {
+  var name = document.getElementById('mcName').value.trim();
+  if (!name) {
+    document.getElementById('mcDialogError').style.display = 'block';
+    document.getElementById('mcDialogError').innerHTML = '<strong>Validation error</strong>: Display name is required.';
+    return;
+  }
+  closeModal('modal-model-config');
+  mcFlashToast(mcEditingKey ? 'Model config updated. Table refreshes automatically.' : 'Model config created. The new row appears in the list.');
+}
+
+// ── Provider dropdown ──
+function mcToggleProviderDropdown(e) {
+  e.stopPropagation();
+  var dd = document.getElementById('mcProviderDropdown');
+  dd.style.display = dd.style.display === 'none' ? 'block' : 'none';
+}
+function mcPickProvider(el, key, label, chipClass) {
+  document.querySelectorAll('#mcProviderDropdown .pd-item').forEach(function(n){n.classList.remove('selected');});
+  el.classList.add('selected');
+  mcUpdateProviderSelect(key, label, chipClass);
+  mcSelectedProvider = key;
+  document.getElementById('mcProviderDropdown').style.display = 'none';
+  // Update base URL placeholder
+  var urls = {
+    openai:'https://api.openai.com/v1', anthropic:'https://api.anthropic.com',
+    litellm_proxy:'http://litellm-proxy:4000', azure_openai:'https://<resource>.openai.azure.com',
+    gemini:'https://generativelanguage.googleapis.com/v1beta', mistral:'https://api.mistral.ai/v1',
+    cohere:'https://api.cohere.com/v1', groq:'https://api.groq.com/openai/v1',
+    together:'https://api.together.xyz/v1', fireworks:'https://api.fireworks.ai/inference/v1',
+    perplexity:'https://api.perplexity.ai', deepseek:'https://api.deepseek.com/v1'
+  };
+  document.getElementById('mcBaseUrl').placeholder = urls[key] || '';
+}
+function mcUpdateProviderSelect(key, label, chipClass) {
+  var sel = document.getElementById('mcProviderSelect');
+  sel.innerHTML = '<span class="chip '+chipClass+'">'+key+'</span><span>'+label+'</span><span class="ps-caret">▾</span>';
+}
+
+// ── Fetch Models ──
+function mcFetchModels() {
+  if (!mcEditingKey) return;
+  var p = MC_PROVIDERS.find(function(x){return x.key===mcEditingKey;});
+  if (!p) return;
+  // Simulate a network fetch with a curated list
+  var curated = {
+    gemini: ['gemini-2.5-pro','gemini-2.5-flash','gemini-2.0-flash','gemini-1.5-pro','gemini-1.5-flash'],
+    mistral: ['mistral-large-latest','mistral-medium-latest','mistral-small-latest','mistral-embed'],
+    cohere: ['command-r-plus','command-r','command-light','command-a-03-2025'],
+    groq: ['llama-3.3-70b-versatile','llama-3.1-8b-instant','mixtral-8x7b-32768','gemma2-9b-it'],
+    together: ['meta-llama/Llama-3.3-70B-Instruct-Turbo','Qwen/Qwen2.5-72B-Instruct-Turbo','deepseek-ai/DeepSeek-V3'],
+    fireworks: ['llama-v3p3-70b-instruct','mixtral-8x7b-instruct','yi-large'],
+    perplexity: ['sonar-pro','sonar','llama-3.1-sonar-small-128k-online','llama-3.1-sonar-large-128k-online'],
+    deepseek: ['deepseek-chat','deepseek-reasoner']
+  };
+  mcFetchedModels = curated[mcEditingKey] || p.models.concat(['model-a','model-b']);
+  // Show loading state briefly
+  document.getElementById('mcFetchSpinner').style.display = 'inline';
+  setTimeout(function() {
+    document.getElementById('mcFetchSpinner').style.display = 'none';
+    document.getElementById('mcFetchStatus').style.display = 'inline-flex';
+    document.getElementById('mcFetchStatus').textContent = 'Loaded ' + mcFetchedModels.length + ' models';
+    document.getElementById('mcFetchHintText').innerHTML = '✓ Curated list loaded for <strong>'+mcEditingKey+'</strong>. Select models to enable below.';
+    // Render checkbox list
+    var p2 = MC_PROVIDERS.find(function(x){return x.key===mcEditingKey;});
+    var enabled = p2 ? p2.models : [];
+    var html = '';
+    mcFetchedModels.forEach(function(m) {
+      var checked = enabled.indexOf(m) !== -1 ? ' checked' : '';
+      html += '<label class="model-fetch-item"><input type="checkbox"'+checked+' onchange="mcToggleFetchedModel(this,\''+m+'\')"> '+m+'</label>';
+    });
+    document.getElementById('mcFetchList').innerHTML = html;
+    document.getElementById('mcFetchList').style.display = 'block';
+  }, 500);
+}
+function mcToggleFetchedModel(cb, model) {
+  var p = MC_PROVIDERS.find(function(x){return x.key===mcEditingKey;});
+  if (!p) return;
+  if (cb.checked) { if (p.models.indexOf(model) === -1) p.models.push(model); }
+  else { p.models = p.models.filter(function(m){return m!==model;}); }
+  // Update chips
+  var chipsHtml = '';
+  p.models.forEach(function(m){ chipsHtml += '<span class="model-chip-inline">'+m+' <span style="opacity:.55">✓</span></span>'; });
+  document.getElementById('mcEnabledChips').innerHTML = chipsHtml || '<span class="text-secondary text-sm">None</span>';
+  document.getElementById('mcEnabledCount').textContent = p.models.length;
+}
+
+// ── Toast ──
+function mcFlashToast(msg) {
+  var t = document.createElement('div');
+  t.textContent = msg;
+  t.style.cssText = 'position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:#1B5E20;color:#fff;padding:10px 18px;border-radius:6px;font-size:13px;box-shadow:0 4px 16px rgba(0,0,0,.25);z-index:9999;animation:toastIn .3s ease';
+  document.body.appendChild(t);
+  setTimeout(function(){ t.style.opacity='0'; t.style.transition='opacity .3s ease'; setTimeout(function(){ document.body.removeChild(t); }, 350); }, 3200);
+}
+
+// Close provider dropdown on outside click
+document.addEventListener('click', function(e) {
+  var shell = document.getElementById('mcProviderShell');
+  if (shell && !shell.contains(e.target)) {
+    var dd = document.getElementById('mcProviderDropdown');
+    if (dd) dd.style.display = 'none';
+  }
+});
+
+// Initialise on page load
+mcRenderTable();
+mcRenderCascade('mcCascadeTree');
+mcRenderCascade('mcCascadeModalTree');
+</script>
+<script src="../shared/page-init.js"></script>
+</body>
+</html>

@@ -1,0 +1,117 @@
+{
+    "edges": [
+        {
+            "label": "runs as",
+            "source": "agent:decd63af-bd69-4aea-bbcd-28ec1f33dd91",
+            "target": "identity:49bb6057-1dcc-4f93-b3b3-1b269d4c7bbe"
+        },
+        {
+            "label": "has role",
+            "source": "agent:decd63af-bd69-4aea-bbcd-28ec1f33dd91",
+            "target": "role:765cbb75-24ec-4851-a53c-25285604ec8d"
+        },
+        {
+            "label": "uses SOP",
+            "source": "role:765cbb75-24ec-4851-a53c-25285604ec8d",
+            "target": "sop:c5844c1d-884d-4c93-ba41-cd4e1bad7cfd"
+        },
+        {
+            "label": "invokes",
+            "source": "sop:c5844c1d-884d-4c93-ba41-cd4e1bad7cfd",
+            "target": "skill:e550ec5c-a703-4227-982e-3a39c9565443"
+        },
+        {
+            "label": "via default",
+            "source": "skill:e550ec5c-a703-4227-982e-3a39c9565443",
+            "target": "tool:mcp-demo____searchFlights"
+        },
+        {
+            "label": "via default",
+            "source": "skill:e550ec5c-a703-4227-982e-3a39c9565443",
+            "target": "tool:mcp-demo____bookTicket"
+        },
+        {
+            "label": "via default",
+            "source": "skill:e550ec5c-a703-4227-982e-3a39c9565443",
+            "target": "tool:mcp-demo____generatePaymentLink"
+        },
+        {
+            "label": "delegates",
+            "source": "sop:c5844c1d-884d-4c93-ba41-cd4e1bad7cfd",
+            "target": "agent_type:7a16be82-135b-4c85-b418-9e93881c722f"
+        }
+    ],
+    "nodes": [
+        {
+            "id": "agent:decd63af-bd69-4aea-bbcd-28ec1f33dd91",
+            "meta": {
+                "description": "Finds flights (by delegating to the flight-search agent) and books the chosen flight for one or more passengers, returning flight options or the PNR with a payment link"
+            },
+            "type": "agent",
+            "label": "airline-booking-agent"
+        },
+        {
+            "id": "identity:49bb6057-1dcc-4f93-b3b3-1b269d4c7bbe",
+            "meta": {
+            },
+            "type": "identity",
+            "label": "test_agent@ai_agents"
+        },
+        {
+            "id": "role:765cbb75-24ec-4851-a53c-25285604ec8d",
+            "meta": {
+                "description": "Airline passenger service agents: PNR lookup, check-in, new booking, and the router SOP"
+            },
+            "type": "role",
+            "label": "airline-agents"
+        },
+        {
+            "id": "sop:c5844c1d-884d-4c93-ba41-cd4e1bad7cfd",
+            "meta": {
+                "description": "Flight search and booking for the airline booking agent: delegates the flight search to flight-search-agent, then books the chosen flight with the create-booking skill."
+            },
+            "type": "sop",
+            "label": "airline-booking-with-flight-search"
+        },
+        {
+            "id": "skill:e550ec5c-a703-4227-982e-3a39c9565443",
+            "meta": {
+                "description": "Book a flight the passenger has ALREADY chosen and generate the payment link (booking only — never searches for flights)."
+            },
+            "type": "skill",
+            "label": "create-booking",
+            "usage": "used"
+        },
+        {
+            "id": "tool:mcp-demo____searchFlights",
+            "meta": {
+                "description": "Search fictional airline flights by origin, destination, and date. Returns flight number, times, fare, and seats available. Read-only."
+            },
+            "type": "tool",
+            "label": "mcp-demo____searchFlights"
+        },
+        {
+            "id": "tool:mcp-demo____bookTicket",
+            "meta": {
+                "description": "Book a flight for one or more passengers (confirm-before-write: the platform approval flow precedes every invocation). Returns the booking PNR with status 'booked'; one seat is reserved per passenger. A child or infant cannot travel without at least one adult on the same booking."
+            },
+            "type": "tool",
+            "label": "mcp-demo____bookTicket"
+        },
+        {
+            "id": "tool:mcp-demo____generatePaymentLink",
+            "meta": {
+                "description": "Generate a fictional payment link for an existing booking in 'booked' state. The demo simulates payment success: the booking becomes 'paid' (amount = fare × passenger count). No real money movement."
+            },
+            "type": "tool",
+            "label": "mcp-demo____generatePaymentLink"
+        },
+        {
+            "id": "agent_type:7a16be82-135b-4c85-b418-9e93881c722f",
+            "meta": {
+            },
+            "type": "agent_type",
+            "label": "flight-search-agent"
+        }
+    ]
+}

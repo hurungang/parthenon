@@ -161,3 +161,17 @@ above remain valid; the following are added.
 - `frontend/src/__tests__/useChatSession.heartbeat.test.ts` — `thinking_heartbeat` refreshes the thinking timestamp; `timeout_or_failed` is the terminal status.
 
 See `control-center-assistant-test-plan.md` for the assistant-wide coverage map.
+
+## Resumable Turns & Persisted Activity (2026-11)
+
+Session payloads and listings now carry the durable pause projection, and the chat surface is driven by a persisted activity record rather than in-memory signals.
+
+**Behaviour deltas:**
+- The sessions listing exposes a resume projection per session (`resume_state`, `resume_outcome`, `resume_expires_at`) and is `null` for an idle session; the Sessions tab renders badges from that projection only, so no session shows "waiting" without a live resume record.
+- Resume is instance-independent: the turn can continue on a different Agent Runtime instance after any service restart (see `resumable-turn-test-plan.md`).
+- The chat bubble reflects the persisted `ConversationActivity` state (thinking / using tool / waiting for input / finished) and hydrates immediately on reload or reconnect (see `conversation-intervention-test-plan.md` §8).
+
+**Test files:**
+- [backend/tests/unit/test_conversation_sessions_resume_projection.py](../../../../backend/tests/unit/test_conversation_sessions_resume_projection.py) — listing projection shape and null for idle.
+- [frontend/src/__tests__/ConversationSessionsTab.test.tsx](../../../../frontend/src/__tests__/ConversationSessionsTab.test.tsx) — resume badges match the projection; no badge without a resume record.
+- [backend/tests/integration/test_conversations_sessions_query.py](../../../../backend/tests/integration/test_conversations_sessions_query.py) — ordering/window/status semantics re-verified with the projection.

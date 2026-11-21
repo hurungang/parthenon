@@ -17,7 +17,7 @@
  * tests verify endpoints are wired (not 404, not 500) and properly require auth (401/403).
  */
 import { test, expect } from '@playwright/test'
-import { standardSetup } from './_helpers'
+import { apiIsReachable, standardSetup } from './_helpers'
 
 const BACKEND = 'http://localhost:8000'
 const API = `${BACKEND}/api/v1`
@@ -46,6 +46,10 @@ async function browserFetch(
 // ── Scenario 1: Certificate Authentication Flow ───────────────────────────────
 
 test.describe('Real Backend Integration — Certificate Authentication Flow', () => {
+  test.beforeEach(async ({ request }) => {
+    test.skip(!(await apiIsReachable(request)), 'Live backend not reachable on :8000')
+  })
+
   /**
    * These tests make real HTTP calls to the running backend.
    * They catch migration and endpoint-wiring issues that mocked tests cannot detect.
@@ -127,6 +131,10 @@ test.describe('Mocked — Certificate Authentication: Issue response excludes id
 // ── Scenario 2: Metadata Security — No Identity Tokens in Agent Runtime Responses ─
 
 test.describe('Real Backend Integration — Metadata Security (AC-1)', () => {
+  test.beforeEach(async ({ request }) => {
+    test.skip(!(await apiIsReachable(request)), 'Live backend not reachable on :8000')
+  })
+
   /**
    * Verifies internal certificate validation and authorization endpoints are wired.
    * Real backend test: catches migration issues in agent_instance_certificates,
@@ -215,6 +223,10 @@ test.describe('Mocked — Metadata Security: zero identity tokens in Agent Runti
 // ── Scenario 3: Tool Call Authorization with Certificate Validation ────────────
 
 test.describe('Real Backend Integration — Tool Authorization Endpoint', () => {
+  test.beforeEach(async ({ request }) => {
+    test.skip(!(await apiIsReachable(request)), 'Live backend not reachable on :8000')
+  })
+
   /**
    * Verifies the internal authorization endpoint is wired.
    * Real backend test: validates that permission resolution service is operational
@@ -326,6 +338,10 @@ test.describe('Mocked — Tool Authorization Decision Outcomes', () => {
 // ── Scenario 4: Certificate Revocation Integration ────────────────────────────
 
 test.describe('Real Backend Integration — Certificate Revocation', () => {
+  test.beforeEach(async ({ request }) => {
+    test.skip(!(await apiIsReachable(request)), 'Live backend not reachable on :8000')
+  })
+
   /**
    * Verifies the revocation endpoint and certificate_revocation_entries table migration.
    */

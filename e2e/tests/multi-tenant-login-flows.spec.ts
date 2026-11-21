@@ -28,6 +28,18 @@ const ORG_A_USER_TOKEN = `${header}.${b64({
   tenant: 'org-a',
 })}.fake-sig`
 
+/**
+ * Same principal, but WITHOUT a tenant claim: the session is not yet bound to
+ * any workspace, which is exactly the state that shows the multi-workspace
+ * picker (a claim matching a membership counts as already bound).
+ */
+const UNBOUND_USER_TOKEN = `${header}.${b64({
+  sub: 'e2e-tenant-user',
+  exp,
+  iat: 0,
+  name: 'Tenant User',
+})}.fake-sig`
+
 const MEMBERSHIPS = [
   {
     tenant_id: 't-a',
@@ -129,7 +141,7 @@ test.describe('Suspended tenant sign-in', () => {
 
     // auth.tenantBlocked: no sign-in flow is rendered at all.
     await expect(
-      page.getByText('This organization is not accessible (suspended).'),
+      page.getByText('This workspace is not accessible (suspended). Please contact your platform administrator.'),
     ).toBeVisible()
     // Data is not lost — the message never claims deletion.
     const body = await page.locator('body').innerText()
@@ -151,7 +163,7 @@ test.describe('Suspended tenant sign-in', () => {
     await page.goto('/login')
     await page.waitForLoadState('load')
     await expect(
-      page.getByText('This organization is not accessible (deleted).'),
+      page.getByText('This workspace is not accessible (deleted). Please contact your platform administrator.'),
     ).toBeVisible()
   })
 })
@@ -159,45 +171,43 @@ test.describe('Suspended tenant sign-in', () => {
 test.describe('Multi-org picker — one session = one tenant', () => {
   test.beforeEach(async ({ page }) => {
     await setupPublicSurface(page)
-    await mockDiscovery(page, {
-      multi_tenancy_enabled: true,
-      tenant: { slug: 'org-a', name: 'Org A', status: 'active', sign_in_ready: true },
-    })
+    // No workspace resolved from the address: the session is unbound, which is
+    // the state that shows the multi-workspace picker (resolving a workspace
+    // auto-binds the session to it).
+    await mockDiscovery(page, { multi_tenancy_enabled: true, tenant: null })
     await mockMemberships(page, MEMBERSHIPS)
   })
 
-  test('multi-org user sees the picker; single selection binds the session', async ({
+  test('multi-org user sees the picker with per-workspace roles; selecting one starts a fresh sign-in', async ({
     page,
   }) => {
     await page.addInitScript((token) => {
       localStorage.setItem('access_token', token)
-    }, ORG_A_USER_TOKEN)
+    }, UNBOUND_USER_TOKEN)
 
     await page.goto('/dashboard')
     const picker = page.getByTestId('tenant-picker')
     await expect(picker).toBeVisible()
 
-    // Both organizations listed with their roles ("Org A" also appears in
-    // the signed-in-as caption, so target the list items by role).
+    // Both workspaces listed with their roles ("Org A" also appears in the
+    // signed-in-as caption, so target the list items by role).
     await expect(picker.getByRole('button', { name: /Org A/ })).toBeVisible()
     await expect(picker.getByRole('button', { name: /Org B/ })).toBeVisible()
     // Real i18n bundle is active in E2E (unlike unit tests with mocked t()).
-    await expect(picker.getByText('Tenant admin')).toBeVisible()
+    await expect(picker.getByText('Workspace admin')).toBeVisible()
     await expect(picker.getByText('Member', { exact: true })).toBeVisible()
 
-    // Selecting the CURRENT organization continues into the workspace and
-    // binds the session (confirmed in sessionStorage, keyed to the token).
+    // One session = one workspace: an unbound session cannot be silently
+    // bound from the picker — selecting a workspace starts a fresh sign-in
+    // against that workspace's provider and records the slug per tab.
     await picker.getByRole('button', { name: /Org A/ }).click()
-    await expect(page.getByTestId('tenant-picker')).toHaveCount(0)
-    const confirmed = await page.evaluate(() =>
-      sessionStorage.getItem('parthenon_tenant_confirmed'),
+    await page.waitForURL(/fake-realm\/protocol\/openid-connect\/auth/, {
+      timeout: 10_000,
+    })
+    const slug = await page.evaluate(() =>
+      sessionStorage.getItem('parthenon_tenant_slug'),
     )
-    expect(confirmed).not.toBeNull()
-
-    // Reload — the bound session does NOT re-prompt (session binding holds).
-    await page.reload()
-    await page.waitForLoadState('load')
-    await expect(page.getByTestId('tenant-picker')).toHaveCount(0)
+    expect(slug).toBe('org-a')
   })
 
   test('switching organizations requires a fresh sign-in and stores the slug in sessionStorage only', async ({
@@ -205,7 +215,7 @@ test.describe('Multi-org picker — one session = one tenant', () => {
   }) => {
     await page.addInitScript((token) => {
       localStorage.setItem('access_token', token)
-    }, ORG_A_USER_TOKEN)
+    }, UNBOUND_USER_TOKEN)
 
     await page.goto('/dashboard')
     const picker = page.getByTestId('tenant-picker')
@@ -234,7 +244,7 @@ test.describe('Multi-org picker — one session = one tenant', () => {
     await mockMemberships(page, [MEMBERSHIPS[0]])
     await page.addInitScript((token) => {
       localStorage.setItem('access_token', token)
-    }, ORG_A_USER_TOKEN)
+    }, UNBOUND_USER_TOKEN)
 
     await page.goto('/dashboard')
     await page.waitForLoadState('load')

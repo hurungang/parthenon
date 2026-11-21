@@ -1,8 +1,25 @@
 import { expect, test } from '@playwright/test'
+import type { Page } from '@playwright/test'
 
 import { standardSetup } from './_helpers'
 
-async function mockChatResumeRoutes(page: Parameters<typeof test>[0]['page']) {
+/**
+ * Conversation delegation visibility.
+ *
+ * `ChatPage` mounts `ConversationDialog` with `testIdPrefix="chat"`, so every
+ * `testId('x')` inside the dialog surfaces as `chat-x` — and the status ids were
+ * already named `chat-status-*`, giving `chat-chat-status-indicator` /
+ * `chat-chat-status-terminal`.
+ *
+ * Delegation progress is rendered inline in the active delegation cycle: the
+ * intro line ("Delegating to agent …"), a live status line, then a compact
+ * `DelegationMiniLog` (no fold/expand toggle — the log lines are always shown
+ * for the active cycle).
+ */
+
+const DELEGATED_SESSION_ID = 'delegated-session-1'
+
+async function mockChatResumeRoutes(page: Page) {
   await page.route('**/api/v1/agents/types', (route) =>
     route.fulfill({
       status: 200,
@@ -22,10 +39,52 @@ async function mockChatResumeRoutes(page: Parameters<typeof test>[0]['page']) {
       }),
     })
   )
+
+  // Delegated sub-agent activity shown inline in the delegation cycle.
+  await page.route(`**/api/v1/agents/sessions/${DELEGATED_SESSION_ID}/logs`, (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify([
+        {
+          id: 'delegated-log-1',
+          session_id: DELEGATED_SESSION_ID,
+          timestamp: '2026-06-17T12:00:10Z',
+          event_type: 'tool_call',
+          log_level: 'INFO',
+          event_category: 'functional',
+          message: 'Searching knowledge base',
+          data: { tool_name: 'knowledge_search' },
+        },
+      ]),
+    })
+  )
+
+  await page.route(`**/api/v1/agents/sessions/${DELEGATED_SESSION_ID}`, (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        id: DELEGATED_SESSION_ID,
+        agent_type_id: 'agent-type-2',
+        agent_type_name: 'Research Agent',
+        triggered_by_user_id: null,
+        triggered_by_user_name: null,
+        input_data: null,
+        status: 'running',
+        started_at: '2026-06-17T12:00:05Z',
+        completed_at: null,
+        output_data: null,
+        error_message: null,
+        conversation_history: null,
+        created_at: '2026-06-17T12:00:05Z',
+      }),
+    })
+  )
 }
 
 async function installMockWebSocket(
-  page: Parameters<typeof test>[0]['page'],
+  page: Page,
   scenario: 'waiting' | 'timeout_or_failed'
 ) {
   await page.addInitScript((chosen) => {
@@ -57,6 +116,7 @@ async function installMockWebSocket(
                 type: 'chat_status',
                 status: 'delegating',
                 agent_type: 'agent____research-agent',
+                receiver_session_id: 'delegated-session-1',
                 timestamp: new Date().toISOString(),
               }),
             })
@@ -69,6 +129,7 @@ async function installMockWebSocket(
                   type: 'chat_status',
                   status: 'waiting',
                   agent_type: 'agent__research-agent',
+                  receiver_session_id: 'delegated-session-1',
                   timestamp: new Date().toISOString(),
                 }),
               })
@@ -102,7 +163,7 @@ async function installMockWebSocket(
 }
 
 test.describe('Conversation Delegation Visibility', () => {
-  test('shows delegating label and waiting indicator with fold-expand-collapse snippet behavior', async ({ page }) => {
+  test('shows delegating label and waiting indicator with inline delegation snippet log', async ({ page }) => {
     await standardSetup(page)
     await mockChatResumeRoutes(page)
     await installMockWebSocket(page, 'waiting')
@@ -110,28 +171,19 @@ test.describe('Conversation Delegation Visibility', () => {
     await page.goto('/agents/agent-type-1/chat/session-1')
     await page.waitForLoadState('load')
 
-    await expect(page.getByTestId('chat-status-indicator')).toBeVisible()
+    const statusIndicator = page.getByTestId('chat-chat-status-indicator')
+    await expect(statusIndicator.first()).toBeVisible()
     await expect(page.getByText('Delegating to agent research-agent')).toBeVisible()
-    await expect(page.getByTestId('chat-status-indicator').getByText('Waiting for delegated response…')).toBeVisible()
+    await expect(
+      statusIndicator.first().getByText('Waiting for delegated response…')
+    ).toBeVisible()
 
+    // The active delegation cycle always shows its sub-agent log lines inline
+    // (there is no fold/expand toggle).
     const snippetsPanel = page.getByTestId('chat-delegation-snippets')
     await expect(snippetsPanel).toBeVisible()
-
-    // Folded by default: preview visible, expanded details hidden.
-    await expect(page.getByTestId('chat-delegation-snippets-preview')).toBeVisible()
-    await expect(page.getByTestId('chat-delegation-snippets-expanded')).toHaveCount(0)
-
-    await page.getByRole('button', { name: 'Show Details' }).click()
-
-    // Expanded on demand: details visible, folded preview hidden.
-    await expect(page.getByTestId('chat-delegation-snippets-expanded')).toBeVisible()
-    await expect(page.getByTestId('chat-delegation-snippets-preview')).toHaveCount(0)
-
-    await page.getByRole('button', { name: 'Hide Details' }).click()
-
-    // Can be collapsed again.
-    await expect(page.getByTestId('chat-delegation-snippets-preview')).toBeVisible()
-    await expect(page.getByTestId('chat-delegation-snippets-expanded')).toHaveCount(0)
+    await expect(snippetsPanel.getByText('Searching knowledge base')).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Show Details' })).toHaveCount(0)
   })
 
   test('shows timeout_or_failed terminal status in chat', async ({ page }) => {
@@ -142,7 +194,7 @@ test.describe('Conversation Delegation Visibility', () => {
     await page.goto('/agents/agent-type-1/chat/session-1')
     await page.waitForLoadState('load')
 
-    await expect(page.getByTestId('chat-status-terminal')).toBeVisible()
+    await expect(page.getByTestId('chat-chat-status-terminal')).toBeVisible()
     await expect(
       page.getByText('Delegated step timed out or failed. Please try again.')
     ).toBeVisible()

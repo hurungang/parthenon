@@ -39,7 +39,8 @@ test.describe('Agent Realm Bootstrap — Mocked', () => {
   test('agent identities page loads when realm is initialized (mocked)', async ({ page }) => {
     await standardSetup(page)
 
-    await page.route('**/api/v1/agents/identities', (route) =>
+    // The list endpoint is paginated (`?limit=&offset=`) — glob must stay open-ended.
+    await page.route('**/api/v1/agents/identities**', (route) =>
       route.fulfill({
         status: 200,
         body: JSON.stringify([
@@ -67,7 +68,8 @@ test.describe('Agent Realm Bootstrap — Mocked', () => {
   test('realm name column displays configured agent realm', async ({ page }) => {
     await standardSetup(page)
 
-    await page.route('**/api/v1/agents/identities', (route) =>
+    // The list endpoint is paginated (`?limit=&offset=`) — glob must stay open-ended.
+    await page.route('**/api/v1/agents/identities**', (route) =>
       route.fulfill({
         status: 200,
         body: JSON.stringify([

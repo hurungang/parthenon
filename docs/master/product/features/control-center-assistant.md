@@ -7,6 +7,8 @@ The Control Center Assistant is a built-in conversational assistant embedded in 
 ## Business Goals
 
 - Reduce the time and navigation required to complete routine agent-administration tasks by letting users state the intended outcome in natural language.
+- Make conversation a complete alternative to the forms: every create, read, and update the web UI supports for these resource families is completable conversationally, so a task never dead-ends with "please finish this in the UI".
+- Let the assistant correct itself: invalid input returns specific, actionable feedback so the assistant completes the change on retry without the user diagnosing errors.
 - Broaden who can administer agents: users who know the result they need but not the exact UI workflow can act correctly without lowering the security bar.
 - Guarantee zero privilege elevation — every action is performed as the signed-in user, attributed to that user, and refused when the user lacks the permission.
 - Prevent costly misconfiguration by requiring an explicit, field-by-field preview and approval before any create or update.
@@ -44,15 +46,24 @@ The Control Center Assistant is a built-in conversational assistant embedded in 
 ### Create, Update & Read
 
 - A user can ask the assistant to create any in-scope resource; the created resource appears in its list/table with all field values correct.
+- **The assistant covers the full capability set of the web UI for every in-scope resource family.** Every field editable in the corresponding create or edit form can be set or changed conversationally — for example an agent type's role assignment, input and output definitions, output data type, system instruction, guardrails, and bindings, and an agent identity's role assignments.
 - A user can ask the assistant to update or reconfigure an existing in-scope resource; changes are saved and visible in the corresponding list/table without a manual page reload, and related counts update.
-- A user can ask the assistant to list or describe current configuration; the answer matches what the UI shows.
-- Missing or invalid required fields produce a clear validation message and no resource is created; duplicate names/identifiers are rejected with a clear message in the conversation.
+- A user can ask the assistant to list or describe current configuration; the answer carries the same information the corresponding list and detail views show, so the assistant can answer accurately about existing resources.
+- Missing or invalid required fields produce a specific, actionable message naming the offending field and the expected input, so the assistant can complete the operation correctly on its next attempt without user diagnosis; no resource is created on a failed attempt. Duplicate names/identifiers are rejected with a clear message in the conversation.
 - The assistant asks for clarification rather than guessing names, identifiers, or field values.
+- Adding bindings or grants is additive and never silently removes existing ones; where a field is intentionally immutable after creation (for example an identifier that cannot be renamed), the assistant says so instead of implying a change was made.
+
+### Permission Denial
+
+- When the signed-in user lacks permission for a requested management action, the assistant receives a clear denial it can relay accurately, and nothing is changed.
+- A denial is explained in plain language — what was refused and why — rather than surfacing a raw error, so the user knows whether to request access or stop.
 
 ### Confirmation Before Any Write
 
 - Before any create or update, the assistant presents a preview of the exact change as a field-by-field table (for updates: previous value → new value) and waits for approval.
 - No create or update is performed unless the user approves the preview; rejecting it leaves everything unchanged and the assistant offers to adjust.
+- An approval or rejection remains effective across a service restart or a hand-off to another instance: a confirmation still pending is still presented and still actionable, and answering it continues the assistant's work from where it paused. Nothing is written until that approval.
+- A request that genuinely can no longer be resumed is explained with one clear message and a next step, rather than a timeout, and never silently retries or double-applies a change.
 - For an agent type, the preview shows the model, identity or role, skills/SOPs, and access grants, so the user can confirm the agent will be functional.
 - The preview can be expanded to a larger view for reviewing wide tables.
 
@@ -73,6 +84,8 @@ The Control Center Assistant is a built-in conversational assistant embedded in 
 - Starting a new session leaves the previous session active; ending a session closes it and stops any work still in progress, and the next open starts fresh.
 - Switching or ending a session is unavailable while the assistant is still working on a turn.
 - Session history is user-scoped and retained for audit and replay.
+- The assistant's current activity is always known and persisted (thinking, calling a tool, delegating, waiting for input, finished), and resuming a session restores the latest status — including re-surfacing a pending approval and its waiting state — with no blank gap around the confirmation prompt.
+- A confirmed change is applied exactly once even if the approval is delivered more than once.
 
 ### Model Configuration
 
@@ -99,6 +112,9 @@ The Control Center Assistant is a built-in conversational assistant embedded in 
 ## Out of Scope
 
 - Deletion of any resource (skills, SOPs, agent types, roles, identities, model configurations, schedules, MCP Hub connections, data types, data, outputs, scripts, API keys).
+- New web UI capabilities or form changes — the web UI is the parity baseline, not a target of change.
+- Bulk or import operations, cross-tenant administration, and platform-setting changes through conversation.
+- Changes to the confirmation interaction itself (the preview format and the approval step stay as they are).
 - Actions outside the Agents menu group (other integration modules, system modules, identity-provider configuration, permissions administration beyond agent-scoped resources).
 - Elevated or privileged operations the signed-in user is not authorized to perform.
 - Changes to the existing forms, dialogs, and manual workflows — the assistant is additive.

@@ -25,6 +25,7 @@ explicit on the row itself.
 from __future__ import annotations
 
 import enum
+import hashlib
 import logging
 import uuid
 from dataclasses import dataclass
@@ -95,6 +96,42 @@ def _new_opaque_key() -> str:
 
 def _state_value(value: ResumeState | str) -> str:
     return value.value if isinstance(value, ResumeState) else str(value)
+
+
+#: Key prefix identifying a pre-"effects map" applied summary that was adopted
+#: into the per-call map.  Only ONE legacy summary can exist per resume (the old
+#: contract allowed a single write per turn), so prefixing is unambiguous.
+LEGACY_EFFECT_KEY_PREFIX = "legacy:"
+
+
+def legacy_effect_key(summary: dict | None) -> str:
+    """Stable key for a legacy (turn-wide) applied summary adopted into effects.
+
+    The legacy record carries no per-call key, so derive one from the stored
+    summary itself.  Used both when seeding the map and when recognising a
+    same-tool retry of the legacy write.
+    """
+    base = summary if isinstance(summary, dict) else {}
+    seed = "|".join(
+        str(base.get(field) or "")
+        for field in ("tool", "resource", "record_id", "name")
+    )
+    return LEGACY_EFFECT_KEY_PREFIX + hashlib.sha256(seed.encode("utf-8")).hexdigest()[:24]
+
+
+def effect_entries(summary: dict | None) -> dict[str, dict]:
+    """Return the per-call ``effects`` map carried by an applied summary."""
+    if not isinstance(summary, dict):
+        return {}
+    effects = summary.get("effects")
+    return effects if isinstance(effects, dict) else {}
+
+
+def _summary_without_effects(summary: dict | None) -> dict:
+    """Top-level compatibility fields (tool/verb/resource/record_id/name)."""
+    if not isinstance(summary, dict):
+        return {}
+    return {key: value for key, value in summary.items() if key != "effects"}
 
 
 class ConversationTurnResumeStore:
@@ -473,32 +510,108 @@ class ConversationTurnResumeStore:
         *,
         applied_effect_summary: dict | None = None,
         applied_by_user_id: uuid.UUID | None = None,
+        effect_key: str | None = None,
     ) -> ConversationTurnResume:
         """Stamp the exactly-once applied marker for the confirmed write.
 
         Must be called **in the same transaction as the write itself** so the
         marker and the write commit atomically: a crash before commit leaves
-        neither, a crash after commit leaves both.  Re-stamping is refused so
-        one paused turn can never record two applied writes.
+        neither, a crash after commit leaves both.
+
+        Two contracts coexist:
+
+        * ``effect_key=None`` — the legacy turn-wide contract: at most ONE write
+          per paused turn (a second stamp is refused).
+        * ``effect_key`` provided — the per-call contract: distinct effect keys
+          accumulate in ``applied_effect_summary["effects"]`` (one paused turn
+          may approve a batch of writes), while re-stamping the SAME key is a
+          logic error and is refused.
         """
         record = await self._require(resume_id, db)
-        if record.write_applied:
-            raise TurnResumeTransitionError(
-                f"Resume {resume_id} already recorded an applied write"
+        if effect_key is None:
+            if record.write_applied:
+                raise TurnResumeTransitionError(
+                    f"Resume {resume_id} already recorded an applied write"
+                )
+            record.write_applied = True
+            record.applied_at = record.applied_at or _utcnow()
+            if applied_effect_summary is not None:
+                record.applied_effect_summary = applied_effect_summary
+        else:
+            record.applied_effect_summary = self._merge_effect(
+                record.applied_effect_summary,
+                effect_key=effect_key,
+                effect_summary=applied_effect_summary,
             )
-        record.write_applied = True
-        record.applied_at = _utcnow()
-        if applied_effect_summary is not None:
-            record.applied_effect_summary = applied_effect_summary
+            record.write_applied = True
+            # The chokepoint stamp is the FIRST applied write; later writes in
+            # the same paused turn must not re-timestamp it.
+            record.applied_at = record.applied_at or _utcnow()
         if applied_by_user_id is not None:
             record.applied_by_user_id = applied_by_user_id
         await db.flush()
         logger.info(
-            "Resume %s recorded the confirmed write (summary keys=%s)",
+            "Resume %s recorded the confirmed write (effect_key=%s, summary keys=%s)",
             resume_id,
+            effect_key,
             sorted((applied_effect_summary or {}).keys()),
         )
         return record
+
+    @staticmethod
+    def _merge_effect(
+        existing: dict | None,
+        *,
+        effect_key: str,
+        effect_summary: dict | None,
+    ) -> dict:
+        """Merge one per-call effect into the stored summary (new dict).
+
+        The top-level fields mirror the most recent effect for backward
+        compatibility with readers that expect ``tool``/``verb``/``resource``
+        at the top level; the ``effects`` map is the authoritative per-call
+        record.  A legacy (pre-map) summary is adopted under a ``legacy:`` key
+        so the old write keeps its exactly-once semantics.
+        """
+        base = existing if isinstance(existing, dict) else {}
+        effects: dict[str, dict] = dict(effect_entries(base))
+        if effect_key in effects:
+            raise TurnResumeTransitionError(
+                f"Effect {effect_key!r} was already applied to this resume"
+            )
+        if not effects:
+            legacy_summary = _summary_without_effects(base)
+            if legacy_summary:
+                effects[legacy_effect_key(legacy_summary)] = legacy_summary
+        top_level = _summary_without_effects(effect_summary)
+        if not top_level:
+            top_level = _summary_without_effects(base)
+        effects[effect_key] = dict(effect_summary or {})
+        merged = dict(top_level)
+        merged["effects"] = effects
+        return merged
+
+    @staticmethod
+    def _merge_completion_summary(
+        existing: dict | None,
+        incoming: dict,
+    ) -> dict:
+        """Merge a completion-time summary without dropping recorded effects.
+
+        A later close may pass a summary that predates the effects map (or omit
+        it entirely).  An existing ``effects`` map is always preserved and the
+        incoming summary only supplies/updates top-level fields plus any new
+        effect entries it explicitly carries.
+        """
+        existing_effects = dict(effect_entries(existing))
+        incoming_effects = effect_entries(incoming)
+        if not existing_effects and not incoming_effects:
+            return incoming
+        merged_effects = {**existing_effects, **incoming_effects}
+        merged = _summary_without_effects(incoming) or _summary_without_effects(existing)
+        if merged_effects:
+            merged["effects"] = merged_effects
+        return merged
 
     async def resolve(
         self,
@@ -551,7 +664,11 @@ class ConversationTurnResumeStore:
         if applied_by_user_id is not None:
             record.applied_by_user_id = applied_by_user_id
         if applied_effect_summary is not None:
-            record.applied_effect_summary = applied_effect_summary
+            # Never drop an effects map recorded by the dispatch chokepoint: a
+            # completion summary only adds/updates top-level context.
+            record.applied_effect_summary = self._merge_completion_summary(
+                record.applied_effect_summary, applied_effect_summary
+            )
         if outcome_turn_id is not None:
             record.outcome_turn_id = outcome_turn_id
         await db.flush()

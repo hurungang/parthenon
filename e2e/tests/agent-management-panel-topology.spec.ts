@@ -15,8 +15,8 @@ import {
  *  - Switching agents re-renders the topology for that agent's saved state.
  *  - The Communication Hub node (dashed "platform messaging" edge) appears in
  *    the panel topology AND in the existing agent preview topology of the
- *    Agent Types view (AgentTypeDetailsDialog → Agent Preview tab), for both
- *    the conversational branch and the typed/plan branch (AgentPlanContent).
+ *    Agent Types view (AgentTypeDetailsDialog → Agent Topology tab), for both
+ *    the conversational branch and the typed/plan branch.
  */
 
 test.describe.configure({ timeout: 90_000 })
@@ -36,6 +36,16 @@ function slot(page: Page, label: string) {
   return page.locator('.MuiPaper-outlined').filter({
     has: page.getByText(label, { exact: true }),
   })
+}
+
+/**
+ * Locates the agent-type details dialog. Its accessible name is the agent type
+ * name (the DialogTitle renders it), so it is identified by its tab set.
+ */
+function agentDetailsDialog(page: Page) {
+  return page
+    .getByRole('dialog')
+    .filter({ has: page.getByRole('tab', { name: 'Agent Topology' }) })
 }
 
 async function selectAgent(page: Page, name: string) {
@@ -265,20 +275,24 @@ test.describe('Agent Management Panel — Communication Hub in existing preview 
 
     const row = page.getByRole('row').filter({ hasText: 'panel-e2e-conv' })
     await expect(row).toBeVisible()
-    await row.getByLabel('View').click()
+    // There is no per-row View button — clicking the row's name opens the
+    // details dialog.
+    await row.getByText('panel-e2e-conv', { exact: true }).click()
 
-    const dialog = page.getByRole('dialog')
-    await expect(dialog.getByRole('tab', { name: 'Agent Preview' })).toBeVisible()
-    await dialog.getByRole('tab', { name: 'Agent Preview' }).click()
+    const dialog = agentDetailsDialog(page)
+    // The old "Agent Preview" tab is gone; the unified canvas lives on the
+    // "Agent Topology" tab.
+    await expect(dialog.getByRole('tab', { name: 'Agent Topology' })).toBeVisible()
+    await dialog.getByRole('tab', { name: 'Agent Topology' }).click()
 
-    const svg = dialog.getByLabel('Agent Topology')
+    const canvas = dialog.getByTestId('panel-topology-canvas')
     // Unified canvas (unify-agent-topology-diagram): the same PanelTopologyCanvas
     // as the management panel — hub BAR, not the old divergent preview's dashed
     // "platform messaging" conversation edge.
-    await expect(svg.getByText('Communication Hub')).toBeVisible()
-    await expect(svg.getByText('platform messaging')).toHaveCount(0)
+    await expect(canvas.getByText('Communication Hub')).toBeVisible()
+    await expect(canvas.getByText('platform messaging')).toHaveCount(0)
     // The agent's role resolves into the preview topology as well.
-    await expect(svg.getByText('panel-e2e-role')).toBeVisible()
+    await expect(canvas.getByText('panel-e2e-role')).toBeVisible()
   })
 
   test('Agent Types details dialog shows the unified topology canvas for a typed agent', async ({
@@ -323,18 +337,21 @@ test.describe('Agent Management Panel — Communication Hub in existing preview 
 
     const row = page.getByRole('row').filter({ hasText: 'panel-e2e-plan-agent' })
     await expect(row).toBeVisible()
-    await row.getByLabel('View').click()
+    // No per-row View button — click the name to open the details dialog.
+    await row.getByText('panel-e2e-plan-agent', { exact: true }).click()
 
-    const dialog = page.getByRole('dialog')
-    await dialog.getByRole('tab', { name: 'Agent Preview' }).click()
+    const dialog = agentDetailsDialog(page)
+    await dialog.getByRole('tab', { name: 'Agent Topology' }).click()
 
     // Unified panel canvas renders for the typed agent — hub bar present,
     // no trace of the old plan-based diagram rendering.
-    const svg = dialog.getByLabel('Agent Topology')
-    await expect(svg.getByText('Communication Hub')).toBeVisible()
-    await expect(svg.getByText('panel-e2e-role')).toBeVisible()
-    await expect(svg.getByText('platform messaging')).toHaveCount(0)
-    // The plan step list is preserved alongside the unified canvas.
+    const canvas = dialog.getByTestId('panel-topology-canvas')
+    await expect(canvas.getByText('Communication Hub')).toBeVisible()
+    await expect(canvas.getByText('panel-e2e-role')).toBeVisible()
+    await expect(canvas.getByText('platform messaging')).toHaveCount(0)
+    // The plan steps moved to their own "Implementation Plan" tab (they no
+    // longer render beside the canvas).
+    await dialog.getByRole('tab', { name: 'Implementation Plan' }).click()
     await expect(dialog.getByText('Do the thing')).toBeVisible()
   })
 })

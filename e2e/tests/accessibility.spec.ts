@@ -100,7 +100,13 @@ test.describe('Accessibility', () => {
 
   test('No critical accessibility violations', async ({ page }) => {
     await page.goto('/');
-    
+
+    // Wait for the app to finish its boot-time provider discovery: while the
+    // login page is in its initial loading state the only content is a bare
+    // CircularProgress (no accessible name), which is not the page under test.
+    await page.waitForLoadState('networkidle');
+    await expect(page.locator('[role="progressbar"]')).toHaveCount(0);
+
     const accessibilityScanResults = await new AxeBuilder({ page })
       .withTags(['wcag2a', 'wcag2aa'])
       .analyze();

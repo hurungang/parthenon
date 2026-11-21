@@ -31,7 +31,7 @@ Covers failure modes of the public `/integrate/*` gateway (Communication Hub) an
 1. Identify the tripping client by `client_id` on the rejected requests.
 2. Raise the client's rate limit (or widen its window) via the Clients UI, or split the consumer's traffic across multiple clients.
 3. If a single client trips its limit repeatedly and unexpectedly, treat as abuse: investigate the caller IP in `AgentClientUsageLog` and consider deactivating the client (`PATCH /api/v1/clients/{id}/status`).
-4. Check the integration-gateway Redis counters are reachable — a Redis outage surfaces as gateway errors, not silent bypass.
+4. Rate-limit counters are in-memory per Communication Hub process — a restart resets them, and a multi-replica deployment enforces the limit per replica.
 
 ### 3. `invalid_credential` / `revoked_credential` — Credential Rotated, Revoked, or Expired
 

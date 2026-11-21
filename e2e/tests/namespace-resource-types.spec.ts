@@ -9,27 +9,45 @@ import { test, expect } from "@playwright/test"
 
 const BASE_URL = process.env.PLAYWRIGHT_BASE_URL || "http://localhost:5173"
 
-test.describe("Namespace Resource Types — Full CRUD Lifecycle", () => {
+// Live-deployment migration checks — skip in the canonical mocked E2E run.
+const API_HEALTH = 'http://localhost:8000/api/v1/health'
 
-  test("resource types endpoint returns 17 namespaced entries (real backend)", async ({ request }) => {
+async function stackIsUp(request: import('@playwright/test').APIRequestContext): Promise<boolean> {
+  try {
+    return (await request.get(API_HEALTH, { timeout: 2000 })).status() === 200
+  } catch {
+    return false
+  }
+}
+
+test.describe("Namespace Resource Types — Full CRUD Lifecycle", () => {
+  test.beforeEach(async ({ request }) => {
+    test.skip(!(await stackIsUp(request)), 'Live stack not reachable — migration checks need a running backend')
+  })
+
+
+  test("resource types endpoint returns the full namespaced manifest (real backend)", async ({ request }) => {
     const response = await request.get(`${BASE_URL}/api/v1/policy/resource-types`)
     // May return 401 if not authenticated — still confirms endpoint exists
     if (response.status() === 200) {
       const data = await response.json()
       expect(Array.isArray(data)).toBeTruthy()
-      expect(data).toHaveLength(17)
+      // The manifest grows as modules are added; assert the namespaced floor
+      // rather than a fixed count (17 at introduction, 29 today).
+      expect(data.length).toBeGreaterThanOrEqual(28)
 
-      // All entries should have ::-delimited resource_type
+      // Every entry is either namespaced or the single bare "agent" gate
       for (const item of data) {
-        expect(item.resource_type).toContain("::")
-        expect(item.resource_type.split("::")).toHaveLength(2)
+        if (item.resource_type !== "agent") {
+          expect(item.resource_type).toContain("::")
+          expect(item.resource_type.split("::")).toHaveLength(2)
+        }
         expect(Array.isArray(item.actions)).toBeTruthy()
         expect(item.actions.length).toBeGreaterThan(0)
       }
 
-      // Verify no legacy flat values
+      // Verify no legacy flat values remain
       const types = data.map((d: { resource_type: string }) => d.resource_type)
-      expect(types).not.toContain("agent")
       expect(types).not.toContain("role")
       expect(types).not.toContain("permissions")
     } else {
@@ -55,8 +73,12 @@ test.describe("Namespace Resource Types — Full CRUD Lifecycle", () => {
     const response = await request.get(`${BASE_URL}/api/v1/policy/resource-types`)
     if (response.status() === 200) {
       const data = await response.json()
-      // All entries should have :: delimiter
-      expect(data.every((d: { resource_type: string }) => d.resource_type.includes("::"))).toBeTruthy()
+      // Entries are namespaced, apart from the bare "agent" gate
+      expect(
+        data.every((d: { resource_type: string }) =>
+          d.resource_type === "agent" ? true : d.resource_type.includes("::"),
+        ),
+      ).toBeTruthy()
     }
   })
 

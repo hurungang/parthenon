@@ -217,6 +217,87 @@ async def test_agent_type_guardrail_contract_is_structured(authed_client, allow_
 
 
 @pytest.mark.asyncio
+async def test_agent_type_delegation_depth_above_former_ceiling_is_accepted(
+    authed_client, allow_all
+):
+    """64 is above the former platform ceiling of 32 and must be persisted as-is."""
+    record = await _invoke(
+        authed_client,
+        "create_agent_type",
+        {"name": "parity-depth", "data": {"guardrail_max_delegation_depth": 64}},
+    )
+    assert record["record"]["guardrail_max_delegation_depth"] == 64
+
+    updated = await _invoke(
+        authed_client,
+        "update_agent_type",
+        {
+            "id": record["record"]["id"],
+            "data": {"guardrail_max_delegation_depth": 1000},
+        },
+    )
+    assert updated["record"]["guardrail_max_delegation_depth"] == 1000
+
+
+@pytest.mark.asyncio
+async def test_agent_type_negative_delegation_depth_is_structured(
+    authed_client, allow_all
+):
+    problems = await _invoke_expect_400(
+        authed_client,
+        "create_agent_type",
+        {"name": "parity-depth-neg", "data": {"guardrail_max_delegation_depth": -1}},
+    )
+    assert problems[0]["field"] == "guardrail_max_delegation_depth"
+
+
+def test_guardrail_depth_validation_parity_rest_vs_management():
+    """Both validation paths accept/reject the same delegation depths."""
+    from app.api.v1.internal.management_tools import (
+        ManagementValidationError,
+        _validate_guardrails_structured,
+    )
+    from app.db.models.agents import AgentInputType, GuardrailTokenEnforcementMode
+    from app.schemas.agents import _validate_guardrail_contract
+
+    def _common(depth: int) -> dict:
+        return {
+            "input_type": AgentInputType.none,
+            "guardrail_max_iterations": 10,
+            "guardrail_max_delegation_depth": depth,
+            "guardrail_max_delegated_steps": 20,
+            "guardrail_execution_timeout_seconds": 300,
+            "guardrail_token_budget": None,
+            "guardrail_token_enforcement_mode": GuardrailTokenEnforcementMode.observe,
+        }
+
+    def _rest_accepts(depth: int) -> bool:
+        try:
+            _validate_guardrail_contract(**_common(depth))
+            return True
+        except ValueError:
+            return False
+
+    def _management_accepts(depth: int) -> bool:
+        try:
+            _validate_guardrails_structured(**_common(depth))
+            return True
+        except ManagementValidationError:
+            return False
+
+    outcomes = {}
+    for depth in (-1, 0, 1, 32, 33, 64, 10_000):
+        outcomes[depth] = _rest_accepts(depth)
+        assert _management_accepts(depth) is outcomes[depth], (
+            f"validators disagree for depth {depth}"
+        )
+
+    assert outcomes[-1] is False
+    for accepted in (0, 1, 32, 33, 64, 10_000):
+        assert outcomes[accepted] is True
+
+
+@pytest.mark.asyncio
 async def test_agent_type_unknown_field_is_rejected_with_allowed_set(authed_client, allow_all):
     agent = await _invoke(authed_client, "create_agent_type", {"name": "bogus-field-agent", "data": {}})
     problems = await _invoke_expect_400(

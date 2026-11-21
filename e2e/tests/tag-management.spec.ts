@@ -216,8 +216,12 @@ test.describe('Tag Management - Allowed Values', () => {
     // Wait for tag to load
     await page.waitForSelector('text=environment')
 
-    // Click Edit button for the tag
-    await page.locator('[data-testid="EditIcon"]').first().click()
+    // Click Edit button for the tag (row action — the icon button is named
+    // "Edit" via its Tooltip; MUI icons carry no data-testid)
+    await page
+      .getByRole('row', { name: /environment/i })
+      .getByRole('button', { name: /^edit$/i })
+      .click()
 
     // Wait for dialog to open by checking for existing values
     await page.locator('text=dev').first().waitFor({ state: 'visible', timeout: 10000 })
@@ -277,8 +281,12 @@ test.describe('Tag Management - Allowed Values', () => {
     await page.goto('/user-permissions')
     await page.waitForLoadState('networkidle')
 
-    // Click Edit button
-    await page.locator('[data-testid="EditIcon"]').first().click()
+    // Click Edit button (row action — the icon button is named "Edit" via
+    // its Tooltip; MUI icons carry no data-testid)
+    await page
+      .getByRole('row', { name: /status/i })
+      .getByRole('button', { name: /^edit$/i })
+      .click()
 
     // Wait for dialog to open by checking for placeholder
     const valueInput = page.getByPlaceholder(/value/i).first()

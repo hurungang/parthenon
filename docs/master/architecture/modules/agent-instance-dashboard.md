@@ -62,6 +62,7 @@ For conversation-type agents, the Agent Type detail dialog includes a dedicated 
 
 - **Session list columns:** Title (auto-generated), Status (active / closed / archived), Last Active timestamp
 - **Actions per session:** Resume (opens chat interface with full history), End (closes session), Archive (hides from active list)
+- **Resume after an interruption:** reopening a session hydrates the persisted activity state, so an in-flight turn shows its real status and a still-valid pause stays answerable even if the service restarted or another instance now serves the conversation
 - **"Start New Conversation" entry point** — creates a new session and opens the chat interface
 - **User-scoped listing** — each user sees only their own sessions
 - **Automatic refresh** — session list updates after create, end, and archive operations without page reload

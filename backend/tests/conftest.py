@@ -1,7 +1,30 @@
 """Pytest configuration and shared fixtures."""
 import asyncio
 import os
+import sys
+from pathlib import Path
 from typing import AsyncGenerator
+
+# Make the repo-root ``setup`` package importable regardless of the pytest
+# working directory (CI runs pytest from ``backend/``, developers often run it
+# from the repo root).
+_REPO_ROOT = Path(__file__).resolve().parents[2]
+if str(_REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT))
+
+# ── SQLite type-affinity shim ────────────────────────────────────────────────
+# Models declare UUID columns with ``postgresql.UUID``. SQLite has no UUID type,
+# so the bare ``UUID`` DDL gets NUMERIC affinity and reserved values such as
+# ``00000000-…-000000000003`` are silently stored as the integer 3, which then
+# blows up UUID result processing. Compile those columns as CHAR(32) (the
+# layout SQLAlchemy itself uses for ``Uuid`` on SQLite).
+from sqlalchemy.dialects.postgresql import UUID as _PgUUID
+from sqlalchemy.ext.compiler import compiles as _compiles
+
+
+@_compiles(_PgUUID, "sqlite")
+def _compile_pg_uuid_sqlite(type_, compiler, **kw):  # noqa: ANN001, ARG001
+    return "CHAR(32)"
 
 import pytest
 import pytest_asyncio
@@ -96,6 +119,47 @@ def event_loop():
     loop.close()
 
 
+@pytest.fixture(scope="session", autouse=True)
+def _migrate_postgres_test_db():
+    """Apply Alembic migrations to the PostgreSQL test database once per session.
+
+    Request middleware (tenant resolution, root-tenant lookup) uses the real
+    ``AsyncSessionLocal`` engine — it is not covered by FastAPI dependency
+    overrides — so the Postgres test DB must have the schema. The QA strategy
+    already requires this ("test database fixture applies migrations").
+    """
+    if not _is_service_available(5432):
+        yield
+        return
+
+    import subprocess
+
+    backend_root = Path(__file__).resolve().parents[1]
+    env = {
+        **os.environ,
+        "DATABASE_URL": (
+            "postgresql+asyncpg://parthenon:parthenon@localhost:5432/parthenon_test"
+        ),
+    }
+    try:
+        result = subprocess.run(
+            [sys.executable, "-m", "alembic", "upgrade", "head"],
+            cwd=str(backend_root),
+            env=env,
+            capture_output=True,
+            text=True,
+            timeout=300,
+        )
+        if result.returncode != 0:
+            print(
+                "WARNING: could not migrate parthenon_test — middleware-backed "
+                f"tests may fail:\n{result.stderr[-2000:]}"
+            )
+    except Exception as exc:  # noqa: BLE001 — never block the unit suite
+        print(f"WARNING: alembic upgrade skipped: {exc}")
+    yield
+
+
 @pytest_asyncio.fixture(scope="session")
 async def test_engine():
     """Create a test database engine."""
@@ -132,6 +196,45 @@ async def test_engine():
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.drop_all)
     await engine.dispose()
+
+
+@pytest_asyncio.fixture(autouse=True, scope="module")
+async def _isolate_module_database(test_engine):
+    """Reset committed state between test modules.
+
+    The test engine is session-scoped and some suites must ``commit()`` (seeder,
+    migration and API-path tests). Those commits survive the per-test rollback
+    and would otherwise leak into every later module, making population-wide
+    assertions order-dependent. Truncate everything except the root tenant at
+    module teardown so each module starts from the same baseline.
+    """
+    yield
+    from app.db.models.tenant import Tenant
+    from app.db.session import Base
+
+    async with test_engine.begin() as conn:
+        for table in reversed(Base.metadata.sorted_tables):
+            if table.name == "tenants":
+                continue
+            await conn.execute(table.delete())
+        await conn.execute(
+            Tenant.__table__.delete().where(Tenant.is_system_tenant.is_(False))
+        )
+
+    # Re-provision the baseline root tenant: some suites legitimately delete it
+    # (platform-tenancy toggles), but every later module must start from the
+    # same session baseline that ``test_engine`` seeds.
+    async with async_sessionmaker(
+        bind=test_engine, class_=AsyncSession, expire_on_commit=False
+    )() as session:
+        existing = (
+            await session.execute(
+                select(Tenant).where(Tenant.is_system_tenant.is_(True))
+            )
+        ).scalar_one_or_none()
+        if existing is None:
+            session.add(Tenant(name="Root", slug="root", is_system_tenant=True))
+            await session.commit()
 
 
 @pytest_asyncio.fixture

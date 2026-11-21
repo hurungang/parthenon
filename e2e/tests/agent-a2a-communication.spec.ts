@@ -25,7 +25,7 @@ const MOCK_DELEGATION_PLAN = {
 }
 
 async function mockAgentManagementRoutes(page: Parameters<typeof test>[0]['page']) {
-  await page.route('**/api/v1/agents/types', (route) => {
+  await page.route('**/api/v1/agents/types**', (route) => {
     if (route.request().method() === 'GET') {
       route.fulfill({ status: 200, body: JSON.stringify([]) })
     } else {
@@ -76,22 +76,22 @@ async function mockAgentManagementRoutes(page: Parameters<typeof test>[0]['page'
       }),
     })
   )
-  await page.route('**/api/v1/agents/roles', (route) =>
+  await page.route('**/api/v1/agents/roles**', (route) =>
     route.fulfill({ status: 200, body: JSON.stringify([]) })
   )
-  await page.route('**/api/v1/agents/identities', (route) =>
+  await page.route('**/api/v1/agents/identities**', (route) =>
     route.fulfill({ status: 200, body: JSON.stringify([]) })
   )
-  await page.route('**/api/v1/agents/model-configs', (route) =>
+  await page.route('**/api/v1/agents/model-configs**', (route) =>
     route.fulfill({ status: 200, body: JSON.stringify([]) })
   )
-  await page.route('**/api/v1/sops', (route) =>
+  await page.route('**/api/v1/sops**', (route) =>
     route.fulfill({ status: 200, body: JSON.stringify([]) })
   )
 }
 
 async function mockRoleRoutes(page: Parameters<typeof test>[0]['page']) {
-  await page.route('**/api/v1/agents/roles', (route) =>
+  await page.route('**/api/v1/agents/roles**', (route) =>
     route.fulfill({
       status: 200,
       body: JSON.stringify([
@@ -107,7 +107,7 @@ async function mockRoleRoutes(page: Parameters<typeof test>[0]['page']) {
       ]),
     })
   )
-  await page.route('**/api/v1/sops', (route) =>
+  await page.route('**/api/v1/sops**', (route) =>
     route.fulfill({
       status: 200,
       body: JSON.stringify([
@@ -115,10 +115,10 @@ async function mockRoleRoutes(page: Parameters<typeof test>[0]['page']) {
       ]),
     })
   )
-  await page.route('**/api/v1/skills', (route) =>
+  await page.route('**/api/v1/skills**', (route) =>
     route.fulfill({ status: 200, body: JSON.stringify([]) })
   )
-  await page.route('**/api/v1/mcp/tools', (route) =>
+  await page.route('**/api/v1/mcp/tools**', (route) =>
     route.fulfill({ status: 200, body: JSON.stringify([]) })
   )
   await page.route('**/api/v1/agents/roles/role-a2a-1/identities', (route) =>
@@ -136,12 +136,38 @@ async function mockRoleRoutes(page: Parameters<typeof test>[0]['page']) {
 }
 
 async function mockMcpRoutes(page: Parameters<typeof test>[0]['page']) {
-  await page.route('**/api/v1/mcp/servers', (route) =>
+  await page.route('**/api/v1/mcp/servers**', (route) =>
     route.fulfill({ status: 200, body: JSON.stringify([]) })
   )
-  await page.route('**/api/v1/mcp/tools', (route) =>
+  await page.route('**/api/v1/mcp/tools**', (route) =>
     route.fulfill({ status: 200, body: JSON.stringify([]) })
   )
+}
+
+async function bindRoleSop(page: Parameters<typeof test>[0]['page']) {
+  // Save is gated on at least one SOP/skill binding drawn from the role.
+  const dialog = page.getByRole('dialog')
+  // MUI's InputLabel here has no id association, so target the field by its
+  // visible label inside the FormControl.
+  const roleField = dialog
+    .locator('.MuiFormControl-root')
+    .filter({ hasText: 'Agent Role' })
+    .first()
+  await roleField.getByRole('combobox').click()
+  await page.getByRole('option', { name: 'Delegator Role' }).click()
+  await dialog.getByRole('button', { name: 'Add Binding' }).click()
+  await dialog.getByText('Select an item…').click()
+  await page.getByRole('option', { name: 'Delegation SOP' }).click()
+  await dialog.getByRole('button', { name: 'Add', exact: true }).click()
+}
+
+async function createBoundAgentType(page: Parameters<typeof test>[0]['page']) {
+  await page.getByRole('button', { name: /create agent type/i }).click()
+  await page.getByLabel('Name').fill('delegator-agent')
+  await bindRoleSop(page)
+  await page.getByText('None (no input required)').click()
+  await page.locator('[role="option"][data-value="typed"]').click()
+  await page.getByRole('dialog').getByRole('button', { name: /save/i }).click()
 }
 
 test.describe('Agent A2A Communication and Slug Enforcement', () => {
@@ -160,40 +186,36 @@ test.describe('Agent A2A Communication and Slug Enforcement', () => {
     ).toBeVisible()
   })
 
-  test('slug-safe agent type creation opens a plan preview with delegation steps', async ({ page }) => {
+  test('slug-safe agent type creation opens the generated plan with delegation steps', async ({ page }) => {
     await standardSetup(page)
     await mockAgentManagementRoutes(page)
+    await mockRoleRoutes(page)
 
     await page.goto('/agents')
     await page.waitForLoadState('load')
 
-    await page.getByRole('button', { name: /create agent type/i }).click()
-    await page.getByLabel('Name').fill('delegator-agent')
-    await page.getByText('None (no input required)').click()
-    await page.locator('[role="option"][data-value="typed"]').click()
-    await page.getByRole('dialog').getByRole('button', { name: /save/i }).click()
+    await createBoundAgentType(page)
 
+    // Saving opens the agent-type details dialog; the generated plan lives on
+    // the Implementation Plan tab (there is no separate plan-preview modal).
+    await expect(page.getByRole('dialog').getByText('delegator-agent').first()).toBeVisible()
+    await page.getByRole('tab', { name: /implementation plan/i }).click()
     await expect(page.getByText('Use Search Skill')).toBeVisible()
     await expect(page.getByText('Delegate Research')).toBeVisible()
-    await expect(page.getByText('Target agent type: research-agent')).toBeVisible()
   })
 
-  test('plan preview topology renders the delegated agent type', async ({ page }) => {
+  test('created agent type opens details with the topology canvas', async ({ page }) => {
     await standardSetup(page)
     await mockAgentManagementRoutes(page)
+    await mockRoleRoutes(page)
 
     await page.goto('/agents')
     await page.waitForLoadState('load')
 
-    await page.getByRole('button', { name: /create agent type/i }).click()
-    await page.getByLabel('Name').fill('delegator-agent')
-    await page.getByText('None (no input required)').click()
-    await page.locator('[role="option"][data-value="typed"]').click()
-    await page.getByRole('dialog').getByRole('button', { name: /save/i }).click()
+    await createBoundAgentType(page)
 
-    await expect(page.getByText('Topology')).toBeVisible()
-    await expect(page.locator('svg text').filter({ hasText: /^research-agent$/ })).toBeVisible()
-    await expect(page.getByText('delegates to')).toBeVisible()
+    await page.getByRole('tab', { name: /topology/i }).click()
+    await expect(page.getByTestId('panel-topology-canvas')).toBeVisible()
   })
 
   test('agent role edit preview shows allowed delegated agent types', async ({ page }) => {
@@ -204,7 +226,7 @@ test.describe('Agent A2A Communication and Slug Enforcement', () => {
     await page.waitForLoadState('load')
 
     await expect(page.getByText('Delegator Role')).toBeVisible()
-    await page.getByRole('button', { name: /app\.edit|edit/i }).first().click()
+    await page.getByRole('button', { name: /^Edit$/ }).first().click()
 
     await expect(page.getByText('Allowed Agent Types Preview')).toBeVisible()
     await expect(page.getByText('research-agent')).toBeVisible()
@@ -219,10 +241,10 @@ test.describe('Agent A2A Communication and Slug Enforcement', () => {
     await page.waitForLoadState('load')
 
     await page.getByRole('button', { name: /register server/i }).click()
-    await page.getByLabel('Name').fill('invalid server')
-    await page.getByLabel('Slug').fill('bad slug')
-
-    await expect(page.getByRole('button', { name: /save/i })).toBeDisabled()
-    await expect(page.getByText('Lowercase letters, numbers, hyphens only').first()).toBeVisible()
+    const dialog = page.getByRole('dialog', { name: /register server/i })
+    // The server's identity is its slug; there is no separate Name field.
+    await dialog.getByLabel('Slug').fill('bad slug')
+    await dialog.getByLabel('Base URL').fill('http://example.test')
+    await expect(dialog.getByRole('button', { name: /save/i })).toBeDisabled()
   })
 })

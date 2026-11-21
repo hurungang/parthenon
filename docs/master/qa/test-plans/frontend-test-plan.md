@@ -72,7 +72,7 @@ Core pages and flows verified to render correctly:
 | MCP Hub | e2e/tests/mcp-hub.spec.ts |
 | Skills & SOPs | e2e/tests/skills-sops.spec.ts |
 | Permissions (Tags, Roles, Groups, Users, Access) | e2e/tests/permissions.spec.ts |
-| Setup Wizard | e2e/tests/setup-wizard.spec.ts |
+| Login & Workspace Address | e2e/tests/oidc-login-flows.spec.ts |
 
 ---
 
@@ -94,7 +94,7 @@ Core pages and flows verified to render correctly:
 **Test files:**
 - [frontend/src/__tests__/McpSessionManager.test.tsx](../../../../frontend/src/__tests__/McpSessionManager.test.tsx) — credential field hiding, informational alert, passthrough chip, submit payload, auth type toggle
 - [frontend/src/__tests__/TestMcpToolDialog.test.tsx](../../../../frontend/src/__tests__/TestMcpToolDialog.test.tsx) — identity picker rendered for passthrough server; session picker absent; correct payload on submit
-- [frontend/src/__tests__/AssignMcpSessionsToRoleDialog.test.tsx](../../../../frontend/src/__tests__/AssignMcpSessionsToRoleDialog.test.tsx) — **REMOVED** — component deleted; passthrough tests migrated to `AgentRoleDialog.test.tsx`
+- `frontend/src/__tests__/AssignMcpSessionsToRoleDialog.test.tsx` — **REMOVED** — component deleted; passthrough tests migrated to `AgentRoleDialog.test.tsx`
 - [e2e/tests/passthrough-sessions.spec.ts](../../../../e2e/tests/passthrough-sessions.spec.ts) — mocked UI flow: admin creates passthrough session, chip displayed, identity picker shown in tool test dialog; `test.describe('Real Backend Integration')`: unauthenticated tool test returns correct status, passthrough+credentials rejected
 
 ---

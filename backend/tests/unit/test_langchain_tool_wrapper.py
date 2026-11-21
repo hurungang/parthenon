@@ -348,6 +348,195 @@ async def test_delegation_tool_logs_failed_on_error():
     assert "error" in result
 
 
+# ── Delegation depth guard (AR path) ─────────────────────────────────────────
+
+_DEPTH_SESSION_ID = "00000000-0000-0000-0000-0000000000d1"
+
+
+def _make_depth_guardrail_state(
+    *,
+    tree_depth: int = 0,
+    delegation_depth: int = 0,
+    max_depth: int = 3,
+):
+    """Build a real RuntimeGuardrailState with the given depth configuration."""
+    from app.services.agents.guardrails import RuntimeGuardrailState
+
+    return RuntimeGuardrailState(
+        max_iterations=10,
+        max_delegation_depth=max_depth,
+        max_delegated_steps=20,
+        execution_timeout_seconds=300,
+        token_budget=None,
+        token_enforcement_mode="observe",
+        token_fallback_mode="observe_and_log",
+        conversational_token_visibility_mode="enabled",
+        conversational_continuation_policy="allow",
+        policy_snapshot_id="agent_type:test",
+        delegation_depth=delegation_depth,
+        tree_depth=tree_depth,
+    )
+
+
+def _depth_guard_tools(guardrail_state, captured_events: list[dict], captured_status: list[dict]):
+    """Build one delegation tool plus its mocked CommHub/data clients."""
+    from app.services.agents.langchain_tool_wrapper import build_langchain_tools_for_ar_path
+
+    mock_comm = AsyncMock()
+    mock_comm.call_a2a_request = AsyncMock(
+        return_value={"status": "accepted", "receiver_session_id": "rcv-depth-1"}
+    )
+    mock_comm.wait_for_a2a_response = AsyncMock(
+        return_value={"status": "completed", "output_data": {"result": "done"}}
+    )
+    mock_comm.call_tool = AsyncMock(return_value={"should": "not be called"})
+
+    async def log_event(session_id, event_type, message, data, **_):
+        captured_events.append({"event_type": event_type, "message": message, "data": data})
+
+    async def status_event(event: dict) -> None:
+        captured_status.append(event)
+
+    mock_data = AsyncMock()
+    mock_data.log_execution_event = log_event
+
+    tools = build_langchain_tools_for_ar_path(
+        tool_definitions=[
+            {
+                "type": "function",
+                "function": {
+                    "name": "agent____analyst",
+                    "description": "Delegate to analyst agent",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {"task": {"type": "string"}},
+                    },
+                },
+            }
+        ],
+        comm_hub_client=mock_comm,
+        data_client=mock_data,
+        session_id=_DEPTH_SESSION_ID,
+        agent_type_id="at-1",
+        role_id="role-1",
+        guardrail_state=guardrail_state,
+        status_event_callback=status_event,
+    )
+    assert len(tools) == 1
+    return tools[0], mock_comm, mock_data
+
+
+@pytest.mark.asyncio
+async def test_delegation_blocked_when_at_configured_maximum():
+    """A run already at its configured maximum must not dispatch an over-depth hop."""
+    captured_events: list[dict] = []
+    captured_status: list[dict] = []
+    state = _make_depth_guardrail_state(tree_depth=3, delegation_depth=3, max_depth=3)
+    tool, mock_comm, _ = _depth_guard_tools(state, captured_events, captured_status)
+
+    result = json.loads(await tool.arun({"task": "analyse"}))
+
+    assert result["blocked"] is True
+    assert "delegating from depth 3" in result["reason"]
+    assert "configured maximum delegation depth of 3" in result["reason"]
+
+    # Nothing is dispatched.
+    mock_comm.call_a2a_request.assert_not_called()
+    mock_comm.wait_for_a2a_response.assert_not_called()
+    mock_comm.call_tool.assert_not_called()
+
+    # Policy block is recorded with the configured maximum and the hop depth.
+    blocked = [e for e in captured_events if e["event_type"] == "delegation_depth_blocked"]
+    assert len(blocked) == 1
+    assert blocked[0]["data"] == {
+        "delegation_target": "analyst",
+        "current_depth": 3,
+        "next_depth": 4,
+        "max_depth": 3,
+    }
+    # The hop is blocked BEFORE delegation_started / waiting are logged.
+    event_types = [e["event_type"] for e in captured_events]
+    assert "delegation_started" not in event_types
+    assert "delegation_waiting" not in event_types
+    assert captured_status == []
+
+    # Counters do not move.
+    assert state.delegated_steps == 0
+    assert state.delegation_depth == 3
+    assert state.tree_depth == 3
+
+
+@pytest.mark.asyncio
+async def test_delegation_allowed_below_configured_maximum():
+    """A hop that stays within the configured maximum keeps existing behaviour."""
+    captured_events: list[dict] = []
+    captured_status: list[dict] = []
+    state = _make_depth_guardrail_state(tree_depth=2, delegation_depth=2, max_depth=3)
+    tool, mock_comm, _ = _depth_guard_tools(state, captured_events, captured_status)
+
+    result = json.loads(await tool.arun({"task": "analyse"}))
+
+    assert result == {"result": "done"}
+    mock_comm.call_a2a_request.assert_called_once()
+    call_kwargs = mock_comm.call_a2a_request.call_args.kwargs
+    assert call_kwargs["target_agent_type_slug"] == "analyst"
+    assert call_kwargs["wait_for_response"] is False
+
+    event_types = [e["event_type"] for e in captured_events]
+    assert "delegation_depth_blocked" not in event_types
+    assert "delegation_started" in event_types
+    assert "delegation_waiting" in event_types
+    assert "delegation_resumed" in event_types
+
+    status_kinds = [e["status"] for e in captured_status]
+    assert status_kinds == ["using_tool", "delegating", "waiting", "waiting", "delegation_resumed"]
+
+    # Hop counters advance as before (next hop reaches the last permitted level).
+    assert state.delegated_steps == 1
+    assert state.delegation_depth == 3
+    assert state.tree_depth == 2
+
+
+@pytest.mark.asyncio
+async def test_delegation_blocked_at_root_with_configured_max_zero():
+    """Configured maximum 0 blocks the first hop from the root."""
+    captured_events: list[dict] = []
+    captured_status: list[dict] = []
+    state = _make_depth_guardrail_state(tree_depth=0, delegation_depth=0, max_depth=0)
+    tool, mock_comm, _ = _depth_guard_tools(state, captured_events, captured_status)
+
+    result = json.loads(await tool.arun({"task": "analyse"}))
+
+    assert result["blocked"] is True
+    assert "delegating from depth 0" in result["reason"]
+    assert "configured maximum delegation depth of 0" in result["reason"]
+    mock_comm.call_a2a_request.assert_not_called()
+
+    blocked = [e for e in captured_events if e["event_type"] == "delegation_depth_blocked"]
+    assert len(blocked) == 1
+    assert blocked[0]["data"]["current_depth"] == 0
+    assert blocked[0]["data"]["next_depth"] == 1
+    assert blocked[0]["data"]["max_depth"] == 0
+    assert state.delegated_steps == 0
+    assert state.delegation_depth == 0
+
+
+@pytest.mark.asyncio
+async def test_delegation_without_guardrail_state_is_unchanged():
+    """No guardrail state → no depth guard (legacy behaviour preserved)."""
+    captured_events: list[dict] = []
+    captured_status: list[dict] = []
+    tool, mock_comm, _ = _depth_guard_tools(None, captured_events, captured_status)
+
+    await tool.arun({"task": "analyse"})
+
+    mock_comm.call_a2a_request.assert_called_once()
+    assert "delegation_depth_blocked" not in [e["event_type"] for e in captured_events]
+
+
+# ── build_langchain_tools_for_ar_path: other tools ────────────────────────────
+
+
 @pytest.mark.asyncio
 async def test_regular_tool_still_uses_call_tool():
     """Non-delegation tools must still use call_tool (not a2a)."""

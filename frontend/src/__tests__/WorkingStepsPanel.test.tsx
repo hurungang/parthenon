@@ -1,10 +1,20 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen, fireEvent } from '@testing-library/react'
+import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { WorkingStepsPanel } from '../components/executions/WorkingStepsPanel'
-import type { WorkingStep, WorkingStepSpan } from '../types'
+import type { ExecutionLogEntry, WorkingStep, WorkingStepSpan } from '../types'
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (k: string) => k }),
+}))
+
+vi.mock('../api/apiClient', () => ({
+  default: {
+    get: vi.fn(),
+  },
+}))
+
+vi.mock('../hooks/useSessionExecutionLogStream', () => ({
+  useSessionExecutionLogStream: () => ({ entries: [] }),
 }))
 
 let idCounter = 0
@@ -66,6 +76,35 @@ function makeIterationSpan(num: number, steps: WorkingStep[] = []): WorkingStepS
     iconType: 'llm',
     children: steps,
     collapsed: false,
+  })
+}
+
+function makeLogEntry(overrides: Partial<ExecutionLogEntry> = {}): ExecutionLogEntry {
+  return {
+    id: `log-${Math.random().toString(36).slice(2)}`,
+    timestamp: '2026-01-01T00:01:00Z',
+    event_type: 'observe',
+    log_level: 'INFO',
+    message: 'log entry',
+    data: {},
+    ...overrides,
+  }
+}
+
+/** Helper: build a delegation card step whose payload names the child session. */
+function makeDelegationStep(childSessionId: string): WorkingStep {
+  return makeStep({
+    iconType: 'delegating',
+    message: "Delegating to agent 'research-helper'",
+    detail: {
+      label: 'delegation_started',
+      eventType: 'delegation_started',
+      content: JSON.stringify({
+        delegation_target: 'research-helper',
+        receiver_session_id: childSessionId,
+        delegation_depth: 1,
+      }),
+    },
   })
 }
 
@@ -220,5 +259,114 @@ describe('WorkingStepsPanel', () => {
     fireEvent.keyDown(toggleBtn, { key: ' ' })
 
     expect(toggleBtn.getAttribute('aria-expanded')).toBe('true')
+  })
+})
+
+// ── Delegation card: direct-child progress peek scoping ─────────────────────
+
+describe('WorkingStepsPanel delegation card peek', () => {
+  const CHILD_SESSION_ID = 'child-session-123'
+
+  async function renderDelegationCard(onViewSubAgentExecution = vi.fn()) {
+    const apiClient = (await import('../api/apiClient')).default
+    ;(apiClient.get as ReturnType<typeof vi.fn>).mockImplementation((url: string) => {
+      if (url === `/agents/sessions/${CHILD_SESSION_ID}`) {
+        return Promise.resolve({ data: { status: 'completed' } })
+      }
+      if (url === `/agents/sessions/${CHILD_SESSION_ID}/logs`) {
+        return Promise.resolve({
+          data: [
+            makeLogEntry({
+              id: 'child-init',
+              event_type: 'agent_initialized',
+              message: 'Child initialised',
+            }),
+            makeLogEntry({
+              id: 'child-delegation-tool-call',
+              event_type: 'tool_call',
+              message: 'Tool call: agent____grandchild-agent',
+              data: { tool: 'agent____grandchild-agent' },
+            }),
+            makeLogEntry({
+              id: 'child-legacy-delegation',
+              event_type: 'tool_call',
+              message: 'Tool call: agent__legacy-grandchild',
+              data: { tool: 'agent__legacy-grandchild' },
+            }),
+            makeLogEntry({
+              id: 'child-delegation-response',
+              event_type: 'tool_response',
+              message: 'Delegation response to parent LLM',
+              data: { delegation_target: 'grandchild-agent' },
+            }),
+            makeLogEntry({
+              id: 'child-delegation-lifecycle',
+              event_type: 'delegation_started',
+              message: 'Grandchild delegation started',
+              data: { delegation_target: 'grandchild-agent' },
+            }),
+            makeLogEntry({
+              id: 'child-model-request',
+              event_type: 'llm_request',
+              message: 'Child model request',
+            }),
+            makeLogEntry({
+              id: 'child-mcp-tool',
+              event_type: 'tool_call',
+              message: 'Tool call: server____search',
+              data: { tool: 'server____search' },
+            }),
+            makeLogEntry({
+              id: 'child-completed',
+              event_type: 'session_completed',
+              message: 'Child completed',
+            }),
+          ],
+        })
+      }
+      return Promise.resolve({ data: [] })
+    })
+
+    render(
+      <WorkingStepsPanel
+        spans={[makePrepSpan([makeDelegationStep(CHILD_SESSION_ID)])]}
+        onViewSubAgentExecution={onViewSubAgentExecution}
+      />,
+    )
+    await waitFor(() => expect(screen.getByText('Child initialised')).toBeDefined())
+    return { apiClient, onViewSubAgentExecution }
+  }
+
+  it('shows the child’s own activity in the peek', async () => {
+    await renderDelegationCard()
+
+    expect(screen.getByText('Child initialised')).toBeDefined()
+    expect(screen.getByText('Child model request')).toBeDefined()
+    expect(screen.getByText('Tool call: server____search')).toBeDefined()
+    expect(screen.getByText('Child completed')).toBeDefined()
+  })
+
+  it('excludes the child’s onward delegation from the peek', async () => {
+    await renderDelegationCard()
+
+    expect(screen.queryByText('Tool call: agent____grandchild-agent')).toBeNull()
+    expect(screen.queryByText('Tool call: agent__legacy-grandchild')).toBeNull()
+    expect(screen.queryByText('Delegation response to parent LLM')).toBeNull()
+    expect(screen.queryByText('Grandchild delegation started')).toBeNull()
+  })
+
+  it('fetches the child log unfiltered for drill-in and keeps the action wired', async () => {
+    const { apiClient, onViewSubAgentExecution } = await renderDelegationCard()
+
+    // The component still reads the child's RAW log (the helper only filters the peek projection).
+    expect(
+      (apiClient.get as ReturnType<typeof vi.fn>).mock.calls.some(
+        (call) => call[0] === `/agents/sessions/${CHILD_SESSION_ID}/logs`,
+      ),
+    ).toBe(true)
+
+    const drillIn = await screen.findByRole('button', { name: /View Execution Logs/ })
+    fireEvent.click(drillIn)
+    expect(onViewSubAgentExecution).toHaveBeenCalledWith(CHILD_SESSION_ID)
   })
 })

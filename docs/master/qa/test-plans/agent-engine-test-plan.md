@@ -14,7 +14,7 @@
 - All dialogs follow Dialog Error Handling Standard (`dialogError` state, `PermissionDeniedAlert`, cleared on open/close)
 - i18n: all new strings use `t()` with keys under `agents.types.*`, `agents.instances.*`, `agents.sessions.*`
 
-### Agent Type Binding Validation (enforce-agent-type-bindings change)
+### Agent Type Binding Validation
 - `validate_bindings()` rejects SOP binding whose `sop_id` is not in the assigned role's permitted SOPs — returns 422 with `{"error": "binding_validation_failed", "messages": [...]}`
 - `validate_bindings()` rejects Skill binding whose `skill_id` is not in the assigned role's permitted skills — returns 422 with per-entry message
 - `validate_bindings()` rejects duplicate `sop_id` across multiple binding entries — returns 422
@@ -24,7 +24,7 @@
 - Binding CASCADE delete: deleting an agent type removes associated binding rows
 - Binding data round-trip: POST create returns `sop_bindings[]` and `skill_bindings[]` in response; GET reads them back
 
-### Agent Plan Mode (agent-plan-mode change)
+### Agent Plan Mode
 - `PlanGenerationService`: traverses role→SOP→Skill→Tool graph, constructs LLM prompt, invokes LLM, parses structured plan steps; upserts `AgentPlan` row on every save (no duplicate rows)
 - `PlanGenerationService`: non-blocking failure — LLM timeouts and parse errors written as `generation_status = failed`; no exception propagates to the API handler
 - `PlanGenerationService`: `agent_config_hash` is deterministic for the same `role_id`, `primary_sop_id`, and `system_instruction`; changes when any input changes
@@ -40,7 +40,7 @@
 - `AgentManagementPage` plan state: `planData` set to `plan` from save response immediately after successful create/update; `PlanPreviewModal` opened before `setDialogOpen(false)`; plan state cleared when modal dismissed; re-opening create/edit dialog does not re-open the plan modal
 - i18n: all plan preview strings use `t()` with keys under `agents.plan.*` namespace; no hardcoded English in `PlanPreviewModal` or `TopologyDiagramRenderer`
 
-### Execution Log Display (user-friendly-agent-logs change)
+### Execution Log Display
 - `LogPresenter` data transformation: parses identity, role, model, and SOPs/skills from `system_instruction`; classifies entries by `event_type` into working steps (`llm_call`, `tool_call`, and fallback for other types); derives overall result status from the final log entry; builds raw log string from all timestamped entries
 - `LogPresenter` graceful handling: empty `entries` array produces empty step list and neutral result status without error; missing or empty `system_instruction` defaults all summary fields without throwing
 - `LogSummaryPanel` rendering: displays identity, role, and model fields; SOPs/skills rendered as individual chips; plan progress displayed; result status badge reflects correct visual state for success, failure, and running states
@@ -49,7 +49,7 @@
 - `LogViewer` routing: summary panel and working steps panel rendered in friendly mode; monospace raw log block rendered in raw mode; `RawLogToggle` always present in header
 - `AgentJobPage` regression: `LogViewer` renders in place of old raw execution log section; "View Execution Logs" button and `SessionExecutionLogsDialog` trigger absent from page; partial log displays without crash when session is still running
 
-### Delegation Visibility and Live Session Stream (agent-delegation-visibility change)
+### Delegation Visibility and Live Session Stream
 - Conversation-status transport forwards thinking/delegating/waiting/final states in order and preserves terminal timeout/failure signaling
 - Delegation target display text is normalized from internal tool naming to user-readable `Delegating to agent <agent_type>`
 - Chat surfaces fold delegation snippets by default, retain concise preview context, and preserve expand/collapse interaction state
@@ -67,7 +67,7 @@
 - `GET /api/v1/agents/sessions/{id}/result` on in-progress session returns 409
 - Stuck agent instances do not hang silently — recovery mechanism or timeout applies
 
-### Execution Log Display (user-friendly-agent-logs change)
+### Execution Log Display
 - Valid `ExecutionLogRead` with all fields → `LogSummary` contains correct identity, role, model, and ordered list of SOPs/skills
 - `entries` mix of `llm_call` and `tool_call` types → each entry classified into correct working step type with appropriate icon and message
 - Final entry with success indicator → result status is `success`; final entry with failure indicator → result status is `failure`
@@ -81,7 +81,7 @@
 - `AgentJobPage` with completed session → no "View Execution Logs" button or `SessionExecutionLogsDialog` trigger present on page
 - `AgentJobPage` with running session → `LogViewer` renders with partial log data; no crash
 
-### Delegation Visibility and Live Session Stream (agent-delegation-visibility change)
+### Delegation Visibility and Live Session Stream
 - Conversational run starts without immediate delegation: thinking state is visible in chat before handoff begins
 - Delegation starts from internal tool name: chat shows normalized `Delegating to agent <agent_type>` label and transitions to waiting
 - Delegation times out or fails: waiting state resolves to a clear terminal timeout/failure status
@@ -102,7 +102,7 @@
 - `agent_config_hash` changes when `system_instruction`, `role_id`, or `primary_sop_id` changes; same inputs → same hash
 - If save API call fails (403, 500), `AgentManagementPage` shows error in dialog via Dialog Error Handling Standard; plan modal is NOT opened
 
-### Execution Log Display (user-friendly-agent-logs change)
+### Execution Log Display
 - Empty `entries` array: summary panel renders; working steps panel shows no step rows; collapsible section renders without crash
 - Single entry with no LLM iterations: collapsible section contains one row; no visual breakage
 - `system_instruction` absent: summary fields silently default; no unguarded property access exception
@@ -130,7 +130,7 @@
 - `frontend/src/__tests__/AgentSessionPage.test.tsx`
 - `frontend/src/__tests__/ConversationDelegationVisibility.test.tsx`
 - `frontend/src/__tests__/ConversationDialog.test.tsx`
-- `frontend/src/__tests__/SessionExecutionLogsDialog.test.tsx`
+- `frontend/src/__tests__/AgentExecutionDetailsDialog.test.tsx`
 - `frontend/src/__tests__/AgentTypeForm.test.tsx`
 - `frontend/src/__tests__/AgentInstanceDashboard.test.tsx`
 - `frontend/src/__tests__/useChatSession.test.ts`

@@ -2,7 +2,7 @@
 
 ## Tenant-Bound Routing
 
-The Communication Hub receives a **signed, immutable tenant context** from Control Center over the existing mTLS channels — it can never alter or widen tenant scope, and introduces no new trust path. Agent session dispatch, the A2A message broker, the MCP protocol server, and tool-call forwarding are all scoped to that tenant context; cross-tenant routing is impossible (A2A pairs must share the tenant context). MCP client API keys are **tenant-bound**: validation resolves the tenant, and keys cannot reach other tenants' resources. Per-tool-call identity token injection (performed by Control Center) is resolved within the tenant's scope only. The hub receives only quota-cleared dispatches — refusals happen in Control Center before anything is sent here. All routing, log, and trace events carry tenant attribution. See [Multi-Tenancy Architecture](multi-tenancy.md).
+The Communication Hub receives a **signed, immutable tenant context** from Control Center over the existing mTLS channels — it can never alter or widen tenant scope, and introduces no new trust path. Agent session dispatch, the A2A message broker, the MCP protocol server, and tool-call forwarding are all scoped to that tenant context; cross-tenant routing is impossible (A2A pairs must share the tenant context). MCP client API keys are **tenant-bound**: validation resolves the tenant, and keys cannot reach other tenants' resources. Per-tool-call identity token injection (performed by Control Center) is resolved within the tenant's scope only. The hub receives only quota-cleared dispatches — refusals happen in Control Center before anything is sent here. All routing, log, and trace events carry tenant attribution. See [Multi-Tenancy Architecture](../multi-tenancy.md).
 
 CH is a **forward-only receiver** of internal tenant context: it verifies the signed `X-Internal-Tenant-*` headers on internal hops (`/internal/a2a`, MCP server hops, system-tool forwarding) and forwards them — it never signs new bindings. All CH → CC internal HTTP goes through the shared `internal_httpx_client` egress choke point, which automatically forwards the tenant headers. **WS chat** authenticates both OIDC and platform-account tokens, binds the tenant context from the token's tenant claim, mints per-call signatures from that verified context (the one non-CC signing point), and delegates to AR with forwarded headers.
 
@@ -50,9 +50,11 @@ Browser chat — the Control Center assistant and every conversational agent —
 
 - **Tenant binding at connect** — the socket carries the user's token (OIDC or platform account) as a query parameter, and tenant resolution is bound once from the verified token claim (OIDC users resolve their tenant from an active membership) instead of the HTTP tenant middleware. When multi-tenancy is on and no tenant resolves, the connection fails closed. Outbound internal calls in the turn carry headers minted from that verified context — the WebSocket path is the one place outside Control Center that mints per-call signatures — so the hub delegates to Agent Runtime with a valid tenant binding.
 - **Turn delegation** — the hub forwards the turn to Agent Runtime over the internal call path and relays its stream back: status events (thinking, tool use, delegation, waiting for human), the reply, and guardrail usage.
-- **Live-session reply routing** — a registry maps conversation session → current socket, and sends resolve the *live* socket at send time, so a client that reconnects mid-turn (new socket, same session) still receives status, intervention prompts, and the final reply. Placement is newest-wins: an older connection's cleanup never evicts a newer registration.
-- **Heartbeat** — while a turn is in flight the hub emits periodic thinking keep-alives, so intermediaries do not idle-close the socket and the "thinking" state stays truthful for arbitrarily long turns.
-- **Turn supervision** — the whole turn is bounded by a watchdog even on the streaming path; the reply is delivered live before persistence so a slow persistence tail cannot swallow it; error turns are persisted exactly once; ending a session or terminating an execution cancels the pending turn and closes out the operator UI.
+- **Activity projection, not ownership** — the hub holds no authoritative status. It forwards each transition to Control Center and keeps a read-through projection for status answers, heartbeats, and pushes; on connect it hydrates the current activity, so a reconnecting client, a fresh hub instance, or a failover gets the truth instead of a blank or a stale spinner.
+- **Live-session reply routing** — a registry maps conversation session → current socket, and sends resolve the *live* socket at send time, so a client that reconnects mid-turn (new socket, same session) still receives status, intervention prompts, and the final reply. Placement is newest-wins: an older connection's cleanup never evicts a newer registration. The registry is a delivery aid, not the resume home.
+- **Instance-independent resume** — a resume is forwarded to whichever Agent Runtime instance can load the paused turn, not necessarily the one that paused it; duplicate operator responses are collapsed into a single dispatch, so one answer produces one resumed turn and one write.
+- **Heartbeat** — while a turn is in flight the hub emits periodic thinking keep-alives, so intermediaries do not idle-close the socket and the "thinking" state stays truthful for arbitrarily long turns; those beats also refresh the persisted working state so a live-but-quiet turn is never mistaken for a dead one.
+- **Turn supervision** — the whole turn is bounded by a watchdog even on the streaming path; the reply is delivered live before persistence so a slow persistence tail cannot swallow it; error turns are persisted exactly once; ending a session or terminating an execution cancels the pending turn and closes out the operator UI. A terminal "no longer resumable" notice is emitted only for a durably unresumable turn, never because a local lookup missed.
 
 ```mermaid
 sequenceDiagram
@@ -60,20 +62,35 @@ sequenceDiagram
     participant UI as Conversation UI
     participant CH as Communication Hub
     participant AR as Agent Runtime
+    participant CC as Control Center
 
     U->>UI: send message
     UI->>CH: turn over WebSocket (token · session id)
     CH->>CH: bind tenant from verified token
+    CH->>CC: record activity (working)
     CH->>AR: delegate turn (signed tenant headers)
     loop while the turn is in flight
         AR-->>CH: status · tool use · delegation
+        CH-->>CC: forward transition
         CH-->>UI: thinking heartbeat
     end
+    AR-->>CH: pause for confirmation · checkpoint payload
+    CH->>CC: persist pause state and checkpoint
+    CH-->>UI: waiting for your input
+    Note over UI,CH: restart or reconnect — same session
+    UI->>CH: reconnect
+    CH->>CC: hydrate activity and resume state
+    CH-->>UI: pending confirmation still actionable
+    U->>UI: approve
+    UI->>CH: operator response
+    CH->>CC: record response once
+    CC->>CH: dispatch resume
+    CH->>AR: resume on any instance
     AR-->>CH: reply
     CH-->>UI: reply on the live socket
-    CH->>CH: persist the turn
-    Note over CH: a mid-turn reconnect still receives on the live socket
 ```
+
+The hub introduces no data access and no signing rights on this path: it verifies and forwards signed tenant headers, and every Control Center call goes through the standard internal egress. Chat status is persisted and hydrated, not process-local.
 
 ## Intervention Routing and External Agents
 
@@ -122,6 +139,29 @@ flowchart TB
     CH --> S1
     S1 --> UI
 ```
+
+## Intervention Response & Resume Relay
+
+Interventions described above are routed by *where the operator is*; the resume relay is about *where the paused turn can run*. They are separate concerns:
+
+```mermaid
+flowchart LR
+    UI[Conversation UI] -->|approve · deny| RELAY["Resume relay (hub)"]
+    RELAY --> DEDUP{Answer already<br/>dispatched?}
+    DEDUP -->|yes| STORED[Return the stored outcome<br/>no second dispatch]
+    DEDUP -->|no| CC[Control Center<br/>record once · resume index]
+    CC -->|single dispatch| RELAY
+    RELAY -->|"any instance that can load it"| AR[Agent Runtime]
+    AR -->|reply · status| RELAY
+    RELAY --> UI
+    AR -->|durably unresumable| TERM[One terminal notice<br/>with an actionable reason]
+    TERM --> UI
+```
+
+- **Forward, don't resolve** — the hub never decides whether a turn can be resumed; it asks Control Center, which owns the resume index.
+- **Exactly one dispatch** — a duplicate operator response short-circuits to the stored outcome, so one answer produces one resumed turn and one confirmed write.
+- **Instance-independent** — the resume target is chosen by ability to load the paused turn, so a restart, a rolling deploy, or an extra replica never strands a waiting operator.
+- **No new trust** — the relay reuses the existing mTLS and signed-tenant-header contract through the shared internal egress; the hub still never signs and never reads the database.
 
 ## Authentication Paths
 
@@ -233,8 +273,10 @@ sequenceDiagram
 - **Intervention Router**: Inspects `human_intervene` suspend signals for a `conversation_session_id`. When present, routes the intervention request to the connected WebSocket client of the parent conversation. When absent, falls through to the existing dashboard-based intervention flow.
 - **Intervention Queue**: Per-conversation-session FIFO queue for intervention requests. When multiple delegated sub-agents request intervention concurrently, requests are delivered sequentially.
 - **Task Delegation Event Router**: In-memory router that manages delivery of non-conversational delegation status events and intervention requests to execution log viewer clients. Maintains a mapping of active log viewer connections to parent task agent sessions. Pushes delegation status events (`delegation_started`, `delegation_waiting`, `delegation_resumed`, `delegation_depth_blocked`, `delegation_timeout`, `delegation_failed`) and intervention requests to the correct log viewer. Falls back to poll-based delivery when no live viewer is connected.
-- **Conversation Turn Runner**: Owns the WebSocket turn lifecycle — binds the tenant from the verified token, delegates the turn to Agent Runtime, relays status events and heartbeats, resolves the live socket at send time for replies and interventions, enforces the whole-turn watchdog, and persists error turns exactly once. Cancels a pending turn when the session is ended or the execution is terminated.
-- **Live Session Registry**: Maps conversation session → connected socket for reply and intervention routing. Newest registration wins, so a reconnect mid-turn never loses delivery and an older connection's cleanup never evicts a newer one.
+- **Conversation Turn Runner**: Owns the WebSocket turn lifecycle — binds the tenant from the verified token, delegates the turn to Agent Runtime, relays status events and heartbeats, forwards activity transitions for persistence, resolves the live socket at send time for replies and interventions, enforces the whole-turn watchdog, and persists error turns exactly once. Cancels a pending turn when the session is ended or the execution is terminated.
+- **Activity Projection**: A read-through projection of the activity state Control Center owns. Serves status answers, heartbeats, and reconnect hydration, so any hub instance can answer correctly after scaling, restart, or failover. It is a cache of the truth, never the truth.
+- **Live Session Registry**: Maps conversation session → connected socket for reply and intervention routing. Newest registration wins, so a reconnect mid-turn never loses delivery and an older connection's cleanup never evicts a newer one. It is no longer the home of paused-turn state.
+- **Resume Router**: Forwards an operator response to an Agent Runtime instance able to load the paused turn and collapses duplicate deliveries of the same answer into a single dispatch; emits a terminal notice only when the durable state genuinely cannot be resumed.
 - **System Tool Router**: Maps bare tool names (`save_data`, `get_data`, `get_output`, `query_result`, `load_skills`) to Control Center internal system-tool endpoints. No new structural components are needed; existing permission-check and certificate-forwarding infrastructure handles these tool calls automatically.
 - **MCP Protocol Server**: Bridges standard MCP JSON-RPC methods (`initialize`, `tools/list`, `tools/call`) over SSE and Streamable HTTP transports to the existing tool registry and proxy path. Clients authenticate by mTLS (internal Agent Runtime), API key (external agents), or the user's OAuth Bearer token (management surface). Listings and call resolution are **per-tenant**: a client authenticated for a tenant sees and calls only that tenant's namespaced tools (slug uniqueness and resolution are `(tenant, slug)` — see [MCP Hub Architecture](../mcp-hub/architecture.md)).
 - **MCP Session Manager**: Tracks per-connection protocol state — capability negotiation from `initialize`, per-session identity context — across the SSE and Streamable HTTP transports.
@@ -271,4 +313,4 @@ injected session-bound tool client — the same authenticated MCP path as the
 LLM agent loop, with unchanged handling: the agent's dual identities,
 per-call token injection, and script provenance tagging. No new protocol or
 identity pathway is introduced for scripted execution. See
-[Sandboxed Scripting](sandboxed-scripting.md).
+[Sandboxed Scripting](../sandboxed-scripting.md).

@@ -38,6 +38,7 @@ flowchart TB
 | **Namespace separation** | Management tools live in the reserved `cc` namespace on a dedicated per-tenant entity | Management capability is grantable independently and cannot ride on a generic system-tool grant |
 | **Entity governance** | `integration::control_center` (`read` / `manage`) plus a system-managed lifecycle | Only permission holders can see or define the entity; nobody can mutate it |
 | **Invocation** | Permission parity plus role/skill tool grants, checked at listing *and* at call | An MCP call can never perform an action the REST equivalent would deny |
+| **Approval integrity** | Preview, then a durable, single-use approval owned by Control Center | No write happens without consent, and consent cannot execute twice or be inherited |
 | **Execution** | Control Center is the only database writer; no delete verbs exist | Service segregation holds and destructive operations are impossible by construction |
 
 ## User-Scope Execution, Not Delegation
@@ -76,6 +77,17 @@ The full resource-family → permission map is in [Control Center Architecture](
 - **Deletion is not registered** as a tool at any layer. Delete-shaped or out-of-scope requests receive a fixed "not supported" result before any write, and the same boundary is stated in the assistant's knowledge and instructions so it is never proposed.
 - **Fail closed** — unknown resource types are denied before evaluation, invalid or expired tokens are rejected, unresolvable tenants are refused, and an unanswered approval resolves as "not executed" rather than as success.
 - **Approval cannot double-execute** — a replayed intervention request is de-duplicated and an already-answered one returns the stored operator response.
+
+## Approval Durability, Full-Field Parity, and Validation
+
+The approval gate is the security control that makes assistant-driven writes safe, so it is durable rather than conversational:
+
+- **Durable consent** — the pause is a Control Center-owned resume record beside an opaque checkpoint payload. A pending approval survives a service restart, a failover, or a different serving instance, and is answerable only inside its validity window. A restart alone never converts a pending approval into a silent write, and never loses it either.
+- **Single use, at most once** — the answer, the idempotency marker, and the resume transition commit together; a duplicate response short-circuits to the stored outcome. Denial, timeout, and expiry write nothing.
+- **Honest state** — a confirmation is actionable only while a live paused turn backs it. A turn that died is resolved terminally with an actionable message instead of leaving a confirmation that looks live.
+- **Full-field parity** — routing now carries the complete field set each resource family's UI edit form accepts, with typed payload validation and structured field-level errors so the agent can correct itself. Validation is not authorization: parity is still re-checked per invocation against the authenticated user's scope, and a well-formed but out-of-scope payload is refused.
+
+This adds **no privilege surface**: the same parity map, the same user identity, the same no-delete boundary. The single-use approval ledger described in optimization belongs to an optimization-mode conversation on an ordinary agent type — it is not a second assistant, adds no system agent type, identity, or role, and grants no authority beyond that agent type's existing tool grants.
 
 ## Audit Surface
 

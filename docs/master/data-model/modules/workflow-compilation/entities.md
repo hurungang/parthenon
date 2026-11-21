@@ -1,5 +1,7 @@
 # Workflow Compilation (Script Registry) — Entities
 
+[← Data model overview](../../overview.md)
+
 Model-authored, sandboxed workflow scripts and their lifecycle evidence:
 definitions, immutable versions, verification runs, execution records,
 fallback events, and repair attempts. All entities are Control-Center-owned
@@ -113,3 +115,46 @@ erDiagram
 - Aggregate `health_status` on the Script Definition degrades with repeated fallback events.
 - `ScriptExecutionRecord.outcome` also accepts `partial_failure`, recorded when a tool call returns a semantic error report. Semantic-error detection is **not yet automated** — the value is written on explicit caller determination rather than derived.
 - Only Control Center persists registry and execution data; Agent Runtime consumes them exclusively via Control Center REST APIs.
+
+## Plan lineage: fallback attribution and the `requires_fix` marking
+
+Every compiled script records the optimized plan that authored it
+(`ScriptDefinition.source_optimized_plan_id`), which is how a runtime fallback
+becomes attributable back to a plan.
+
+- A `FallbackEvent` is recorded first (script health degrades as above). The
+  attribution walk is **read-only**:
+  `ScriptExecutionRecord` → `ScriptVersion` → `ScriptDefinition.source_optimized_plan_id`
+  → `OptimizedImplementationPlan`. Retired plans are excluded.
+- When attribution resolves to a **live** plan, the same transaction sets that
+  plan's `status = requires_fix` **and** appends an execution-derived entry to
+  its `feedback_comments` memory (see the Agents module for the plan entity and
+  the feedback entry shape). Both happen together or not at all; when no live
+  plan is attributable, nothing is written.
+- `requires_fix` is the **execution-side** state: the plan was verified and
+  ready, and a later execution failed because of it. It is distinct from
+  `needs_feedback`, which is authored-side (the Optimize & Verify run itself
+  could not verify a passing composition and records its reason in
+  `OptimizedImplementationPlan.error`).
+- A plan in `requires_fix` (or `retired`) is **never served** — execution stays
+  on the model-driven path until the plan is re-optimized. Re-optimization
+  retires the old plan and authors a new one with the prior plan plus the whole
+  feedback memory (manual + execution-derived entries) as context.
+- No new field exists on `FallbackEvent` / `RepairAttempt` for this reaction —
+  it is a status change plus an appended feedback entry on the plan.
+
+## Replay evidence vs live evidence
+
+Two kinds of proof, kept deliberately separate:
+
+| Evidence | Entity | What it proves |
+|---|---|---|
+| Replay / verification | `VerificationRun`, `ScriptExecutionRecord` | The script reproduced a recorded reference execution against recorded tool responses (shadow run, then real served runs). |
+| Live | `OptimizationLiveTestRequest` (agents module) + `RuntimeToolCall.optimization_live_test_request_id` | A human approved **one** end-to-end run of a saved script version against a real integration, under the subject agent type's own identity and permissions. |
+
+A live test is the **only** path by which optimization contacts a real
+integration. Its approval, denial, expiry, and execution evidence live on the
+ledger row; the tool log pointer marks exactly which calls were live. A live row
+therefore makes "a real integration was contacted" unambiguous, and replay rows
+never imply it. The one-shot gate is the linked `ConversationTurnResume`
+exactly-once marker (see the Communication module), not a second counter here.

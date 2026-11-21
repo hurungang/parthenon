@@ -1,0 +1,635 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Decisions — Decision Tools & Decision Model Providers</title>
+<link rel="stylesheet" href="../shared/styles.css">
+</head>
+<body data-page="decision" data-default-view="decision-tools">
+
+<div class="app-shell">
+
+<!-- ═══════════════════════════════ SIDEBAR ═══════════════════════════════ -->
+<nav class="sidebar" aria-label="Primary navigation">
+  <div class="sidebar-logo">
+    <h1>⚡ Parthenon</h1>
+    <small>Enterprise AI Harness</small>
+  </div>
+
+  <!-- Dashboard -->
+  <a class="nav-item" data-view="dashboard" href="../index.html#view-dashboard"><span class="nav-icon">🏠</span>Dashboard</a>
+
+  <!-- Project Showcase -->
+  <a class="nav-item" data-view="project-showcase" href="../index.html#view-project-showcase"><span class="nav-icon">🌐</span>Project Showcase</a>
+
+  <div class="nav-parent-group" id="nav-agents" data-group="agents">
+    <a class="nav-parent-group-label" href="agents.html#view-agent-roles" role="button" aria-expanded="true">
+      <span>🤖 Agents</span>
+      <span class="toggle-icon" aria-hidden="true">▼</span>
+    </a>
+    <div class="nav-children">
+      <a class="nav-item sub-item" data-view="agent-roles" data-group="agents" href="agents.html#view-agent-roles"><span class="nav-icon">👤</span>Agent Roles</a>
+      <a class="nav-item sub-item" data-view="agent-identities" data-group="agents" href="agents.html#view-agent-identities"><span class="nav-icon">🆔</span>Agent Identities</a>
+      <a class="nav-item sub-item" data-view="agents" data-group="agents" href="agents.html#view-agents"><span class="nav-icon">🤖</span>Agent Types</a>
+      <a class="nav-item sub-item" data-view="agent-management-panel" data-group="agents" href="agent-panel.html#view-agent-management-panel"><span class="nav-icon">🎛️</span>Agent Management Panel</a>
+      <a class="nav-item sub-item" data-view="agent-executions" data-group="agents" href="executions.html#view-agent-executions"><span class="nav-icon">▶️</span>Agent Executions</a>
+      <a class="nav-item sub-item" data-view="runtime-monitor" data-group="agents" href="executions.html#view-runtime-monitor"><span class="nav-icon">🕸️</span>Agent Runtime Monitor</a>
+      <a class="nav-item sub-item" data-view="agent-trails" data-group="agents" href="executions.html#view-agent-trails"><span class="nav-icon">📋</span>Agent Trails</a>
+      <a class="nav-item sub-item" data-view="skills" data-group="agents" href="skills-sops.html#view-skills"><span class="nav-icon">🔧</span>Skills</a>
+      <a class="nav-item sub-item" data-view="sops" data-group="agents" href="skills-sops.html#view-sops"><span class="nav-icon">📋</span>SOPs</a>
+      <a class="nav-item sub-item" data-view="schedules" data-group="agents" href="schedules.html#view-schedules"><span class="nav-icon">📅</span>Schedules</a>
+      <a class="nav-item sub-item" data-view="chat" data-group="agents" href="chat.html#view-chat"><span class="nav-icon">💬</span>Chat Sessions</a>
+      <a class="nav-item sub-item" data-view="conversational-intervention" data-group="agents" href="chat.html#view-conversational-intervention"><span class="nav-icon">💬</span>Conversational Intervention</a>
+      <a class="nav-item sub-item" data-view="intervene-requests" data-group="agents" href="chat.html#view-intervene-requests"><span class="nav-icon">🛑</span>Intervene Requests</a>
+      <a class="nav-item sub-item" data-view="data-types" data-group="agents" href="data-results.html#view-data-types"><span class="nav-icon">📐</span>Data Types</a>
+      <a class="nav-item sub-item" data-view="agent-outputs" data-group="agents" href="data-results.html#view-agent-outputs"><span class="nav-icon">📤</span>Agent Outputs</a>
+      <a class="nav-item sub-item" data-view="agent-logs" data-group="agents" href="executions.html#view-agent-logs"><span class="nav-icon">🧾</span>Agent Logs</a>
+    </div>
+  </div>
+
+  <div class="nav-parent-group" id="nav-results" data-group="results">
+    <a class="nav-parent-group-label" href="data-results.html#view-results" role="button" aria-expanded="true">
+      <span>📊 Results</span>
+      <span class="toggle-icon" aria-hidden="true">▼</span>
+    </a>
+    <div class="nav-children">
+      <a class="nav-item sub-item" data-view="results" data-group="results" href="data-results.html#view-results"><span class="nav-icon">📊</span>Result Repository</a>
+    </div>
+  </div>
+
+  <div class="nav-parent-group locked-open" id="nav-integrations" data-group="integrations">
+    <a class="nav-parent-group-label" href="integrations.html#view-mcp-hub" role="button" aria-expanded="true">
+      <span>🌐 Integrations</span>
+      <span class="toggle-icon" aria-hidden="true">▼</span>
+    </a>
+    <div class="nav-children">
+      <a class="nav-item sub-item" data-view="mcp-hub" data-group="integrations" href="integrations.html#view-mcp-hub"><span class="nav-icon">🔌</span>MCP Hub</a>
+      <a class="nav-item sub-item" data-view="notifications" data-group="integrations" href="integrations.html#view-notifications"><span class="nav-icon">🔔</span>Notification Integration</a>
+      <a class="nav-item sub-item" data-view="api-keys" data-group="integrations" href="integrations.html#view-api-keys"><span class="nav-icon">🔑</span>API Keys</a>
+      <a class="nav-item sub-item" data-view="agent-clients" data-group="integrations" href="integrations.html#view-agent-clients"><span class="nav-icon">🤝</span>Agent Client</a>
+      <a class="nav-item sub-item" data-view="gateway" data-group="integrations" href="integrations.html#view-gateway"><span class="nav-icon">🛰️</span>Agent Gateway</a>
+    </div>
+  </div>
+
+  <div class="nav-parent-group" id="nav-system" data-group="system">
+    <a class="nav-parent-group-label" href="system.html#view-observability" role="button" aria-expanded="true">
+      <span>⚙️ System</span>
+      <span class="toggle-icon" aria-hidden="true">▼</span>
+    </a>
+    <div class="nav-children">
+      <a class="nav-item sub-item" data-view="observability" data-group="system" href="system.html#view-observability"><span class="nav-icon">📊</span>Observability</a>
+      <a class="nav-item sub-item" data-view="permissions" data-group="system" href="system.html#view-permissions"><span class="nav-icon">🔐</span>Permissions</a>
+      <a class="nav-item sub-item" data-view="system-config" data-group="system" href="system.html#view-system-config"><span class="nav-icon">⚙️</span>System Config</a>
+      <a class="nav-item sub-item" data-view="model-configs" data-group="system" href="system.html#view-model-configs"><span class="nav-icon">🧩</span>Model Configs</a>
+      <a class="nav-item sub-item" data-view="decision-tools" data-group="system" href="#view-decision-tools"><span class="nav-icon">⚖️</span>Decision Tools</a>
+      <a class="nav-item sub-item" data-view="sysone-providers" data-group="system" href="#view-sysone-providers"><span class="nav-icon">🧠</span>Decision Model Providers</a>
+      <a class="nav-item sub-item" data-view="security-audit" data-group="system" href="system.html#view-security-audit"><span class="nav-icon">🛡️</span>Security Audit</a>
+    </div>
+  </div>
+
+  <div class="nav-parent-group" id="nav-tenant-admin" data-group="tenant-admin">
+    <a class="nav-parent-group-label" href="tenancy.html#view-tenant-settings" role="button" aria-expanded="true">
+      <span>🏢 Tenant Admin</span>
+      <span class="toggle-icon" aria-hidden="true">▼</span>
+    </a>
+    <div class="nav-children">
+      <a class="nav-item sub-item" data-view="tenant-settings" data-group="tenant-admin" href="tenancy.html#view-tenant-settings"><span class="nav-icon">⚙️</span>Tenant Settings</a>
+      <a class="nav-item sub-item" data-view="tenant-members" data-group="tenant-admin" href="tenancy.html#view-tenant-members"><span class="nav-icon">👥</span>Members</a>
+      <a class="nav-item sub-item" data-view="tenant-identity-providers" data-group="tenant-admin" href="tenancy.html#view-tenant-identity-providers"><span class="nav-icon">🔑</span>Identity Providers</a>
+    </div>
+  </div>
+
+  <div class="nav-parent-group" id="nav-platform" data-group="platform" style="display:none">
+    <a class="nav-parent-group-label" href="tenancy.html#view-platform-settings" role="button" aria-expanded="true">
+      <span>🛡️ Platform</span>
+      <span class="toggle-icon" aria-hidden="true">▼</span>
+    </a>
+    <div class="nav-children">
+      <a class="nav-item sub-item" data-view="platform-settings" data-group="platform" href="tenancy.html#view-platform-settings"><span class="nav-icon">⚙️</span>Platform Settings</a>
+      <a class="nav-item sub-item" data-view="platform-tenants" data-group="platform" href="tenancy.html#view-platform-tenants"><span class="nav-icon">🏢</span>Tenants</a>
+      <a class="nav-item sub-item" data-view="platform-audit" data-group="platform" href="tenancy.html#view-platform-audit"><span class="nav-icon">🛡️</span>Platform Security Audit</a>
+    </div>
+  </div>
+
+</nav>
+<!-- ═══════════════════════════════ MAIN WRAPPER ═══════════════════════════════ -->
+<div class="main-wrapper">
+  <!-- TOP BAR -->
+  <div class="topbar">
+    <div class="topbar-title" id="topbar-title">System</div>
+    <div class="topbar-actions">
+      <span class="chip chip-yellow" id="oidc-sa-indicator" style="display:none">🔑 Super Admin</span>
+      <span class="chip chip-blue" id="tenant-ctx-chip" style="display:none">🏢 <span id="tenant-ctx-name"></span></span>
+      <button class="btn-icon" title="Notifications">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg>
+        <span class="badge">3</span>
+      </button>
+      <div class="avatar" title="Alex Harper — Admin">AH</div>
+    </div>
+  </div>
+
+  <!-- MAIN CONTENT -->
+  <div class="main-content">
+
+<!-- ═══════════════════════════════ VIEW: DECISION TOOLS (strict-tenant-isolation as-built) ═══════════════ -->
+<div id="view-decision-tools" class="view">
+  <div class="view-header">
+    <div><h2>Decision Tools</h2><div class="view-desc">Tenant-scoped decision tools exposed as decision____&lt;name&gt; MCP tools with auto-generated descriptions — each tool selects one enabled decision model</div></div>
+    <button class="btn btn-primary" onclick="dctOpenCreate()">+ Add Tool</button>
+  </div>
+  <div class="table-wrap">
+    <div style="overflow-x:auto">
+      <table style="min-width:900px;table-layout:fixed">
+        <thead><tr><th style="width:200px">Tool Name</th><th>Purpose</th><th>Generated Description</th><th style="width:180px">Decision Model</th><th style="width:100px">Status</th><th class="dct-sticky-actions" style="width:110px;text-align:right">Actions</th></tr></thead>
+        <tbody id="dctTableBody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════ VIEW: DECISION MODEL PROVIDERS (decision-model-providers as-built) ═══════════════ -->
+<div id="view-sysone-providers" class="view">
+  <div class="view-header">
+    <div><h2>Decision Model Providers</h2><div class="view-desc">Multi-vendor decision providers — encrypted write-only credentials, enabled-model chips + vendor sync, embedded decision guardrails</div></div>
+    <div style="display:flex;align-items:center;gap:12px">
+      <span class="chip" id="soStatusChip" style="background:#DCFCE7;color:#15803D">Configured</span>
+      <button class="btn btn-primary" onclick="soOpenCreate()">+ Add Provider</button>
+    </div>
+  </div>
+  <div class="alert alert-info">ℹ️ <div><strong>Multi-vendor support.</strong> Credentials are encrypted at rest and <strong>write-only</strong> — never returned in read responses. Enabled models are managed inside the provider editor (chips + vendor sync). All decision model usage passes through the same guardrail and budget/spend controls as regular agent model usage.</div></div>
+  <!-- Embedded guardrail section (decision-scoped) -->
+  <div class="card" style="margin-bottom:16px">
+    <div style="display:flex;align-items:center;gap:8px;padding:14px 20px;cursor:pointer;user-select:none" onclick="soGuardToggle()" data-testid="guardrails-section-toggle">
+      <span id="soGuardCaret" style="font-size:11px;color:var(--text-secondary);transition:transform .2s">▶</span>
+      <span style="font-size:14.5px;font-weight:600">Decision Guardrails</span>
+      <span style="font-size:12px;color:var(--text-secondary)">Per-provider spend thresholds for decision model usage — evaluated before every decision vendor call</span>
+    </div>
+    <div id="soGuardBody" style="display:none;padding:4px 20px 18px;border-top:1px solid var(--border)" data-testid="guardrails-section">
+      <div class="form-group" style="max-width:340px;margin-top:12px">
+        <label>Provider</label>
+        <select class="form-control" id="soGuardProvider" onchange="soGuardRender()"></select>
+      </div>
+      <div id="soGuardList"></div>
+      <div class="alert alert-info" style="margin:12px 0 0">🛡️ <div>Guardrails created here are <strong>decision-scoped</strong> — evaluated by the decision pre-call check; LLM guardrails on Model Configurations are never mixed (and vice versa).</div></div>
+    </div>
+  </div>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Display Name</th><th>Vendor</th><th>Base URL</th><th>Default Model</th><th>API Key</th><th>Enabled</th><th style="text-align:right">Actions</th></tr></thead>
+      <tbody id="soTableBody"></tbody>
+    </table>
+  </div>
+</div>
+
+  </div><!-- /main-content -->
+</div><!-- /main-wrapper -->
+</div><!-- /app-shell -->
+
+<!-- Decision Tool Create / Edit Dialog -->
+<div class="modal-overlay" id="dctDialog" onclick="if(event.target===this)dctClose()">
+  <div class="modal modal-lg" style="max-width:720px;max-height:88vh;overflow-y:auto">
+    <div class="modal-header"><h3 id="dctTitle">Add Decision Tool</h3><button class="modal-close" onclick="dctClose()">×</button></div>
+    <div class="modal-body">
+      <div class="alert alert-warning" id="dctReadiness" style="display:none">⚠️ Enabling requires an input data type and an output data type. Assign both to make the tool executable — Save stays disabled until then (inline pre-validation instead of a raw 422).</div>
+      <div class="alert alert-info">✅ System One provider configured — model <strong>jev-latest</strong>. AI draft generation available.</div>
+      <div class="form-row">
+        <div class="form-group"><label>Name *</label><input class="form-control" id="dctName" placeholder="contract-risk-review" style="font-family:monospace"><div class="form-hint">Unique within your tenant · lowercase [a-z0-9-]</div></div>
+        <div class="form-group">
+          <label>Decision model *</label>
+          <select class="form-control" id="dctModel">
+            <option value="">— Select an enabled decision model —</option>
+            <option value="ts::jev-latest">jev-latest — Production TypeSafe</option>
+            <option value="ts::jev-pro">jev-pro — Production TypeSafe</option>
+            <option value="vd::arbiter-2">arbiter-2 — Veridian EU</option>
+          </select>
+          <div class="form-hint" id="dctModelHint">Only <strong>enabled</strong> decision models across all providers are listed; a stored-but-disabled selection renders as an unavailable option — re-select before saving.</div>
+        </div>
+      </div>
+      <div class="form-group"><label>Purpose *</label><textarea class="form-control" id="dctPurpose" rows="2"></textarea></div>
+      <div class="form-row">
+        <div class="form-group"><label>Input data type</label><select class="form-control" id="dctIn" onchange="dctReadiness()"><option value="">— none —</option><option>Contract Record (contract-record)</option><option>Incident Report (incident-report)</option></select></div>
+        <div class="form-group"><label>Output data type</label><select class="form-control" id="dctOut" onchange="dctReadiness()"><option value="">— none —</option><option>Contract Record (contract-record)</option><option>Incident Report (incident-report)</option></select><div class="form-hint">Question answers are typed against this schema</div></div>
+      </div>
+      <button class="btn btn-secondary btn-sm">✨ Generate with AI</button>
+      <div style="border-top:1px solid var(--border);margin:14px 0 8px;padding-top:10px;font-weight:600;font-size:13px">Questions</div>
+      <div class="alert alert-info">💡 No questions authored — they are auto-generated from the output data type at execution time. Manual questions here override the generated ones.</div>
+      <button class="btn btn-secondary btn-sm">+ Add Question</button>
+      <div id="dctAdvToggle" style="display:flex;align-items:center;gap:8px;padding:12px 0 6px;cursor:pointer;font-weight:600;font-size:13px" onclick="dctAdv()"><span id="dctChev">▶</span> State Preset <span class="chip">Advanced</span></div>
+      <div id="dctAdvBody" style="display:none;border-top:1px solid var(--border);padding-top:10px">
+        <div class="form-hint" style="margin-bottom:8px">State is built from the input data type automatically. Map backtick-quoted state paths in question instructions here only when names differ. Keys equal to an input property auto-match silently.</div>
+        <div style="margin-bottom:8px"><span class="chip" style="border:1px solid #86EFAC;color:#15803D;background:#F0FDF4">contract_id → contract_id</span> <span class="chip" style="border:1px solid #86EFAC;color:#15803D;background:#F0FDF4">supplier → supplier</span> <span class="form-hint" style="display:inline">auto-matched</span></div>
+        <div style="display:flex;gap:8px;align-items:center;margin-bottom:6px"><span style="min-width:170px;font-family:monospace;font-size:12px">risk_score_override</span><select class="form-control" style="flex:1"><option>— select input property —</option><option>score</option><option>reviewed</option></select></div>
+        <button class="btn btn-secondary btn-xs">+ Add Mapping</button>
+      </div>
+      <div style="border-top:1px solid var(--border);margin:14px 0 8px;padding-top:10px;font-weight:600;font-size:13px">Thresholds &amp; Flags</div>
+      <div class="form-row">
+        <div class="form-group"><label>Act threshold</label><input class="form-control" value="0.9"></div>
+        <div class="form-group"><label>Confirm threshold</label><input class="form-control" value="0.7"></div>
+        <div class="form-group"><label>Status</label><select class="form-control" id="dctStatus"><option>draft</option><option selected>active</option><option>disabled</option></select></div>
+        <div class="form-group" style="align-self:end"><label style="display:flex;gap:6px;align-items:center;cursor:pointer"><input type="checkbox" id="dctEnabled" onchange="dctReadiness()"> Enabled</label></div>
+      </div>
+      <div class="form-hint">act ≥ confirm. Below confirm the tool escalates; between confirm and act it recommends review.</div>
+      <div style="border-top:1px solid var(--border);margin:14px 0 8px;padding-top:10px;font-weight:600;font-size:13px">Generated Description</div>
+      <div id="dctPreview" style="background:#FAFAFA;border:1px solid var(--border);border-radius:6px;padding:10px;font-size:12px;white-space:pre-wrap;color:#374151"></div>
+      <div style="margin-top:8px"><span class="chip" id="dctToolChip" style="font-family:monospace">decision____…</span></div>
+    </div>
+    <div class="modal-footer"><button class="btn btn-secondary" onclick="dctClose()">Cancel</button><button class="btn btn-primary" id="dctSave" onclick="dctSaveTool()">Save</button></div>
+  </div>
+</div>
+
+<!-- Decision Model Provider Create / Edit Dialog (decision-model-providers as-built) -->
+<div class="modal-overlay" id="soDialog" onclick="if(event.target===this)soClose()">
+  <div class="modal modal-lg" style="max-width:620px">
+    <div class="modal-header"><h3 id="soTitle">Add Decision Model Provider</h3><button class="modal-close" onclick="soClose()">×</button></div>
+    <div class="modal-body">
+      <div class="alert alert-error" id="soDialogError" style="display:none">⛔ <div id="soDialogErrorText"></div></div>
+      <div class="form-group"><label>Vendor type *</label><select class="form-control" id="soVendor" onchange="soVendorChanged()"><option value="typesafe">TypeSafe AI (Decision API)</option><option value="veridian">Veridian Decisions</option><option value="cortexa">Cortexa Judge</option></select><div class="form-hint" id="soVendorHint">Vendors are release-managed; new integrations ship with the platform.</div></div>
+      <div class="form-group"><label>Display name *</label><input class="form-control" id="soName" placeholder="e.g. Production TypeSafe"><div class="form-hint">Must be unique per vendor type.</div></div>
+      <div class="form-group"><label>Base URL *</label><input class="form-control" id="soBase" placeholder="https://api.typesafe.example/v1" style="font-family:monospace"><div class="form-hint">Per-tenant deployment endpoint; editable at any time. Preset: <span style="font-family:monospace">https://systemone.parthenon.local/api</span></div></div>
+      <div class="form-group">
+        <label>Enabled models</label>
+        <div class="so-chip-select" id="soChips">
+          <input type="text" id="soChipInput" list="soChipOptions" placeholder="Type or pick a model, press Enter…" onkeydown="if(event.key==='Enter'){event.preventDefault();soAddChip()}">
+          <datalist id="soChipOptions"></datalist>
+        </div>
+        <div class="form-hint">The chips are the enabled models sent in the payload; typed entries are also allowed. “Sync models from vendor” imports the discovered catalogue as chips.</div>
+      </div>
+      <div class="form-group">
+        <label>Default model *</label>
+        <select class="form-control" id="soDefault" disabled><option value="">— select or sync models first —</option></select>
+        <div class="form-hint" id="soDefaultHint">Options are exactly the enabled-model chips; disabled until at least one model is selected. Removing the default chip clears the selection — a stale default is never sent.</div>
+      </div>
+      <div style="display:flex;justify-content:flex-end;margin:-6px 0 12px">
+        <button class="btn btn-secondary btn-sm" id="soSyncBtn" style="display:none" onclick="soSyncModels()">⟳ Sync models from vendor</button>
+      </div>
+      <div class="form-group"><label>API key <span class="chip" id="soKeyChip" style="background:#DCFCE7;color:#15803D">Configured ✓</span></label><input class="form-control" type="password" id="soKey" placeholder="•••••••••••• (unchanged)"><div class="form-hint" id="soKeyHint">Write-only: never displayed or prefilled. Leave blank to keep the saved key; required when creating a provider.</div></div>
+      <label style="display:flex;gap:6px;align-items:center;cursor:pointer"><input type="checkbox" id="soEnabled" checked> Enabled <span class="form-hint" style="margin:0">— disabling cascades to all its models; referencing tools are blocked from evaluating</span></label>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="soClose()">Cancel</button>
+      <button class="btn btn-secondary" onclick="toast('Connection test → ✓ Reachable · 4 models available (demo)','success')">Test Connection</button>
+      <button class="btn btn-primary" onclick="soSave()">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ CONTROL CENTER ASSISTANT (global floating launcher) ═══ -->
+<button class="asst-fab" id="asst-fab" onclick="asstOpen()" title="Control Center Assistant" aria-label="Control Center Assistant">🤖</button>
+<div class="asst-overlay" id="asst-overlay" onclick="if(event.target===this)asstClose()">
+  <div class="asst-dialog" id="asst-dialog" role="dialog" aria-label="Control Center Assistant conversation">
+    <div class="asst-head">
+      <span style="font-size:20px">🤖</span>
+      <h3 id="asst-title">Control Center Assistant</h3>
+      <span class="chip chip-green" id="asst-conn-chip">Connected</span>
+      <div class="asst-head-right">
+        <button class="btn-icon" id="asst-fs-btn" onclick="asstToggleFullscreen()" title="Toggle fullscreen">⛶</button>
+        <button class="btn-icon" onclick="asstClose()" title="Close">✕</button>
+      </div>
+    </div>
+
+    <div class="asst-body">
+      <div class="asst-alert" id="asst-model-alert" style="display:none">
+        <span>⚠️</span>
+        <div style="flex:1">
+          <b>The assistant needs a model configured for this workspace</b>
+          No model is configured for this workspace yet. An administrator can select one under System Config → Assistant model.
+          <div style="margin-top:8px"><button class="btn btn-secondary btn-sm" onclick="asstGoConfigure()">Configure model</button></div>
+        </div>
+      </div>
+
+      <div class="asst-paper-wrap">
+        <div class="asst-paper" id="asst-messages"></div>
+      </div>
+    </div>
+
+    <div class="asst-input-row">
+      <textarea class="chat-input" id="asst-input" rows="1" placeholder="Type a message… (Enter to send)" onkeydown="asstOnKey(event)" oninput="asstAutoGrow(this)"></textarea>
+      <button class="btn btn-primary" id="asst-send" onclick="asstSend()">Send</button>
+    </div>
+
+    <div class="asst-foot">
+      <button class="btn btn-secondary btn-sm" id="asst-btn-sessions" onclick="asstOpenSessions()">🗂 View All Sessions</button>
+      <button class="btn btn-secondary btn-sm" id="asst-btn-new" onclick="asstNewSession()">＋ New Session</button>
+      <span class="spacer"></span>
+      <button class="btn btn-sm" id="asst-btn-end" style="background:#fff;border:1px solid #FECACA;color:#B91C1C" onclick="asstOpenEnd()">⏹ End Session</button>
+      <button class="btn btn-secondary btn-sm" onclick="asstClose()">Exit</button>
+    </div>
+  </div>
+</div>
+<div class="asst-overlay" id="asst-sessions-overlay" onclick="if(event.target===this)asstCloseSessions()">
+  <div class="asst-dialog" style="width:min(620px,100%);height:auto;max-height:85vh" role="dialog" aria-label="All sessions for this agent">
+    <div class="asst-head">
+      <h3>All sessions for this agent</h3>
+      <div class="asst-head-right"><button class="btn-icon" onclick="asstCloseSessions()" title="Close">✕</button></div>
+    </div>
+    <div class="asst-body" style="overflow-y:auto;padding-bottom:14px">
+      <div class="asst-sess-filters">
+        <label class="toggle"><input type="checkbox" id="asst-show-ended" onchange="asstShowEnded(this.checked)"><span class="toggle-slider"></span><span style="font-size:12px">Show ended sessions</span></label>
+        <label style="display:inline-flex;align-items:center;gap:6px">From <input type="date" class="form-control" id="asst-sess-from" style="width:150px;padding:5px 8px;font-size:12px" onchange="asstDateChange()"></label>
+        <label style="display:inline-flex;align-items:center;gap:6px">To <input type="date" class="form-control" id="asst-sess-to" style="width:150px;padding:5px 8px;font-size:12px" onchange="asstDateChange()"></label>
+      </div>
+      <div id="asst-sessions-list"></div>
+      <div class="asst-pager" style="justify-content:center">
+        <span class="asst-pager-btns" id="asst-sessions-pager"></span>
+      </div>
+    </div>
+    <div class="asst-foot">
+      <span class="spacer"></span>
+      <button class="btn btn-secondary btn-sm" onclick="asstCloseSessions()">Cancel</button>
+    </div>
+  </div>
+</div>
+<div class="asst-overlay" id="asst-preview-overlay" onclick="if(event.target===this)asstClosePreview()">
+  <div class="asst-dialog" style="width:90vw;height:80vh" role="dialog" aria-label="Approval Preview">
+    <div class="asst-head">
+      <h3>Approval Preview</h3>
+      <div class="asst-head-right"><button class="btn-icon" onclick="asstClosePreview()" title="Collapse">⤡</button></div>
+    </div>
+    <div class="asst-body" id="asst-preview-body" style="overflow-y:auto;padding-bottom:14px;display:block;font-size:13px;line-height:1.6"></div>
+    <div class="asst-foot">
+      <button class="btn btn-secondary btn-sm" onclick="asstClosePreview()">Collapse</button>
+      <span class="spacer"></span>
+      <button class="btn btn-sm" style="background:#fff;border:1px solid #FECACA;color:#B91C1C" onclick="asstResolve(false)">✕ Deny</button>
+      <button class="btn btn-sm" style="background:#16A34A;color:#fff" onclick="asstResolve(true)">✓ Approve</button>
+    </div>
+  </div>
+</div>
+<div class="asst-overlay" id="asst-end-overlay" onclick="if(event.target===this)asstCloseEnd()">
+  <div class="asst-dialog" style="width:min(560px,100%);height:auto" role="dialog" aria-label="End Conversation Session">
+    <div class="asst-head">
+      <h3>End Conversation Session</h3>
+      <div class="asst-head-right"><button class="btn-icon" onclick="asstCloseEnd()" title="Close">✕</button></div>
+    </div>
+    <div class="asst-body" style="padding-bottom:16px">
+      <p style="font-size:13px;line-height:1.6">This will close the session. You can still view its history but cannot resume it.</p>
+      <p class="text-sm text-secondary" style="line-height:1.6;margin-top:8px">Any in-flight execution for this session is terminated. The next time you open the assistant it starts a <b>new</b> session instead of resuming this one.</p>
+    </div>
+    <div class="asst-foot">
+      <span class="spacer"></span>
+      <button class="btn btn-secondary btn-sm" onclick="asstCloseEnd()">Cancel</button>
+      <button class="btn btn-sm" style="background:#C62828;color:#fff" onclick="asstConfirmEnd()">End Session</button>
+    </div>
+  </div>
+</div>
+
+<script src="../shared/app.js"></script>
+<script src="../shared/assistant.js"></script>
+<script src="../shared/max-dialog.js"></script>
+<!-- ═══ decision ═══ -->
+<script>
+/* ═══ STRICT-TENANT-ISOLATION: Decision Tools + System One + Tenant Picker (as-built) ═══ */
+var DCT_TOOLS=[
+  {name:'contract-risk-review',purpose:'Review supplier contracts for risk',desc:"Decision tool 'contract-risk-review': evaluates predefined questions against a constructed state and returns structured typed answers with confidence.",enabled:true,ready:true,provId:'p1',modelId:'jev-latest'},
+  {name:'incident-triage',purpose:'Triage incoming incident reports',desc:"Decision tool 'incident-triage': evaluates predefined questions…",enabled:true,ready:false,provId:'p1',modelId:'jev-pro'},
+  {name:'expense-approval',purpose:'Approve or escalate expense requests',desc:"Decision tool 'expense-approval': evaluates predefined questions…",enabled:false,ready:true,provId:'p2',modelId:'arbiter-2'},
+  {name:'refund-approval',purpose:'Approve or deny customer refund requests',desc:"Decision tool 'refund-approval': evaluates predefined questions…",enabled:true,ready:true,provId:'pX',modelId:'arbiter-2-mini'}
+];
+/* decision-model-providers as-built: multi-provider state — enabled_models
+   chips + default_model on the provider; availability rows are authoritative. */
+var SO_PROVIDERS=[
+  {id:'p1',vendor:'typesafe',name:'Production TypeSafe',base:'https://api.typesafe.example/v1',keyConfigured:true,enabled:true,enabledModels:['jev-latest','jev-pro'],defaultModel:'jev-latest',catalogue:['jev-latest','jev-pro','jev-lite'],guardrails:[{model:'jev-latest',period:'monthly',threshold:80,spend:62},{model:'jev-pro',period:'monthly',threshold:80,spend:94}]},
+  {id:'p2',vendor:'veridian',name:'Veridian EU',base:'https://eu.veridian.example/api',keyConfigured:true,enabled:true,enabledModels:['arbiter-2'],defaultModel:'arbiter-2',catalogue:['arbiter-2','arbiter-2-mini'],guardrails:[{model:'arbiter-2',period:'monthly',threshold:80,spend:31}]},
+  {id:'p3',vendor:'cortexa',name:'Cortexa Trial',base:'https://trial.cortexa.example',keyConfigured:false,enabled:false,enabledModels:[],defaultModel:'',catalogue:['judge-v1'],guardrails:[]}
+];
+var soEditing=null,soChips=[],soDialogModels=[];
+
+function soModelAvailable(pid,mid){
+  var p=SO_PROVIDERS.find(function(x){return x.id===pid;});
+  return !!(p&&p.enabled&&p.enabledModels.indexOf(mid)>=0);
+}
+function soModelLabel(pid,mid){
+  var p=SO_PROVIDERS.find(function(x){return x.id===pid;});
+  return mid+' — '+(p?p.name:'?');
+}
+function dctRender(){
+  var b=document.getElementById('dctTableBody'); if(!b) return;
+  b.innerHTML=DCT_TOOLS.map(function(t,i){
+    var chip=t.ready===false?'<span class="chip" title="Not Ready: tool is enabled but has no input data type. Assign an input data type and an output data type to make it executable." style="background:#FEF3C7;color:#92400E;border-bottom:1px dotted #92400E">Not Ready ⓘ</span>'
+      :(t.enabled?'<span class="chip" style="background:#DCFCE7;color:#15803D">Active</span>':'<span class="chip" style="background:#F3F4F6;color:#6B7280">Draft</span>');
+    var modelOk=soModelAvailable(t.provId,t.modelId);
+    if(!modelOk) chip='<span class="chip" title="Not Ready: the selected decision model is disabled — evaluations are blocked until an enabled model is selected" style="background:#FEF3C7;color:#92400E;border-bottom:1px dotted #92400E">Not Ready ⓘ</span>';
+    var modelChip=modelOk?'<span class="chip chip-border" style="background:#EDE9FE;color:#4527A0">'+soModelLabel(t.provId,t.modelId)+'</span>':'<span class="chip" style="background:#FEE2E2;color:#B91C1C">'+t.modelId+' — unavailable</span>';
+    return '<tr><td style="font-family:monospace;font-size:12.5px;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="decision____'+t.name+'">decision____'+t.name+'</td>'+
+      '<td style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+(t.purpose||'')+'">'+(t.purpose||'—')+'</td>'+
+      '<td style="max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text-secondary)" title="'+t.desc+'">'+t.desc+'</td>'+
+      '<td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+modelChip+'</td>'+
+      '<td>'+chip+'</td>'+
+      '<td class="dct-sticky-actions" style="text-align:right"><div style="display:flex;gap:4px;justify-content:flex-end"><button class="btn-icon-sm" onclick="dctOpenEdit('+i+')">✏️</button><button class="btn-icon-sm" onclick="toast(\'Delete confirmation (demo)\',\'info\')">🗑️</button></div></td></tr>';
+  }).join('');
+}
+function dctOpenCreate(){
+  document.getElementById('dctTitle').textContent='Add Decision Tool';
+  document.getElementById('dctIn').selectedIndex=0;document.getElementById('dctOut').selectedIndex=0;
+  document.getElementById('dctEnabled').checked=false;
+  document.getElementById('dctModel').value='';
+  dctReadiness();dctSyncPreview();document.getElementById('dctDialog').style.display='flex';
+}
+function dctOpenEdit(i){
+  var t=DCT_TOOLS[i];document.getElementById('dctTitle').textContent='Edit Decision Tool';
+  document.getElementById('dctName').value=t.name;document.getElementById('dctPurpose').value=t.purpose;
+  document.getElementById('dctEnabled').checked=t.enabled;
+  document.getElementById('dctOut').selectedIndex=t.ready?1:0;
+  /* Stored-but-disabled selection: render as a visible disabled
+     "unavailable — re-select" option instead of a silently empty select. */
+  var sel=document.getElementById('dctModel');
+  var key=t.provId+'::'+t.modelId;
+  var ok=soModelAvailable(t.provId,t.modelId);
+  if(!ok){
+    sel.insertAdjacentHTML('beforeend','<option value="'+key+'" disabled>'+soModelLabel(t.provId,t.modelId)+' — unavailable — re-select</option>');
+    sel.value='';
+    document.getElementById('dctModelHint').innerHTML='⚠️ The previously selected model (<strong>'+soModelLabel(t.provId,t.modelId)+'</strong>) is disabled. Choose a replacement to unblock evaluations — saving stays blocked (modelUnavailable) until a valid model is selected.';
+  }else{
+    sel.value=key;
+    document.getElementById('dctModelHint').innerHTML='Only <strong>enabled</strong> decision models across all providers are listed; a stored-but-disabled selection renders as an unavailable option — re-select before saving.';
+  }
+  dctReadiness();dctSyncPreview();document.getElementById('dctDialog').style.display='flex';
+}
+function dctClose(){document.getElementById('dctDialog').style.display='none';}
+function dctReadiness(){
+  var en=document.getElementById('dctEnabled').checked;
+  var missing=!document.getElementById('dctIn').value||!document.getElementById('dctOut').value;
+  document.getElementById('dctReadiness').style.display=(en&&missing)?'':'none';
+  document.getElementById('dctSave').disabled=(en&&missing);
+}
+function dctAdv(){
+  var b=document.getElementById('dctAdvBody'),open=b.style.display!=='none';
+  b.style.display=open?'none':'';document.getElementById('dctChev').textContent=open?'▶':'▼';
+}
+function dctSyncPreview(){
+  var n=document.getElementById('dctName').value||'…',p=document.getElementById('dctPurpose').value.trim();
+  var inp=document.getElementById('dctIn'),out=document.getElementById('dctOut');
+  var s="Decision tool '"+n+"': "+(p||'evaluates predefined System One questions against a constructed state and returns structured typed answers with confidence.');
+  if(inp.value)s+="\n\nInput data type: "+inp.value+".";
+  if(out.value)s+="\nOutput data type: "+out.value+".";
+  s+="\n\nReturns per-question typed answers with probabilities and an overall gate outcome (act >= 0.9, confirm >= 0.7, else escalate).";
+  document.getElementById('dctPreview').textContent=s;
+  document.getElementById('dctToolChip').textContent='decision____'+(n==='…'?'…':n);
+}
+function dctSaveTool(){toast('Saved — new tools start as DISABLED drafts; enabling required both data types (pre-validated inline)','success');dctClose();dctRender();}
+['dctName','dctPurpose'].forEach(function(id){document.addEventListener('input',function(e){if(e.target.id===id)dctSyncPreview();});});
+
+function soRender(){
+  var b=document.getElementById('soTableBody'); if(!b) return;
+  b.innerHTML=SO_PROVIDERS.map(function(p,i){
+    return '<tr><td>'+p.name+'</td>'+
+      '<td><span class="chip chip-border" style="background:#EDE9FE;color:#4527A0">'+p.vendor+'</span></td>'+
+      '<td style="font-family:monospace;font-size:12.5px">'+p.base+'</td>'+
+      '<td><span class="chip" style="background:#F1F5F9;color:#475569;font-family:monospace">'+(p.defaultModel||'—')+'</span></td>'+
+      '<td>'+(p.keyConfigured?'<span class="chip" style="background:#DCFCE7;color:#15803D">Stored 🔒</span>':'<span class="chip" style="background:#FEF3C7;color:#92400E">Missing</span>')+'</td>'+
+      '<td>'+(p.enabled?'<span class="chip" style="background:#DCFCE7;color:#15803D">Yes</span>':'<span class="chip" style="background:#F3F4F6;color:#6B7280">No</span>')+'</td>'+
+      '<td><div style="display:flex;gap:4px;justify-content:flex-end"><button class="btn-icon-sm" title="Edit" onclick="soOpenEdit('+i+')">✏️</button><button class="btn-icon-sm" title="Test connection" onclick="toast(\'Connection test → ✓ Reachable · '+p.catalogue.length+' models available (demo)\',\'success\')">🔌</button><button class="btn-icon-sm" title="Delete" onclick="soAskDelete('+i+')">🗑️</button></div></td></tr>';
+  }).join('');
+  var anyEnabled=SO_PROVIDERS.some(function(p){return p.enabled;});
+  var sc=document.getElementById('soStatusChip');
+  if(sc){sc.textContent=anyEnabled?'Configured':'Not configured';sc.style.cssText=anyEnabled?'background:#DCFCE7;color:#15803D':'background:#F1F5F9;color:#475569';}
+  soGuardFill();
+}
+/* Vendor type is locked on edit (would invalidate models + credential). */
+function soOpenCreate(){
+  soEditing=null;soChips=[];soDialogModels=[];
+  document.getElementById('soTitle').textContent='Add Decision Model Provider';
+  document.getElementById('soVendor').disabled=false;
+  document.getElementById('soVendorHint').textContent='Vendors are release-managed; new integrations ship with the platform.';
+  document.getElementById('soName').value='';document.getElementById('soBase').value='';document.getElementById('soKey').value='';
+  document.getElementById('soKey').placeholder='sk-…';
+  document.getElementById('soKeyHint').textContent='Write-only: never displayed or prefilled. Required when creating a provider.';
+  document.getElementById('soKeyChip').style.display='none';
+  document.getElementById('soEnabled').checked=true;
+  document.getElementById('soSyncBtn').style.display='none';
+  document.getElementById('soDialogError').style.display='none';
+  soRenderChips();document.getElementById('soDialog').style.display='flex';
+}
+function soOpenEdit(i){
+  var p=SO_PROVIDERS[i];soEditing=i;soChips=p.enabledModels.slice();soDialogModels=p.enabledModels.slice();
+  document.getElementById('soTitle').textContent='Edit Provider — '+p.name;
+  document.getElementById('soVendor').value=p.vendor;
+  document.getElementById('soVendor').disabled=true;
+  document.getElementById('soVendorHint').innerHTML='🔒 Vendor type is locked on edit — changing it would invalidate the stored models and credential.';
+  document.getElementById('soName').value=p.name;document.getElementById('soBase').value=p.base;document.getElementById('soKey').value='';
+  document.getElementById('soKey').placeholder='•••••••••••• (unchanged)';
+  document.getElementById('soKeyHint').textContent='Write-only: never prefilled. Leave blank to keep the stored key; enter a new value to replace it.';
+  document.getElementById('soKeyChip').style.display=p.keyConfigured?'':'none';
+  document.getElementById('soEnabled').checked=p.enabled;
+  document.getElementById('soSyncBtn').style.display='inline-flex';
+  document.getElementById('soDialogError').style.display='none';
+  soRenderChips();document.getElementById('soDialog').style.display='flex';
+}
+function soClose(){document.getElementById('soDialog').style.display='none';}
+/* Enabled-models chip multi-select: options = selected chips ∪ in-session
+   vendor-synced models ∪ catalogue rows (edit mode). */
+function soRenderChips(){
+  var box=document.getElementById('soChips');
+  box.querySelectorAll('.so-mchip').forEach(function(el){el.remove();});
+  soChips.forEach(function(m){
+    var chip=document.createElement('span');chip.className='so-mchip';
+    chip.innerHTML=m+' <button title="Remove" onclick="soRemoveChip(\''+m+'\')">✕</button>';
+    box.insertBefore(chip,document.getElementById('soChipInput'));
+  });
+  var opts=[];soChips.concat(soDialogModels).forEach(function(m){if(opts.indexOf(m)<0)opts.push(m);});
+  if(soEditing!==null){SO_PROVIDERS[soEditing].catalogue.forEach(function(m){if(opts.indexOf(m)<0)opts.push(m);});}
+  document.getElementById('soChipOptions').innerHTML=opts.map(function(m){return '<option value="'+m+'">';}).join('');
+  soRenderDefault();
+}
+/* Default model: directly below the chips; options = exactly the selected
+   chips; disabled until ≥1 chip; removing the default chip clears it. */
+function soRenderDefault(){
+  var sel=document.getElementById('soDefault');
+  var has=soChips.length>0;
+  var keep=null;
+  if(soEditing!==null){var p=SO_PROVIDERS[soEditing];if(p&&soChips.indexOf(p.defaultModel)>=0)keep=p.defaultModel;}
+  sel.disabled=!has;
+  var html=has?'':'<option value="">— select or sync models first —</option>';
+  if(has&&soChips.indexOf(sel.value)<0&&sel.value!=='')html+='<option value=""></option>';
+  html+=soChips.map(function(m){return '<option value="'+m+'"'+(m===(keep!==null?keep:sel.value)?' selected':'')+'>'+m+'</option>';}).join('');
+  sel.innerHTML=html;
+  document.getElementById('soDefaultHint').textContent=has
+    ?'Options are exactly the enabled-model chips above; removing the default chip clears the selection — a stale default is never sent.'
+    :'Select at least one enabled model above (or run vendor sync) to choose a default.';
+}
+function soAddChip(){
+  var inp=document.getElementById('soChipInput');var v=inp.value.trim();if(!v)return;
+  if(soChips.indexOf(v)<0)soChips.push(v);
+  inp.value='';soRenderChips();
+}
+function soRemoveChip(m){soChips=soChips.filter(function(x){return x!==m;});soRenderChips();}
+function soVendorChanged(){}
+/* Vendor sync: discover + import vendor models as chips (enabled), keeping
+   the default-model select in sync. */
+function soSyncModels(){
+  if(soEditing===null)return;
+  var btn=document.getElementById('soSyncBtn');btn.disabled=true;btn.textContent='⟳ Syncing…';
+  setTimeout(function(){
+    btn.disabled=false;btn.textContent='⟳ Sync models from vendor';
+    var p=SO_PROVIDERS[soEditing];
+    p.catalogue.forEach(function(m){if(soDialogModels.indexOf(m)<0)soDialogModels.push(m);if(soChips.indexOf(m)<0)soChips.push(m);});
+    soRenderChips();
+    toast('Imported '+p.catalogue.length+' vendor models as enabled — chips and the default-model select refreshed.','success');
+  },700);
+}
+function soSave(){
+  var err=document.getElementById('soDialogError');
+  var name=document.getElementById('soName').value.trim();
+  var base=document.getElementById('soBase').value.trim();
+  var vendor=soEditing!==null?SO_PROVIDERS[soEditing].vendor:document.getElementById('soVendor').value;
+  if(!name||!base){err.style.display='flex';document.getElementById('soDialogErrorText').textContent='Display name and base URL are required.';return;}
+  var dup=SO_PROVIDERS.find(function(p,i){return i!==soEditing&&p.vendor===vendor&&p.name.toLowerCase()===name.toLowerCase();});
+  if(dup){err.style.display='flex';document.getElementById('soDialogErrorText').textContent='A provider with display name “'+name+'” already exists for this vendor. Display names must be unique per vendor.';return;}
+  var def=document.getElementById('soDefault').value;
+  if(soChips.indexOf(def)<0)def='';
+  var keyVal=document.getElementById('soKey').value;
+  if(soEditing!==null){
+    var p=SO_PROVIDERS[soEditing];
+    p.name=name;p.base=base;p.enabled=document.getElementById('soEnabled').checked;
+    p.enabledModels=soChips.slice();p.defaultModel=def;
+    if(keyVal!=='')p.keyConfigured=true;
+  }else{
+    SO_PROVIDERS.push({id:'p'+(SO_PROVIDERS.length+1),vendor:vendor,name:name,base:base,keyConfigured:keyVal!=='',enabled:document.getElementById('soEnabled').checked,enabledModels:soChips.slice(),defaultModel:def,catalogue:soChips.slice(),guardrails:[]});
+  }
+  soRender();soClose();
+  toast('Provider “'+name+'” saved — table refreshed automatically (api_key omitted when blank).','success');
+}
+function soAskDelete(i){
+  var p=SO_PROVIDERS[i];
+  /* Delete-blocking: referenced tools are named in the error. */
+  var blockers=DCT_TOOLS.filter(function(t){return t.provId===p.id;});
+  if(blockers.length){
+    toast('Cannot delete “'+p.name+'” — still referenced by '+blockers.length+' decision tool(s): '+blockers.map(function(t){return t.name;}).join(', ')+'.','error');
+    return;
+  }
+  SO_PROVIDERS.splice(i,1);soRender();
+  toast('Provider “'+p.name+'” deleted — the same name and vendor can now be re-created.','success');
+}
+/* Embedded decision-scoped guardrail section */
+function soGuardToggle(){
+  var b=document.getElementById('soGuardBody'),open=b.style.display!=='none';
+  b.style.display=open?'none':'block';
+  document.getElementById('soGuardCaret').style.transform=open?'':'rotate(90deg)';
+}
+function soGuardFill(){
+  var sel=document.getElementById('soGuardProvider');if(!sel)return;
+  var cur=sel.value;
+  sel.innerHTML=SO_PROVIDERS.map(function(p){return '<option value="'+p.id+'"'+(p.id===cur?' selected':'')+'>'+p.name+'</option>';}).join('');
+  soGuardRender();
+}
+function soGuardRender(){
+  var pid=document.getElementById('soGuardProvider').value;
+  var p=SO_PROVIDERS.find(function(x){return x.id===pid;});
+  var list=document.getElementById('soGuardList');
+  if(!p||!p.guardrails.length){list.innerHTML='<div style="font-size:12px;color:var(--text-secondary);padding:8px 0">No decision guardrails configured for this provider yet.</div>';return;}
+  list.innerHTML=p.guardrails.map(function(g){
+    var cls=g.spend>=g.threshold?'over':(g.spend>=g.threshold*0.75?'warn':'');
+    return '<div class="so-guard-row"><span class="so-guard-model">'+g.model+'</span><span class="chip chip-gray">'+g.period+'</span>'+
+      '<div class="so-guard-meter"><div style="font-size:12px;color:var(--text-secondary)">$'+(g.spend*4.2).toFixed(2)+' of $'+(g.threshold*4.2).toFixed(2)+' · threshold '+g.threshold+'%</div><div class="meter"><div class="'+cls+'" style="width:'+Math.min(100,g.spend)+'%"></div></div></div>'+
+      '<button class="btn-icon-sm" onclick="toast(\'Guardrail edit (period immutable) — demo\',\'info\')">✏️</button><button class="btn-icon-sm" onclick="toast(\'Guardrail deleted — LLM guardrails on Model Configurations are untouched\',\'success\')">🗑️</button></div>';
+  }).join('');
+}
+
+</script>
+<!-- ═══ decision-init ═══ -->
+<script>
+dctRender();soRender();
+</script>
+<script src="../shared/page-init.js"></script>
+</body>
+</html>

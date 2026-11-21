@@ -1,5 +1,14 @@
 # System Overview
 
+## Service Segregation Invariants
+
+Four rules hold for every diagram and flow in this folder. They are not negotiable by feature design:
+
+- **Three fully segregated backend services** — Control Center, Agent Runtime, and Communication Hub, each with one job.
+- **Agents run only in Agent Runtime** — including every conversational turn, optimization-mode conversation, sandboxed script, and approved live optimization test.
+- **Only Control Center connects to the database** — every other service reaches state through Control Center's internal API. Agent Runtime holds no datastore, and Communication Hub gains no data access.
+- **Agents never receive sensitive data** — identity tokens, database credentials, and provider secrets stay outside Agent Runtime; tokens are injected per tool call by Communication Hub, and model/authoring identifiers cross service boundaries as identifiers only.
+
 ## Infrastructure & Configuration
 
 The setup tool is an operator-invoked component that provisions external infrastructure before the runtime services start. It is not part of the running system — it runs once during environment initialization and is safe to re-run (all operations are idempotent).
@@ -60,17 +69,53 @@ LLM fallback: when a serving, sandbox-validated script version exists for
 the workflow, Agent Runtime executes model-authored sandboxed Python
 (RestrictedPython, MCP-only egress, resource caps) instead of the LLM loop;
 any sandbox violation or resource-cap breach falls back to the LLM path with
-a recorded reason — a run never fails solely because a script failed. See
-[modules/sandboxed-scripting.md](modules/sandboxed-scripting.md). The
+a recorded reason — a run never fails solely because a script failed. The
 composition follows a **two-layer plan model**: the base implementation plan
-stays a plain high-level step list, while an opt-in "Run with optimization"
-step of the Run Agent flow launches a command-driven side execution
-("Optimize & Verify") that authors the optimized composition (script
-segments, LLM bridges, output decision) as a separate
-`OptimizedImplementationPlan` — served only while fresh; absent, stale, or
-retired plans fall back to the base-plan LLM path. In test
-environments the LLM Mock Layer (`LLM_MOCK_MODE`) serves deterministic
-model responses so runs complete with zero LLM API usage.
+stays a plain high-level step list, while a **separate Optimize action** —
+never an option on Run — authors the optimized composition (script segments,
+LLM bridges, output decision) as a separate `OptimizedImplementationPlan`,
+served only while fresh.
+
+Run and Optimize are independent operator actions. A normal Run uses the
+agent's own instructions on the agent's runtime model and never becomes an
+optimization mission; Optimize is gated (a successful execution and a usable
+authoring model are both required) and executes as a dedicated command
+mission. All plan authoring — Skill/SOP workflow generation, implementation
+plans, optimized plans — runs on **one workspace authoring model**, a
+tenant-scoped setting resolved by Control Center and never the agent's
+runtime model; generation happens only on explicit request. A ready plan
+whose script later fell back is marked `requires_fix` with recorded feedback
+and is never re-served. Absent, stale, retired, or requires-fix plans fall
+back to the base-plan LLM path.
+
+Optimization is also available as a human-gated **optimization-mode
+conversation on the agent type itself** — no separate optimizer agent,
+identity, or role: the conversation *is* the agent type, with its own role
+and tool grants. It runs on a tenant-scoped **optimizer model** that falls
+back to the authoring model when unset — never the agent's runtime model.
+Reference-transcript replay is the default verification, and a live
+verification is one explicitly approved script run under the agent's own
+identity, consumed once. In test environments the LLM Mock Layer
+(`LLM_MOCK_MODE`) serves deterministic model responses so runs complete with
+zero LLM API usage.
+
+```mermaid
+flowchart LR
+    OP[Operator] --> RUN[Run<br/>agent instructions · runtime model]
+    OP --> OPT[Optimize<br/>gated · authoring model]
+    OP --> GEN[Generate plan<br/>explicit request only]
+    OP --> OC[Optimization conversation<br/>on the agent type]
+    RUN --> EXEC[Execution<br/>script-first · LLM fallback]
+    GEN --> AUTH[Workspace authoring model<br/>tenant setting]
+    OPT --> AUTH
+    AUTH --> PLAN[(Optimized plan)]
+    PLAN -->|ready & fresh| EXEC
+    OC -->|replay verify · one approved live run| PLAN
+    EXEC -->|optimized script falls back| FIX[requires_fix<br/>+ recorded feedback]
+    FIX --> OPT
+```
+
+See [Sandboxed Scripting](modules/sandboxed-scripting.md).
 
 ```mermaid
 flowchart LR
@@ -191,33 +236,115 @@ flowchart LR
     CH -->|"delegate input"| AR
 ```
 
+## Example External MCP Server — Airline Booking Demo
+
+The platform ships a standalone **MCP demo app** that registers itself with the MCP Hub like any third-party server and exposes a scenario-based airline booking toolset (search flights, book, payment link, ticket status, check-in, seat selection, cancel) over its own in-memory seed data. It is a demo/validation surface, not a platform component: no Parthenon database row describes a booking, the demo app's state lives and resets in its own process, and every call still travels the governed path (agent in Agent Runtime → Communication Hub → permission resolution in Control Center → the external server). The same scenario is driven from the platform chat surface and from the agent client demo app, and its multi-step check-in capability is the canonical example of a scripted/optimized plan executing in the sandbox while consuming MCP tools.
+
+```mermaid
+flowchart LR
+    U[Presenter / User]
+    CHAT["Parthenon chat UI"]
+    AC["Agent client demo app"]
+    CH["Communication Hub<br/>MCP proxy · permission gate"]
+    AR["Agent Runtime<br/>agent and scripted plan"]
+    CC["Control Center<br/>permission resolution"]
+    MCP["MCP demo app<br/>airline booking tools"]
+    MEM[("In-memory booking data")]
+    DB[(PostgreSQL)]
+
+    U --> CHAT
+    U --> AC
+    CHAT --> CH
+    AC --> CH
+    CH -->|"delegate turn"| AR
+    AR -->|"server____tool"| CH
+    CH -->|"resolve scope"| CC
+    CC --> DB
+    CH -->|"MCP tool call"| MCP
+    MCP --> MEM
+```
+
+See [MCP Demo App](modules/mcp-demo-app/architecture.md) and [MCP Hub Architecture](modules/mcp-hub/architecture.md).
+
 ## Permission Authorization
 
 Parthenon uses a **deny-by-default** authorization model with **policy-based allow**. The Permission Engine resolves effective permissions through a role → policy → resource type chain using the `module::submodule` naming convention. Permissions are **contained within the session's resolved tenant**: every grant (including wildcards) is evaluated only inside the session's tenant — global tenant-less roles no longer exist (legacy global roles migrated into the root tenant), so a tenant user can never hold `platform::` grants that exist only in the root tenant's role space. For the full authorization flow, wildcard evaluation rules, and policy management architecture, see [IAM Module Architecture](modules/iam.md).
 
 ## Control Center Assistant
 
-The Control Center Assistant is a seeded, system-provided conversational agent type that performs Agents-menu management tasks (create / update / read of skills, SOPs, agent types, roles, identities, model configurations, schedules, data types, and MCP Hub connections) from natural language. It is an ordinary agent: it runs in Agent Runtime and reaches management capability only as MCP tools on a dedicated per-tenant Control Center entity, authenticated by the *user's* OAuth token, so its permission scope is the user's own scope. Every write is previewed and approved by the operator first, and deletion is not registered as a tool. The overall service topology is unchanged — no new service is introduced.
+The Control Center Assistant is a seeded, system-provided conversational agent type that performs Agents-menu management tasks (create / update / read of skills, SOPs, agent types, roles, identities, model configurations, schedules, data types, and MCP Hub connections) from natural language. It is an ordinary agent: it runs in Agent Runtime and reaches management capability only as MCP tools on a dedicated per-tenant Control Center entity, authenticated by the *user's* OAuth token, so its permission scope is the user's own scope. Every write is previewed and approved by the operator first, and deletion is not registered as a tool. Conversational management reaches **full parity with the web UI edit surface**: routing carries the complete field set each resource family accepts, payloads are validated with structured, actionable errors the agent can self-correct from, and per-tool permission parity is unchanged. The overall service topology is unchanged — no new service is introduced.
 
 ```mermaid
 flowchart LR
     U[Control Center user]
     UI[Assistant chat panel]
-    AR["Agent Runtime<br/>assistant agent"]
-    CH["Communication Hub<br/>MCP server · OAuth identity plane"]
-    CC["Control Center<br/>management MCP tools"]
+    AR["Agent Runtime<br/>assistant agent · turn execution"]
+    CH["Communication Hub<br/>MCP server · OAuth identity plane<br/>activity projection · resume relay"]
     EXT["External MCP client<br/>user's own credentials"]
-    DB[(PostgreSQL)]
+
+    subgraph CC["Control Center — sole database owner"]
+        MT["Management MCP tools<br/>full-field payloads"]
+        ACT[("Activity state ·<br/>turn resume index ·<br/>checkpoint payload")]
+        DB[(PostgreSQL)]
+    end
 
     U --> UI
-    UI -->|"conversation turn"| AR
+    UI -->|"conversation turn"| CH
+    CH -->|"delegated turn"| AR
     AR -->|"tools/call cc____"| CH
     EXT -->|"tools/call cc____"| CH
-    CH -->|"user-scope dispatch"| CC
-    CC --> DB
+    CH -->|"user-scope dispatch"| MT
+    CH -->|"persist transition · hydrate"| ACT
+    ACT --> DB
 ```
 
 For the module detail see [Control Center Architecture](modules/control-center/architecture.md) and the layered model in [Control Center Assistant Security](security/control-center-assistant.md).
+
+## Conversational Turn Ownership
+
+A conversational turn is owned by Control Center, executed by Agent Runtime, and transported by Communication Hub — so a turn's state never lives only in a process that can restart.
+
+- **One authoritative activity state** — Control Center is the sole owner and writer of what the assistant is doing right now (`thinking` / `using_tool` / `delegating` / `waiting for input` / `finished`, plus the terminal `failed` and `timed out`). Agent Runtime forwards transitions inside its response to the hub; only the hub forwards them to Control Center. Communication Hub keeps a read-through projection, hydrates the current state for a reconnecting or fresh client, and no longer holds the source of truth.
+- **One durable pause** — a paused turn is a **Control Center-owned resume index** (lifecycle, pending intervention, validity window, terminal outcome) beside an **opaque checkpoint payload**; Agent Runtime produces and reloads that payload through the existing internal API and claims the turn before continuing, so any instance can resume and only one does. Agent Runtime remains a courier: no datastore, no credentials, no new dependency.
+- **One dispatch** — duplicate operator responses collapse into a single resume, and a confirmed write applies at most once. A turn that genuinely cannot be continued resolves terminally with one actionable message, so "waiting for your input" never coexists with an unresumable turn.
+
+```mermaid
+flowchart LR
+    UI[Conversation UI]
+
+    subgraph CH["Communication Hub — transport"]
+        WS[Chat socket]
+        PROJ[Activity projection<br/>read-through]
+        RT[Resume router<br/>single dispatch]
+    end
+
+    subgraph AR["Agent Runtime — execution"]
+        TURN[Turn executor]
+        CKPT[Checkpoint manager<br/>claim before continue]
+    end
+
+    subgraph CC["Control Center — sole database owner"]
+        ACT[Activity state]
+        IDX[Resume index<br/>+ checkpoint payload]
+        REAP[Terminal resolver]
+        DB[(PostgreSQL)]
+    end
+
+    UI <--> WS
+    WS -->|delegate turn| TURN
+    TURN --> CKPT
+    CKPT -->|save / load payload| WS
+    WS -->|persist · hydrate| ACT
+    WS -->|persist · read| IDX
+    PROJ --> ACT
+    UI -->|approve · deny| RT
+    RT -->|resume on any instance| TURN
+    REAP -->|close unresumable turn| IDX
+    ACT --> DB
+    IDX --> DB
+```
+
+Because ownership is centralized, a paused confirmation survives a restart, failover, or instance replacement: it stays actionable on reconnect until its validity window closes, and a turn that dies mid-flight is resolved to a terminal failure with an actionable message rather than an endless indicator. The state and intervention lifecycles are in [Agent Lifecycle](modules/agent-lifecycle.md); the per-service views are in [Control Center](modules/control-center/architecture.md), [Agent Runtime](modules/agent-runtime/architecture.md), and [Communication Hub](modules/communication-hub/architecture.md).
 
 ## Authentication Pipeline
 
@@ -299,7 +426,7 @@ See [Token Refresh Service](modules/token-refresh.md), [Communication Hub Archit
 
 ## Key Responsibilities
 
-- **Control Center** — Central authority for configuration, authentication, tenant resolution and enforcement (sole database gateway, including tenant-scoped queries and quota usage counting), per-tenant OIDC provider registry, permission resolution, certificate authority, API key management, agent data type registry, agent outputs, the Software 3.0 **script registry** (lifecycle, lineage, serving of validated compositions to Agent Runtime), and scheduling. Hosts the per-tenant **Control Center MCP entity** and its management MCP tools, which power the conversational assistant strictly within the signed-in user's permission scope. Validates infrastructure dependencies at startup and fails fast. It is the **only signing origin** for internal tenant headers and the only issuer of new tenant bindings on internal calls.
-- **Agent Runtime** — Deep agent execution via LangChain with tool call orchestration through Communication Hub. Executes workflows **script-first with unconditional LLM fallback**: a fresh, sandbox-validated optimized composition runs as a sandboxed script; any sandbox violation or resource-cap breach falls back to the LLM path with a recorded reason (see [Sandboxed Scripting](modules/sandboxed-scripting.md)). Runs the seeded conversational assistant (and every conversational turn), and injects the inherent self-context / workflow-optimization skills into every agent without per-agent configuration. Enforces delegation depth limits, performs typed output validation, and emits delegation status events. Executes strictly within the signed tenant context received from Control Center — the tenant is resolved once from the signed execution context (fail-closed) and applied to **all** tool, MCP, and A2A resolution and every downstream internal call during the run; scope cannot be widened, and no quota logic runs here. Agents never hold identity tokens.
-- **Communication Hub** — Message broker and agent gateway supporting parallel authentication (mTLS cert, tenant-bound API key, and the user's OAuth Bearer token for the management surface). Exposes a standard MCP protocol endpoint (SSE + Streamable HTTP) in addition to the REST skills-loading endpoint; the MCP protocol server's `tools/list` / `tools/call` are **per-tenant** — a client sees and calls only the namespaced tools its own scope permits. Runs the conversational WebSocket flow: binds the tenant from the verified token, delegates turns to Agent Runtime, routes replies and interventions through a live-session registry, and keeps long turns alive with heartbeats and a turn watchdog. Routes tool calls, agent sessions, and A2A messages strictly within the tenant context received from Control Center; cross-tenant routing is impossible.
+- **Control Center** — Central authority for configuration, authentication, tenant resolution and enforcement (sole database gateway, including tenant-scoped queries and quota usage counting), per-tenant OIDC provider registry, permission resolution, certificate authority, API key management, agent data type registry, agent outputs, the Software 3.0 **script registry** (lifecycle, lineage, serving of validated compositions to Agent Runtime), and scheduling. Owns the **conversational turn**: the persisted, authoritative activity state (with a terminal resolver that closes stale or unresumable work) and the durable **turn resume index plus checkpoint payload store** that make a paused turn answerable on any instance after a restart. Resolves the workspace **authoring model** and the **optimizer model** (tenant-scoped, optimizer falling back to the authoring model), enforces the Optimize gate, marks a plan `requires_fix` on fallback, and keeps the single-use audit ledger behind approved live optimization tests. Hosts the per-tenant **Control Center MCP entity** and its management MCP tools, which power the conversational assistant strictly within the signed-in user's permission scope at full web-UI field parity. Validates infrastructure dependencies at startup and fails fast. It is the **only signing origin** for internal tenant headers and the only issuer of new tenant bindings on internal calls.
+- **Agent Runtime** — Deep agent execution via LangChain with tool call orchestration through Communication Hub. Executes workflows **script-first with unconditional LLM fallback**: a fresh, sandbox-validated optimized composition runs as a sandboxed script; any sandbox violation or resource-cap breach falls back to the LLM path with a recorded reason (see [Sandboxed Scripting](modules/sandboxed-scripting.md)). Runs a dedicated **Optimize command execution** separately from normal runs (the authoring model arrives as an execution-context identifier, never credentials), and reports a fallback attributed to an optimized artifact so Control Center can mark the plan `requires_fix`. Runs the seeded conversational assistant and every conversational turn, including **optimization-mode conversations** (routed to the conversational loop regardless of the agent type's input type; replay verification by default, one approved live script run under the agent's own identity). Produces and reloads **durable paused-turn checkpoints as a courier** and claims a turn before continuing it — no datastore, no credentials, no new infrastructure dependency. Injects the inherent self-context / workflow-optimization skills into every agent without per-agent configuration. Enforces delegation depth limits, performs typed output validation, and emits delegation status events. Executes strictly within the signed tenant context received from Control Center — the tenant is resolved once from the signed execution context (fail-closed) and applied to **all** tool, MCP, and A2A resolution and every downstream internal call during the run; scope cannot be widened, and no quota logic runs here. Agents never hold identity tokens.
+- **Communication Hub** — Message broker and agent gateway supporting parallel authentication (mTLS cert, tenant-bound API key, and the user's OAuth Bearer token for the management surface). Exposes a standard MCP protocol endpoint (SSE + Streamable HTTP) in addition to the REST skills-loading endpoint; the MCP protocol server's `tools/list` / `tools/call` are **per-tenant** — a client sees and calls only the namespaced tools its own scope permits. Runs the conversational WebSocket flow: binds the tenant from the verified token, delegates turns to Agent Runtime, keeps long turns alive with heartbeats and a turn watchdog, **projects and hydrates the authoritative activity state** owned by Control Center instead of holding status itself, and **routes interventions and resumes to any Agent Runtime instance able to load the paused turn**, collapsing duplicate responses into a single dispatch. It gains no data access and no signing rights — it remains a forward-only receiver. Routes tool calls, agent sessions, and A2A messages strictly within the tenant context received from Control Center; cross-tenant routing is impossible.
 - **Setup Tool** — Operator-invoked CLI (outside running system) for Keycloak provisioning, certificate authority bootstrap, and database seeding. All operations are idempotent.

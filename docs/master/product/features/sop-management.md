@@ -20,6 +20,7 @@ SOP Management enables the creation and orchestration of Standard Operating Proc
 - Applies delegation depth and delegated-step boundaries as part of bounded execution governance
 - Provides auditability and management of all SOPs
 - SOP creation is also available inline from the Agent Management Panel, which reuses the same create/edit dialogs — with no change to standalone SOP Management behaviour
+- SOPs can also be created and updated conversationally through the [Control Center Assistant](control-center-assistant.md), covering the same create/read/update capability set as this module — including the ordered step list (skill invocations and agent delegations) — under the same permission, preview-and-approve, and no-deletion rules
 
 ## Key Concepts
 - **SOP (Standard Operating Procedure)**: A multi-step, sequenced workflow composed of Skills

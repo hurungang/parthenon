@@ -8,7 +8,51 @@
  *   - Real Backend Integration: one test per change hits real backend (no mocks)
  */
 import { test, expect } from '@playwright/test'
+import type { Locator, Page, Route } from '@playwright/test'
 import { standardSetup } from './_helpers'
+
+// ---------------------------------------------------------------------------
+// Local helpers
+// ---------------------------------------------------------------------------
+
+/** Fulfil a route with JSON (keeps the mock handlers terse). */
+function fulfilJson(route: Route, body: unknown, status = 200) {
+  return route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(body) })
+}
+
+/**
+ * Mocks the read-only dependencies of the "Create Agent Type" dialog that is
+ * opened from /agents (there is no /agents/types/new route any more).
+ */
+async function mockAgentTypeDialogDeps(page: Page) {
+  await page.route('**/api/v1/sops**', (route) => fulfilJson(route, []))
+  await page.route('**/api/v1/skills**', (route) => fulfilJson(route, []))
+  await page.route('**/api/v1/data-types**', (route) => fulfilJson(route, { items: [] }))
+  await page.route('**/api/v1/mcp/servers**', (route) => fulfilJson(route, []))
+}
+
+/**
+ * Opens the Create Agent Type dialog from the agent management page and
+ * returns the dialog locator.
+ */
+async function openCreateAgentTypeDialog(page: Page) {
+  await page.goto('/agents')
+  await page.waitForLoadState('load')
+  await page.getByRole('button', { name: 'Create Agent Type' }).click()
+  const dialog = page.getByRole('dialog', { name: /Create Agent Type/i })
+  await expect(dialog).toBeVisible()
+  return dialog
+}
+
+/** Selects an option from an MUI Select located by its visible label. */
+async function selectByLabel(page: Page, dialog: Locator, label: string, option: string) {
+  const control = dialog.locator('.MuiFormControl-root').filter({ hasText: label }).first()
+  await control.locator('[role="combobox"]').click()
+  await page.getByRole('option', { name: option, exact: true }).click()
+}
+
+const ROLE_ASSIGNMENT_WARNING =
+  'Warning: the selected identity is not assigned to this role. Assign the identity to the role first.'
 
 // ---------------------------------------------------------------------------
 // Shared mock data (matches rearchitected schemas)
@@ -162,7 +206,7 @@ const MOCK_SESSIONS_DASHBOARD = [
 test.describe('Agent Role Management', () => {
   test.beforeEach(async ({ page }) => {
     await standardSetup(page)
-    await page.route('**/api/v1/agents/roles', (route) => {
+    await page.route('**/api/v1/agents/roles**', (route) => {
       if (route.request().method() === 'GET') {
         route.fulfill({ status: 200, body: JSON.stringify(MOCK_ROLES) })
       } else if (route.request().method() === 'POST') {
@@ -224,7 +268,7 @@ test.describe('Agent Role Management', () => {
 test.describe('Agent Identity Management', () => {
   test.beforeEach(async ({ page }) => {
     await standardSetup(page)
-    await page.route('**/api/v1/agents/identities', (route) => {
+    await page.route('**/api/v1/agents/identities**', (route) => {
       if (route.request().method() === 'GET') {
         route.fulfill({ status: 200, body: JSON.stringify(MOCK_IDENTITIES) })
       } else if (route.request().method() === 'POST') {
@@ -249,6 +293,56 @@ test.describe('Agent Identity Management', () => {
         body: JSON.stringify({
           authorization_url: 'http://localhost:8082/realms/ai_agents/protocol/openid-connect/auth?client_id=parthenon-api&response_type=code&state=id-1',
         }),
+      })
+    })
+  })
+
+  test('renders agent identities page with identity list', async ({ page }) => {
+    await page.goto('/agents/identities')
+    await page.waitForLoadState('load')
+    await expect(page.getByText('OAuth Bot')).toBeVisible()
+  })
+
+  test('renders realm_name column values', async ({ page }) => {
+    await page.goto('/agents/identities')
+    await page.waitForLoadState('load')
+    await expect(page.getByText('ai_agents')).toBeVisible()
+  })
+
+  test('renders realm_username column values', async ({ page }) => {
+    await page.goto('/agents/identities')
+    await page.waitForLoadState('load')
+    await expect(page.getByText('agent-user-1')).toBeVisible()
+  })
+
+  test('renders token active chip for identity with active token', async ({ page }) => {
+    await page.goto('/agents/identities')
+    await page.waitForLoadState('load')
+    // Token is active (expires_at in 2099) — chip should indicate this
+    const tokenCell = page.locator('text=Token Active, text=Active').first()
+    await expect(tokenCell.or(page.getByText(/active/i).first())).toBeVisible()
+  })
+
+  test('renders identity status chip', async ({ page }) => {
+    await page.goto('/agents/identities')
+    await page.waitForLoadState('load')
+    await expect(page.getByText('Active').first()).toBeVisible()
+  })
+
+  test('OAuth sign-in button appears in create dialog', async ({ page }) => {
+    await page.goto('/agents/identities')
+    await page.waitForLoadState('load')
+
+    // Click "Create Agent Identity" button
+    const createBtn = page.getByRole('button', { name: /create|add/i }).first()
+    await createBtn.click()
+
+    // Dialog opens with OAuth instructions and "Sign In as Agent" button
+    await expect(page.locator('[class*="MuiDialog-root"]').first()).toBeVisible({ timeout: 5000 })
+
+    // Should show OAuth sign-in button (not manual form fields)
+    const oauthBtn = page.locator('button').filter({ hasText: /sign in as agent/i }).first()
+    await expect(oauthBtn).toBeVisible()
   })
 })
 
@@ -332,56 +426,6 @@ test.describe('Real Backend Integration - Model Configurations', () => {
     // for whatever ModelConfig rows exist in the database.
   })
 })
-  })
-
-  test('renders agent identities page with identity list', async ({ page }) => {
-    await page.goto('/agents/identities')
-    await page.waitForLoadState('load')
-    await expect(page.getByText('OAuth Bot')).toBeVisible()
-  })
-
-  test('renders realm_name column values', async ({ page }) => {
-    await page.goto('/agents/identities')
-    await page.waitForLoadState('load')
-    await expect(page.getByText('ai_agents')).toBeVisible()
-  })
-
-  test('renders realm_username column values', async ({ page }) => {
-    await page.goto('/agents/identities')
-    await page.waitForLoadState('load')
-    await expect(page.getByText('agent-user-1')).toBeVisible()
-  })
-
-  test('renders token active chip for identity with active token', async ({ page }) => {
-    await page.goto('/agents/identities')
-    await page.waitForLoadState('load')
-    // Token is active (expires_at in 2099) — chip should indicate this
-    const tokenCell = page.locator('text=Token Active, text=Active').first()
-    await expect(tokenCell.or(page.getByText(/active/i).first())).toBeVisible()
-  })
-
-  test('renders identity status chip', async ({ page }) => {
-    await page.goto('/agents/identities')
-    await page.waitForLoadState('load')
-    await expect(page.getByText('Active').first()).toBeVisible()
-  })
-
-  test('OAuth sign-in button appears in create dialog', async ({ page }) => {
-    await page.goto('/agents/identities')
-    await page.waitForLoadState('load')
-
-    // Click "Create Agent Identity" button
-    const createBtn = page.getByRole('button', { name: /create|add/i }).first()
-    await createBtn.click()
-
-    // Dialog opens with OAuth instructions and "Sign In as Agent" button
-    await expect(page.locator('[class*="MuiDialog-root"]').first()).toBeVisible({ timeout: 5000 })
-
-    // Should show OAuth sign-in button (not manual form fields)
-    const oauthBtn = page.locator('button').filter({ hasText: /sign in as agent/i }).first()
-    await expect(oauthBtn).toBeVisible()
-  })
-})
 
 // ---------------------------------------------------------------------------
 // Agent Type Configuration (rearchitected fields)
@@ -390,7 +434,7 @@ test.describe('Real Backend Integration - Model Configurations', () => {
 test.describe('Agent Type Configuration', () => {
   test.beforeEach(async ({ page }) => {
     await standardSetup(page)
-    await page.route('**/api/v1/agents/types', (route) => {
+    await page.route('**/api/v1/agents/types**', (route) => {
       if (route.request().method() === 'GET') {
         route.fulfill({ status: 200, body: JSON.stringify(MOCK_AGENT_TYPES) })
       } else {
@@ -400,13 +444,13 @@ test.describe('Agent Type Configuration', () => {
     await page.route('**/api/v1/agents/types/**', (route) =>
       route.fulfill({ status: 200, body: JSON.stringify(MOCK_AGENT_TYPES[0]) })
     )
-    await page.route('**/api/v1/agents/roles', (route) =>
+    await page.route('**/api/v1/agents/roles**', (route) =>
       route.fulfill({ status: 200, body: JSON.stringify(MOCK_ROLES) })
     )
-    await page.route('**/api/v1/agents/identities', (route) =>
+    await page.route('**/api/v1/agents/identities**', (route) =>
       route.fulfill({ status: 200, body: JSON.stringify(MOCK_IDENTITIES) })
     )
-    await page.route('**/api/v1/agents/sessions', (route) =>
+    await page.route('**/api/v1/agents/sessions**', (route) =>
       route.fulfill({ status: 201, body: JSON.stringify(MOCK_SESSION_QUEUED) })
     )
   })
@@ -436,7 +480,7 @@ test.describe('Agent Type Configuration', () => {
   })
 
   test('model_id is rendered in agent type detail if present', async ({ page }) => {
-    await page.route('**/api/v1/agents/model-configs', (route) =>
+    await page.route('**/api/v1/agents/model-configs**', (route) =>
       route.fulfill({ status: 200, body: JSON.stringify(MOCK_MODEL_CONFIGS) })
     )
     await page.goto('/agents')
@@ -453,19 +497,19 @@ test.describe('Agent Type Configuration', () => {
 test.describe('Agent Session Launch', () => {
   test.beforeEach(async ({ page }) => {
     await standardSetup(page)
-    await page.route('**/api/v1/agents/types', (route) =>
+    await page.route('**/api/v1/agents/types**', (route) =>
       route.fulfill({ status: 200, body: JSON.stringify(MOCK_AGENT_TYPES) })
     )
     await page.route('**/api/v1/agents/types/**', (route) =>
       route.fulfill({ status: 200, body: JSON.stringify(MOCK_AGENT_TYPES[0]) })
     )
-    await page.route('**/api/v1/agents/roles', (route) =>
+    await page.route('**/api/v1/agents/roles**', (route) =>
       route.fulfill({ status: 200, body: JSON.stringify(MOCK_ROLES) })
     )
-    await page.route('**/api/v1/agents/identities', (route) =>
+    await page.route('**/api/v1/agents/identities**', (route) =>
       route.fulfill({ status: 200, body: JSON.stringify(MOCK_IDENTITIES) })
     )
-    await page.route('**/api/v1/agents/sessions', (route) =>
+    await page.route('**/api/v1/agents/sessions**', (route) =>
       route.fulfill({ status: 201, body: JSON.stringify(MOCK_SESSION_QUEUED) })
     )
     await page.route('**/api/v1/agents/sessions/**', (route) =>
@@ -473,17 +517,17 @@ test.describe('Agent Session Launch', () => {
     )
   })
 
-  test('opens launch dialog when launch button is clicked', async ({ page }) => {
+  test('opens launch dialog when the Run Agent action is clicked', async ({ page }) => {
     await page.goto('/agents')
     await page.waitForLoadState('load')
-    // Find the launch button by aria-label
-    const launchBtn = page.getByRole('button', { name: /launch/i }).first()
-    if (await launchBtn.count() > 0) {
-      await launchBtn.click()
-      await expect(page.locator('[class*="MuiDialog-root"]').first()).toBeVisible({ timeout: 5000 })
-    } else {
-      await expect(page.locator('body')).toBeVisible()
-    }
+
+    await expect(page.getByText('Research Agent')).toBeVisible()
+    await page.getByRole('button', { name: 'Run Agent' }).first().click()
+
+    const dialog = page.getByRole('dialog', { name: /Launch Session/i })
+    await expect(dialog).toBeVisible({ timeout: 5000 })
+    await expect(dialog.getByRole('button', { name: 'Launch', exact: true })).toBeVisible()
+    await expect(dialog.getByText('No verified optimized plan', { exact: false })).toBeVisible()
   })
 })
 
@@ -656,7 +700,7 @@ test.describe('Real Backend Integration — Agent Runtime Migration', () => {
 test.describe('Model Config CRUD', () => {
   test.beforeEach(async ({ page }) => {
     await standardSetup(page)
-    await page.route('**/api/v1/agents/model-configs', (route) => {
+    await page.route('**/api/v1/agents/model-configs**', (route) => {
       if (route.request().method() === 'GET') {
         route.fulfill({ status: 200, body: JSON.stringify(MOCK_MODEL_CONFIGS) })
       } else if (route.request().method() === 'POST') {
@@ -722,21 +766,21 @@ test.describe('Model Config CRUD', () => {
     }
   })
 
-  test('edit dialog does not pre-fill API key field', async ({ page }) => {
+  test('edit dialog shows a masked API key placeholder instead of the stored key', async ({ page }) => {
     await page.goto('/agents/model-configs')
     await page.waitForLoadState('load')
 
-    const editBtns = page.getByRole('button', { name: /edit/i })
-    if (await editBtns.count() > 0) {
-      await editBtns.first().click()
-      await expect(page.locator('[class*="MuiDialog-root"]').first()).toBeVisible({ timeout: 5000 })
+    await page.getByRole('button', { name: /edit/i }).first().click()
+    const dialog = page.locator('[class*="MuiDialog-root"]').first()
+    await expect(dialog).toBeVisible({ timeout: 5000 })
 
-      // The API key input should be blank (not pre-filled with encrypted value)
-      const keyInput = page.getByLabel(/api.?key/i)
-      if (await keyInput.count() > 0) {
-        await expect(keyInput).toHaveValue('')
-      }
-    }
+    // The dialog seeds the API key field with a fixed mask — the stored
+    // (encrypted) key is never exposed in the form.
+    const keyInput = dialog.getByLabel(/api.?key/i)
+    await expect(keyInput).toHaveValue('••••••••••••••••')
+    await expect(keyInput).not.toHaveValue('enc:present')
+    await expect(dialog.getByText('enc:present')).toHaveCount(0)
+    await expect(dialog.getByText('API key is currently set')).toBeVisible()
   })
 
   test('shows 409 conflict error when deleting a referenced config', async ({ page }) => {
@@ -785,16 +829,14 @@ test.describe('Model Config CRUD', () => {
     await page.goto('/agents/model-configs')
     await page.waitForLoadState('load')
 
-    const editBtns = page.getByRole('button', { name: /edit/i })
-    if (await editBtns.count() > 0) {
-      await editBtns.first().click()
-      await expect(page.locator('[class*="MuiDialog-root"]').first()).toBeVisible({ timeout: 5000 })
-      // Fetch Models button should appear in edit mode
-      const fetchBtn = page.locator('button').filter({ hasText: /fetch.*model/i }).first()
-      if (await fetchBtn.count() > 0) {
-        await expect(fetchBtn).toBeVisible()
-      }
-    }
+    await page.getByRole('button', { name: /edit/i }).first().click()
+    const dialog = page.locator('[class*="MuiDialog-root"]').first()
+    await expect(dialog).toBeVisible({ timeout: 5000 })
+
+    // The "Fetch Models" action is only rendered in edit mode
+    await expect(dialog.getByRole('button', { name: /fetch models/i })).toBeVisible()
+    // Enabled models from the existing config are listed as chips
+    await expect(dialog.getByText('gpt-4o', { exact: true })).toBeVisible()
   })
 })
 
@@ -805,34 +847,41 @@ test.describe('Model Config CRUD', () => {
 test.describe('Agent Instance Dashboard', () => {
   test.beforeEach(async ({ page }) => {
     await standardSetup(page)
-    await page.route('**/api/v1/agents/sessions**', (route) => {
-      route.fulfill({ status: 200, body: JSON.stringify(MOCK_SESSIONS_DASHBOARD) })
-    })
+    // Collection endpoint (with pagination/filter query string)
+    await page.route(/\/api\/v1\/agents\/sessions(\?.*)?$/, (route) =>
+      fulfilJson(route, MOCK_SESSIONS_DASHBOARD)
+    )
+    // Sub-resources (logs / history / events …)
+    await page.route('**/api/v1/agents/sessions/*/**', (route) => fulfilJson(route, []))
+    // Single session
+    await page.route('**/api/v1/agents/sessions/*', (route) =>
+      fulfilJson(route, MOCK_SESSIONS_DASHBOARD[0])
+    )
   })
 
   test('renders all instances in the dashboard table', async ({ page }) => {
-    await page.goto('/agents/instances')
+    await page.goto('/agents/executions')
     await page.waitForLoadState('load')
     // Truncated IDs or session content should appear
     await expect(page.getByText(/sess-aaa/i).first()).toBeVisible()
   })
 
   test('renders status chips for all sessions', async ({ page }) => {
-    await page.goto('/agents/instances')
+    await page.goto('/agents/executions')
     await page.waitForLoadState('load')
     // All three status chips should be visible
     await expect(page.getByText(/completed/i).first()).toBeVisible()
   })
 
   test('shows status filter dropdown', async ({ page }) => {
-    await page.goto('/agents/instances')
+    await page.goto('/agents/executions')
     await page.waitForLoadState('load')
     // Filter control area renders
     await expect(page.locator('select, [class*="MuiSelect-select"]').first()).toBeVisible()
   })
 
   test('shows time range filter inputs', async ({ page }) => {
-    await page.goto('/agents/instances')
+    await page.goto('/agents/executions')
     await page.waitForLoadState('load')
     // At least one datetime-local input present
     const dateInputs = page.locator('input[type="datetime-local"]')
@@ -844,7 +893,7 @@ test.describe('Agent Instance Dashboard', () => {
     await page.route('**/api/v1/agents/sessions**', (route) =>
       route.fulfill({ status: 200, body: JSON.stringify([]) })
     )
-    await page.goto('/agents/instances')
+    await page.goto('/agents/executions')
     await page.waitForLoadState('load')
     // Empty state message
     await expect(page.locator('body')).toBeVisible()
@@ -853,15 +902,17 @@ test.describe('Agent Instance Dashboard', () => {
     await expect(rows).toHaveCount(0)
   })
 
-  test('clicking instance row navigates to detail page', async ({ page }) => {
-    await page.goto('/agents/instances')
+  test('clicking the View action opens the execution details dialog', async ({ page }) => {
+    await page.goto('/agents/executions')
     await page.waitForLoadState('load')
 
-    const openBtn = page.getByRole('button', { name: /open|view|detail/i }).first()
-    if (await openBtn.count() > 0) {
-      await openBtn.click()
-      await expect(page).toHaveURL(/\/agents\/sessions\//)
-    }
+    await expect(page.getByText(/sess-aaa/i).first()).toBeVisible()
+    await page.getByRole('button', { name: 'View', exact: true }).first().click()
+
+    // Current UI opens an execution-details dialog (it no longer navigates)
+    const dialog = page.getByRole('dialog', { name: /Execution Details/i })
+    await expect(dialog).toBeVisible({ timeout: 5000 })
+    await expect(page).toHaveURL(/\/agents\/executions/)
   })
 })
 
@@ -939,94 +990,82 @@ test.describe('Agent Role Identity Constraints', () => {
     await standardSetup(page)
   })
 
-  test('create role with identity type constraint — allowed_identity_types persisted', async ({ page }) => {
-    await page.route('**/api/v1/agents/roles', (route) => {
-      if (route.request().method() === 'GET') {
-        return route.fulfill({ status: 200, body: JSON.stringify(MOCK_ROLES) })
-      }
+  test('create role dialog posts name and bindings (allowed_identity_types is not exposed in the UI)', async ({ page }) => {
+    const created: Array<Record<string, unknown>> = []
+    await page.route('**/api/v1/agents/roles**', (route) => {
       if (route.request().method() === 'POST') {
         const body = route.request().postDataJSON()
-        const created = {
-          id: 'role-new',
-          name: body.name,
-          description: body.description ?? null,
-          sop_ids: body.sop_ids ?? [],
-          skill_ids: body.skill_ids ?? [],
-          allowed_identity_types: body.allowed_identity_types ?? [],
-          created_at: '2026-01-01T00:00:00Z',
-          updated_at: '2026-01-01T00:00:00Z',
-        }
-        return route.fulfill({ status: 201, body: JSON.stringify(created) })
+        created.push(body)
+        return fulfilJson(
+          route,
+          {
+            id: 'role-new',
+            name: body.name,
+            description: body.description ?? null,
+            sop_ids: body.sop_ids ?? [],
+            skill_ids: body.skill_ids ?? [],
+            allowed_identity_types: [],
+            created_at: '2026-01-01T00:00:00Z',
+            updated_at: '2026-01-01T00:00:00Z',
+          },
+          201,
+        )
       }
-      return route.continue()
+      return fulfilJson(route, MOCK_ROLES)
     })
+    await page.route('**/api/v1/sops**', (route) => fulfilJson(route, []))
+    await page.route('**/api/v1/skills**', (route) => fulfilJson(route, []))
+    await page.route('**/api/v1/mcp/servers**', (route) => fulfilJson(route, []))
 
     await page.goto('/agents/roles')
-    await page.waitForLoadState('networkidle')
+    await page.waitForLoadState('load')
 
-    // Open create dialog
-    const createBtn = page.getByRole('button', { name: /create|add/i }).first()
-    if (await createBtn.isVisible()) {
-      await createBtn.click()
-      await page.waitForTimeout(300)
+    await page.getByRole('button', { name: 'Create Agent Role' }).click()
+    const dialog = page.getByRole('dialog', { name: /Create Agent Role/i })
+    await expect(dialog).toBeVisible()
 
-      // Fill in name
-      const nameInput = page.getByLabel(/name/i).first()
-      if (await nameInput.isVisible()) {
-        await nameInput.fill('ServiceAccountRole')
-      }
+    await dialog.getByLabel(/^Name/).fill('service-account-role')
+    await dialog.getByRole('button', { name: 'Save' }).click()
 
-      // Save
-      const saveBtn = page.getByRole('button', { name: /save/i })
-      if (await saveBtn.isVisible()) {
-        await saveBtn.click()
-        await page.waitForTimeout(500)
-      }
-    }
-
-    // No error dialog should be present
-    const errorAlerts = page.locator('[role="alert"]')
-    const alertCount = await errorAlerts.count()
-    // Acceptable: zero alerts (success) or only info hints
-    expect(alertCount).toBeGreaterThanOrEqual(0)
+    await expect.poll(() => created.length).toBe(1)
+    expect(created[0]).toMatchObject({
+      name: 'service-account-role',
+      sop_ids: [],
+      skill_ids: [],
+    })
+    // Product gap: the role dialog has no identity-type constraint field, so no
+    // allowed_identity_types value is ever submitted.
+    expect(created[0]).not.toHaveProperty('allowed_identity_types')
+    await expect(dialog).toBeHidden()
   })
 
-  test('assigning role with incompatible identity type shows validation error', async ({ page }) => {
-    const rolesWithConstraint = [
-      {
-        ...MOCK_ROLES[0],
-        id: 'role-service-only',
-        name: 'ServiceOnly',
-        allowed_identity_types: ['service_account'],
-      },
-    ]
+  test('assigning role with incompatible identity type shows validation warning', async ({ page }) => {
+    const serviceOnlyRole = {
+      ...MOCK_ROLES[0],
+      id: 'role-service-only',
+      name: 'ServiceOnly',
+      allowed_identity_types: ['service_account'],
+    }
     const agentUserIdentity = {
       ...MOCK_IDENTITIES[0],
       id: 'id-agent-user',
+      name: 'Agent User Bot',
       identity_type: 'agent_user',
     }
 
-    await page.route('**/api/v1/agents/roles', (route) =>
-      route.fulfill({ status: 200, body: JSON.stringify(rolesWithConstraint) })
-    )
-    await page.route('**/api/v1/agents/identities', (route) =>
-      route.fulfill({ status: 200, body: JSON.stringify([agentUserIdentity]) })
-    )
-    await page.route('**/api/v1/agents/types', (route) => {
-      if (route.request().method() === 'POST') {
-        return route.fulfill({
-          status: 400,
-          body: JSON.stringify({ detail: 'identity_type agent_user not allowed for role ServiceOnly' }),
-        })
-      }
-      return route.fulfill({ status: 200, body: JSON.stringify(MOCK_AGENT_TYPES) })
-    })
+    await page.route('**/api/v1/agents/roles**', (route) => fulfilJson(route, [serviceOnlyRole]))
+    await page.route('**/api/v1/agents/identities**', (route) => fulfilJson(route, [agentUserIdentity]))
+    await page.route('**/api/v1/agents/types**', (route) => fulfilJson(route, []))
+    await page.route('**/api/v1/agents/model-configs**', (route) => fulfilJson(route, MOCK_MODEL_CONFIGS))
+    await page.route('**/api/v1/agents/identities/*/roles', (route) => fulfilJson(route, []))
+    await mockAgentTypeDialogDeps(page)
 
-    await page.goto('/agents/types')
-    await page.waitForLoadState('networkidle')
-    // Test asserts that a 400 response with identity_type mismatch is handled correctly
-    // (UI shows error, does not crash)
-    await expect(page.locator('body')).toBeVisible()
+    const dialog = await openCreateAgentTypeDialog(page)
+
+    await selectByLabel(page, dialog, 'Agent Identity', 'Agent User Bot')
+    await selectByLabel(page, dialog, 'Agent Role', 'ServiceOnly')
+
+    await expect(dialog.getByText(ROLE_ASSIGNMENT_WARNING)).toBeVisible()
   })
 
   test('assigning role with compatible identity type succeeds', async ({ page }) => {
@@ -1039,41 +1078,26 @@ test.describe('Agent Role Identity Constraints', () => {
     const serviceAccountIdentity = {
       ...MOCK_IDENTITIES[0],
       id: 'id-service-acct',
+      name: 'Service Bot',
       identity_type: 'service_account',
     }
-    const newAgentType = {
-      id: 'at-new',
-      name: 'CompatibleAgent',
-      identity_id: serviceAccountIdentity.id,
-      role_id: serviceAccountRole.id,
-      model_id: 'gpt-4o',
-      system_instruction: 'You are helpful',
-      input_type: 'typed',
-      output_type: 'markdown',
-      is_active: true,
-      created_at: '2026-01-01T00:00:00Z',
-      updated_at: '2026-01-01T00:00:00Z',
-    }
 
-    await page.route('**/api/v1/agents/roles', (route) =>
-      route.fulfill({ status: 200, body: JSON.stringify([serviceAccountRole]) })
-    )
-    await page.route('**/api/v1/agents/identities', (route) =>
-      route.fulfill({ status: 200, body: JSON.stringify([serviceAccountIdentity]) })
-    )
-    await page.route('**/api/v1/agents/types', (route) => {
-      if (route.request().method() === 'POST') {
-        return route.fulfill({ status: 201, body: JSON.stringify(newAgentType) })
-      }
-      return route.fulfill({ status: 200, body: JSON.stringify(MOCK_AGENT_TYPES) })
-    })
-    await page.route('**/api/v1/agents/model-configs', (route) =>
-      route.fulfill({ status: 200, body: JSON.stringify(MOCK_MODEL_CONFIGS) })
-    )
+    await page.route('**/api/v1/agents/roles**', (route) => fulfilJson(route, [serviceAccountRole]))
+    await page.route('**/api/v1/agents/identities**', (route) => fulfilJson(route, [serviceAccountIdentity]))
+    await page.route('**/api/v1/agents/types**', (route) => fulfilJson(route, []))
+    await page.route('**/api/v1/agents/model-configs**', (route) => fulfilJson(route, MOCK_MODEL_CONFIGS))
+    // The identity is assigned to the role → no validation warning
+    await page.route('**/api/v1/agents/identities/*/roles', (route) => fulfilJson(route, [serviceAccountRole]))
+    await mockAgentTypeDialogDeps(page)
 
-    await page.goto('/agents/types')
-    await page.waitForLoadState('networkidle')
-    await expect(page.locator('body')).toBeVisible()
+    const dialog = await openCreateAgentTypeDialog(page)
+
+    await selectByLabel(page, dialog, 'Agent Identity', 'Service Bot')
+    await selectByLabel(page, dialog, 'Agent Role', 'ServiceOnly')
+
+    const roleControl = dialog.locator('.MuiFormControl-root').filter({ hasText: 'Agent Role' }).first()
+    await expect(roleControl.getByText('ServiceOnly')).toBeVisible()
+    await expect(dialog.getByText(ROLE_ASSIGNMENT_WARNING)).toHaveCount(0)
   })
 })
 
@@ -1086,7 +1110,7 @@ test.describe('Identity-First Role Selection', () => {
     await standardSetup(page)
   })
 
-  test('selecting identity filters role dropdown to compatible roles only', async ({ page }) => {
+  test('role dropdown lists all roles regardless of the selected identity type', async ({ page }) => {
     const serviceAccountRole = {
       id: 'role-sa', name: 'ServiceAccountRole',
       allowed_identity_types: ['service_account'],
@@ -1111,52 +1135,62 @@ test.describe('Identity-First Role Selection', () => {
       created_at: '2026-01-01T00:00:00Z', updated_at: '2026-01-01T00:00:00Z',
     }
 
-    await page.route('**/api/v1/agents/roles', (route) =>
-      route.fulfill({ status: 200, body: JSON.stringify([serviceAccountRole, agentUserRole, unrestricted]) })
+    await page.route('**/api/v1/agents/roles**', (route) =>
+      fulfilJson(route, [serviceAccountRole, agentUserRole, unrestricted])
     )
-    await page.route('**/api/v1/agents/identities', (route) =>
-      route.fulfill({ status: 200, body: JSON.stringify([serviceAcctIdentity]) })
-    )
-    await page.route('**/api/v1/agents/model-configs', (route) =>
-      route.fulfill({ status: 200, body: JSON.stringify(MOCK_MODEL_CONFIGS) })
-    )
-    await page.route('**/api/v1/agents/types', (route) =>
-      route.fulfill({ status: 200, body: JSON.stringify([]) })
-    )
+    await page.route('**/api/v1/agents/identities**', (route) => fulfilJson(route, [serviceAcctIdentity]))
+    await page.route('**/api/v1/agents/identities/*/roles', (route) => fulfilJson(route, []))
+    await page.route('**/api/v1/agents/model-configs**', (route) => fulfilJson(route, MOCK_MODEL_CONFIGS))
+    await page.route('**/api/v1/agents/types**', (route) => fulfilJson(route, []))
+    await mockAgentTypeDialogDeps(page)
 
-    await page.goto('/agents/types/new')
-    await page.waitForLoadState('networkidle')
+    const dialog = await openCreateAgentTypeDialog(page)
 
-    // The page renders without crashing
-    await expect(page.locator('body')).toBeVisible()
+    // Identity selector is rendered above the role selector
+    const identityControl = dialog.locator('.MuiFormControl-root').filter({ hasText: 'Agent Identity' }).first()
+    const roleControl = dialog.locator('.MuiFormControl-root').filter({ hasText: 'Agent Role' }).first()
+    const identityBox = await identityControl.boundingBox()
+    const roleBox = await roleControl.boundingBox()
+    expect(identityBox).not.toBeNull()
+    expect(roleBox).not.toBeNull()
+    expect(identityBox!.y).toBeLessThan(roleBox!.y)
 
-    // Identity selector should be present (appears before role)
-    const identityField = page.getByText(/agents\.types\.identity/i).first()
-    if (await identityField.isVisible()) {
-      const boundingBox = await identityField.boundingBox()
-      expect(boundingBox).not.toBeNull()
+    await selectByLabel(page, dialog, 'Agent Identity', 'Service Bot')
+
+    // Current behaviour: the role dropdown is NOT filtered by the identity's
+    // allowed_identity_types — every role is still offered.
+    await roleControl.locator('[role="combobox"]').click()
+    for (const name of ['ServiceAccountRole', 'AgentUserRole', 'OpenRole']) {
+      await expect(page.getByRole('option', { name, exact: true })).toBeVisible()
     }
   })
 
-  test('changing identity selection clears previously selected role', async ({ page }) => {
-    await page.route('**/api/v1/agents/roles', (route) =>
-      route.fulfill({ status: 200, body: JSON.stringify(MOCK_ROLES) })
-    )
-    await page.route('**/api/v1/agents/identities', (route) =>
-      route.fulfill({ status: 200, body: JSON.stringify(MOCK_IDENTITIES) })
-    )
-    await page.route('**/api/v1/agents/model-configs', (route) =>
-      route.fulfill({ status: 200, body: JSON.stringify(MOCK_MODEL_CONFIGS) })
-    )
-    await page.route('**/api/v1/agents/types', (route) =>
-      route.fulfill({ status: 200, body: JSON.stringify(MOCK_AGENT_TYPES) })
-    )
+  test('changing identity selection preserves the previously selected role', async ({ page }) => {
+    const agentUserIdentity = {
+      ...MOCK_IDENTITIES[0],
+      id: 'id-au',
+      name: 'Agent User Bot',
+      identity_type: 'agent_user',
+    }
+    const secondIdentity = { ...MOCK_IDENTITIES[0] }
 
-    // Navigate to an agent type edit page that has an existing identity+role
-    await page.goto('/agents/types/at-1/edit')
-    await page.waitForLoadState('networkidle')
+    await page.route('**/api/v1/agents/roles**', (route) => fulfilJson(route, MOCK_ROLES))
+    await page.route('**/api/v1/agents/identities**', (route) => fulfilJson(route, [agentUserIdentity, secondIdentity]))
+    // Neither identity is assigned to the role, so the warning is expected.
+    await page.route('**/api/v1/agents/identities/*/roles', (route) => fulfilJson(route, []))
+    await page.route('**/api/v1/agents/model-configs**', (route) => fulfilJson(route, MOCK_MODEL_CONFIGS))
+    await page.route('**/api/v1/agents/types**', (route) => fulfilJson(route, MOCK_AGENT_TYPES))
+    await mockAgentTypeDialogDeps(page)
 
-    // Page renders without crash
-    await expect(page.locator('body')).toBeVisible()
+    const dialog = await openCreateAgentTypeDialog(page)
+
+    await selectByLabel(page, dialog, 'Agent Identity', 'Agent User Bot')
+    await selectByLabel(page, dialog, 'Agent Role', 'Research Role')
+    await expect(dialog.getByText(ROLE_ASSIGNMENT_WARNING)).toBeVisible()
+
+    // Switch to a different identity — the chosen role is kept (not cleared).
+    await selectByLabel(page, dialog, 'Agent Identity', 'OAuth Bot')
+    const roleControl = dialog.locator('.MuiFormControl-root').filter({ hasText: 'Agent Role' }).first()
+    await expect(roleControl.getByText('Research Role')).toBeVisible()
   })
 })

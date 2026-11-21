@@ -1,0 +1,1382 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Integrations — MCP Hub, Notifications, API Keys & Clients</title>
+<link rel="stylesheet" href="../shared/styles.css">
+</head>
+<body data-page="integrations" data-default-view="mcp-hub">
+
+<div class="app-shell">
+
+<!-- ═══════════════════════════════ SIDEBAR ═══════════════════════════════ -->
+<nav class="sidebar" aria-label="Primary navigation">
+  <div class="sidebar-logo">
+    <h1>⚡ Parthenon</h1>
+    <small>Enterprise AI Harness</small>
+  </div>
+
+  <!-- Dashboard -->
+  <a class="nav-item" data-view="dashboard" href="../index.html#view-dashboard"><span class="nav-icon">🏠</span>Dashboard</a>
+
+  <!-- Project Showcase -->
+  <a class="nav-item" data-view="project-showcase" href="../index.html#view-project-showcase"><span class="nav-icon">🌐</span>Project Showcase</a>
+
+  <div class="nav-parent-group" id="nav-agents" data-group="agents">
+    <a class="nav-parent-group-label" href="agents.html#view-agent-roles" role="button" aria-expanded="true">
+      <span>🤖 Agents</span>
+      <span class="toggle-icon" aria-hidden="true">▼</span>
+    </a>
+    <div class="nav-children">
+      <a class="nav-item sub-item" data-view="agent-roles" data-group="agents" href="agents.html#view-agent-roles"><span class="nav-icon">👤</span>Agent Roles</a>
+      <a class="nav-item sub-item" data-view="agent-identities" data-group="agents" href="agents.html#view-agent-identities"><span class="nav-icon">🆔</span>Agent Identities</a>
+      <a class="nav-item sub-item" data-view="agents" data-group="agents" href="agents.html#view-agents"><span class="nav-icon">🤖</span>Agent Types</a>
+      <a class="nav-item sub-item" data-view="agent-management-panel" data-group="agents" href="agent-panel.html#view-agent-management-panel"><span class="nav-icon">🎛️</span>Agent Management Panel</a>
+      <a class="nav-item sub-item" data-view="agent-executions" data-group="agents" href="executions.html#view-agent-executions"><span class="nav-icon">▶️</span>Agent Executions</a>
+      <a class="nav-item sub-item" data-view="runtime-monitor" data-group="agents" href="executions.html#view-runtime-monitor"><span class="nav-icon">🕸️</span>Agent Runtime Monitor</a>
+      <a class="nav-item sub-item" data-view="agent-trails" data-group="agents" href="executions.html#view-agent-trails"><span class="nav-icon">📋</span>Agent Trails</a>
+      <a class="nav-item sub-item" data-view="skills" data-group="agents" href="skills-sops.html#view-skills"><span class="nav-icon">🔧</span>Skills</a>
+      <a class="nav-item sub-item" data-view="sops" data-group="agents" href="skills-sops.html#view-sops"><span class="nav-icon">📋</span>SOPs</a>
+      <a class="nav-item sub-item" data-view="schedules" data-group="agents" href="schedules.html#view-schedules"><span class="nav-icon">📅</span>Schedules</a>
+      <a class="nav-item sub-item" data-view="chat" data-group="agents" href="chat.html#view-chat"><span class="nav-icon">💬</span>Chat Sessions</a>
+      <a class="nav-item sub-item" data-view="conversational-intervention" data-group="agents" href="chat.html#view-conversational-intervention"><span class="nav-icon">💬</span>Conversational Intervention</a>
+      <a class="nav-item sub-item" data-view="intervene-requests" data-group="agents" href="chat.html#view-intervene-requests"><span class="nav-icon">🛑</span>Intervene Requests</a>
+      <a class="nav-item sub-item" data-view="data-types" data-group="agents" href="data-results.html#view-data-types"><span class="nav-icon">📐</span>Data Types</a>
+      <a class="nav-item sub-item" data-view="agent-outputs" data-group="agents" href="data-results.html#view-agent-outputs"><span class="nav-icon">📤</span>Agent Outputs</a>
+      <a class="nav-item sub-item" data-view="agent-logs" data-group="agents" href="executions.html#view-agent-logs"><span class="nav-icon">🧾</span>Agent Logs</a>
+    </div>
+  </div>
+
+  <div class="nav-parent-group" id="nav-results" data-group="results">
+    <a class="nav-parent-group-label" href="data-results.html#view-results" role="button" aria-expanded="true">
+      <span>📊 Results</span>
+      <span class="toggle-icon" aria-hidden="true">▼</span>
+    </a>
+    <div class="nav-children">
+      <a class="nav-item sub-item" data-view="results" data-group="results" href="data-results.html#view-results"><span class="nav-icon">📊</span>Result Repository</a>
+    </div>
+  </div>
+
+  <div class="nav-parent-group locked-open" id="nav-integrations" data-group="integrations">
+    <a class="nav-parent-group-label" href="#view-mcp-hub" role="button" aria-expanded="true">
+      <span>🌐 Integrations</span>
+      <span class="toggle-icon" aria-hidden="true">▼</span>
+    </a>
+    <div class="nav-children">
+      <a class="nav-item sub-item" data-view="mcp-hub" data-group="integrations" href="#view-mcp-hub"><span class="nav-icon">🔌</span>MCP Hub</a>
+      <a class="nav-item sub-item" data-view="notifications" data-group="integrations" href="#view-notifications"><span class="nav-icon">🔔</span>Notification Integration</a>
+      <a class="nav-item sub-item" data-view="api-keys" data-group="integrations" href="#view-api-keys"><span class="nav-icon">🔑</span>API Keys</a>
+      <a class="nav-item sub-item" data-view="agent-clients" data-group="integrations" href="#view-agent-clients"><span class="nav-icon">🤝</span>Agent Client</a>
+      <a class="nav-item sub-item" data-view="gateway" data-group="integrations" href="#view-gateway"><span class="nav-icon">🛰️</span>Agent Gateway</a>
+    </div>
+  </div>
+
+  <div class="nav-parent-group" id="nav-system" data-group="system">
+    <a class="nav-parent-group-label" href="system.html#view-observability" role="button" aria-expanded="true">
+      <span>⚙️ System</span>
+      <span class="toggle-icon" aria-hidden="true">▼</span>
+    </a>
+    <div class="nav-children">
+      <a class="nav-item sub-item" data-view="observability" data-group="system" href="system.html#view-observability"><span class="nav-icon">📊</span>Observability</a>
+      <a class="nav-item sub-item" data-view="permissions" data-group="system" href="system.html#view-permissions"><span class="nav-icon">🔐</span>Permissions</a>
+      <a class="nav-item sub-item" data-view="system-config" data-group="system" href="system.html#view-system-config"><span class="nav-icon">⚙️</span>System Config</a>
+      <a class="nav-item sub-item" data-view="model-configs" data-group="system" href="system.html#view-model-configs"><span class="nav-icon">🧩</span>Model Configs</a>
+      <a class="nav-item sub-item" data-view="decision-tools" data-group="system" href="decision.html#view-decision-tools"><span class="nav-icon">⚖️</span>Decision Tools</a>
+      <a class="nav-item sub-item" data-view="sysone-providers" data-group="system" href="decision.html#view-sysone-providers"><span class="nav-icon">🧠</span>Decision Model Providers</a>
+      <a class="nav-item sub-item" data-view="security-audit" data-group="system" href="system.html#view-security-audit"><span class="nav-icon">🛡️</span>Security Audit</a>
+    </div>
+  </div>
+
+  <div class="nav-parent-group" id="nav-tenant-admin" data-group="tenant-admin">
+    <a class="nav-parent-group-label" href="tenancy.html#view-tenant-settings" role="button" aria-expanded="true">
+      <span>🏢 Tenant Admin</span>
+      <span class="toggle-icon" aria-hidden="true">▼</span>
+    </a>
+    <div class="nav-children">
+      <a class="nav-item sub-item" data-view="tenant-settings" data-group="tenant-admin" href="tenancy.html#view-tenant-settings"><span class="nav-icon">⚙️</span>Tenant Settings</a>
+      <a class="nav-item sub-item" data-view="tenant-members" data-group="tenant-admin" href="tenancy.html#view-tenant-members"><span class="nav-icon">👥</span>Members</a>
+      <a class="nav-item sub-item" data-view="tenant-identity-providers" data-group="tenant-admin" href="tenancy.html#view-tenant-identity-providers"><span class="nav-icon">🔑</span>Identity Providers</a>
+    </div>
+  </div>
+
+  <div class="nav-parent-group" id="nav-platform" data-group="platform" style="display:none">
+    <a class="nav-parent-group-label" href="tenancy.html#view-platform-settings" role="button" aria-expanded="true">
+      <span>🛡️ Platform</span>
+      <span class="toggle-icon" aria-hidden="true">▼</span>
+    </a>
+    <div class="nav-children">
+      <a class="nav-item sub-item" data-view="platform-settings" data-group="platform" href="tenancy.html#view-platform-settings"><span class="nav-icon">⚙️</span>Platform Settings</a>
+      <a class="nav-item sub-item" data-view="platform-tenants" data-group="platform" href="tenancy.html#view-platform-tenants"><span class="nav-icon">🏢</span>Tenants</a>
+      <a class="nav-item sub-item" data-view="platform-audit" data-group="platform" href="tenancy.html#view-platform-audit"><span class="nav-icon">🛡️</span>Platform Security Audit</a>
+    </div>
+  </div>
+
+</nav>
+<!-- ═══════════════════════════════ MAIN WRAPPER ═══════════════════════════════ -->
+<div class="main-wrapper">
+  <!-- TOP BAR -->
+  <div class="topbar">
+    <div class="topbar-title" id="topbar-title">Integrations</div>
+    <div class="topbar-actions">
+      <span class="chip chip-yellow" id="oidc-sa-indicator" style="display:none">🔑 Super Admin</span>
+      <span class="chip chip-blue" id="tenant-ctx-chip" style="display:none">🏢 <span id="tenant-ctx-name"></span></span>
+      <button class="btn-icon" title="Notifications">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg>
+        <span class="badge">3</span>
+      </button>
+      <div class="avatar" title="Alex Harper — Admin">AH</div>
+    </div>
+  </div>
+
+  <!-- MAIN CONTENT -->
+  <div class="main-content">
+
+<!-- ═══════════════════════════════ VIEW: MCP HUB ═══════════════════════════════ -->
+<div id="view-mcp-hub" class="view">
+  <div class="view-header">
+    <div><h2>MCP Hub</h2><div class="view-desc">Manage Model Context Protocol servers, sessions, and synced tools</div></div>
+    <button class="btn btn-primary" onclick="mcpOpenServerForm()">+ Register Server</button>
+  </div>
+
+  <!-- System entry contextual notice -->
+  <div style="display:flex;align-items:flex-start;gap:12px;padding:12px 16px;border-radius:var(--radius);background:rgba(37,99,235,0.04);border:1px solid rgba(37,99,235,0.12);margin-bottom:18px">
+    <span style="font-size:18px;flex-shrink:0">💡</span>
+    <div>
+      <strong style="font-size:13px;color:var(--text-primary)">About the System entry</strong>
+      <p style="font-size:12px;color:var(--text-secondary);line-height:1.5;margin-top:2px">The <strong>System</strong> entry represents Parthenon's built-in platform tools. It is shown only once, is not editable or deletable, and cannot be synced from this view.</p>
+      <p style="font-size:12px;color:var(--text-secondary);line-height:1.5;margin-top:4px">The <strong>Control Center</strong> entry (<code>cc</code>) is the platform-provisioned management integration: system-managed, sessionless, and hidden entirely from roles without <code>integration::control_center:read</code>. It hosts the <code>cc____*</code> management tools.</p>
+    </div>
+  </div>
+
+  <div class="tabs">
+    <div class="tab active" onclick="switchTab(this,'mcp-servers-panel')">🔌 Servers</div>
+    <div class="tab" onclick="switchTab(this,'mcp-tools-panel')">🛠️ Tool Repository</div>
+  </div>
+
+  <div id="mcp-servers-panel" class="tab-panel active">
+    <!-- Sessions needing re-authentication (rendered by mcpRenderReauthBanner) -->
+    <div id="mcp-reauth-banner"></div>
+    <!-- Server List -->
+    <div class="table-wrap">
+      <table id="mcp-servers-table">
+        <thead><tr>
+          <th>Server</th><th>Slug</th><th>URL</th><th>Status</th><th>Sessions</th><th>Last Sync</th><th>Actions</th>
+        </tr></thead>
+        <tbody>
+          <!-- SYSTEM ENTRY (built-in, slug "system") -->
+          <tr id="mcp-row-system" data-type="system">
+            <td>
+              <span style="display:flex;align-items:center;gap:8px">
+                <strong>System</strong>
+                <span class="chip chip-red" style="background:#FEE2E2;color:#B91C1C;border:1px solid #FECACA">⚡ Built-in</span>
+              </span>
+            </td>
+            <td><span class="font-mono text-sm">system</span></td>
+            <td><span class="text-secondary text-xs">—</span></td>
+            <td><span class="chip chip-green"><span class="status-dot dot-green"></span> Active</span></td>
+            <td><span class="text-secondary">—</span></td>
+            <td><span class="text-secondary">—</span></td>
+            <td class="actions-cell">
+              <span class="text-secondary text-xs" style="opacity:0.7">System managed</span>
+            </td>
+          </tr>
+
+          <!-- CONTROL CENTER ENTRY (protected, system-managed, sessionless) -->
+          <tr id="mcp-row-cc" data-type="cc">
+            <td>
+              <span style="display:flex;align-items:center;gap:8px">
+                <strong>Control Center</strong>
+                <span class="chip chip-yellow" style="border:1px solid #FDE68A">Control Center</span>
+              </span>
+              <div class="text-xs text-secondary" style="margin-top:2px">Management toolset · <code>cc____*</code></div>
+            </td>
+            <td><span class="font-mono text-sm">cc</span></td>
+            <td><span class="font-mono text-sm text-secondary">https://control-center.internal/mcp</span></td>
+            <td><span class="chip chip-green"><span class="status-dot dot-green"></span> Active</span></td>
+            <td><span class="text-secondary">—</span></td>
+            <td><span class="text-secondary">—</span></td>
+            <td class="actions-cell">
+              <span class="text-secondary text-xs">System-managed</span>
+            </td>
+          </tr>
+
+          <!-- filesystem — 3 sessions, active -->
+          <tr id="mcp-row-filesystem" data-server="filesystem" data-sessions="3">
+            <td><strong>File System Tools</strong></td>
+            <td><span class="font-mono text-sm">filesystem</span></td>
+            <td><span class="font-mono text-sm text-secondary">http://mcp-fs:8000</span></td>
+            <td><span class="chip chip-green"><span class="status-dot dot-green"></span> Active</span></td>
+            <td><span>3 sessions</span></td>
+            <td class="text-secondary">2 min ago</td>
+            <td class="actions-cell">
+              <button class="btn btn-xs btn-secondary" onclick="mcpSync('filesystem')" title="Sync tools from server">🔄 Sync</button>
+              <button class="btn btn-xs btn-secondary" onclick="mcpOpenSessions('filesystem')" title="Manage sessions">⚙️ Sessions</button>
+              <button class="btn-icon-sm" title="Edit server">✏️</button>
+            </td>
+          </tr>
+
+          <!-- github — 0 sessions, sync disabled -->
+          <tr id="mcp-row-github" data-server="github" data-sessions="0">
+            <td><strong>GitHub Integration</strong></td>
+            <td><span class="font-mono text-sm">github</span></td>
+            <td><span class="font-mono text-sm text-secondary">http://mcp-github:8001</span></td>
+            <td><span class="chip chip-green"><span class="status-dot dot-green"></span> Active</span></td>
+            <td><span class="chip chip-gray">0 sessions</span></td>
+            <td class="text-secondary">Never</td>
+            <td class="actions-cell">
+              <span class="tooltip-wrap" style="display:inline-flex">
+                <button class="btn btn-xs btn-secondary" disabled style="opacity:0.4">🔄 Sync</button>
+                <span class="tooltip" style="position:absolute;bottom:calc(100%+6px);left:50%;transform:translateX(-50%);background:#1E293B;color:#fff;font-size:11px;padding:5px 10px;border-radius:4px;white-space:nowrap;z-index:500;display:none">Add a session before syncing</span>
+              </span>
+              <button class="btn btn-xs btn-secondary" onclick="mcpOpenSessions('github')">⚙️ Sessions</button>
+              <button class="btn-icon-sm">✏️</button>
+            </td>
+          </tr>
+
+          <!-- slack-tools — 4 sessions, warning, sync enabled, one session needs re-auth -->
+          <tr id="mcp-row-slack-tools" data-server="slack-tools" data-sessions="4">
+            <td><strong>Slack Notifications</strong></td>
+            <td><span class="font-mono text-sm">slack-tools</span></td>
+            <td><span class="font-mono text-sm text-secondary">http://mcp-slack:8002</span></td>
+            <td><span class="chip chip-yellow"><span class="status-dot dot-yellow"></span> Warning</span></td>
+            <td><span>4 sessions</span></td>
+            <td>
+              <span class="text-secondary">1 hour ago</span>
+              <div class="text-xs" style="color:var(--warning);margin-top:2px">initialize handshake issues — 6 tools</div>
+              <div class="text-xs" style="color:var(--error);margin-top:2px">1 session needs re-authentication</div>
+            </td>
+            <td class="actions-cell">
+              <button class="btn btn-xs btn-secondary" onclick="mcpSync('slack-tools')">🔄 Sync</button>
+              <button class="btn btn-xs btn-secondary" onclick="mcpOpenSessions('slack-tools')">⚙️ Sessions</button>
+              <button class="btn-icon-sm">✏️</button>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div id="mcp-tools-panel" class="tab-panel">
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px">
+      <div class="search-input" style="max-width:320px">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+        <input placeholder="Search tools..." oninput="filterTools(this.value)">
+      </div>
+      <select class="form-control" style="width:200px" onchange="filterToolsByServer(this.value)">
+        <option value="">All Servers</option>
+        <option>filesystem</option><option>github</option><option>slack-tools</option>
+      </select>
+    </div>
+
+    <div id="tool-groups">
+      <!-- filesystem group -->
+      <div class="tool-group">
+        <div class="tool-group-header">
+          <h4>filesystem</h4>
+          <span class="count-badge">6 tools</span>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Tool Name</th><th>Description</th><th>Server</th><th>Assigned Skills</th><th style="width:100px">Enabled</th></tr></thead>
+            <tbody>
+              <tr><td><strong class="font-mono">read_file</strong></td><td>Read file contents from path</td><td><span class="chip chip-blue">filesystem</span></td><td><span class="chip chip-gray" style="margin-right:4px">read-analyze-file</span><span class="chip chip-gray">file-organizer</span></td><td><label class="toggle"><input type="checkbox" checked><span class="toggle-slider"></span></label></td><td class="actions-cell"><button class="btn btn-xs btn-secondary" onclick="openModal('modal-test-tool')">Test</button></td></tr>
+              <tr><td><strong class="font-mono">write_file</strong></td><td>Write data to a file</td><td><span class="chip chip-blue">filesystem</span></td><td><span class="text-secondary">—</span></td><td><label class="toggle"><input type="checkbox" checked><span class="toggle-slider"></span></label></td><td class="actions-cell"><button class="btn btn-xs btn-secondary" onclick="openModal('modal-test-tool')">Test</button></td></tr>
+              <tr><td><strong class="font-mono">copy_file</strong></td><td>Copy file to destination</td><td><span class="chip chip-blue">filesystem</span></td><td><span class="chip chip-gray">file-organizer</span></td><td><label class="toggle"><input type="checkbox" checked><span class="toggle-slider"></span></label></td><td class="actions-cell"><button class="btn btn-xs btn-secondary" onclick="openModal('modal-test-tool')">Test</button></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════ VIEW: NOTIFICATION INTEGRATION ═══════════════════════════════ -->
+<div id="view-notifications" class="view">
+  <div class="view-header">
+    <div><h2>Notification Integration</h2><div class="view-desc">Configure delivery channels, recipient groups, and delivery monitoring</div></div>
+    <button class="btn btn-primary" onclick="openModal('modal-notif')">+ Add Channel</button>
+  </div>
+  <div class="tabs">
+    <div class="tab active" onclick="switchTab(this,'notif-channels')">📧 Channels</div>
+    <div class="tab" onclick="switchTab(this,'notif-groups')">👥 Recipient Groups</div>
+    <div class="tab" onclick="switchTab(this,'notif-logs')">📋 Delivery Logs</div>
+  </div>
+
+  <div id="notif-channels" class="tab-panel active">
+    <div class="notif-grid">
+      <div class="notif-card">
+        <div class="notif-card-header">
+          <div style="display:flex;align-items:center;gap:10px">
+            <span style="font-size:24px">📧</span>
+            <span class="notif-card-title">Email</span>
+          </div>
+          <span class="chip chip-green">● Active</span>
+        </div>
+        <div class="notif-card-meta">
+          <div>Endpoint: <span>smtp.company.com:587</span></div>
+          <div>MCP Tool: <span>send_email</span></div>
+          <div>Auth: <span>SMTP Credentials</span></div>
+        </div>
+        <div style="margin-top:14px;display:flex;gap:8px">
+          <button class="btn btn-sm btn-secondary">🔌 Test</button>
+          <button class="btn btn-sm btn-secondary">✏️ Edit</button>
+        </div>
+      </div>
+      <div class="notif-card">
+        <div class="notif-card-header">
+          <div style="display:flex;align-items:center;gap:10px">
+            <span style="font-size:24px">💬</span>
+            <span class="notif-card-title">Slack</span>
+          </div>
+          <span class="chip chip-green">● Active</span>
+        </div>
+        <div class="notif-card-meta">
+          <div>Endpoint: <span>hooks.slack.com/services/...</span></div>
+          <div>MCP Tool: <span>slack_notify</span></div>
+          <div>Auth: <span>Webhook URL</span></div>
+        </div>
+        <div style="margin-top:14px;display:flex;gap:8px">
+          <button class="btn btn-sm btn-secondary">🔌 Test</button>
+          <button class="btn btn-sm btn-secondary">✏️ Edit</button>
+        </div>
+      </div>
+      <div class="notif-card" style="border-color:var(--warning)">
+        <div class="notif-card-header">
+          <div style="display:flex;align-items:center;gap:10px">
+            <span style="font-size:24px">🔷</span>
+            <span class="notif-card-title">Microsoft Teams</span>
+          </div>
+          <span class="chip chip-yellow">⚠ Warning</span>
+        </div>
+        <div class="notif-card-meta">
+          <div>Endpoint: <span>outlook.office.com/webhooks/...</span></div>
+          <div>MCP Tool: <span>teams_notify</span></div>
+          <div style="color:var(--error)">Last test failed — 401 Unauthorized</div>
+        </div>
+        <div style="margin-top:14px;display:flex;gap:8px">
+          <button class="btn btn-sm btn-secondary">🔌 Test</button>
+          <button class="btn btn-sm btn-secondary">✏️ Edit</button>
+        </div>
+      </div>
+      <div class="notif-card">
+        <div class="notif-card-header">
+          <div style="display:flex;align-items:center;gap:10px">
+            <span style="font-size:24px">🌐</span>
+            <span class="notif-card-title">Webhook</span>
+          </div>
+          <span class="chip chip-green">● Active</span>
+        </div>
+        <div class="notif-card-meta">
+          <div>Endpoint: <span>https://api.company.com/events</span></div>
+          <div>MCP Tool: <span>webhook_post</span></div>
+          <div>Auth: <span>Bearer Token</span></div>
+        </div>
+        <div style="margin-top:14px;display:flex;gap:8px">
+          <button class="btn btn-sm btn-secondary">🔌 Test</button>
+          <button class="btn btn-sm btn-secondary">✏️ Edit</button>
+        </div>
+      </div>
+      <div class="notif-card">
+        <div class="notif-card-header">
+          <div style="display:flex;align-items:center;gap:10px">
+            <span style="font-size:24px">🚨</span>
+            <span class="notif-card-title">PagerDuty</span>
+          </div>
+          <span class="chip chip-gray">● Inactive</span>
+        </div>
+        <div class="notif-card-meta">
+          <div>Endpoint: <span>events.pagerduty.com</span></div>
+          <div>MCP Tool: <span>pagerduty_alert</span></div>
+          <div>Auth: <span>Integration Key</span></div>
+        </div>
+        <div style="margin-top:14px;display:flex;gap:8px">
+          <button class="btn btn-sm btn-secondary">🔌 Test</button>
+          <button class="btn btn-sm btn-secondary">✏️ Edit</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="notif-groups" class="tab-panel">
+    <div class="view-desc" style="margin-bottom:16px">Define recipient groups for routing notifications to the right people.</div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Group Name</th><th>Members</th><th>Channels</th><th>Created</th><th>Actions</th></tr></thead>
+        <tbody>
+          <tr><td><strong>Engineering Team</strong></td><td>12 members</td><td><span class="chip chip-blue">Slack</span> <span class="chip chip-blue">Email</span></td><td class="text-secondary">2 weeks ago</td><td class="actions-cell"><button class="btn-icon-sm">✏️</button><button class="btn-icon-sm">🗑️</button></td></tr>
+          <tr><td><strong>Operations</strong></td><td>8 members</td><td><span class="chip chip-blue">PagerDuty</span> <span class="chip chip-blue">Webhook</span></td><td class="text-secondary">1 month ago</td><td class="actions-cell"><button class="btn-icon-sm">✏️</button><button class="btn-icon-sm">🗑️</button></td></tr>
+          <tr><td><strong>Security</strong></td><td>5 members</td><td><span class="chip chip-blue">Teams</span> <span class="chip chip-blue">Email</span></td><td class="text-secondary">3 months ago</td><td class="actions-cell"><button class="btn-icon-sm">✏️</button><button class="btn-icon-sm">🗑️</button></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div id="notif-logs" class="tab-panel">
+    <div class="view-desc" style="margin-bottom:16px">Monitor recent notification deliveries and identify failures.</div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Timestamp</th><th>Channel</th><th>Recipient</th><th>Message</th><th>Status</th></tr></thead>
+        <tbody>
+          <tr><td class="text-secondary">Today 14:32:01</td><td><span class="chip chip-blue">Slack</span></td><td>#engineering-alerts</td><td>PR #142 review complete</td><td><span class="chip chip-green">Delivered</span></td></tr>
+          <tr><td class="text-secondary">Today 14:28:15</td><td><span class="chip chip-blue">Email</span></td><td>ops@company.com</td><td>Weekly report ready</td><td><span class="chip chip-green">Delivered</span></td></tr>
+          <tr><td class="text-secondary">Today 14:15:42</td><td><span class="chip chip-yellow">Teams</span></td><td>Security Channel</td><td>Incident alert: API timeout</td><td><span class="chip chip-red">Failed</span></td></tr>
+          <tr><td class="text-secondary">Today 13:55:10</td><td><span class="chip chip-blue">PagerDuty</span></td><td>on-call</td><td>Critical: system degraded</td><td><span class="chip chip-green">Delivered</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════ VIEW: API KEY MANAGEMENT ═══════════════════════════════ -->
+<div id="view-api-keys" class="view">
+  <div class="view-header">
+    <div>
+      <h2>API Key Management</h2>
+      <div class="view-desc">Create and manage API keys for third-party agents connecting via the MCP Hub</div>
+    </div>
+    <button class="btn btn-primary" onclick="akOpenCreate()">
+      + Create API Key
+    </button>
+  </div>
+
+  <!-- Filter Bar -->
+  <div class="filter-bar">
+    <select id="akFilterStatus" onchange="akRefreshTable()">
+      <option value="all">All Statuses</option>
+      <option value="active">Active</option>
+      <option value="revoked">Revoked</option>
+    </select>
+    <div class="search-input" style="max-width:300px">
+      <span style="font-size:15px">🔍</span>
+      <input type="text" id="akSearchInput" placeholder="Search by name or identity..." oninput="akRefreshTable()">
+    </div>
+    <span class="text-sm text-secondary" id="akResultCount">4 keys</span>
+  </div>
+
+  <!-- API Keys Table -->
+  <div class="table-wrap" id="akTableWrap">
+    <table id="akTable">
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Agent Identity</th>
+          <th>Agent Role</th>
+          <th>Status</th>
+          <th>Key Hint</th>
+          <th>Created</th>
+          <th>Last Used</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody id="akTbody"></tbody>
+    </table>
+  </div>
+
+  <!-- Empty State -->
+  <div id="akEmptyState" class="empty-state" style="display:none">
+    <div class="empty-icon">🔑</div>
+    <h3>No API Keys Yet</h3>
+    <p>Create your first API key to allow external agents to connect to the MCP Hub.</p>
+    <button class="btn btn-primary" onclick="akOpenCreate()">+ Create API Key</button>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════ VIEW: AGENT CLIENT (third-party-agent-integration) ═══════════════════════════════ -->
+<div id="view-agent-clients" class="view">
+  <div class="view-header">
+    <div>
+      <h2>Agent Client</h2>
+      <div class="view-desc">Tenant-managed access grants bound to one agent type. A client is <b>not</b> an agent identity — it can only invoke the agent type's input interface (conversation turn or typed submit), never tools or the MCP hub.</div>
+    </div>
+    <button class="btn btn-primary" onclick="acOpenCreate()">+ New Client</button>
+  </div>
+
+  <div class="tabs">
+    <div class="tab active" onclick="switchTab(this,'ac-clients-panel')">🔑 Clients</div>
+    <div class="tab" onclick="switchTab(this,'ac-widget-panel')">💬 Widget Preview (End User)</div>
+    <div class="tab" onclick="switchTab(this,'ac-server-panel')">🖥️ Server-Side Flow (Secret)</div>
+  </div>
+
+  <!-- Clients panel -->
+  <div id="ac-clients-panel" class="tab-panel active">
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Client</th><th>Agent Type</th><th>Credential</th><th>Allowed Origins</th><th>Rate Limit</th><th>Status</th><th>Actions</th></tr></thead>
+        <tbody id="acTbody"></tbody>
+      </table>
+    </div>
+    <div class="alert alert-info" style="margin-top:14px"><div><b>Scoping.</b> A client credential reaches only the target agent type's input interface. The invoked agent type always runs with its own identity + role. Publishable clients require at least one allowed origin (wildcards like <span class="font-mono">https://*.acme.com</span> supported); incoming request origins are detected automatically from the browser/deployment — there is no user-editable origin field. All invocations are audited, never the credential value.</div></div>
+  </div>
+
+  <!-- Widget preview panel (stateful) -->
+  <div id="ac-widget-panel" class="tab-panel">
+    <div style="display:flex;gap:20px;align-items:flex-start;flex-wrap:wrap">
+      <div style="flex:1;min-width:420px;border:1px solid var(--border);border-radius:var(--radius-lg);overflow:hidden;display:flex;flex-direction:column;height:520px;background:#fff">
+        <div style="background:#6D28D9;color:#fff;padding:14px 18px;display:flex;align-items:center;gap:12px">
+          <div style="width:38px;height:38px;border-radius:50%;background:rgba(255,255,255,0.2);display:flex;align-items:center;justify-content:center;font-weight:700">A</div>
+          <div><div style="font-weight:600">Acme Support Bot</div><div style="font-size:11.5px;opacity:.85">White-labeled · publishable client · no Parthenon branding visible</div></div>
+        </div>
+        <div id="acChatBody" style="flex:1;overflow-y:auto;padding:16px;background:#F6F3FB;display:flex;flex-direction:column;gap:10px">
+          <div style="max-width:82%;padding:9px 13px;border-radius:14px;background:#fff;border:1px solid #E9E2F7;border-top-left-radius:4px;align-self:flex-start;font-size:13.5px">Hi! I'm the Acme support assistant. Start a conversation to ask about orders, returns, or your account.</div>
+        </div>
+        <div style="display:flex;gap:8px;padding:12px;border-top:1px solid var(--border);background:#fff">
+          <input id="acChatInput" placeholder="Start a session to begin chatting…" disabled style="flex:1;padding:9px 12px;border:1px solid var(--border);border-radius:999px" onkeydown="if(event.key==='Enter')acSendChat()">
+          <button id="acChatSend" class="btn btn-primary btn-sm" style="border-radius:999px;background:#6D28D9" disabled onclick="acSendChat()">Send</button>
+        </div>
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 14px;background:#F6F3FB;border-top:1px solid var(--border);font-size:12px;color:var(--text-secondary)">
+          <span id="acSessionChip">● No session</span>
+          <span style="display:flex;gap:8px">
+            <button class="btn btn-secondary btn-sm" id="acBtnStart" onclick="acStartSession()">▶ Start session</button>
+            <button class="btn btn-danger btn-sm" id="acBtnEnd" onclick="acEndSession()" disabled>■ End session</button>
+          </span>
+        </div>
+      </div>
+      <div style="width:300px;flex-shrink:0">
+        <div class="card">
+          <div class="card-header"><h3>Stateful conversation flow</h3></div>
+          <div class="card-body text-sm" style="color:var(--text-secondary)">
+            <p style="margin-bottom:8px">1. <b>Start session</b> → <span class="font-mono">POST /integrate/conversations</span></p>
+            <p style="margin-bottom:8px">2. Messages → <span class="font-mono">/messages</span> share the same conversation context (like Control Center chat). There is <b>no one-shot chat</b>.</p>
+            <p style="margin-bottom:8px">3. <b>End session</b> → <span class="font-mono">/end</span></p>
+            <p style="margin-bottom:0">Replies render with format detection: markdown incl. tables and pretty-printed JSON. Guardrail/timeout failures surface as error turns, never an endless spinner.</p>
+          </div>
+        </div>
+        <div class="card" style="margin-top:14px">
+          <div class="card-header"><h3>Origin (automatic)</h3></div>
+          <div class="card-body text-sm"><span class="chip chip-blue font-mono">https://acme.com</span><p style="font-size:12px;color:var(--text-secondary);margin-top:8px">Sent automatically by the browser; checked against the client's allowed origins.</p></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Server-side panel -->
+  <div id="ac-server-panel" class="tab-panel">
+    <div class="card" style="max-width:760px">
+      <div class="card-header"><h3>Typed request/response — Python SDK (secret client)</h3><span class="chip chip-purple">secret · phn_cl_sk_…</span></div>
+      <div class="card-body">
+        <pre class="font-mono text-sm" style="background:#1E293B;color:#E2E8F0;border-radius:var(--radius);padding:16px;overflow-x:auto">from parthenon import Client
+
+client = Client(secret_key="phn_cl_sk_…")      # server-side only
+result = client.invoke("inbox-triage", input={
+    "email_body": "I ordered a laptop two weeks ago but it arrived damaged. I want a refund."
+})
+print(result.status)      # "valid"
+print(result.output)      # typed AgentOutput</pre>
+        <div style="margin-top:14px;display:flex;gap:10px;align-items:center">
+          <button class="btn btn-primary" onclick="acRunServer()">▶ Run request</button>
+          <span class="text-xs" style="color:var(--text-secondary)">Simulated — typed responses include validation status with raw-output fallback.</span>
+        </div>
+        <div id="acServerResult"></div>
+        <div class="alert alert-info" style="margin-top:14px"><div><b>Optional dual identity:</b> a secret client may pass its end user's identity when the third party and tenant share an identity provider — server-to-server only, validated and tenant-matched. Identity tokens never reach a browser.</div></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════ VIEW: GATEWAY ═══════════════════════════════ -->
+<div id="view-gateway" class="view">
+  <div class="view-header">
+    <div><h2>Gateway</h2><div class="view-desc">Endpoint registry and lifecycle protocol reference</div></div>
+  </div>
+  <div class="gateway-shell">
+    <div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Agent Type</th><th>Protocol</th><th>Endpoint URL</th><th>Status</th><th>Actions</th></tr></thead>
+          <tbody>
+            <tr>
+              <td><strong>pr-reviewer</strong></td>
+              <td><span class="chip chip-blue">HTTP</span></td>
+              <td><span class="font-mono text-sm">https://gw.parthenon.local/agents/pr-reviewer</span></td>
+              <td><span class="chip chip-green">● Active</span></td>
+              <td class="actions-cell"><button class="btn btn-xs btn-secondary">Test</button><button class="btn-icon-sm">📋</button></td>
+            </tr>
+            <tr>
+              <td><strong>pr-reviewer</strong></td>
+              <td><span class="chip chip-purple">MCP</span></td>
+              <td><span class="font-mono text-sm">mcp://gw.parthenon.local/agents/pr-reviewer</span></td>
+              <td><span class="chip chip-green">● Active</span></td>
+              <td class="actions-cell"><button class="btn btn-xs btn-secondary">Test</button><button class="btn-icon-sm">📋</button></td>
+            </tr>
+            <tr>
+              <td><strong>report-generator</strong></td>
+              <td><span class="chip chip-blue">HTTP</span></td>
+              <td><span class="font-mono text-sm">https://gw.parthenon.local/agents/report-generator</span></td>
+              <td><span class="chip chip-green">● Active</span></td>
+              <td class="actions-cell"><button class="btn btn-xs btn-secondary">Test</button><button class="btn-icon-sm">📋</button></td>
+            </tr>
+            <tr>
+              <td><strong>data-analyst</strong></td>
+              <td><span class="chip chip-blue">HTTP</span></td>
+              <td><span class="font-mono text-sm">https://gw.parthenon.local/agents/data-analyst</span></td>
+              <td><span class="chip chip-green">● Active</span></td>
+              <td class="actions-cell"><button class="btn btn-xs btn-secondary">Test</button><button class="btn-icon-sm">📋</button></td>
+            </tr>
+            <tr>
+              <td><strong>incident-bot</strong></td>
+              <td><span class="chip chip-blue">HTTP</span></td>
+              <td><span class="font-mono text-sm">https://gw.parthenon.local/agents/incident-bot</span></td>
+              <td><span class="chip chip-gray">● Inactive</span></td>
+              <td class="actions-cell"><button class="btn btn-xs btn-secondary">Test</button><button class="btn-icon-sm">📋</button></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <div>
+      <div class="protocol-card" style="position:sticky;top:0">
+        <div style="font-size:14px;font-weight:600;margin-bottom:16px;color:var(--text-primary)">📖 Lifecycle Protocol</div>
+        <div class="protocol-item">
+          <div><span class="protocol-method">POST</span><span class="protocol-endpoint">/init</span></div>
+          <div class="protocol-desc">Initialize a new agent session</div>
+          <div class="protocol-code">Body: { user_id, context }
+Returns: { session_id }</div>
+        </div>
+        <div class="protocol-item">
+          <div><span class="protocol-method">POST</span><span class="protocol-endpoint">/request</span></div>
+          <div class="protocol-desc">Send a task request to the agent</div>
+          <div class="protocol-code">Body: { session_id, message }
+Returns: { request_id, status }</div>
+        </div>
+        <div class="protocol-item">
+          <div><span class="protocol-method">GET</span><span class="protocol-endpoint">/question</span></div>
+          <div class="protocol-desc">Poll for pending agent questions</div>
+          <div class="protocol-code">Returns: { question_id, text } | null</div>
+        </div>
+        <div class="protocol-item">
+          <div><span class="protocol-method">POST</span><span class="protocol-endpoint">/answer</span></div>
+          <div class="protocol-desc">Send answer to agent question</div>
+          <div class="protocol-code">Body: { question_id, answer }</div>
+        </div>
+        <div class="protocol-item">
+          <div><span class="protocol-method">POST</span><span class="protocol-endpoint">/close</span></div>
+          <div class="protocol-desc">Close and terminate the session</div>
+          <div class="protocol-code">Body: { session_id }</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+  </div><!-- /main-content -->
+</div><!-- /main-wrapper -->
+</div><!-- /app-shell -->
+
+<!-- Register MCP Server Modal -->
+<div id="modal-mcp-server" class="modal-overlay" onclick="closeModalIfOverlay(event,'modal-mcp-server')">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>Register MCP Server</h3>
+      <button class="modal-close" onclick="closeModal('modal-mcp-server')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-row">
+        <div class="form-group">
+          <label>Slug</label>
+          <input class="form-control" placeholder="e.g. my-tools">
+        </div>
+        <div class="form-group">
+          <label>Name</label>
+          <input class="form-control" placeholder="My Tool Server">
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Server URL</label>
+        <input class="form-control" type="url" placeholder="http://mcp-server:8000">
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Auth Type</label>
+          <select class="form-control"><option>API Key</option><option>OAuth2</option><option>Bearer Token</option><option>None</option></select>
+        </div>
+        <div class="form-group">
+          <label>Auth Value</label>
+          <input class="form-control" type="password" placeholder="••••••••">
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-mcp-server')">Cancel</button>
+      <button class="btn btn-primary">Register Server</button>
+    </div>
+  </div>
+</div>
+
+<!-- Add Notification Channel Modal -->
+<div id="modal-notif" class="modal-overlay" onclick="closeModalIfOverlay(event,'modal-notif')">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>Add Notification Channel</h3>
+      <button class="modal-close" onclick="closeModal('modal-notif')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-row">
+        <div class="form-group">
+          <label>Channel Type</label>
+          <select class="form-control"><option>Email</option><option>Slack</option><option>Teams</option><option>Webhook</option><option>PagerDuty</option></select>
+        </div>
+        <div class="form-group">
+          <label>Name</label>
+          <input class="form-control" placeholder="e.g. primary-slack">
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Endpoint URL</label>
+        <input class="form-control" type="url" placeholder="https://hooks.slack.com/services/...">
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Auth Type</label>
+          <select class="form-control"><option>None</option><option>Bearer Token</option><option>API Key</option><option>Basic Auth</option></select>
+        </div>
+        <div class="form-group">
+          <label>Auth Value</label>
+          <input class="form-control" type="password" placeholder="••••••••">
+        </div>
+      </div>
+      <button class="btn btn-secondary btn-sm">🔌 Test Connection</button>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-notif')">Cancel</button>
+      <button class="btn btn-primary">Add Channel</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════ MODALS ═══════════════════════════════ -->
+<!-- SESSIONS MODAL (MCP Hub) -->
+<div id="modal-sessions" class="modal-overlay" onclick="if(event.target===this)closeModal('modal-sessions')">
+  <div class="modal modal-lg">
+    <div class="modal-header">
+      <h3 id="modal-sessions-title">Sessions</h3>
+      <button class="modal-close" onclick="closeModal('modal-sessions')">×</button>
+    </div>
+    <div class="modal-body" id="modal-sessions-body">
+      <!-- Populated by JS -->
+    </div>
+    <div class="modal-footer">
+      <span style="flex:1;font-size:12px;color:var(--text-secondary);display:flex;align-items:center;gap:6px">
+        <span style="color:#6D28D9">★</span> Default session is used for sync and tool routing when no specific session is selected.
+      </span>
+      <button class="btn btn-secondary" onclick="closeModal('modal-sessions')">Close</button>
+      <button class="btn btn-primary" id="btn-add-session-modal">+ Add Session</button>
+    </div>
+  </div>
+</div>
+
+<!-- SESSION FORM MODAL (MCP Hub - Add/Edit) -->
+<div id="modal-session-form" class="modal-overlay" onclick="if(event.target===this)closeModal('modal-session-form')">
+  <div class="modal modal-lg">
+    <div class="modal-header">
+      <h3 id="modal-session-form-title">Add Session</h3>
+      <button class="modal-close" onclick="closeModal('modal-session-form')">×</button>
+    </div>
+    <div class="modal-body" id="modal-session-form-body">
+      <!-- Populated by JS -->
+    </div>
+    <div class="modal-footer">
+      <span id="session-form-error" style="flex:1;font-size:11px;color:var(--error);display:none;text-align:left"></span>
+      <button class="btn btn-secondary" onclick="closeModal('modal-session-form')">Cancel</button>
+      <button class="btn btn-primary" id="btn-save-session-form">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- REGISTER SERVER MODAL (MCP Hub) -->
+<div id="modal-mcp-server-form" class="modal-overlay" onclick="if(event.target===this)closeModal('modal-mcp-server-form')">
+  <div class="modal">
+    <div class="modal-header">
+      <h3 id="modal-mcp-server-title">Register MCP Server</h3>
+      <button class="modal-close" onclick="closeModal('modal-mcp-server-form')">×</button>
+    </div>
+    <div class="modal-body">
+      <div id="server-form-error-msg" style="font-size:11px;color:var(--error);display:none;margin-bottom:12px"></div>
+      <div class="form-group"><label>Server Name <span style="color:var(--error)">*</span></label><input class="form-control" id="svr-name-inp" placeholder="e.g. github-mcp"><div class="form-hint">Lowercase letters, numbers, hyphens only</div></div>
+      <div class="form-group"><label>Slug</label><input class="form-control" id="svr-slug-inp" placeholder="e.g. github-mcp" disabled><div class="form-hint">Auto-generated from name. Cannot be changed after creation.</div></div>
+      <div class="form-group"><label>Base URL</label><input class="form-control" id="svr-url-inp" placeholder="https://mcp.example.com"></div>
+      <div class="form-group"><label>Description</label><textarea class="form-control" id="svr-desc-inp" rows="2" placeholder="Optional description..."></textarea></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-mcp-server-form')">Cancel</button>
+      <button class="btn btn-primary" id="btn-save-server-form">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- TEST TOOL MODAL -->
+<div id="modal-test-tool" class="modal-overlay">
+  <div class="modal modal-lg">
+    <div class="modal-header">
+      <h3>Test Tool: read_file</h3>
+      <button class="modal-close" onclick="closeModal('modal-test-tool')">×</button>
+    </div>
+    <div class="modal-body">
+      <div style="margin-bottom:16px">
+        <label style="font-size:13px;font-weight:600;display:block;margin-bottom:4px">Tool Information</label>
+        <div style="font-size:13px;color:var(--text-secondary)">Read file contents from path.</div>
+      </div>
+      
+      <div class="alert alert-info" style="margin-bottom:16px">
+        <div>This MCP server uses Passthrough authentication. Please select an agent identity to execute as.</div>
+      </div>
+      
+      <div class="form-group">
+        <label>Execute as agent identity</label>
+        <select class="form-control">
+          <option value="">Select Identity...</option>
+          <option value="agent-analyst">agent-analyst@parthenon</option>
+          <option value="agent-reporter">agent-reporter@parthenon</option>
+        </select>
+      </div>
+
+      <div class="form-group mt-4">
+        <label>Payload (JSON)</label>
+        <textarea class="form-control" style="font-family: monospace;" rows="4">
+{
+  "path": "/etc/hosts"
+}
+        </textarea>
+      </div>
+
+      <div class="mt-4 flex gap-2">
+        <button class="btn btn-primary" onclick="this.textContent='Executing...';setTimeout(()=>this.textContent='Run Test',800)">Run Test</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ASSIGN SESSIONS MODAL -->
+<!-- REMOVED in improve-role-mcp-session-assignment: replaced by inline MCP session dropdowns in modal-agent-role -->
+<div id="modal-assign-sessions" class="modal-overlay" style="display:none!important" aria-hidden="true">
+  <div class="modal modal-lg">
+    <div class="modal-header">
+      <h3>Assign MCP Sessions to: Developer</h3>
+      <button class="modal-close" onclick="closeModal('modal-assign-sessions')">×</button>
+    </div>
+    <div class="modal-body" style="text-align:center;color:var(--text-secondary);padding:48px 24px">
+      <p style="font-size:32px;margin-bottom:16px">🗑️</p>
+      <p style="font-size:14px;font-weight:500">This separate popup has been removed.</p>
+      <p style="font-size:12px;margin-top:4px">MCP session assignment is now done inline within the Edit Agent Role dialog.</p>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-assign-sessions')">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- AGENT CLIENT: CREATE DIALOG -->
+<div class="modal-overlay" id="acCreateModal" onclick="acCloseIfOverlay(event,'acCreateModal')">
+  <div class="modal" style="max-width:640px">
+    <div class="modal-header"><h3>New Client</h3><button class="modal-close" onclick="acClose('acCreateModal')">×</button></div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label>Client name</label>
+        <input class="form-control" id="acName" placeholder="e.g. Acme Support Bot" oninput="acValidateCreate()">
+        <div class="form-hint">Unique within the tenant — duplicates are rejected with a clear error.</div>
+      </div>
+      <div class="form-group">
+        <label>Agent type</label>
+        <input class="form-control" id="acAgent" placeholder="Search agent types…" autocomplete="off" oninput="acFilterTypes()" onfocus="acFilterTypes()">
+        <div id="acAgentList" style="display:none;position:relative"></div>
+        <div class="form-hint">The client grants access to this agent type's input interface only. Fixed after creation.</div>
+      </div>
+      <div class="form-group">
+        <label>Credential type</label>
+        <select class="form-control" id="acKeyType" onchange="acOnKeyType()">
+          <option value="secret">secret — server-to-server (stays on the integrator's backend)</option>
+          <option value="publishable">publishable — browser-safe (white-label widget)</option>
+        </select>
+      </div>
+      <div class="alert" id="acPubWarn" style="display:none;background:#FFF8E1;border:1px solid #FFE082;color:#6D4C00"><div>⚠️ <b>Publishable client:</b> safe to embed in a browser, but it exposes this agent type's full behavior publicly. It <b>requires at least one allowed origin</b> — Save stays disabled until then. The tenant owns this decision; Parthenon does not hard-block it.</div></div>
+      <div class="form-group">
+        <label>Allowed origins (one per line)</label>
+        <textarea class="form-control" id="acOrigins" rows="3" placeholder="https://acme.com&#10;https://*.acme.com" oninput="acValidateCreate()"></textarea>
+        <div class="form-hint">Wildcards supported. Required for publishable clients. Incoming request origins are detected automatically — no user-editable origin field exists.</div>
+        <div id="acOriginWarn" style="display:none;margin-top:8px;background:#FFF8E1;border:1px solid #FFE082;border-radius:var(--radius-sm);padding:8px 12px;font-size:12px;color:#6D4C00">A publishable client needs at least one allowed origin before it can be saved.</div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label>Rate limit</label><input class="form-control" id="acRate" type="number" value="100" min="1"></div>
+        <div class="form-group"><label>Window</label><select class="form-control" id="acRateWindow"><option>per minute</option><option>per hour</option><option>per day</option></select></div>
+      </div>
+      <div class="form-group" style="margin-bottom:0"><label>Widget theme (optional)</label>
+        <div style="display:flex;gap:10px"><input class="form-control" id="acThemeName" placeholder="Display name, e.g. Acme Support Bot" style="flex:1"><input type="color" value="#6D28D9" style="width:52px;height:38px;padding:4px"></div>
+      </div>
+    </div>
+    <div class="modal-footer" style="display:flex;justify-content:flex-end;gap:10px">
+      <button class="btn btn-secondary" onclick="acClose('acCreateModal')">Cancel</button>
+      <button class="btn btn-primary" id="acSaveBtn" onclick="acSaveCreate()">Save Client</button>
+    </div>
+  </div>
+</div>
+
+<!-- AGENT CLIENT: EDIT DIALOG (origins + rate limit only) -->
+<div class="modal-overlay" id="acEditModal" onclick="acCloseIfOverlay(event,'acEditModal')">
+  <div class="modal" style="max-width:640px">
+    <div class="modal-header"><h3>Edit Client — <span id="aceName"></span></h3><button class="modal-close" onclick="acClose('acEditModal')">×</button></div>
+    <div class="modal-body">
+      <div class="form-row">
+        <div class="form-group"><label>Agent type (fixed)</label><input class="form-control" id="aceAgent" readonly></div>
+        <div class="form-group"><label>Credential type (fixed)</label><input class="form-control" id="aceKeyType" readonly></div>
+      </div>
+      <div class="form-hint" style="margin-bottom:14px">Name, credential type and target agent type are immutable — rotate the credential from the row actions if needed.</div>
+      <div class="form-group">
+        <label>Allowed origins (one per line)</label>
+        <textarea class="form-control" id="aceOrigins" rows="3"></textarea>
+        <div id="aceOriginWarn" style="display:none;background:#FFF8E1;border:1px solid #FFE082;border-radius:var(--radius-sm);padding:8px 12px;font-size:12px;color:#6D4C00">A publishable client needs at least one allowed origin.</div>
+      </div>
+      <div class="form-row" style="margin-bottom:0">
+        <div class="form-group"><label>Rate limit</label><input class="form-control" id="aceRate" type="number" min="1"></div>
+        <div class="form-group"><label>Window</label><select class="form-control" id="aceRateWindow"><option>per minute</option><option>per hour</option><option>per day</option></select></div>
+      </div>
+    </div>
+    <div class="modal-footer" style="display:flex;justify-content:flex-end;gap:10px">
+      <button class="btn btn-secondary" onclick="acClose('acEditModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="acSaveEdit()">Save Changes</button>
+    </div>
+  </div>
+</div>
+
+<!-- AGENT CLIENT: ONE-TIME CREDENTIAL -->
+<div class="modal-overlay" id="acCredModal">
+  <div class="modal" style="max-width:560px">
+    <div class="modal-header"><h3>Client credential created</h3><button class="modal-close" onclick="acClose('acCredModal')">×</button></div>
+    <div class="modal-body">
+      <p class="text-sm" style="margin-bottom:12px"><b id="acCredName"></b> is ready. Copy the credential now — <b>it is shown only once</b>; only its hash is stored.</p>
+      <div style="background:#0F172A;color:#E2E8F0;border-radius:var(--radius);padding:14px 16px;font-family:'SF Mono',Menlo,monospace;font-size:13px;word-break:break-all;display:flex;justify-content:space-between;gap:12px;align-items:center">
+        <span id="acCredValue"></span>
+        <button class="btn btn-secondary btn-xs" style="flex-shrink:0" onclick="acCopyCred()">Copy</button>
+      </div>
+      <div class="alert" id="acCredPubWarn" style="display:none;background:#FFF8E1;border:1px solid #FFE082;color:#6D4C00;margin-top:12px"><div>⚠️ Publishable credential — publicly exposes the agent type's behavior. Verify the allowed origins are correct.</div></div>
+    </div>
+    <div class="modal-footer" style="display:flex;justify-content:flex-end">
+      <button class="btn btn-primary" onclick="acClose('acCredModal')">I've stored it</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════ API KEY MODALS ═══════════════════════════════ -->
+<!-- Create API Key Dialog -->
+<div class="modal-overlay" id="akCreateDialog" onclick="if(event.target===this)akCloseCreate()">
+  <div class="modal modal-lg">
+    <div class="modal-header">
+      <h3>Create API Key</h3>
+      <button class="modal-close" onclick="akCloseCreate()">✕</button>
+    </div>
+    <div class="modal-body">
+      <!-- Step 1: Form -->
+      <div id="akCreateStepForm">
+        <div class="form-group">
+          <label>Key Name <span style="color:var(--error)">*</span></label>
+          <input type="text" class="form-control" id="akInputName" placeholder="e.g. Claude Code Production Key" maxlength="128" oninput="akValidateForm()">
+          <div class="form-hint">A human-readable label to identify this API key</div>
+          <div class="form-error" id="akErrName">Key name is required</div>
+        </div>
+
+        <div class="form-group">
+          <label>Agent Identity <span style="color:var(--error)">*</span></label>
+          <select class="form-control" id="akSelectIdentity" onchange="akOnIdentityChange()">
+            <option value="">-- Select an agent identity --</option>
+          </select>
+          <div class="form-hint">The agent identity that will use this key to authenticate</div>
+          <div class="form-error" id="akErrIdentity">Agent identity is required</div>
+        </div>
+
+        <div class="form-group">
+          <label>Agent Role <span style="color:var(--error)">*</span></label>
+          <select class="form-control" id="akSelectRole" onchange="akValidateForm()" disabled style="background:#F5F5F5">
+            <option value="">-- Select a role --</option>
+          </select>
+          <div class="form-hint" id="akRoleHint">First select an agent identity to see available roles</div>
+          <div class="form-error" id="akErrRole">Agent role is required</div>
+        </div>
+
+        <div class="alert alert-info" style="margin-bottom:0">
+          <div>
+            <strong style="display:block;margin-bottom:2px">Key Scoping</strong>
+            <p class="text-sm">The API key inherits the full permission set of the selected role. The external agent will only have access to skills and tools granted by that role.</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Step 2: Key Created Success -->
+      <div id="akCreateStepSuccess" style="display:none">
+        <div class="key-created-success">
+          <div class="success-icon">✓</div>
+          <h4>API Key Created Successfully</h4>
+          <p id="akCreatedKeyLabel">Key has been generated</p>
+        </div>
+
+        <div class="key-reveal-box">
+          <div class="key-warning">
+            <span class="warn-icon">⚠️</span>
+            <span>Save this key now — it will not be shown again. You will not be able to retrieve it after closing this dialog.</span>
+          </div>
+
+          <div class="key-display">
+            <span class="key-text masked" id="akKeyText">phn_sk_a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6</span>
+            <button class="copy-btn" id="akBtnCopy" onclick="akCopyKey()" title="Copy to clipboard">📋 Copy</button>
+          </div>
+
+          <div class="key-reveal-actions">
+            <button class="reveal-toggle" id="akBtnReveal" onclick="akToggleReveal()">👁️ Reveal Key</button>
+          </div>
+
+          <div class="key-format-hint">
+            Key format: <span class="font-mono" style="color:var(--primary-dark)">phn_sk_</span> + 32 random characters
+          </div>
+        </div>
+
+        <div style="margin-top:16px;font-size:13px;color:var(--text-secondary)">
+          <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #F0F0F0">
+            <span>Bound Identity</span>
+            <strong style="color:var(--text-primary)" id="akSummaryIdentity">—</strong>
+          </div>
+          <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #F0F0F0">
+            <span>Bound Role</span>
+            <strong style="color:var(--text-primary)" id="akSummaryRole">—</strong>
+          </div>
+          <div style="display:flex;justify-content:space-between;padding:6px 0">
+            <span>Key Hint</span>
+            <span class="key-hint" id="akSummaryHint">—</span>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer" id="akCreateFooterForm">
+      <button class="btn btn-secondary" onclick="akCloseCreate()">Cancel</button>
+      <button class="btn btn-primary" id="akBtnSubmit" onclick="akSubmitCreate()" disabled>Create Key</button>
+    </div>
+    <div class="modal-footer" id="akCreateFooterDone" style="display:none">
+      <button class="btn btn-primary w-full" onclick="akCloseCreate();akRefreshTable()">Done — I have saved this key</button>
+    </div>
+  </div>
+</div>
+
+<!-- Revoke Confirmation Dialog -->
+<div class="modal-overlay" id="akRevokeDialog" onclick="if(event.target===this)closeModal('akRevokeDialog')">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>⚠️ Revoke API Key</h3>
+      <button class="modal-close" onclick="closeModal('akRevokeDialog')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="alert alert-warning">
+        <div>
+          <p class="text-sm" style="font-size:14px;margin-bottom:8px">
+            Are you sure you want to revoke key <strong id="akRevokeKeyName">'Unnamed Key'</strong>?
+          </p>
+          <p class="text-sm" style="color:#92400E">
+            Any agent using this key will <strong>immediately lose access</strong>. This action cannot be undone. The key will remain visible in the list with "Revoked" status.
+          </p>
+        </div>
+      </div>
+      <p class="text-sm text-secondary mt-3">
+        Consider creating a replacement key before revoking if the agent still needs access.
+      </p>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('akRevokeDialog')">Cancel</button>
+      <button class="btn btn-danger" id="akBtnConfirmRevoke" onclick="akConfirmRevoke()">Revoke Key</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ CONTROL CENTER ASSISTANT (global floating launcher) ═══ -->
+<button class="asst-fab" id="asst-fab" onclick="asstOpen()" title="Control Center Assistant" aria-label="Control Center Assistant">🤖</button>
+<div class="asst-overlay" id="asst-overlay" onclick="if(event.target===this)asstClose()">
+  <div class="asst-dialog" id="asst-dialog" role="dialog" aria-label="Control Center Assistant conversation">
+    <div class="asst-head">
+      <span style="font-size:20px">🤖</span>
+      <h3 id="asst-title">Control Center Assistant</h3>
+      <span class="chip chip-green" id="asst-conn-chip">Connected</span>
+      <div class="asst-head-right">
+        <button class="btn-icon" id="asst-fs-btn" onclick="asstToggleFullscreen()" title="Toggle fullscreen">⛶</button>
+        <button class="btn-icon" onclick="asstClose()" title="Close">✕</button>
+      </div>
+    </div>
+
+    <div class="asst-body">
+      <div class="asst-alert" id="asst-model-alert" style="display:none">
+        <span>⚠️</span>
+        <div style="flex:1">
+          <b>The assistant needs a model configured for this workspace</b>
+          No model is configured for this workspace yet. An administrator can select one under System Config → Assistant model.
+          <div style="margin-top:8px"><button class="btn btn-secondary btn-sm" onclick="asstGoConfigure()">Configure model</button></div>
+        </div>
+      </div>
+
+      <div class="asst-paper-wrap">
+        <div class="asst-paper" id="asst-messages"></div>
+      </div>
+    </div>
+
+    <div class="asst-input-row">
+      <textarea class="chat-input" id="asst-input" rows="1" placeholder="Type a message… (Enter to send)" onkeydown="asstOnKey(event)" oninput="asstAutoGrow(this)"></textarea>
+      <button class="btn btn-primary" id="asst-send" onclick="asstSend()">Send</button>
+    </div>
+
+    <div class="asst-foot">
+      <button class="btn btn-secondary btn-sm" id="asst-btn-sessions" onclick="asstOpenSessions()">🗂 View All Sessions</button>
+      <button class="btn btn-secondary btn-sm" id="asst-btn-new" onclick="asstNewSession()">＋ New Session</button>
+      <span class="spacer"></span>
+      <button class="btn btn-sm" id="asst-btn-end" style="background:#fff;border:1px solid #FECACA;color:#B91C1C" onclick="asstOpenEnd()">⏹ End Session</button>
+      <button class="btn btn-secondary btn-sm" onclick="asstClose()">Exit</button>
+    </div>
+  </div>
+</div>
+<div class="asst-overlay" id="asst-sessions-overlay" onclick="if(event.target===this)asstCloseSessions()">
+  <div class="asst-dialog" style="width:min(620px,100%);height:auto;max-height:85vh" role="dialog" aria-label="All sessions for this agent">
+    <div class="asst-head">
+      <h3>All sessions for this agent</h3>
+      <div class="asst-head-right"><button class="btn-icon" onclick="asstCloseSessions()" title="Close">✕</button></div>
+    </div>
+    <div class="asst-body" style="overflow-y:auto;padding-bottom:14px">
+      <div class="asst-sess-filters">
+        <label class="toggle"><input type="checkbox" id="asst-show-ended" onchange="asstShowEnded(this.checked)"><span class="toggle-slider"></span><span style="font-size:12px">Show ended sessions</span></label>
+        <label style="display:inline-flex;align-items:center;gap:6px">From <input type="date" class="form-control" id="asst-sess-from" style="width:150px;padding:5px 8px;font-size:12px" onchange="asstDateChange()"></label>
+        <label style="display:inline-flex;align-items:center;gap:6px">To <input type="date" class="form-control" id="asst-sess-to" style="width:150px;padding:5px 8px;font-size:12px" onchange="asstDateChange()"></label>
+      </div>
+      <div id="asst-sessions-list"></div>
+      <div class="asst-pager" style="justify-content:center">
+        <span class="asst-pager-btns" id="asst-sessions-pager"></span>
+      </div>
+    </div>
+    <div class="asst-foot">
+      <span class="spacer"></span>
+      <button class="btn btn-secondary btn-sm" onclick="asstCloseSessions()">Cancel</button>
+    </div>
+  </div>
+</div>
+<div class="asst-overlay" id="asst-preview-overlay" onclick="if(event.target===this)asstClosePreview()">
+  <div class="asst-dialog" style="width:90vw;height:80vh" role="dialog" aria-label="Approval Preview">
+    <div class="asst-head">
+      <h3>Approval Preview</h3>
+      <div class="asst-head-right"><button class="btn-icon" onclick="asstClosePreview()" title="Collapse">⤡</button></div>
+    </div>
+    <div class="asst-body" id="asst-preview-body" style="overflow-y:auto;padding-bottom:14px;display:block;font-size:13px;line-height:1.6"></div>
+    <div class="asst-foot">
+      <button class="btn btn-secondary btn-sm" onclick="asstClosePreview()">Collapse</button>
+      <span class="spacer"></span>
+      <button class="btn btn-sm" style="background:#fff;border:1px solid #FECACA;color:#B91C1C" onclick="asstResolve(false)">✕ Deny</button>
+      <button class="btn btn-sm" style="background:#16A34A;color:#fff" onclick="asstResolve(true)">✓ Approve</button>
+    </div>
+  </div>
+</div>
+<div class="asst-overlay" id="asst-end-overlay" onclick="if(event.target===this)asstCloseEnd()">
+  <div class="asst-dialog" style="width:min(560px,100%);height:auto" role="dialog" aria-label="End Conversation Session">
+    <div class="asst-head">
+      <h3>End Conversation Session</h3>
+      <div class="asst-head-right"><button class="btn-icon" onclick="asstCloseEnd()" title="Close">✕</button></div>
+    </div>
+    <div class="asst-body" style="padding-bottom:16px">
+      <p style="font-size:13px;line-height:1.6">This will close the session. You can still view its history but cannot resume it.</p>
+      <p class="text-sm text-secondary" style="line-height:1.6;margin-top:8px">Any in-flight execution for this session is terminated. The next time you open the assistant it starts a <b>new</b> session instead of resuming this one.</p>
+    </div>
+    <div class="asst-foot">
+      <span class="spacer"></span>
+      <button class="btn btn-secondary btn-sm" onclick="asstCloseEnd()">Cancel</button>
+      <button class="btn btn-sm" style="background:#C62828;color:#fff" onclick="asstConfirmEnd()">End Session</button>
+    </div>
+  </div>
+</div>
+
+<script src="../shared/app.js"></script>
+<script src="../shared/assistant.js"></script>
+<script src="../shared/max-dialog.js"></script>
+<!-- ═══ api-keys ═══ -->
+<script>
+(function(){
+  var AK_IDENTITIES = [
+    { id:'ident-001', name:'GitHub Copilot Agent' },
+    { id:'ident-002', name:'Claude Code Agent' },
+    { id:'ident-003', name:'Cursor Agent' },
+    { id:'ident-004', name:'Custom DevOps Agent' }
+  ];
+  var AK_ROLES = [
+    { id:'role-001', name:'Code Review' },
+    { id:'role-002', name:'Skill Discovery' },
+    { id:'role-003', name:'SOP Executor' },
+    { id:'role-004', name:'Read-Only Observer' }
+  ];
+  var AK_IDENTITY_ROLE_MAP = {
+    'ident-001': ['role-001','role-002'],
+    'ident-002': ['role-001','role-002','role-003'],
+    'ident-003': ['role-001','role-002'],
+    'ident-004': ['role-003','role-004']
+  };
+  var akKeys = [
+    { id:'key-001', name:'Claude Code Production', identityId:'ident-002', identityName:'Claude Code Agent', roleId:'role-001', roleName:'Code Review', status:'active', keyHint:'phn_sk_...a1b2', createdAt:'2026-07-15T10:30:00Z', lastUsedAt:'2026-07-29T14:22:00Z' },
+    { id:'key-002', name:'GitHub Copilot Dev', identityId:'ident-001', identityName:'GitHub Copilot Agent', roleId:'role-002', roleName:'Skill Discovery', status:'active', keyHint:'phn_sk_...c3d4', createdAt:'2026-07-20T08:15:00Z', lastUsedAt:'2026-07-29T11:05:00Z' },
+    { id:'key-003', name:'DevOps Pipeline Key', identityId:'ident-004', identityName:'Custom DevOps Agent', roleId:'role-003', roleName:'SOP Executor', status:'active', keyHint:'phn_sk_...e5f6', createdAt:'2026-07-25T16:45:00Z', lastUsedAt:'2026-07-28T09:30:00Z' },
+    { id:'key-004', name:'Old Cursor Integration', identityId:'ident-003', identityName:'Cursor Agent', roleId:'role-001', roleName:'Code Review', status:'revoked', keyHint:'phn_sk_...7890', createdAt:'2026-07-10T12:00:00Z', lastUsedAt:'2026-07-18T20:15:00Z' }
+  ];
+  var akRevokeTargetId = null;
+
+  function akInit() {
+    var sel = document.getElementById('akSelectIdentity');
+    if (sel) {
+      sel.innerHTML = '<option value="">-- Select an agent identity --</option>';
+      AK_IDENTITIES.forEach(function(i){ var o=document.createElement('option');o.value=i.id;o.textContent=i.name;sel.appendChild(o); });
+    }
+    akRefreshTable();
+  }
+
+  function akOpenCreate() { akResetForm(); openModal('akCreateDialog'); }
+  function akCloseCreate() { closeModal('akCreateDialog'); akResetForm(); }
+
+  function akResetForm() {
+    document.getElementById('akCreateStepForm').style.display='block';
+    document.getElementById('akCreateStepSuccess').style.display='none';
+    document.getElementById('akCreateFooterForm').style.display='flex';
+    document.getElementById('akCreateFooterDone').style.display='none';
+    document.getElementById('akInputName').value='';
+    document.getElementById('akSelectIdentity').value='';
+    document.getElementById('akSelectRole').value='';
+    document.getElementById('akSelectRole').innerHTML='<option value="">-- Select a role --</option>';
+    document.getElementById('akSelectRole').disabled=true;
+    document.getElementById('akSelectRole').style.background='#F5F5F5';
+    document.getElementById('akRoleHint').textContent='First select an agent identity to see available roles';
+    document.querySelectorAll('#akCreateDialog .form-control').forEach(function(el){el.classList.remove('error');});
+    document.querySelectorAll('#akCreateDialog .form-error').forEach(function(el){el.classList.remove('visible');});
+    document.getElementById('akBtnSubmit').disabled=true;
+    document.getElementById('akKeyText').classList.add('masked');
+    document.getElementById('akKeyText').removeAttribute('data-full-key');
+    document.getElementById('akBtnCopy').removeAttribute('data-full-key');
+    document.getElementById('akBtnReveal').textContent='👁️ Reveal Key';
+    document.getElementById('akBtnReveal').setAttribute('data-revealed','false');
+  }
+
+  function akOnIdentityChange() {
+    var identityId=document.getElementById('akSelectIdentity').value;
+    var roleSel=document.getElementById('akSelectRole');
+    var hint=document.getElementById('akRoleHint');
+    roleSel.innerHTML='<option value="">-- Select a role --</option>';
+    if(!identityId){ roleSel.disabled=true;roleSel.style.background='#F5F5F5';hint.textContent='First select an agent identity to see available roles';akValidateForm();return; }
+    var allowed=(AK_IDENTITY_ROLE_MAP[identityId]||[]);
+    if(!allowed.length){ roleSel.disabled=true;roleSel.style.background='#F5F5F5';hint.textContent='No roles available for this identity';akValidateForm();return; }
+    allowed.forEach(function(rid){ var r=AK_ROLES.find(function(x){return x.id===rid;}); if(r){var o=document.createElement('option');o.value=r.id;o.textContent=r.name;roleSel.appendChild(o);}});
+    roleSel.disabled=false;roleSel.style.background='';hint.textContent=allowed.length+' role(s) available for this identity';
+    akValidateForm();
+  }
+
+  function akValidateForm() {
+    var ok=!!document.getElementById('akInputName').value.trim() && !!document.getElementById('akSelectIdentity').value && !!document.getElementById('akSelectRole').value;
+    document.getElementById('akBtnSubmit').disabled=!ok;
+  }
+
+  function akSubmitCreate() {
+    var name=document.getElementById('akInputName').value.trim();
+    var iId=document.getElementById('akSelectIdentity').value;
+    var rId=document.getElementById('akSelectRole').value;
+    var valid=true;
+    if(!name){ document.getElementById('akInputName').classList.add('error');document.getElementById('akErrName').classList.add('visible');valid=false; } else { document.getElementById('akInputName').classList.remove('error');document.getElementById('akErrName').classList.remove('visible'); }
+    if(!iId){ document.getElementById('akSelectIdentity').classList.add('error');document.getElementById('akErrIdentity').classList.add('visible');valid=false; } else { document.getElementById('akSelectIdentity').classList.remove('error');document.getElementById('akErrIdentity').classList.remove('visible'); }
+    if(!rId){ document.getElementById('akSelectRole').classList.add('error');document.getElementById('akErrRole').classList.add('visible');valid=false; } else { document.getElementById('akSelectRole').classList.remove('error');document.getElementById('akErrRole').classList.remove('visible'); }
+    if(!valid)return;
+    var btn=document.getElementById('akBtnSubmit');btn.innerHTML='<span class="spinner-sm"></span> Creating...';btn.disabled=true;
+    setTimeout(function(){
+      var chars='abcdefghijklmnopqrstuvwxyz0123456789',rnd='';for(var i=0;i<32;i++)rnd+=chars.charAt(Math.floor(Math.random()*chars.length));
+      var fullKey='phn_sk_'+rnd, hint='phn_sk_...'+rnd.slice(-4);
+      akKeys.unshift({ id:'key-'+Date.now(), name:name, identityId:iId, identityName:AK_IDENTITIES.find(function(x){return x.id===iId;}).name, roleId:rId, roleName:AK_ROLES.find(function(x){return x.id===rId;}).name, status:'active', keyHint:hint, createdAt:new Date().toISOString(), lastUsedAt:null });
+      document.getElementById('akCreateStepForm').style.display='none';
+      document.getElementById('akCreateStepSuccess').style.display='block';
+      document.getElementById('akCreateFooterForm').style.display='none';
+      document.getElementById('akCreateFooterDone').style.display='flex';
+      document.getElementById('akCreatedKeyLabel').textContent='Key "'+name+'" has been generated';
+      document.getElementById('akSummaryIdentity').textContent=akKeys[0].identityName;
+      document.getElementById('akSummaryRole').textContent=akKeys[0].roleName;
+      document.getElementById('akSummaryHint').textContent=hint;
+      document.getElementById('akKeyText').textContent=fullKey;
+      document.getElementById('akKeyText').classList.add('masked');
+      document.getElementById('akBtnReveal').textContent='👁️ Reveal Key';
+      document.getElementById('akBtnReveal').setAttribute('data-revealed','false');
+      document.getElementById('akKeyText').setAttribute('data-full-key',fullKey);
+      document.getElementById('akBtnCopy').setAttribute('data-full-key',fullKey);
+      schedToast('API key "'+name+'" created successfully','success');
+    },800);
+  }
+
+  function akToggleReveal() {
+    var kd=document.getElementById('akKeyText'), btn=document.getElementById('akBtnReveal');
+    if(btn.getAttribute('data-revealed')==='true'){ kd.classList.add('masked');btn.textContent='👁️ Reveal Key';btn.setAttribute('data-revealed','false'); }
+    else{ kd.classList.remove('masked');btn.textContent='🙈 Hide Key';btn.setAttribute('data-revealed','true'); }
+  }
+
+  function akCopyKey() {
+    var full=document.getElementById('akBtnCopy').getAttribute('data-full-key');
+    if(!full)return;
+    if(navigator.clipboard){ navigator.clipboard.writeText(full).then(function(){ akCopySuccess(); })['catch'](function(){ akFallbackCopy(full); }); }
+    else{ akFallbackCopy(full); }
+  }
+  function akFallbackCopy(text) {
+    var ta=document.createElement('textarea');ta.value=text;ta.style.position='fixed';ta.style.left='-9999px';document.body.appendChild(ta);ta.select();
+    try{document.execCommand('copy');akCopySuccess();}catch(e){schedToast('Failed to copy. Please select and copy manually.','error');}
+    document.body.removeChild(ta);
+  }
+  function akCopySuccess() {
+    var btn=document.getElementById('akBtnCopy'), orig=btn.innerHTML;
+    btn.innerHTML='✓ Copied!';btn.style.background='rgba(76,175,80,.3)';btn.style.borderColor='rgba(76,175,80,.5)';
+    setTimeout(function(){btn.innerHTML=orig;btn.style.background='rgba(255,255,255,.12)';btn.style.borderColor='rgba(255,255,255,.2)';},2000);
+  }
+
+  function akOpenRevoke(keyId) {
+    var k=akKeys.find(function(x){return x.id===keyId;});if(!k)return;
+    akRevokeTargetId=keyId;
+    document.getElementById('akRevokeKeyName').textContent="'"+k.name+"'";
+    openModal('akRevokeDialog');
+  }
+  function akConfirmRevoke() {
+    if(!akRevokeTargetId)return;
+    var k=akKeys.find(function(x){return x.id===akRevokeTargetId;});if(!k)return;
+    k.status='revoked';closeModal('akRevokeDialog');akRevokeTargetId=null;akRefreshTable();
+    schedToast('API key "'+k.name+'" has been revoked. Agents using this key have lost access.','info');
+  }
+
+  function akDeleteKey(keyId) {
+    var k=akKeys.find(function(x){return x.id===keyId;});if(!k)return;
+    akKeys=akKeys.filter(function(x){return x.id!==keyId;});
+    akRefreshTable();schedToast('API key "'+k.name+'" has been deleted','info');
+  }
+
+  function akRefreshTable() {
+    var sf=document.getElementById('akFilterStatus').value;
+    var st=(document.getElementById('akSearchInput').value||'').toLowerCase();
+    var filtered=akKeys.slice();
+    if(sf!=='all')filtered=filtered.filter(function(k){return k.status===sf;});
+    if(st)filtered=filtered.filter(function(k){return k.name.toLowerCase().indexOf(st)>=0||k.identityName.toLowerCase().indexOf(st)>=0||k.roleName.toLowerCase().indexOf(st)>=0;});
+    document.getElementById('akResultCount').textContent=filtered.length+' key'+(filtered.length!==1?'s':'');
+    var tbody=document.getElementById('akTbody'),empty=document.getElementById('akEmptyState'),wrap=document.getElementById('akTableWrap');
+    if(!filtered.length){wrap.style.display='none';empty.style.display='block';return;}
+    wrap.style.display='';empty.style.display='none';
+    tbody.innerHTML='';
+    filtered.forEach(function(k){
+      var tr=document.createElement('tr');
+      if(k.status==='revoked')tr.classList.add('revoked-row');
+      var sc=k.status==='active'?'<span class="chip chip-green"><span class="status-dot dot-green" style="margin-right:4px"></span>Active</span>':'<span class="chip chip-red"><span class="status-dot dot-red" style="margin-right:4px"></span>Revoked</span>';
+      var acts='';
+      if(k.status==='active')acts='<button class="btn btn-sm btn-danger" onclick="akOpenRevoke(\''+k.id+'\')">Revoke</button><button class="btn btn-sm btn-secondary" onclick="akDeleteKey(\''+k.id+'\')" style="margin-left:4px">Delete</button>';
+      else acts='<button class="btn btn-sm btn-secondary" onclick="akDeleteKey(\''+k.id+'\')">Delete</button>';
+      tr.innerHTML='<td><strong>'+akEsc(k.name)+'</strong></td><td>'+akEsc(k.identityName)+'</td><td>'+akEsc(k.roleName)+'</td><td>'+sc+'</td><td><span class="key-hint">'+akEsc(k.keyHint)+'</span></td><td class="text-sm">'+akFmtDate(k.createdAt)+'</td><td class="text-sm">'+akFmtDate(k.lastUsedAt)+'</td><td class="actions-cell">'+acts+'</td>';
+      tbody.appendChild(tr);
+    });
+  }
+
+  function akFmtDate(iso) {
+    if(!iso)return'Never';
+    var d=new Date(iso),n=new Date(),dh=Math.floor((n-d)/(1000*60*60));
+    if(dh<1){var dm=Math.floor((n-d)/(1000*60));return dm<=0?'Just now':dm+'m ago';}
+    if(dh<24)return dh+'h ago';if(dh<48)return'Yesterday';
+    var mn=d.toLocaleString('en-US',{month:'short'}),dy=d.getDate(),yr=d.getFullYear(),hm=d.toLocaleString('en-US',{hour:'2-digit',minute:'2-digit',hour12:false});
+    return yr===n.getFullYear()?mn+' '+dy+' '+hm:mn+' '+dy+', '+yr+' '+hm;
+  }
+  function akEsc(t){if(!t)return'';var div=document.createElement('div');div.textContent=t;return div.innerHTML;}
+
+  // Init API keys on load
+  akInit();
+
+})();
+</script>
+<script src="../shared/page-init.js"></script>
+</body>
+</html>

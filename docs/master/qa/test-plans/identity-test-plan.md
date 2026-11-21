@@ -148,7 +148,7 @@
 - `backend/tests/services/identity/test_bootstrap_service.py`
 
 ### Backend Integration Tests
-- `backend/tests/integration/test_identity_setup_flow.py`
+- `backend/tests/api/v1/test_setup_identity.py`
 
 ### Frontend Component Tests
 - `frontend/src/__tests__/RolesPage.test.tsx`

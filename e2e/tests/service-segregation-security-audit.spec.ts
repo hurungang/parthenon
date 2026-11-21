@@ -1,10 +1,14 @@
 import { expect, test } from '@playwright/test'
-import { standardSetup } from './_helpers'
+import { apiIsReachable, standardSetup } from './_helpers'
 
 const BACKEND = process.env.CONTROL_CENTER_URL || 'http://localhost:8000'
 const API = `${BACKEND}/api/v1`
 
 test.describe('Real Backend Integration - Service Segregation Deny Paths', () => {
+  test.beforeEach(async ({ request }) => {
+    test.skip(!(await apiIsReachable(request)), 'Live backend not reachable on :8000')
+  })
+
   test('internal authorize endpoint is wired and rejects missing service certificate', async ({ request }) => {
     const response = await request.post(`${API}/internal/authorize/tool-call`, {
       data: {

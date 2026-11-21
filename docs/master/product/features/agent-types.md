@@ -23,6 +23,10 @@ Agent Types define how organizations standardize agent behavior, governance, and
 - The agent type details dialog preview shows the unified agent topology view — the same presentation used in the agent management panel — for ALL agent types (both typed and conversational). There is no separate or divergent preview topology diagram; users see one identical composition graph in both locations, including zoom in/out. Text size is capped, so zooming and fullscreen reveal more topology content rather than magnifying text, and input/output slots display the same editor-dialog labels (None/Auto) instead of empty placeholders
 - Agent types provided by the platform (such as the [Control Center Assistant](control-center-assistant.md)) are marked as system-provided and are protected from user editing and deletion, mirroring system-provided skills and roles
 - An agent type is only considered complete and functional when it has a working model and either an identity or a role, in addition to its capability bindings; the Agent Types area and conversational creation both follow this expectation
+- Every part of an agent type's configuration that the forms support — role assignment, identity, input and output definitions, output data type, system instruction, guardrails, and SOP/skill bindings — can also be created and updated through conversation with the [Control Center Assistant](control-center-assistant.md), at the same parity and under the same approval and permission rules
+- The agent type's configured model is for **execution only**. Plan authoring and optimization are driven by the workspace's approved authoring (optimizer) model, so a small runtime model never limits plan quality (see [Agent Plan Mode](agent-plan-mode.md))
+- Conversational agent types have no implementation-plan generation and no one-shot Optimize action; their only plan/optimization path is the interactive optimization conversation (see [Sandboxed Scripting & Model-Authored Composition](sandboxed-scripting.md))
+- The optimization conversation is a distinct conversation channel on an existing agent type: it creates or alters no agent type, role, identity, or permission, and the agent's business behaviour outside it is unchanged
 
 ## Third-Party Exposure via Clients
 - An agent type may be exposed to third parties through one or more [clients](third-party-agent-integration.md) (one-to-many); each client is bound to exactly one agent type
@@ -85,6 +89,10 @@ Agent Types define how organizations standardize agent behavior, governance, and
 - **System-provided agent types are visibly marked and their edit/delete controls are unavailable**
 - **An agent type is only presented as complete when it has a working model and either an identity or a role plus its bindings; incomplete agent types are not created conversationally**
 - **Conversational creation of an agent type shows model, identity or role, bindings, and grants in the confirmation preview before saving**
+- **Role assignment, identity, input/output definitions, output data type, system instruction, guardrails, and bindings can each be changed through conversation at the same parity as the edit form, with the change applied only after approval**
+- **The agent type's model governs execution only; plan authoring and optimization use the workspace authoring model**
+- **Conversational agent types expose no plan generation and no one-shot Optimize action, only the optimization conversation**
+- **Optimization mode on an agent type creates or alters no agent type, role, identity, or permission, and leaves business behaviour outside the conversation unchanged**
 - **Capability grants are applied at the level the agent type consumes them: role grants for role-based agent types, direct bindings for platform-provided agent types without a role**
 
 ## Out of Scope

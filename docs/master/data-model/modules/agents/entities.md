@@ -1,12 +1,28 @@
 # Agent Management — Entities
 
+[← Data model overview](../../overview.md)
+
+Core agent entities: agent types, roles, identities, plans, sessions, outputs and
+their relationships. Adjacent entity groups have their own pages:
+
+| Page | Entities |
+|---|---|
+| **[Runtime control & guardrails](runtime-control.md)** | Model guardrails, evaluations, usage posture, runtime control, termination and recursion checks |
+| **[Software 3.0 scripting](scripting.md)** | Script registry, versions, optimized plans, verification/fallback/repair evidence, LLM mock recordings, command prompts |
+
+Third-party `AgentClient` grants stay on this page (they are a small, tightly
+coupled group bound to `AgentType`).
+
+
+[← Data model overview](../../overview.md)
+
 ```mermaid
 erDiagram
     ModelConfig {
         uuid id
         uuid tenant_id "mandatory; display_name unique per tenant"
         string name
-        enum provider_type "12 providers — 4 incumbent (openai, anthropic, litellm_proxy, azure_openai) + 8 new (gemini, mistral, cohere, groq, together, fireworks, perplexity, deepseek). Adding a new value is a release-led activity."
+        enum provider_type "12 providers (OpenAI-compatible + native API); new values are release-led"
         string api_endpoint
         string api_key_encrypted
         json enabled_models
@@ -75,15 +91,11 @@ erDiagram
     }
     TokenHealthCheck {
         uuid id
-        uuid tenant_id "mandatory; tenant-scoped"
-        uuid agent_type_id "execution being preflighted"
-        uuid session_id "agent execution session, nullable if blocked pre-submission"
+        uuid tenant_id
+        uuid agent_type_id
         enum target_kind "agent_identity | mcp_session"
-        uuid target_id "polymorphic reference, no DB-level FK"
         enum health_state "healthy | expiring | expired | unknown"
         enum check_outcome "passed | blocked"
-        string message
-        datetime checked_at
     }
     AgentType {
         uuid id
@@ -136,25 +148,15 @@ erDiagram
     }
     InterveneRequest {
         uuid id
-        uuid agent_session_id "nullable; NULL for conversation-scoped requests (no backing agent job)"
-        uuid agent_type_id
+        uuid agent_session_id "nullable; NULL for conversation-scoped requests"
         uuid conversation_session_id
         enum intervention_type "approval | choice | text"
-        string reason
-        json choices "required when intervention_type = choice"
         enum status "pending | responded | cancelled | expired"
-        int delegation_depth
-        datetime created_at
-        datetime responded_at "set when status becomes responded, cancelled, or expired"
-        datetime expires_at "optional timeout deadline"
     }
     InterveneResponse {
         uuid id
         uuid request_id
         uuid operator_user_id
-        boolean approval_value "populated when intervention_type = approval"
-        string selected_choice "populated when intervention_type = choice"
-        string text_value "populated when intervention_type = text"
         datetime responded_at
     }
     AgentA2ASessionLink {
@@ -245,8 +247,8 @@ erDiagram
         uuid agent_type_id
         json plan_steps
         json topology
-        enum generation_status
-        string generation_error
+        enum generation_status "pending | success | failed (outcome of one attempt)"
+        string generation_error "failure reason; the last successful plan is preserved"
         string agent_config_hash
         boolean fully_scripted "base-plan mark: single-script zero-LLM workflow candidate"
         datetime generated_at
@@ -258,26 +260,12 @@ erDiagram
         uuid id
         uuid agent_type_id
         string instance_id
-        string certificate_pem
-        string serial_number
-        datetime issued_at
-        datetime expires_at
-        datetime revoked_at
-        string revocation_reason
-        enum status
-        datetime created_at
-        datetime updated_at
+        enum status "active | expired | revoked"
     }
     TokenRefreshLog {
         uuid id
-        uuid agent_identity_id
-        datetime attempted_at
+        uuid agent_identity_id "nullable; one of identity/session per row"
         enum outcome
-        string error_message
-        int retry_attempt
-        datetime next_retry_at
-        json metadata
-        datetime created_at
     }
 
     AgentType }o--|| AgentRole : "governed by"
@@ -311,32 +299,29 @@ erDiagram
 
 **Sources**: `backend/app/db/models/agents.py`, `backend/app/db/models/token_health.py`, `backend/app/db/models/agent_data.py`, `backend/app/db/models/agent_output.py`, `backend/app/db/models/agent_data_type.py`, `backend/app/db/models/agent_security.py`
 
-**Tenant containment:** `ModelConfig`, `AgentRole`, `AgentIdentity`, `AgentType`, `AgentData`, `AgentOutput`, and `AgentDataType` carry a **mandatory** tenant reference; names, slugs, and display names are unique **per tenant only** (NULL-tenant global uniqueness variants retired). Bindings resolve within the tenant: agent type → skill/SOP bindings and role grants are same-tenant only; SOP delegation steps and A2A delegation **by name** resolve the target agent type by **(tenant, name)** — a name collision across tenants never routes to the wrong tenant's agent. Data saves and typed output queries match the calling tenant only.
+> **Canonical homes:** `InterveneRequest`/`InterveneResponse` live in the Communication module; `TokenHealthCheck`/`AgentInstanceCertificate`/`TokenRefreshLog` in the Security module. They appear above as relationship context only.
+
+**Tenant containment:** `ModelConfig`, `AgentRole`, `AgentIdentity`, `AgentType`, `AgentData`, `AgentOutput` and `AgentDataType` carry a **mandatory** tenant reference; names, slugs and display names are unique **per tenant only**. Bindings and role grants are same-tenant only; SOP and A2A delegation **by name** resolve by **(tenant, name)**, so a name collision never routes to the wrong tenant's agent. Data saves and typed output queries match the calling tenant only.
 
 | Entity | Description |
 |--------|-------------|
 | **ModelConfig** | A named, reusable LLM provider backend configuration. Stores provider type, API endpoint, encrypted credentials, and the explicit list of enabled model IDs. The runtime resolves which config to use by matching a model ID against `enabled_models` on active configs. |
 | **AgentRole** | A named permission set granting an agent access to specific SOPs and/or Skills. Controls which MCP tools are available at runtime and which identities may assume the role. |
 | **AgentRoleAllowedType** | Explicit allow-list mapping between an agent role and target agent types permitted for delegation. Used for A2A policy preview and enforcement checks. |
-| **AgentRoleIdentity** | Many-to-many join table explicitly assigning an AgentIdentity to an AgentRole. An identity can only be used for a role if a record exists here. Tracks when and by whom the assignment was made. |
+| **AgentRoleIdentity** | Join table assigning an AgentIdentity to an AgentRole (an identity may only assume a role recorded here); tracks when and by whom. |
 | **AgentRoleSOP** | Join table linking an AgentRole to a Sop. Granting an SOP implicitly includes all Skills it depends on and all MCP tools those Skills require. |
 | **AgentRoleSkill** | Join table linking an AgentRole to a Skill directly (outside of any SOP). Contributes the Skill's required MCP tools to the role's allowed tool set. |
-| **AgentRoleMcpSession** | Join table associating an MCP Session with an AgentRole, providing credential and resource context for MCP tool calls. At most one session per MCP server per role. |
-| **AgentIdentity** | Represents an agent's user account in a dedicated identity provider realm (e.g., `ai_agents`). Stores encrypted OAuth tokens used at runtime; refresh tokens are stored encrypted and refreshed automatically. `token_status` tracks the current refresh state (`active`, `expired`, `refresh_failed`); `last_token_refresh_at` records the most recent successful refresh. If `token_status` becomes `refresh_failed`, agent execution is blocked until operator intervention. Token health fields (`refresh_token_expires_at`, `last_token_refresh_outcome`, `token_health_state`) carry the computed health state (`healthy | expiring ≤7d | expired | unknown`) surfaced on dashboard and topology, refreshed on token refresh and dashboard read. Identity slug/name is treated as a slug-safe runtime identifier, while display labels remain user-friendly. |
-| **AgentType** | The definition of an agent class: its identity, permission role, model selection, system instruction, and input/output schema. When `output_type` is `typed`, `output_data_type_id` links to the `AgentDataType` that defines the expected output schema. The `model_id` is resolved at runtime against active `ModelConfig.enabled_models`; there is no direct FK to ModelConfig. Agent type slug is the canonical routing key for delegation and protocol metadata. Agent Types store curated SOP and skill bindings via `AgentTypeSopBinding` and `AgentTypeSkillBinding` join tables. `is_system = true` marks a **platform-supplied** agent type (e.g. the seeded Control Center Assistant) that the UI surfaces specially and that users cannot modify or delete. |
-| **AgentTypeSopBinding** | Join entity linking an AgentType to a Sop with an explicit ordering position. Each pair (agent_type_id, sop_id) is unique. The order field determines the sequence in the merged binding list alongside skill bindings. Used by system instruction generation and Agent Plan Mode. |
-| **AgentTypeSkillBinding** | Join entity linking an AgentType to a Skill with an explicit ordering position. Each pair (agent_type_id, skill_id) is unique. The order field determines the sequence in the merged binding list alongside SOP bindings. |
-| **AgentSession** | A single agent execution instance from submission through completion. Serves as the agent instance record for the dashboard. Stores input, output, status, timing, and (for conversational agents) the full `conversation_history`. Provides session context for `get_data` and `get_output` queries. `output_id` provides an optional convenience link to the session's typed output record when one exists. Status includes `waiting_for_human` when the agent is paused pending operator response to an intervene request. |
-| **InterveneRequest** | An agent-initiated request for human intervention during execution. Supports three intervention types: `approval` (yes/no), `choice` (select one from a list), and `text` (free-form input). Tracks lifecycle from `pending` through `responded`, `cancelled`, or `expired`. `agent_session_id` is **optional**: conversation-scoped requests (e.g. raised by the Control Center Assistant) have no backing `AgentJob` and carry NULL, resuming from `conversation_session_id` instead. Links to the parent `ConversationSession` (when surfaced in a conversational context) and preserves `delegation_depth` from the originating `AgentJob` for audit. |
-| **InterveneResponse** | The operator's response to an intervene request. Exactly one response per request. The response field populated depends on the intervention type: `approval_value` (boolean) for approval requests, `selected_choice` (string) for choice requests, `text_value` (string) for text requests. |
+| **AgentRoleMcpSession** | Join table giving an AgentRole the credential/resource context of an MCP session (at most one session per server per role). |
+| **AgentIdentity** | An agent's user account in a dedicated identity provider realm (e.g. `ai_agents`). Stores encrypted OAuth access/refresh tokens, refreshed automatically; `token_status` (`active`/`expired`/`refresh_failed`) blocks execution when it becomes `refresh_failed`. Token-health fields (`refresh_token_expires_at`, `last_token_refresh_outcome`, `token_health_state`) carry the computed `healthy | expiring ≤7d | expired | unknown` state surfaced on dashboard and topology. Name/slug is the slug-safe runtime identifier; display labels stay user-friendly. |
+| **AgentType** | The definition of an agent class: identity, permission role, runtime model, system instruction, and input/output schema. When `output_type` is `typed`, `output_data_type_id` links the `AgentDataType` defining the output contract. `model_id` resolves at runtime against active `ModelConfig.enabled_models` (no direct FK). Slug is the canonical routing key for delegation and protocol metadata. Curated SOP/skill bindings live in `AgentTypeSopBinding` / `AgentTypeSkillBinding`. `is_system = true` marks a **platform-supplied** agent type (e.g. the seeded Control Center Assistant), protected from user edit/delete. |
+| **AgentTypeSopBinding** | Join entity binding an AgentType to a Sop at an explicit `order` position (unique per pair); the merged order across SOP and skill bindings drives system-instruction generation and plan context. |
+| **AgentTypeSkillBinding** | Join entity binding an AgentType to a Skill at an explicit `order` position (unique per pair), merged with SOP bindings. |
+| **AgentSession** | A single agent execution instance from submission through completion — the agent instance record behind the dashboard. Stores input, output, status, timing and, for conversational agents, the full `conversation_history`; provides session context for `get_data`/`get_output`. `output_id` is an optional convenience link to the typed output. Status includes `waiting_for_human` while paused pending an intervene response. |
 | **AgentA2ASessionLink** | Tracks A2A requester/receiver linkage for delegated runs. Supports shared-session lifecycle tracking, receiver cleanup decisions, and delegated execution status visibility. |
-| **AgentData** | A named, typed data record explicitly saved via the `save_data` tool during an agent execution session. Multiple AgentData records may exist per session (intermediate, optional); each is scoped to an AgentType and AgentSession. Queried at runtime via `get_data` by data_name and session. |
-| **AgentOutput** | Immutable record of a single typed agent execution result. Links the agent type, execution session, and data type schema together with validated field values. `validation_status` is `valid` when field values pass schema validation, `validation_error` otherwise. `raw_output` stores the unparsed agent output as a fallback for UI rendering when validation fails. `field_values` stores values keyed by field name per the referenced `AgentDataType` schema. |
-| **AgentDataType** | Central registry of reusable output schemas. Each type defines a named collection of typed fields (`fields` is an ordered array of field definitions with name, type, and validation constraints) that agent types reference as their output contract. **Enum fields** carry allowed values as `{value, description}` entries (legacy bare strings are still accepted and treated as description-less). The `slug` is the canonical identifier used by the `query_result` tool at runtime. Tenant-owned (no platform-shared types); name and slug are unique per tenant only and resolve within the calling tenant. Cannot be deleted while referenced by an agent type or a decision tool. |
-| **AgentPlan** | Stores the most recent LLM-generated implementation plan for an agent type. One record per `AgentType` (unique on `agent_type_id`). `plan_steps` is a structured, ordered plan payload that is both human-readable (for UI preview) and machine-parseable (for runtime execution guidance). `topology` is an opaque node-edge JSON payload produced by the Topology Builder service for frontend rendering. `generation_status` tracks `pending` \| `success` \| `failed` state; `generation_error` captures the failure reason without discarding the last successful plan. `agent_config_hash` is a hash of the inputs at generation time (role, SOPs, skills, system instruction) used to detect plan staleness. The Agent Runtime loads the saved plan during session initialization to guide execution. |
-| **AgentInstanceCertificate** | X.509 certificate issued to a specific agent runtime instance by the Control Center CA. Tracks the full certificate lifecycle: issuance, expiration (24-hour validity), and revocation. The `instance_id` combined with `agent_type_id` uniquely identifies the runtime instance. `status` is computed: `revoked` if `revoked_at` is set, `expired` if past `expires_at`, otherwise `active`. |
-| **TokenRefreshLog** | Audit trail for every automatic OAuth token refresh attempt on an agent identity. Records the outcome (`success`, `failure`, `rate_limited`), retry attempt number, and any error message. Supports compliance review and debugging of refresh failures. Old entries (> 90 days) may be archived. |
-| **TokenHealthCheck** | One row per pre-execution token health evaluation performed by Control Center before an agent execution (including subagent token checks). Audit trail proving every expired token is surfaced before a run; `target_kind`/`target_id` is a polymorphic reference to the checked `AgentIdentity` or `McpSession` (no DB-level FK). `health_state` is computed at check time; `check_outcome` records `passed` or `blocked`. Source: `backend/app/db/models/token_health.py`. |
+| **AgentData** | A named, typed record saved via the `save_data` tool; zero or more per session (intermediate, optional), scoped to an AgentType and AgentSession and queried by `get_data`. |
+| **AgentOutput** | Immutable record of one typed execution result: agent type + execution session + data type schema, with `field_values` keyed by field name. `validation_status` is `valid` or `validation_error`; `raw_output` keeps the unparsed text as a render fallback when validation fails. |
+| **AgentDataType** | Central registry of reusable output schemas: an ordered array of typed field definitions (`fields`) that agent types reference as their output contract. **Enum fields** carry allowed values as `{value, description}` entries (bare strings read as description-less). `slug` is the canonical identifier used by `query_result` at runtime. Tenant-owned (no platform-shared types); name/slug unique per tenant and resolved within the calling tenant. Cannot be deleted while referenced by an agent type or decision tool. |
+| **AgentPlan** | The most recent implementation plan for an agent type — one record per `AgentType` (unique on `agent_type_id`). `plan_steps` is an ordered payload, human-readable for preview and machine-parseable for runtime guidance; steps may carry an optional `parent_order` (tree rendering) and optional `type` (non-entity steps are `processing`). `topology` is an opaque node-edge JSON payload rendered by the Topology Builder. `generation_status` (`pending` \| `success` \| `failed`) is the outcome of the **latest attempt**, not a prerequisite: `generation_error` records the failure **without discarding the last successful plan** (steps, topology, config hash, `generated_at` preserved; a failed row is inserted only when no plan exists yet). Authoring is **explicit only** (saving an agent type never schedules it) and uses the **workspace authoring model** (`TenantSetting.workflow_generation_model_id`), never the agent type's runtime `model_id`; no field records which model authored a plan. `agent_config_hash` detects staleness. The Agent Runtime loads the saved plan at session start. |
 
 **Business rules:**
 - `AgentType.slug` is the canonical agent routing identifier within its tenant, unique and normalized. A2A and SOP delegation by name resolve targets by **(tenant, name)**.
@@ -354,220 +339,11 @@ erDiagram
 - `AgentOutput.validation_status` is `valid` when `field_values` passes schema validation against the referenced `AgentDataType.fields`, `validation_error` otherwise.
 - `AgentOutput.raw_output` stores the unparsed agent output as a fallback for UI rendering when validation fails.
 - `AgentOutput.field_values` is soft-referenced to the data type schema — the schema is resolved at read time via `data_type_id`.
-- **System-provided agent types are protected**: `is_system = true` (e.g. the Control Center Assistant) means the UI surfaces the agent type specially and users cannot modify or delete it. The flag is set only by platform seeding, never by tenant users, mirroring `Skill.is_system`, `Role.is_system`, and `DecisionTool.is_system`.
-- **The Control Center Assistant is a seeded agent type**: every tenant receives its own `control-center-assistant` row during assistant seeding — conversational input, `is_system = true`, bound to the `control-center-management` skill and its management MCP tools. It is not a separate business entity; it is configuration of an `AgentType` plus its skill/MCP bindings.
+- **System-provided agent types are protected**: `is_system = true` (only the Control Center Assistant today) is surfaced specially and cannot be modified or deleted; the flag is set by platform seeding only, never by tenant users.
+- **The Control Center Assistant is a seeded agent type**: each tenant gets its own `control-center-assistant` row (conversational, `is_system = true`, bound to the `control-center-management` skill and its management MCP tools) — configuration of an `AgentType` plus bindings, not a separate entity.
 - **Conversation-scoped interventions**: an `InterveneRequest` raised from a conversational turn carries `agent_session_id = NULL` (no backing `AgentJob`) and resumes from `conversation_session_id`; job-scoped requests continue to set `agent_session_id`.
 
-## Model Guardrail and Runtime Control Entities
-
-The following entities support the **vendor → model → guardrail hierarchy** for model-usage guardrails and the **Runtime Control Dashboard** for live execution visibility and operator-controlled termination.
-
-```mermaid
-erDiagram
-    ModelGuardrailConfiguration {
-        uuid id
-        uuid model_id
-        string model_name
-        enum period
-        int max_units
-        enum enforcement_posture
-        boolean is_active
-        datetime created_at
-        datetime updated_at
-    }
-    ModelAvailability {
-        uuid id
-        uuid model_id
-        string model_name
-        boolean is_disabled
-        enum disabled_reason
-        datetime disabled_at
-        datetime created_at
-        datetime updated_at
-    }
-    ModelUsagePosture {
-        uuid id
-        uuid model_id
-        string model_name
-        enum period
-        enum posture_state
-        int current_units
-        datetime last_updated_at
-    }
-    AgentInstance {
-        uuid id
-        uuid agent_type_id
-        string instance_id
-        enum status
-        datetime created_at
-        datetime closed_at
-    }
-    AgentRunRelationship {
-        uuid id
-        uuid parent_session_id
-        uuid child_session_id
-        enum relationship_type
-        datetime created_at
-    }
-    TerminationRequest {
-        uuid id
-        uuid target_session_id
-        string target_node_kind
-        uuid requested_by
-        enum status
-        enum outcome
-        datetime requested_at
-        datetime completed_at
-    }
-    TerminationCascadeOutcome {
-        uuid id
-        uuid termination_request_id
-        uuid affected_session_id
-        enum outcome
-        datetime observed_at
-    }
-    GuardrailThresholdEvent {
-        uuid id
-        uuid guardrail_id
-        uuid session_id
-        enum event_category
-        enum posture_state
-        int units_at_event
-        datetime occurred_at
-    }
-    SopRecursionValidationCheck {
-        uuid id
-        uuid agent_type_id
-        uuid triggered_by_user_id
-        enum check_trigger
-        enum result
-        datetime performed_at
-    }
-    SopRecursionValidationFinding {
-        uuid id
-        uuid check_id
-        uuid sop_id
-        string cycle_path_json
-    }
-
-    ModelGuardrailConfiguration }o--|| ModelConfig : "applies to"
-    ModelAvailability }o--|| ModelConfig : "applies to"
-    ModelUsagePosture }o--|| ModelConfig : "applies to"
-    AgentInstance }o--|| AgentType : "instantiated from"
-    AgentRunRelationship }o--|| AgentSession : "parent"
-    AgentRunRelationship }o--|| AgentSession : "child"
-    TerminationRequest }o--o| AgentSession : "targets"
-    TerminationCascadeOutcome }o--|| TerminationRequest : "cascade from"
-    GuardrailThresholdEvent }o--|| ModelGuardrailConfiguration : "raised against"
-    SopRecursionValidationFinding }o--|| SopRecursionValidationCheck : "found by"
-```
-
-**Sources**: `backend/app/db/models/model_guardrail_configuration.py`, `backend/app/db/models/model_usage_posture.py`, `backend/app/db/models/model_availability.py`, `backend/app/db/models/guardrail_threshold_event.py`, `backend/app/db/models/agent_run_relationship.py`, `backend/app/db/models/termination_request.py`, `backend/app/db/models/termination_cascade_outcome.py`, `backend/app/db/models/sop_recursion_validation_check.py`, `backend/app/db/models/sop_recursion_validation_finding.py`
-
-| Entity | Description |
-|--------|-------------|
-| **ModelGuardrailConfiguration** | A single guardrail scoped to one period (hour, day, week, or month) for one model. At most one guardrail per model per period. `enforcement_posture` is `terminate` (default) or `observe-only`; `is_active` allows per-guardrail enable/disable independent of the other periods. |
-| **ModelAvailability** | Per-model availability state. `is_disabled=True` blocks execution; `disabled_reason` is `vendor_disabled` (cascade from vendor-level disable) or `model_disabled` (manual). |
-| **ModelUsagePosture** | Current usage posture against a guardrail limit. `posture_state` is `within_limit`, `approaching_limit`, or `breached`. When `breached` and the guardrail's `enforcement_posture` is `terminate`, the agent execution is blocked. |
-| **AgentInstance** | A logical agent instance shown in the Agent Instance Dashboard. `instance_id` is the canonical identifier used for `AgentInstanceCertificate` lookup. `status` is one of `created`, `active`, `closed`, `error`. |
-| **AgentRunRelationship** | Parent/child edges between `AgentSession` records for delegated execution. The relationship graph is rendered in the runtime topology diagram and walked during cascade termination. |
-| **TerminationRequest** | A recorded operator-initiated termination request against a session. `target_node_kind` is `agent` (live `AgentJob`) or `conversation` (sleep `ConversationSession`). `status` is `pending` / `completed` / `failed`; `outcome` is `cancelled` / `not_found` / `error`. |
-| **TerminationCascadeOutcome** | One row per delegated child affected by a parent termination. Captures whether each child was successfully cancelled, not found, or errored. |
-| **GuardrailThresholdEvent** | Append-only log of guardrail threshold transitions. `event_category` is one of `model_disabled`, `vendor_disabled`, `guardrail_breached`. `posture_state` is the new state at the time of the event. |
-| **SopRecursionValidationCheck** | Records a recursion/dead-loop risk validation at create, update, or run initiation. `check_trigger` is `create` / `update` / `run`; `result` is `pass` / `fail`. |
-| **SopRecursionValidationFinding** | The specific cycle path(s) found by a `SopRecursionValidationCheck`. Stores the cycle path as a JSON array of SOP IDs. |
-| **ModelGuardrailEvaluation** | Per-run evaluation outcome for model guardrail policy checks. Records the guardrail configuration, agent job, policy name, evaluated period, threshold value, observed value, posture state, and evaluation outcome (pass/fail/error). |
-| **ExecutionLogEntry** | Immutable audit trail of agent session execution events (LLM calls, tool calls, system events, errors). Categorised by event type and actor type; referenced by `agent_job_id` for session-scoped queries. |
-
-**Business rules:**
-- A model can have one to four `ModelGuardrailConfiguration` records, one per period. There is no forced four-period entry.- `ModelAvailability.disabled_reason = vendor_disabled` indicates a cascade from vendor-level disable; the per-model `ModelGuardrailConfiguration` records remain visible to show the cascade source.
-- `AgentJob.status` accepts `terminated` as a distinct value from `failed`, enabling operators to distinguish operator-initiated stops from execution errors.
-- `ExecutionEventCategory` accepts `model_disabled`, `vendor_disabled`, and `guardrail_breached` as user-visible event categories for execution logs. These are distinct from standard execution failures.
-- `SopRecursionValidationCheck` runs at every agent create, update, and run; `result = fail` blocks the action.
-
-## Software 3.0 Script Registry, Optimized Plan & Command Prompt Entities
-
-The two-layer plan model and its script registry: the base `AgentPlan` stays
-a high-level step list; the model-authored workflow composition lives in a
-separate `OptimizedImplementationPlan` produced by the opt-in "Optimize &
-Verify" side execution (its mission text is stored as a `CommandPrompt`).
-The composition's script segments are persisted as versioned, sandboxed
-`ScriptDefinition` / `ScriptVersion` rows with verification, fallback, and
-repair evidence.
-
-```mermaid
-erDiagram
-    AgentType ||--o{ ScriptDefinition : "owns"
-    AgentPlan ||--o{ OptimizedImplementationPlan : "optimized from"
-    OptimizedImplementationPlan ||--o{ ScriptDefinition : "authored"
-    ScriptDefinition ||--o{ ScriptVersion : "versions"
-    ScriptVersion ||--o{ VerificationRun : "verified by"
-    ScriptVersion |o--o| ScriptVersion : "repaired_from"
-    FallbackEvent |o--o{ RepairAttempt : "repaired by"
-    RepairAttempt }o--o| ScriptVersion : "produces repaired candidate"
-    CommandPrompt {
-        string slug
-        text prompt_text
-        boolean is_active
-    }
-    OptimizedImplementationPlan {
-        uuid agent_plan_id "base plan optimized from"
-        json plan_steps "authored composition"
-        boolean fully_scripted "zero-LLM vs scripts-as-tools"
-        enum status "generating|ready|failed|needs_feedback|retired"
-        text error "populated whenever status is needs_feedback"
-        json feedback_comments
-    }
-    ScriptDefinition {
-        string name
-        enum lifecycle_status
-        enum health_status
-        boolean fully_scripted
-        uuid source_optimized_plan_id
-    }
-    ScriptVersion {
-        string version_label
-        text python_source
-        int cpu_limit_seconds
-        int memory_limit_mb
-        int wall_time_limit_seconds
-        enum sandbox_validation_status
-        text sandbox_validation_reason
-    }
-    VerificationRun {
-        enum comparison_outcome
-        enum verdict
-        boolean sandbox_check_passed
-    }
-    FallbackEvent {
-        enum trigger_reason "incl. sandbox_violation, resource_limit_exceeded"
-        enum resulting_action
-    }
-    RepairAttempt {
-        text defect_diagnosis
-        string diff_applied
-        enum retry_outcome
-    }
-```
-
-**Source**: `backend/app/db/models/script_registry.py` — ScriptDefinition, ScriptVersion, VerificationRun, FallbackEvent, RepairAttempt
-**Source**: `backend/app/db/models/optimized_plan.py` — OptimizedImplementationPlan
-**Source**: `backend/app/db/models/command_prompt.py` — CommandPrompt
-
-| Entity | Description |
-|--------|-------------|
-| **OptimizedImplementationPlan** | The model-authored workflow composition for an agent type — a separate entity from the high-level base plan. Carries the authored composition (`plan_steps`: sandboxed Python script segments, LLM bridge steps, output decision), the `fully_scripted` execution-semantics mark (only a fully-scripted plan is served zero-LLM; otherwise its scripts become invocable tools the LLM orchestrates), lifecycle status (`generating`/`ready`/`failed`/`needs_feedback`/`retired`), a one-line failure reason (`error`, reliably populated whenever the plan ends in `needs_feedback` — this is what the Optimized Plan tab renders), and an accumulated `feedback_comments` memory that is included when the plan is regenerated. Served only while **fresh** (ready and newer than the base plan); "Retire plan" marks the row `retired` (kept for reference, never gates execution). |
-| **CommandPrompt** | A stored, named command mission (e.g. `optimize-and-verify`) that drives a special agent side execution: at launch, the mission text is used as the execution prompt (with the target agent type interpolated) instead of the agent type's own system instruction. Deliberately not a Skill/SOP — a command is a mission, not a permission-grantable capability. |
-| **ScriptDefinition** | A versioned, named script owned by exactly one AgentType (name unique per tenant); the script inherits the agent's identity and permissions. Lifecycle: `draft → verified → compiled → retired`. Carries lineage to the base plan, the optimized plan that authored it (`source_optimized_plan_id`), and/or the observed session, a `current_version` serving pointer, aggregate `health_status` derived from fallback behaviour, and the `fully_scripted` execution-semantics mark (set from the plan's mark at promotion). |
-| **ScriptVersion** | Immutable revision of a ScriptDefinition. Carries the model-authored `python_source` (sandboxed Python), per-version sandbox resource caps (`cpu_limit_seconds`, `memory_limit_mb`, `wall_time_limit_seconds`; platform defaults when null), the sandbox-validation outcome (`sandbox_validation_status` + recorded `sandbox_validation_reason`), the deprecated-but-retained `declarative_step_graph`, and repair lineage (`repaired_from`). Content + caps are immutable and auditable per version. |
-| **VerificationRun** | Evidence of shadow-running a script version against a reference LLM execution: recorded input/expected/actual, `comparison_outcome` (`match`/`match_within_tolerance`/`mismatch`), the promote/reject `verdict` with reason, and `sandbox_check_passed` sandbox-compliance evidence. Rejection keeps the version in draft. |
-| **FallbackEvent** | Recorded whenever a compiled run fell back to the LLM path. `trigger_reason` includes `sandbox_violation` and `resource_limit_exceeded` alongside `execution_error`, `tool_schema_mismatch`, `output_validation_failure`; records the resulting action and the contribution to the owning script's health degradation. |
-| **RepairAttempt** | One bounded, agent-driven repair cycle within a fallback episode: defect diagnosis, applied diff, and the produced successor `ScriptVersion` (which must re-verify). Retry outcome is `pending`/`succeeded`/`failed`; exhaustion triggers unconditional fallback with reason capture. |
-
-**Business rules:**
-- Script-First execution preference: a `fully_scripted` optimized plan is served as a zero-LLM script; all other scripts are exposed as `script____<name>` tools the LLM orchestrates. Absent, stale, retired, or failed optimized plans fall back to the base-plan LLM path.
-- The base `AgentPlan.fully_scripted` mark flags workflows achievable by a single script (no/typed input); it seeds the optimized-plan authoring, not execution itself.
-- Only Control Center persists registry, plan, and execution data; Agent Runtime consumes them exclusively via CC REST APIs.
+---
 
 ## Third-Party Agent Integration Entities
 
@@ -618,3 +394,17 @@ erDiagram
 |--------|-------------|
 | **AgentClient** | Tenant-owned access grant to exactly one agent type; `key_type` is `secret` (server-to-server) or `publishable` (browser-safe) and is immutable once created. Grants input-interface-only access — cannot list/call tools, cannot reach the MCP hub, and cannot impersonate an agent identity. |
 | **AgentClientUsageLog** | Append-only audit record for each client invocation (success and failure); never stores the credential value. |
+
+---
+
+## Agent Execution Data Flow
+
+Saved data (`AgentData`) is intermediate and optional — the `save_data` tool may
+be called zero or more times per session. Output (`AgentOutput`) is the final,
+singular result per session, produced once at execution completion and validated
+against the referenced `AgentDataType` schema. The entities and their
+relationships are drawn in the domain diagram above; the flow is
+`AgentType` → `AgentSession` → (0..n) `AgentData` → (0..1) `AgentOutput`, with
+`AgentDataType` defining the output contract.
+
+**Source**: `backend/app/db/models/agent_data.py`, `backend/app/db/models/agent_output.py`, `backend/app/db/models/agent_data_type.py`

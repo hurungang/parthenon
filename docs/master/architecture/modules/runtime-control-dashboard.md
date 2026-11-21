@@ -74,6 +74,14 @@ When a parent `AgentJob` is terminated, Agent Runtime cancels the parent's in-fl
 - All terminate requests are routed Control Center → Communication Hub → Agent Runtime, never directly from Control Center to Agent Runtime, to preserve the certificate-based authentication boundary (Agent Runtime's `ControlCenterCertificateMiddleware` only accepts `service:communication-hub` service certificates)
 - End-session requests for sleep conversations are handled by Control Center's existing conversation session management endpoints
 
+## Paused and Working Turns After a Restart
+
+A conversation node's status comes from the session record, while the *turn's* activity is a separately persisted Control Center record. That distinction makes a restart legible instead of ambiguous:
+
+- A turn interrupted by a restart resolves within a few minutes — its heartbeat stopped, so it is closed as an unexpected termination with an actionable message, not left looking alive forever.
+- A pause for confirmation survives the restart and stays answerable; it is actionable only while a live paused turn backs it.
+- A confirmation whose turn is already terminal is presented read-only, and the chat input is re-enabled so the operator can resend the request.
+
 ## Related Modules
 - [Agent Instance Dashboard](agent-instance-dashboard.md) — parent dashboard component
 - [Execution Logs](execution-logs.md) — execution log view, status colors, and terminated/failed distinction

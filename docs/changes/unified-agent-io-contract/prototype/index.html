@@ -1,0 +1,1225 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Parthenon — Unified Agent I/O Contract</title>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --primary:#2563EB;--primary-dark:#1D4ED8;--primary-light:#DBEAFE;
+  --violet:#7C3AED;--violet-dark:#6D28D9;--violet-light:#EDE9FE;
+  --sidebar-bg:#FFFFFF;--sidebar-text:#424242;--sidebar-active-bg:rgba(0,0,0,0.06);
+  --sidebar-hover-bg:rgba(0,0,0,0.03);--sidebar-active-text:#2563EB;
+  --surface:#FFFFFF;--bg:#FAFAFA;--border:#E0E0E0;
+  --success:#4CAF50;--warning:#FF9800;--error:#F44336;--info:#2196F3;
+  --text-primary:#212121;--text-secondary:#757575;
+  --shadow:0 1px 2px 0 rgba(60,64,67,0.3),0 1px 3px 1px rgba(60,64,67,0.15);
+  --shadow-md:0 4px 6px 0 rgba(60,64,67,0.3),0 4px 8px 3px rgba(60,64,67,0.15);
+  --radius:8px;--radius-sm:4px;--radius-lg:12px;
+  --sidebar-w:236px;--topbar-h:60px;--transition:0.2s ease;
+}
+html,body{height:100%;font-family:'Inter','Roboto',system-ui,sans-serif;background:var(--bg);color:var(--text-primary);font-size:14px;line-height:1.5}
+a{color:inherit;text-decoration:none}
+button{cursor:pointer;font-family:inherit;font-size:14px}
+input,select,textarea{font-family:inherit;font-size:14px}
+:focus-visible{outline:2px solid var(--primary);outline-offset:2px}
+
+/* APP SHELL */
+.app-shell{display:flex;height:100vh;overflow:hidden}
+.sidebar{width:var(--sidebar-w);background:var(--sidebar-bg);display:flex;flex-direction:column;flex-shrink:0;overflow-y:auto;border-right:1px solid var(--border)}
+.sidebar-logo{padding:18px 18px 14px;border-bottom:1px solid var(--border)}
+.sidebar-logo h1{font-size:17px;font-weight:700;color:var(--text-primary);letter-spacing:-.5px}
+.sidebar-logo small{font-size:11px;color:var(--text-secondary);letter-spacing:.5px;text-transform:uppercase}
+.nav-item{display:flex;align-items:center;gap:8px;padding:8px 14px;cursor:pointer;border-radius:var(--radius);margin:1px 6px;color:var(--sidebar-text);font-size:13px;user-select:none;white-space:nowrap;background:none;border:none;text-align:left;width:calc(100% - 12px)}
+.nav-item:hover{background:var(--sidebar-hover-bg)}
+.nav-item.active{background:var(--sidebar-active-bg);color:var(--sidebar-active-text);font-weight:500}
+.nav-item .nav-icon{font-size:14px;width:18px;text-align:center;flex-shrink:0;line-height:1}
+.nav-note{margin-top:auto;padding:14px 18px;border-top:1px solid var(--border);font-size:11px;color:var(--text-secondary);line-height:1.5}
+.main-wrapper{flex:1;display:flex;flex-direction:column;overflow:hidden}
+.topbar{height:var(--topbar-h);background:var(--surface);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 24px;gap:16px;flex-shrink:0}
+.topbar-title{font-size:17px;font-weight:600;flex:1}
+.main-content{flex:1;overflow-y:auto;overflow-x:hidden;padding:18px 24px 32px}
+.main-content::-webkit-scrollbar{width:6px}.main-content::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+
+/* GLOBAL FLOW / STATE BAR */
+.global-bar{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:8px 12px;margin-bottom:18px;box-shadow:var(--shadow)}
+.gb-group{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.gb-label{font-size:10.5px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--text-secondary);margin-right:2px}
+.gb-btn{background:#fff;border:1px solid var(--border);color:var(--text-primary);padding:4px 10px;border-radius:20px;font-size:11.5px;font-weight:600;transition:all var(--transition)}
+.gb-btn:hover{border-color:var(--primary);color:var(--primary)}
+.gb-btn.active{background:var(--primary-light);border-color:#93C5FD;color:var(--primary-dark)}
+.gb-select{padding:5px 8px;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:11.5px;background:#fff}
+
+/* VIEWS */
+.view{display:none}.view.is-active{display:block}
+.view-header{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:18px}
+.view-header h2{font-size:21px;font-weight:600;letter-spacing:-.2px}
+.view-desc{font-size:12.5px;color:var(--text-secondary);margin-top:3px;max-width:640px}
+
+/* CHANGE BANNER */
+.change-banner{display:flex;align-items:flex-start;gap:14px;padding:14px 18px;border:1px solid #BBD8F0;background:#E8F1FB;border-left:4px solid var(--primary);border-radius:var(--radius);margin-bottom:16px}
+.change-banner .cb-icon{width:32px;height:32px;border-radius:50%;background:var(--primary);color:#fff;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:700;flex-shrink:0}
+.change-banner h4{font-size:14px;margin-bottom:4px;color:var(--primary-dark)}
+.change-banner p{font-size:12.5px;color:var(--text-secondary);line-height:1.55}
+
+/* BUTTONS / CHIPS */
+.btn{display:inline-flex;align-items:center;gap:6px;padding:8px 16px;border-radius:var(--radius-sm);border:none;font-weight:500;transition:all var(--transition);white-space:nowrap;letter-spacing:.25px}
+.btn-primary{background:var(--primary);color:#fff;box-shadow:var(--shadow)}.btn-primary:hover{background:var(--primary-dark)}
+.btn-secondary{background:var(--surface);color:var(--text-primary);border:1px solid var(--border)}.btn-secondary:hover{background:var(--bg)}
+.btn-danger{background:var(--error);color:#fff}.btn-danger:hover{background:#D32F2F}
+.btn-sm{padding:5px 12px;font-size:12px}
+.btn-xs{padding:3px 9px;font-size:11px}
+.btn:disabled{opacity:.45;cursor:not-allowed;box-shadow:none}
+.btn-link{background:none;border:none;color:var(--primary);font-size:12px;font-weight:600;padding:2px 0}
+.btn-link:hover{text-decoration:underline}
+.chip{display:inline-flex;align-items:center;gap:4px;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:600;white-space:nowrap}
+.chip-blue{background:#DBEAFE;color:#1D4ED8}
+.chip-green{background:#DCFCE7;color:#15803D}
+.chip-red{background:#FEE2E2;color:#B91C1C}
+.chip-yellow{background:#FEF3C7;color:#92400E}
+.chip-purple{background:#EDE9FE;color:#6D28D9}
+.chip-gray{background:#F1F5F9;color:#475569}
+.chip-outline{background:#fff;border:1px solid var(--border);color:var(--text-secondary)}
+.dot{width:8px;height:8px;border-radius:50%;display:inline-block;flex-shrink:0}
+.dot-green{background:var(--success)}.dot-yellow{background:var(--warning)}.dot-red{background:var(--error)}.dot-gray{background:#94A3B8}
+
+/* CARDS / TABLES */
+.card{background:var(--surface);border-radius:var(--radius);border:1px solid var(--border);box-shadow:var(--shadow);margin-bottom:16px}
+.card-header{padding:13px 18px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.card-header h3{font-size:14px;font-weight:600}
+.card-body{padding:16px 18px}
+.table-wrap{background:var(--surface);border-radius:var(--radius);border:1px solid var(--border);box-shadow:var(--shadow);overflow:hidden}
+table{width:100%;border-collapse:collapse}
+thead{background:#F8FAFC}
+thead th{padding:10px 16px;text-align:left;font-size:11px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.5px;white-space:nowrap;border-bottom:1px solid var(--border)}
+tbody tr{border-bottom:1px solid var(--border);transition:background var(--transition)}
+tbody tr:hover{background:#F8FAFC}
+tbody tr:last-child{border-bottom:none}
+tbody td{padding:11px 16px;vertical-align:middle;font-size:13px}
+.row-title{font-weight:600}
+.row-sub{font-size:11.5px;color:var(--text-secondary);margin-top:2px}
+.actions-cell{display:flex;align-items:center;gap:6px;justify-content:flex-end;white-space:nowrap}
+
+/* ALERTS / NOTES */
+.alert{border-radius:6px;padding:12px 16px;font-size:13px;line-height:1.5;margin-bottom:14px;display:flex;gap:10px;align-items:flex-start}
+.alert-info{background:#EFF6FF;color:#1E40AF;border-left:4px solid #3B82F6}
+.alert-warning{background:#FFFBEB;color:#92400E;border-left:4px solid #F59E0B}
+.alert-success{background:#F0FDF4;color:#166534;border-left:4px solid #22C55E}
+.alert-error{background:#FEF2F2;color:#991B1B;border-left:4px solid #EF4444}
+.alert strong{font-weight:700}
+.alert .btn{margin-left:auto;flex-shrink:0}
+.annotate{display:flex;gap:10px;padding:12px 14px;border:1px dashed #C7D2FE;background:#F5F8FF;border-radius:var(--radius);font-size:12.5px;color:#3730A3;line-height:1.55;margin:14px 0}
+.annotate .a-icon{flex-shrink:0;font-size:16px;margin-top:1px}
+
+/* FORMS */
+.form-group{margin-bottom:14px}
+.form-group>label,.field-label{display:block;font-size:12.5px;font-weight:600;margin-bottom:5px}
+.form-control{width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface);color:var(--text-primary);transition:border-color var(--transition);outline:none}
+.form-control:focus{border-color:var(--primary);box-shadow:0 0 0 3px var(--primary-light)}
+textarea.form-control{resize:vertical;min-height:72px}
+.form-hint{font-size:11px;color:var(--text-secondary);margin-top:4px;line-height:1.45}
+.form-row{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.req{color:var(--error);margin-left:2px}
+.field-error{font-size:11px;color:var(--error);margin-top:4px;display:none}
+.field-error.visible{display:block}
+.form-control.invalid{border-color:var(--error)}
+.mono{font-family:'SF Mono','Roboto Mono',ui-monospace,monospace}
+.code{background:#0F172A;border-radius:var(--radius);padding:12px 14px;font-family:'SF Mono','Roboto Mono',ui-monospace,monospace;font-size:11.5px;line-height:1.65;color:#E2E8F0;overflow:auto;white-space:pre;max-height:340px}
+.code .j-key{color:#93C5FD}.code .j-str{color:#86EFAC}.code .j-num{color:#FCA5A5}.code .j-bool{color:#FDE68A}
+.code-light{background:#F8FAFC;color:#334155;border:1px solid var(--border)}
+
+/* MODALS */
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(15,23,42,.5);z-index:1000;align-items:flex-start;justify-content:center;backdrop-filter:blur(2px);padding:32px 16px;overflow-y:auto}
+.modal-overlay.open{display:flex}
+.modal{background:var(--surface);border-radius:var(--radius-lg);box-shadow:var(--shadow-md);width:100%;max-width:560px;max-height:calc(100vh - 64px);display:flex;flex-direction:column;overflow:hidden;margin:auto}
+.modal-lg{max-width:760px}.modal-xl{max-width:980px}
+.modal-header{padding:16px 22px;border-bottom:1px solid var(--border);display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-shrink:0}
+.modal-header h3{font-size:16px;font-weight:600}
+.modal-header .mh-sub{font-size:11.5px;color:var(--text-secondary);margin-top:3px}
+.modal-close{background:none;border:none;padding:6px;border-radius:var(--radius-sm);color:var(--text-secondary);font-size:18px;line-height:1;flex-shrink:0}
+.modal-close:hover{background:var(--bg)}
+.modal-body{padding:18px 22px;overflow-y:auto;flex:1}
+.modal-body::-webkit-scrollbar{width:5px}.modal-body::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+.modal-footer{padding:13px 22px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:10px;flex-shrink:0;flex-wrap:wrap}
+.modal-footer .mf-left{margin-right:auto;font-size:11.5px;color:var(--text-secondary);align-self:center}
+
+/* TABS */
+.tabs{display:flex;gap:2px;border-bottom:1px solid var(--border);margin-bottom:16px}
+.tab{background:none;border:none;padding:9px 14px;font-size:13px;font-weight:600;color:var(--text-secondary);border-bottom:2px solid transparent;margin-bottom:-1px}
+.tab.active{color:var(--primary-dark);border-bottom-color:var(--primary)}
+.tab:hover{color:var(--text-primary)}
+
+/* FIELD EDITOR */
+.ed-grid{display:grid;grid-template-columns:1fr 300px;gap:16px;align-items:start}
+@media(max-width:900px){.ed-grid{grid-template-columns:1fr}}
+.field-head,.field-row{display:grid;grid-template-columns:1fr 132px 56px 56px 74px;gap:6px;align-items:center}
+.field-head{font-size:9.5px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;color:var(--text-secondary);padding:0 2px 6px;border-bottom:1px solid var(--border);margin-bottom:8px}
+.field-head>div:nth-child(3),.field-head>div:nth-child(4){text-align:center}
+.fields-empty{padding:18px;text-align:center;font-size:12.5px;color:var(--text-secondary);border:1px dashed var(--border);border-radius:var(--radius-sm);background:#F8FAFC}
+.field-row .form-control{padding:6px 8px;font-size:12.5px}
+.field-row .chk{display:flex;align-items:center;justify-content:center;gap:4px;font-size:10.5px;color:var(--text-secondary);cursor:pointer}
+.field-row .chk input{accent-color:var(--primary);width:13px;height:13px}
+.icon-btns{display:flex;gap:2px;justify-content:flex-end}
+.icon-btn{background:#fff;border:1px solid var(--border);border-radius:4px;width:22px;height:24px;font-size:11px;line-height:1;color:var(--text-secondary);display:flex;align-items:center;justify-content:center}
+.icon-btn:hover{border-color:var(--primary);color:var(--primary)}
+.icon-btn:disabled{opacity:.35;cursor:not-allowed}
+.field-sub{grid-column:1 / -1;display:flex;gap:8px;align-items:flex-start;flex-wrap:wrap;margin:2px 0 10px;padding:8px 10px;background:#F8FAFC;border-left:3px solid var(--primary-light);border-radius:0 var(--radius-sm) var(--radius-sm) 0}
+.field-sub .fs-label{font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.3px;color:var(--text-secondary);align-self:center;white-space:nowrap}
+.field-sub .form-control{flex:1;min-width:140px;padding:5px 8px;font-size:12px}
+.field-sub .form-hint{flex-basis:100%;margin:0}
+.field-block{margin-bottom:10px}
+.preview-title{font-size:10.5px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;color:var(--text-secondary);margin-bottom:6px;display:flex;justify-content:space-between;align-items:center;gap:6px}
+.preview-meta{font-size:11px;color:var(--text-secondary);margin-top:6px;line-height:1.5}
+.section-title{font-size:11px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--text-secondary);margin:18px 0 10px;padding-bottom:6px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:10px}
+.section-title:first-child{margin-top:0}
+
+/* SCHEMA TABLE (read-only previews) */
+.schema-table{width:100%;border:1px solid var(--border);border-radius:var(--radius-sm);overflow:hidden}
+.schema-table td{padding:5px 9px;font-size:11.5px;border-bottom:1px solid #F1F5F9}
+.schema-table tr:last-child td{border-bottom:none}
+.schema-table .st-name{font-weight:600;font-family:'SF Mono','Roboto Mono',monospace;font-size:11px}
+.schema-table .st-type{color:var(--text-secondary);white-space:nowrap}
+.schema-table .st-sub td{background:#F8FAFC;color:var(--text-secondary);font-size:11px;padding-left:22px}
+.schema-table .st-sub .st-name{font-weight:500}
+.schema-cap{font-size:10.5px;color:var(--text-secondary);padding:5px 9px;background:#F8FAFC;border-top:1px solid var(--border)}
+
+/* CONTRACT SUMMARY / SEGMENTED */
+.seg{display:inline-flex;border:1px solid var(--border);border-radius:var(--radius-sm);overflow:hidden;background:#fff}
+.seg button{background:#fff;border:none;padding:6px 13px;font-size:12px;font-weight:600;color:var(--text-secondary);border-right:1px solid var(--border)}
+.seg button:last-child{border-right:none}
+.seg button.active{background:var(--primary-light);color:var(--primary-dark)}
+.radio-row{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px}
+.radio-card{display:flex;align-items:center;gap:7px;border:1px solid var(--border);border-radius:var(--radius-sm);padding:7px 11px;font-size:12.5px;cursor:pointer;background:#fff}
+.radio-card.active{border-color:var(--primary);background:#F5F8FF;box-shadow:0 0 0 2px var(--primary-light)}
+.radio-card input{accent-color:var(--primary)}
+.contract-box{border:1px solid var(--border);border-radius:var(--radius);padding:14px;margin-bottom:14px;background:#fff}
+.contract-box h4{font-size:12.5px;text-transform:uppercase;letter-spacing:.4px;color:var(--text-secondary);margin-bottom:10px;display:flex;align-items:center;gap:8px}
+.contract-box .cb-note{font-size:11.5px;color:var(--text-secondary);margin-top:6px;line-height:1.5}
+.contract-box.disabled{background:#FAFAFA}
+.preview-toggle{background:#F8FAFC;border:1px solid var(--border);border-radius:var(--radius-sm);padding:8px 10px;margin-top:10px}
+.preview-toggle .pt-head{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.preview-toggle .pt-head span{font-size:11.5px;font-weight:600;color:var(--text-secondary)}
+.contract-meta{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+
+/* LAUNCH */
+.agent-tiles{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:16px}
+@media(max-width:1000px){.agent-tiles{grid-template-columns:1fr}}
+.agent-tile{text-align:left;background:#fff;border:1px solid var(--border);border-radius:var(--radius);padding:12px 14px;transition:all var(--transition)}
+.agent-tile:hover{border-color:#93C5FD;box-shadow:var(--shadow)}
+.agent-tile.active{border-color:var(--primary);box-shadow:0 0 0 3px var(--primary-light)}
+.agent-tile .at-name{font-size:13px;font-weight:600;display:flex;align-items:center;gap:6px}
+.agent-tile .at-meta{font-size:11px;color:var(--text-secondary);margin-top:5px;line-height:1.5}
+.agent-tile .at-chips{display:flex;gap:5px;margin-top:8px;flex-wrap:wrap}
+.form-card{max-width:820px}
+.pax-box{border:1px solid var(--border);border-radius:var(--radius);padding:12px;background:#F8FAFC}
+.pax-head{display:grid;grid-template-columns:1fr 130px 92px 30px;gap:8px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text-secondary);margin-bottom:6px;padding:0 2px}
+.pax-row{display:grid;grid-template-columns:1fr 130px 92px 30px;gap:8px;margin-bottom:8px;align-items:start}
+.pax-row .form-control{padding:7px 9px;font-size:12.5px;background:#fff}
+.pax-box .add-row{margin-top:4px}
+.inline-err{padding:9px 11px;background:#FFF5F5;border:1px solid #FECACA;border-radius:var(--radius-sm);font-size:11.5px;color:#B91C1C;margin-bottom:10px;line-height:1.5}
+.loader{display:flex;align-items:center;gap:10px;padding:26px;justify-content:center;color:var(--text-secondary);font-size:12.5px}
+.spinner{width:20px;height:20px;border-radius:50%;border:2px solid #E2E8F0;border-top-color:var(--primary);animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.skeleton{height:12px;border-radius:3px;background:#EEF2F7;margin-bottom:10px;animation:pulse 1.2s ease-in-out infinite}
+@keyframes pulse{50%{opacity:.5}}
+
+/* RESULTS */
+.result-card{background:#fff;border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);margin-bottom:16px;overflow:hidden}
+.result-head{display:flex;align-items:flex-start;gap:12px;padding:14px 18px;border-bottom:1px solid var(--border);flex-wrap:wrap}
+.result-head .rh-main{flex:1;min-width:220px}
+.result-head .rh-id{font-size:13px;font-weight:600;font-family:'SF Mono','Roboto Mono',monospace}
+.result-head .rh-agent{font-size:12px;color:var(--text-secondary);margin-top:2px}
+.result-head .rh-chips{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.result-body{padding:16px 18px}
+.env-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--border);border:1px solid var(--border);border-radius:var(--radius-sm);overflow:hidden;margin-bottom:14px}
+@media(max-width:800px){.env-grid{grid-template-columns:repeat(2,1fr)}}
+.env-cell{background:#F8FAFC;padding:7px 10px}
+.env-cell .k{font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text-secondary);display:block}
+.env-cell .v{font-size:11.5px;font-weight:600;font-family:'SF Mono','Roboto Mono',monospace}
+.kv{border:1px solid var(--border);border-radius:var(--radius-sm);overflow:hidden}
+.kv-row{display:grid;grid-template-columns:170px 1fr;border-bottom:1px solid var(--border);font-size:12.5px}
+.kv-row:last-child{border-bottom:none}
+.kv-k{padding:7px 11px;background:#F8FAFC;color:var(--text-secondary);font-weight:600;font-family:'SF Mono','Roboto Mono',monospace;font-size:11.5px;border-right:1px solid var(--border)}
+.kv-v{padding:7px 11px;word-break:break-word}
+.kv-table{width:100%;border-collapse:collapse;font-size:11.5px}
+.kv-table th{padding:4px 8px;text-align:left;font-size:9.5px;text-transform:uppercase;letter-spacing:.3px;color:var(--text-secondary);background:#F1F5F9;border-bottom:1px solid var(--border)}
+.kv-table td{padding:4px 8px;border-bottom:1px solid #F1F5F9}
+.md{font-size:13px;line-height:1.6}
+.md h4{font-size:13.5px;margin:4px 0 8px}
+.md h5{font-size:12.5px;margin:10px 0 6px}
+.md p{margin-bottom:9px}
+.md ul{margin:0 0 10px 20px}
+.md li{margin-bottom:4px}
+.md code{background:#F1F5F9;border-radius:3px;padding:1px 4px;font-size:11.5px;font-family:'SF Mono','Roboto Mono',monospace}
+.script-hint{display:flex;gap:9px;align-items:flex-start;padding:10px 12px;border-radius:var(--radius-sm);font-size:11.5px;line-height:1.5;margin-top:12px}
+.script-hint.ok{background:#F0FDF4;border:1px solid #BBF7D0;color:#166534}
+.script-hint.sem{background:#FFF7ED;border:1px solid #FED7AA;color:#9A3412}
+.script-hint.fail{background:#FEF2F2;border:1px solid #FECACA;color:#991B1B}
+
+/* EMPTY / TOAST */
+.empty-state{border:1px dashed #CBD5E1;background:#F8FAFC;border-radius:var(--radius);padding:30px 22px;text-align:center;margin-bottom:14px}
+.empty-state .es-ico{font-size:28px;margin-bottom:8px;line-height:1}
+.empty-state h4{font-size:14px;font-weight:600;margin-bottom:5px}
+.empty-state p{font-size:12.5px;color:var(--text-secondary);line-height:1.55;max-width:470px;margin:0 auto 14px}
+.toast-wrap{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);z-index:3000;display:flex;flex-direction:column;gap:8px;align-items:center}
+@keyframes toastIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+.toast{padding:11px 18px;border-radius:var(--radius);color:#fff;font-size:13px;font-weight:500;box-shadow:var(--shadow-md);animation:toastIn .28s ease;max-width:520px}
+.toast-success{background:#2E7D32}.toast-error{background:#C62828}.toast-info{background:#1565C0}.toast-warning{background:#B45309}
+.hide{display:none!important}
+.text-secondary{color:var(--text-secondary)}
+.text-sm{font-size:12px}.text-xs{font-size:11px}
+.flex{display:flex}.items-center{align-items:center}.justify-between{justify-content:space-between}
+.gap-2{gap:8px}.gap-3{gap:12px}
+.mt-2{margin-top:8px}.mt-3{margin-top:12px}.mt-4{margin-top:16px}.mb-0{margin-bottom:0}.mb-3{margin-bottom:12px}
+hr{display:block;height:1px;border:none;border-top:1px solid var(--border);margin:16px 0}
+</style>
+</head>
+<body>
+<div class="app-shell">
+  <aside class="sidebar" aria-label="Primary navigation">
+    <div class="sidebar-logo"><h1>Parthenon</h1><small>Enterprise AI Harness</small></div>
+    <button class="nav-item active" id="nav-datatypes" onclick="go('datatypes')"><span class="nav-icon">📐</span>Data Types</button>
+    <button class="nav-item" id="nav-agenttypes" onclick="go('agenttypes')"><span class="nav-icon">🤖</span>Agent Types</button>
+    <button class="nav-item" id="nav-launch" onclick="go('launch')"><span class="nav-icon">▶️</span>Run Agent</button>
+    <button class="nav-item" id="nav-results" onclick="go('results')"><span class="nav-icon">📊</span>Result Repository</button>
+    <div class="nav-note">Prototype · <span class="mono">unified-agent-io-contract</span><br>Sample data only. In production all strings resolve through i18next keys.</div>
+  </aside>
+
+  <div class="main-wrapper">
+    <div class="topbar">
+      <div class="topbar-title" id="topTitle">Agent Data Types</div>
+      <span class="chip chip-outline" id="permChip">Editor · manage</span>
+      <button class="btn btn-sm btn-secondary" onclick="resetDemo()">↺ Reset demo</button>
+    </div>
+
+    <div class="main-content">
+      <div class="global-bar">
+        <div class="gb-group">
+          <span class="gb-label">Flows</span>
+          <button class="gb-btn" id="gb-1" onclick="go('datatypes')">1 · Data types</button>
+          <button class="gb-btn" id="gb-2" onclick="openFlow2()">2 · Agent contract</button>
+          <button class="gb-btn" id="gb-3" onclick="go('launch')">3 · Structured input</button>
+          <button class="gb-btn" id="gb-4" onclick="go('results')">4 · Results</button>
+        </div>
+        <div class="gb-group">
+          <span class="gb-label">States</span>
+          <select class="gb-select" id="permSelect" onchange="setPermission(this.value)" aria-label="Simulated permission">
+            <option value="editor">Editor (manage)</option>
+            <option value="viewer">Viewer (403 on save)</option>
+          </select>
+          <button class="gb-btn" onclick="simulateLoading()">Loading</button>
+          <button class="gb-btn" onclick="setEmptyRegistry()">Empty registry</button>
+          <button class="gb-btn" onclick="showValidationDemo()">Schema error</button>
+        </div>
+      </div>
+
+      <!-- ═══ VIEW: DATA TYPES ═══ -->
+      <div id="view-datatypes" class="view is-active">
+        <div class="change-banner">
+          <div class="cb-icon">↔</div>
+          <div class="cb-body">
+            <h4>One registry defines both input and output</h4>
+            <p>A data type can be a field (<b>child</b>), a single value or a <b>list</b>, and the same definition is used as an agent's input contract and output contract. The guided editor and schema source are two views over one definition.</p>
+          </div>
+        </div>
+        <div class="view-header">
+          <div>
+            <h2>Agent Data Types</h2>
+            <div class="view-desc">Reusable typed schemas shared by agent input, agent output, decision tools, and result rendering. Names are unique per tenant.</div>
+          </div>
+          <button class="btn btn-primary" onclick="openEditor(null)">+ Create Data Type</button>
+        </div>
+
+        <div id="dtLoading" class="card hide">
+          <div class="card-body">
+            <div class="skeleton" style="width:34%"></div>
+            <div class="skeleton" style="width:68%"></div>
+            <div class="skeleton" style="width:58%"></div>
+            <div class="skeleton" style="width:72%;margin-bottom:0"></div>
+            <div class="loader"><span class="spinner"></span>Loading data types…</div>
+          </div>
+        </div>
+
+        <div class="table-wrap" id="dtTableWrap">
+          <table>
+            <thead><tr><th>Name</th><th>Fields</th><th>Referenced by</th><th>Used by agent types</th><th>Updated</th><th style="text-align:right">Actions</th></tr></thead>
+            <tbody id="dtBody"></tbody>
+          </table>
+        </div>
+
+        <div class="empty-state hide" id="dtEmpty">
+          <div class="es-ico">📐</div>
+          <h4>No data types yet</h4>
+          <p>Register a data type to define what an agent accepts or returns — a passenger record, a booking confirmation, a flight request. Typed agents cannot be saved without one.</p>
+          <button class="btn btn-primary" onclick="openEditor(null)">+ Create Data Type</button>
+        </div>
+
+        <div class="annotate">
+          <span class="a-icon">①</span>
+          <span><strong>One level of child data types.</strong> A field may reference another data type as a child, once or as a list. A data type that already references a child cannot itself be used as a child — and a data type already used as a child cannot reference one; the pickers disable those options and explain why. This keeps schemas reviewable and predictable.<br><strong>Try:</strong> Edit “Passenger” → consumer warning · Delete “Passenger” → blocked with dependents · Schema source → paste a nested child reference · Edit “Booking Confirmation” → its legacy free-text schema stays readable · switch States to Viewer, then Save → 403.</span>
+        </div>
+      </div>
+
+      <!-- ═══ VIEW: AGENT TYPES ═══ -->
+      <div id="view-agenttypes" class="view">
+        <div class="view-header">
+          <div>
+            <h2>Agent Types</h2>
+            <div class="view-desc">Each agent declares its input contract and its result type. Result type is explicit — never inferred from a data type or a legacy schema.</div>
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Agent Type</th><th>Mode</th><th>Input contract</th><th>Declared result type</th><th>Output data type</th><th style="text-align:right">Actions</th></tr></thead>
+            <tbody id="agentBody"></tbody>
+          </table>
+        </div>
+        <div class="annotate">
+          <span class="a-icon">②</span>
+          <span><strong>Open a definition</strong> to preview the selected input and output schema without leaving the dialog. Switching the selected data type updates the read-only preview immediately.</span>
+        </div>
+      </div>
+
+      <!-- ═══ VIEW: LAUNCH ═══ -->
+      <div id="view-launch" class="view">
+        <div class="view-header">
+          <div>
+            <h2>Run Agent</h2>
+            <div class="view-desc">An agent with an input data type gets a structured entry form derived from that data type. Invalid input is rejected before the run starts.</div>
+          </div>
+        </div>
+        <div class="agent-tiles" id="agentTiles"></div>
+        <div id="launchBody"></div>
+      </div>
+
+      <!-- ═══ VIEW: RESULTS ═══ -->
+      <div id="view-results" class="view">
+        <div class="view-header">
+          <div>
+            <h2>Result Repository</h2>
+            <div class="view-desc">Every execution path returns the same envelope: execution status, declared result type, payload, and contract metadata. Business fields live only inside the payload.</div>
+          </div>
+          <span class="chip chip-gray">read-only</span>
+        </div>
+        <div id="resultsList"></div>
+        <div class="annotate">
+          <span class="a-icon">④</span>
+          <span><strong>Scriptability follows the declared result type.</strong> Typed and JSON boundaries are scriptable; markdown and text boundaries are semantic steps, so the optimizer can never report the whole workflow as fully scriptable across them. A payload that fails validation still completes the run, is recorded, and shows the raw result as the fallback — exactly as today.</span>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- ═══ DIALOG: DATA TYPE EDITOR ═══ -->
+<div class="modal-overlay" id="edDialog" onclick="closeIfOverlay(event,'edDialog')">
+  <div class="modal modal-xl" role="dialog" aria-modal="true" aria-labelledby="edTitle">
+    <div class="modal-header">
+      <div><h3 id="edTitle">Create Data Type</h3><div class="mh-sub" id="edSub">One definition · two views</div></div>
+      <button class="modal-close" onclick="closeDialog('edDialog')" aria-label="Close">×</button>
+    </div>
+    <div class="modal-body" id="edBody"></div>
+    <div class="modal-footer" id="edFooter"></div>
+  </div>
+</div>
+
+<!-- ═══ DIALOG: AGENT TYPE DEFINITION ═══ -->
+<div class="modal-overlay" id="agentDialog" onclick="closeIfOverlay(event,'agentDialog')">
+  <div class="modal modal-lg" role="dialog" aria-modal="true" aria-labelledby="agentTitle">
+    <div class="modal-header">
+      <div><h3 id="agentTitle">Edit Agent Type</h3><div class="mh-sub">Input and output contracts · result type is explicit</div></div>
+      <button class="modal-close" onclick="closeDialog('agentDialog')" aria-label="Close">×</button>
+    </div>
+    <div class="modal-body" id="agentBodyDlg"></div>
+    <div class="modal-footer" id="agentFooter"></div>
+  </div>
+</div>
+
+<!-- ═══ DIALOG: DELETE DATA TYPE ═══ -->
+<div class="modal-overlay" id="deleteDialog" onclick="closeIfOverlay(event,'deleteDialog')">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="delTitle">
+    <div class="modal-header"><div><h3 id="delTitle">Delete Data Type</h3></div><button class="modal-close" onclick="closeDialog('deleteDialog')" aria-label="Close">×</button></div>
+    <div class="modal-body" id="delBody"></div>
+    <div class="modal-footer" id="delFooter"></div>
+  </div>
+</div>
+
+<div class="toast-wrap" id="toastWrap" role="status" aria-live="polite"></div>
+
+<script>
+/* ═══════════ STATE ═══════════ */
+const TYPES=[['string','String'],['number','Number'],['boolean','Boolean'],['date','Date'],['enum','Enum'],['child','Child data type']];
+const TYPE_LABEL={string:'String',number:'Number',boolean:'Boolean',date:'Date',enum:'Enum',child:'Child data type'};
+const BASE={datatypes:[
+  {id:'dt-passenger',name:'Passenger',slug:'passenger',description:'A traveller on a booking.',updated:'2026-11-14',fields:[
+    {name:'name',type:'string',required:true,list:false},
+    {name:'type',type:'enum',required:true,list:false,values:['adult','child','infant']},
+    {name:'bags',type:'number',required:false,list:false}]},
+  {id:'dt-flight-request',name:'Flight Request',slug:'flight-request',description:'A structured search / booking request.',updated:'2026-11-19',fields:[
+    {name:'origin',type:'string',required:true,list:false},
+    {name:'destination',type:'string',required:true,list:false},
+    {name:'departure_date',type:'date',required:true,list:false},
+    {name:'passengers',type:'child',required:true,list:true,child:'dt-passenger'}]},
+  {id:'dt-booking',name:'Booking Confirmation',slug:'booking-confirmation',description:'Confirmed itinerary returned after booking.',updated:'2026-11-19',legacySchema:true,fields:[
+    {name:'pnr',type:'string',required:true,list:false},
+    {name:'status',type:'enum',required:true,list:false,values:['confirmed','waitlisted','cancelled']},
+    {name:'total_price',type:'number',required:false,list:false},
+    {name:'passengers',type:'child',required:true,list:true,child:'dt-passenger'}]},
+  {id:'dt-refund-note',name:'Refund Note',slug:'refund-note',description:'Internal note recorded against a refund. Unused in this demo.',updated:'2026-11-02',fields:[
+    {name:'reason',type:'enum',required:true,list:false,values:['duplicate','voluntary','schedule_change']},
+    {name:'note',type:'string',required:false,list:false}]}
+],agents:[
+  {id:'at-flight',name:'Flight Request Intake',slug:'flight-request-intake',mode:'standard',model:'gpt-4.1',inputType:'typed',inputDataType:'dt-flight-request',outputType:'typed',outputDataType:'dt-booking'},
+  {id:'at-disruption',name:'Disruption Summariser',slug:'disruption-summariser',mode:'standard',model:'claude-sonnet-4',inputType:'none',inputDataType:null,outputType:'markdown',outputDataType:null},
+  {id:'at-json',name:'Disruption Assessment',slug:'disruption-assessment',mode:'standard',model:'gpt-4.1',inputType:'none',inputDataType:null,outputType:'json',outputDataType:null},
+  {id:'at-legacy',name:'Weekly Ops Narrative',slug:'weekly-ops-narrative',mode:'standard',model:'gpt-4.1-mini',inputType:'none',inputDataType:null,outputType:'text',outputDataType:null,legacy:true},
+  {id:'at-chat',name:'Booking Assistant',slug:'booking-assistant',mode:'conversational',model:'claude-sonnet-4',inputType:'conversation',inputDataType:null,outputType:'text',outputDataType:null}
+]};
+const BASE_RESULTS=[
+  {exec:'EXE-9F21',agent:'Flight Request Intake',when:'Today 09:41',status:'succeeded',resultType:'typed',dataType:'dt-booking',validation:'valid',boundary:'scriptable',meta:'LLM run · 4.2s · input validated',
+    payload:{pnr:'QE7X2M',status:'confirmed',total_price:612.4,passengers:[{name:'Jordan Lee',type:'adult',bags:2},{name:'Ava Lee',type:'child',bags:1},{name:'Mia Lee',type:'infant',bags:0}]}},
+  {exec:'EXE-9E07',agent:'Disruption Summariser · delegated by “Ops Recovery”',when:'Today 09:12',status:'succeeded',resultType:'markdown',dataType:null,validation:null,boundary:'semantic',meta:'Delegated hand-off · child agent declared markdown',
+    payload:'## Disruption summary — QF402 (MEL → SYD)\n\n**Impact:** 2 passengers rebooked; 1 infant requires a bassinet.\n\n- QF402 delayed 2h 15m — engineering: hydraulic leak\n- Booking `QE7X2M` rebooked to QF418 at 16:40\n- Infant passenger (Mia Lee, 11 months) — bassinet confirmed at 12A\n\n**Required:** notify ground operations at gate 12 before boarding.'},
+  {exec:'EXE-9D54',agent:'Disruption Assessment',when:'Today 08:55',status:'succeeded',resultType:'json',dataType:null,validation:null,boundary:'scriptable',meta:'Fully-scripted plan · zero-LLM execution',
+    payload:{delay_minutes:135,cause:'hydraulic_leak',impacted_passengers:2,rebooking:{pnr:'QE7X2M',new_flight:'QF418',seat_map:'pending'},confidence:0.86}},
+  {exec:'EXE-9C10',agent:'Weekly Ops Narrative',when:'Yesterday 18:02',status:'succeeded',resultType:'text',dataType:null,validation:null,boundary:'semantic',meta:'Legacy agent · “auto” normalised to text on read',
+    payload:'MEL–SYD corridor ran 94.2% on time this week. Two engineering delays exceeded 90 minutes (QF402, QF512). Rebooking volumes were within the seasonal band; no escalations were required.'},
+  {exec:'EXE-9B02',agent:'Flight Request Intake',when:'Yesterday 16:40',status:'failed',resultType:'typed',dataType:'dt-booking',validation:null,boundary:'failed',meta:'Failed run · envelope preserved in logs',
+    failure:'Model provider timed out after 120s. No payload was produced; the declared contract is retained so history stays traceable.',payload:null},
+  {exec:'EXE-9A88',agent:'Flight Request Intake',when:'Yesterday 14:22',status:'succeeded',resultType:'typed',dataType:'dt-booking',validation:'invalid',boundary:'scriptable',meta:'LLM run · payload did not match the contract',
+    payload:null,
+    raw:'{"pnr":"QE7X2M","status":"CONFIRMED","total_price":"612.40","passengers":"Jordan Lee, Ava Lee, Mia Lee"}'}
+];
+let DB, RESULTS, S;
+
+function blankLaunch(){
+  return {agent:'at-flight',form:{origin:'',destination:'',departure_date:'',passengers:[{name:'',type:'adult',bags:''}]},errors:{},tried:false,running:false,result:null};
+}
+function resetState(){
+  DB=JSON.parse(JSON.stringify(BASE));
+  RESULTS=JSON.parse(JSON.stringify(BASE_RESULTS));
+  S={route:'datatypes',permission:'editor',loading:false,empty:false,editor:null,agentDlg:null,deleteId:null,launch:blankLaunch()};
+}
+resetState();
+
+/* ═══════════ HELPERS ═══════════ */
+const $=id=>document.getElementById(id);
+const esc=s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+const dt=id=>DB.datatypes.find(d=>d.id===id);
+const agent=id=>DB.agents.find(a=>a.id===id);
+function toast(msg,kind){
+  const t=document.createElement('div');t.className='toast toast-'+(kind||'info');t.textContent=msg;
+  $('toastWrap').appendChild(t);setTimeout(()=>t.remove(),4200);
+}
+let lastFocus=null;
+function closeDialog(id){
+  const el=$(id);if(!el)return;
+  const wasOpen=el.classList.contains('open');
+  el.classList.remove('open');
+  if(wasOpen&&lastFocus){const t=lastFocus;lastFocus=null;if(document.contains(t)&&typeof t.focus==='function')t.focus();}
+}
+function closeIfOverlay(e,id){if(e.target===e.currentTarget)closeDialog(id);}
+function openDialog(id){const a=document.activeElement;if(a&&a!==document.body&&!a.closest('.modal-overlay'))lastFocus=a;$(id).classList.add('open');}
+document.addEventListener('keydown',e=>{
+  if(e.key==='Escape')['edDialog','agentDialog','deleteDialog'].forEach(id=>closeDialog(id));
+});
+function setPermission(v){S.permission=v;$('permChip').textContent=v==='viewer'?'Viewer · read-only':'Editor · manage';$('permChip').className='chip '+(v==='viewer'?'chip-yellow':'chip-outline');toast(v==='viewer'?'Simulating viewer permissions — saves will return 403.':'Editor permissions restored.','info');}
+function resetDemo(){resetState();$('permSelect').value='editor';$('permChip').textContent='Editor · manage';$('permChip').className='chip chip-outline';['edDialog','agentDialog','deleteDialog'].forEach(closeDialog);renderAll();go('datatypes');toast('Demo reset to sample airline data.','success');}
+
+/* ═══════════ NAVIGATION ═══════════ */
+const TITLES={datatypes:'Agent Data Types',agenttypes:'Agent Types',launch:'Run Agent',results:'Result Repository'};
+function openFlow2(){go('agenttypes');$('gb-2').classList.add('active');openAgent('at-flight');}
+function go(v){
+  S.route=v;
+  document.querySelectorAll('.view').forEach(el=>el.classList.remove('is-active'));
+  $('view-'+v).classList.add('is-active');
+  ['datatypes','agenttypes','launch','results'].forEach(k=>$('nav-'+k).classList.toggle('active',k===v));
+  ['1','2','3','4'].forEach(n=>$('gb-'+n).classList.remove('active'));
+  const flow={datatypes:'1',launch:'3',results:'4'}[v];
+  if(flow)$('gb-'+flow).classList.add('active');
+  $('topTitle').textContent=TITLES[v];
+  if(v==='datatypes')renderDataTypes();
+  if(v==='agenttypes')renderAgents();
+  if(v==='launch')renderLaunch();
+  if(v==='results')renderResults();
+}
+
+/* ═══════════ CONSUMPTION / DEPENDENTS ═══════════ */
+function parentRefs(id){
+  const out=[];
+  DB.datatypes.forEach(d=>d.fields.forEach(f=>{if(f.type==='child'&&f.child===id)out.push({type:'data',name:d.name,detail:'field “'+f.name+'”'+(f.list?' · list':'')});}));
+  DB.agents.forEach(a=>{
+    if(a.inputDataType===id)out.push({type:'agent',name:a.name,detail:'input contract'});
+    if(a.outputDataType===id)out.push({type:'agent',name:a.name,detail:'output contract'});
+  });
+  return out;
+}
+const isChildUsed=id=>DB.datatypes.some(d=>d.id!==id&&d.fields.some(f=>f.type==='child'&&f.child===id));
+function fieldTypeText(f){
+  let base=f.type==='child'?(dt(f.child)?dt(f.child).name:'Missing child'):TYPE_LABEL[f.type];
+  if(f.type==='enum'&&f.values&&f.values.length)base+=' ('+f.values.join(' / ')+')';
+  return (f.list?'List of ':'')+base;
+}
+function consumersText(id){
+  const refs=parentRefs(id).filter(r=>r.type==='data');
+  if(!refs.length)return '<span class="text-secondary">—</span>';
+  return refs.map(r=>esc(r.name)).join(', ');
+}
+
+/* ═══════════ DATA TYPES LIST ═══════════ */
+function renderDataTypes(){
+  $('dtLoading').classList.toggle('hide',!S.loading);
+  $('dtTableWrap').classList.toggle('hide',S.loading||S.empty);
+  $('dtEmpty').classList.toggle('hide',S.loading||!S.empty);
+  if(S.loading||S.empty)return;
+  $('dtBody').innerHTML=DB.datatypes.map(d=>{
+    const refs=parentRefs(d.id),agents=refs.filter(r=>r.type==='agent').length;
+    return '<tr><td><div class="row-title">'+esc(d.name)+'</div><div class="row-sub mono">'+esc(d.slug)+'</div>'
+      +(d.legacySchema?'<div class="row-sub"><span class="chip chip-gray">Legacy free-text schema · readable</span></div>':'')+'</td>'
+      +'<td>'+d.fields.length+' field'+(d.fields.length===1?'':'s')
+      +'<div class="row-sub">'+d.fields.map(f=>esc(f.name)+(f.list?'[]':'')).slice(0,4).join(', ')+(d.fields.length>4?'…':'')+'</div></td>'
+      +'<td>'+consumersText(d.id)+'</td>'
+      +'<td>'+(agents?agents+' agent type'+(agents===1?'':'s'):'<span class="text-secondary">—</span>')+'</td>'
+      +'<td class="text-secondary text-sm">'+esc(d.updated)+'</td>'
+      +'<td><div class="actions-cell"><button class="btn btn-xs btn-secondary" onclick="openEditor(\''+d.id+'\')">Edit</button>'
+      +'<button class="btn btn-xs btn-secondary" onclick="openDelete(\''+d.id+'\')">Delete</button></div></td></tr>';
+  }).join('');
+}
+
+/* ═══════════ SCHEMA GENERATION / PARSING ═══════════ */
+function fieldSchema(f){
+  let schema;
+  if(f.type==='enum')schema={type:'enum',values:(f.values||[])};
+  else if(f.type==='child'){
+    const c=dt(f.child);
+    schema={type:'object',ref:c?c.slug:'',fields:c?c.fields.map(fieldSchema):[]};
+  }else schema={type:f.type};
+  if(f.list)schema={type:'array',items:schema};
+  return {name:f.name,type:schema.type,required:!!f.required,...(schema.items?{items:schema.items}:{}),...(schema.values?{values:schema.values}:{}),...(schema.ref?{ref:schema.ref,fields:schema.fields}:{})};
+}
+function toSchema(d){return {name:d.name,slug:d.slug,description:d.description,fields:(d.fields||[]).map(fieldSchema)};}
+function parseSchema(text){
+  let obj;try{obj=JSON.parse(text);}catch(err){return {error:'Invalid JSON — '+err.message};}
+  if(!obj||typeof obj!=='object')return {error:'Schema source must be a JSON object.'};
+  if(!Array.isArray(obj.fields))return {error:'Schema source must contain a "fields" array.'};
+  if(!obj.fields.length)return {error:'At least one field is required (fields[] is empty).'};
+  const fields=[],seen=new Set();
+  for(let i=0;i<obj.fields.length;i++){
+    const f=obj.fields[i],at='fields['+i+']'+(f&&f.name?' ("'+f.name+'")':'');
+    if(!f||typeof f!=='object')return {error:at+' must be an object.'};
+    if(!f.name)return {error:at+' is missing a name.'};
+    const key=String(f.name).toLowerCase();
+    if(seen.has(key))return {error:'Duplicate field name “'+f.name+'” ('+at+'). Field names must be unique.'};
+    seen.add(key);
+    const built=parseField(f,at);
+    if(built.error)return built;
+    built.field.name=f.name;built.field.required=!!f.required;fields.push(built.field);
+  }
+  return {fields,name:obj.name,slug:obj.slug,description:obj.description};
+}
+function parseField(f,at){
+  let node=f,list=false;
+  if(f.type==='array'){list=true;node=f.items||{};if(!node.type&&!node.ref)return {error:at+' is a list but has no items.type.'};}
+  if(node.type==='object'||node.ref||(node.fields&&Array.isArray(node.fields))){
+    const ref=node.ref||'';
+    const target=DB.datatypes.find(d=>d.slug===ref);
+    if(!target)return {error:at+' references unknown child data type “'+(ref||'(missing ref)')+'”. Child references resolve within the tenant only.'};
+    if(target.fields.some(x=>x.type==='child'))return {error:at+' references “'+target.name+'”, which itself references a child data type. Nested child references are not supported (one level only).'};
+    if(Array.isArray(node.fields)&&node.fields.length&&!node.ref)return {error:at+' is an inline nested object. Use a registered data type as a child reference instead.'};
+    return {field:{name:'',type:'child',required:false,list,child:target.id}};
+  }
+  const t=node.type;
+  if(!['string','number','boolean','date','enum'].includes(t))return {error:at+' has unsupported type “'+(t||'(missing)')+'”. Supported: string, number, boolean, date, enum, array, child object.'};
+  if(t==='enum'){
+    const values=Array.isArray(node.values)?node.values.map(String).filter(Boolean):[];
+    if(!values.length)return {error:at+' is an enum but has no allowed values.'};
+    return {field:{name:'',type:'enum',required:false,list,values}};
+  }
+  return {field:{name:'',type:t,required:false,list}};
+}
+
+/* ═══════════ DATA TYPE EDITOR ═══════════ */
+const EDITOR_TYPES=[['string','String'],['number','Number'],['boolean','Boolean'],['date','Date'],['enum','Enum'],['child','Child data type']];
+function openEditor(id){
+  const src=id?dt(id):{name:'',slug:'',description:'',fields:[{name:'',type:'string',required:true,list:false}]};
+  S.editor={id:id||null,tab:'fields',draft:JSON.parse(JSON.stringify(src)),errors:[],permDenied:false,schemaMsg:null,blocked:false,sourceDirty:false};
+  S.editor.schemaText=JSON.stringify(toSchema(S.editor.draft),null,2);
+  $('edTitle').textContent=id?'Edit Data Type':'Create Data Type';
+  $('edSub').textContent=id?'One definition · two views':'One definition · guided fields and schema source stay in sync';
+  openDialog('edDialog');renderEditor();
+  const first=$('edName');if(first)first.focus();
+}
+function editorError(html){S.editor.errors=[html];renderEditor();}
+function renderEditor(){
+  const ed=S.editor,isEdit=!!ed.id,refs=isEdit?parentRefs(ed.id):[];
+  const asChild=isEdit?isChildUsed(ed.id):false;
+  let h='';
+  if(ed.permDenied){
+    h+='<div class="alert alert-error" role="alert"><span style="font-size:15px">🔒</span><div><strong>403 Forbidden — permission denied.</strong><br>You need <span class="mono">agent::data_types:update</span> in this workspace. Nothing was saved. Ask a workspace administrator for access.</div></div>';
+  }
+  if(ed.errors.length){
+    h+='<div class="alert alert-error" role="alert"><span style="font-size:15px">⚠️</span><div><strong>Cannot save this data type.</strong><ul style="margin:6px 0 0 18px">'+ed.errors.map(e=>'<li>'+e+'</li>').join('')+'</ul></div></div>';
+  }
+  if(isEdit&&ed.draft.legacySchema){
+    h+='<div class="alert alert-info"><span style="font-size:15px">🕘</span><div><strong>Legacy free-text schema retained.</strong><br>This data type still carries a free-text schema from before the unified contract. It stays readable and keeps validating results exactly as today; the fields below describe its structured contract. No review queue or approval step is involved — migrate when convenient, and nothing already recorded changes.</div></div>';
+  }
+  if(isEdit&&refs.length){
+    h+='<div class="alert alert-warning"><span style="font-size:15px">⚠️</span><div><strong>'+(asChild?'This data type is used as a child — all consumers are affected.':'This data type is in use — all consumers are affected.')+'</strong><br>'
+      +'Changes here appear immediately in <b>'+refs.length+'</b> consumer'+(refs.length===1?'':'s')+': '+refs.map(r=>esc(r.name)+' ('+esc(r.detail)+')').join(', ')+'. Historical results keep their recorded payload.</div></div>';
+  }
+  h+='<div class="form-row"><div class="form-group"><label for="edName">Name<span class="req">*</span></label><input class="form-control" id="edName" value="'+esc(ed.draft.name)+'" oninput="edMeta(\'name\',this.value)" placeholder="e.g. Passenger"><div class="form-hint">Unique per tenant. Shown wherever this contract is used.</div></div>'
+   +'<div class="form-group"><label for="edSlug">Slug</label><input class="form-control mono" id="edSlug" value="'+esc(ed.draft.slug)+'" oninput="edMeta(\'slug\',this.value)" placeholder="e.g. passenger"><div class="form-hint">Referenced by client integrations and schema source.</div></div></div>'
+   +'<div class="form-group"><label for="edDesc">Description</label><input class="form-control" id="edDesc" value="'+esc(ed.draft.description||'')+'" oninput="edMeta(\'description\',this.value)" placeholder="What this contract represents"></div>'
+   +'<div class="tabs" role="tablist"><button class="tab'+(ed.tab==='fields'?' active':'')+'" role="tab" aria-selected="'+(ed.tab==='fields')+'" onclick="edTab(\'fields\')">Fields (guided)</button>'
+   +'<button class="tab'+(ed.tab==='source'?' active':'')+'" role="tab" aria-selected="'+(ed.tab==='source')+'" onclick="edTab(\'source\')">Schema source</button></div>';
+  h+=ed.tab==='fields'?fieldsTab():sourceTab();
+  $('edBody').innerHTML=h;
+  $('edFooter').innerHTML='<span class="mf-left">Both views update the same definition.</span><button class="btn btn-secondary" onclick="closeDialog(\'edDialog\')">Cancel</button>'
+    +'<button class="btn btn-primary" onclick="saveEditor()"'+(ed.blocked?' disabled title="Resolve the source-only definition first"':'')+'>Save Data Type</button>';
+}
+function edMeta(k,v){
+  S.editor.draft[k]=v;
+  if(S.editor.tab==='source'&&!S.editor.sourceDirty){
+    S.editor.schemaText=JSON.stringify(toSchema(S.editor.draft),null,2);
+    const ta=$('edSource');if(ta)ta.value=S.editor.schemaText;
+    return;
+  }
+  updateEdPreview();
+}
+function edTab(t){
+  const ed=S.editor;
+  if(t==='source'){
+    if(!ed.sourceDirty)ed.schemaText=JSON.stringify(toSchema(ed.draft),null,2);
+    ed.tab='source';ed.schemaMsg=null;ed.blocked=false;renderEditor();return;
+  }
+  const parsed=parseSchema(ed.schemaText);
+  if(parsed.error){
+    ed.tab='fields';ed.blocked=true;ed.tabError='The schema source cannot be fully displayed in the guided editor: '+parsed.error+' The definition is preserved in the Schema source view.';
+    renderEditor();return;
+  }
+  ed.draft.name=parsed.name||ed.draft.name;ed.draft.slug=parsed.slug||ed.draft.slug;
+  ed.draft.description=parsed.description!==undefined?parsed.description:ed.draft.description;
+  ed.draft.fields=parsed.fields;ed.sourceDirty=false;ed.tab='fields';ed.blocked=false;ed.tabError=null;renderEditor();
+}
+function fieldsTab(){
+  const ed=S.editor,d=ed.draft;
+  let h='';
+  if(ed.blocked)h+='<div class="alert alert-warning"><span style="font-size:15px">🧩</span><div><strong>Guided view cannot display this definition.</strong><br>'+esc(ed.tabError)+'<br><button class="btn btn-xs btn-secondary" style="margin-top:8px" onclick="edDiscardSource()">Load last valid guided definition</button></div></div>';
+  h+='<div class="ed-grid"><div>';
+  h+='<div class="section-title">Fields<span><button class="btn btn-xs btn-secondary" onclick="edAddField()">+ Add field</button></span></div>';
+  if(!d.fields.length)h+='<div class="fields-empty">No fields yet. At least one field is required.</div>';
+  else{
+    h+='<div class="field-head"><div>Field name</div><div>Type</div><div style="text-align:center">Req.</div><div style="text-align:center">List</div><div></div></div>';
+    d.fields.forEach((f,i)=>{h+=fieldRow(f,i,d.fields.length);});
+  }
+  h+='<div class="form-hint" style="margin-top:8px">A data type that already references a child cannot be selected as a child, and a data type used as a child cannot reference one — one level only.</div></div>';
+  h+='<div><div class="preview-title"><span>Resolved schema</span><span class="chip chip-gray">live</span></div><pre class="code" id="edPreview" aria-live="polite">'+esc(JSON.stringify(toSchema(d),null,2))+'</pre><div class="preview-meta" id="edPreviewMeta">'+previewMeta(d)+'</div></div></div>';
+  return h;
+}
+function previewMeta(d){
+  const lists=d.fields.filter(f=>f.list).length,childs=d.fields.filter(f=>f.type==='child').length;
+  return d.fields.length+' field'+(d.fields.length===1?'':'s')+(lists?' · '+lists+' list'+(lists===1?'':'s'):'')+(childs?' · '+childs+' child reference'+(childs===1?'':'s'):'')+' · validated on save';
+}
+function fieldRow(f,i,count){
+  const usedAsChild=!!S.editor.id&&isChildUsed(S.editor.id);
+  const opts=EDITOR_TYPES.map(([v,l])=>{
+    const dis=v==='child'&&usedAsChild;
+    return '<option value="'+v+'"'+(f.type===v?' selected':'')+(dis?' disabled':'')+'>'+l+(dis?' — unavailable: this data type is used as a child':'')+'</option>';
+  }).join('');
+  let sub='';
+  if(f.type==='enum'){
+    sub='<div class="field-sub"><span class="fs-label">Allowed values</span><input class="form-control" value="'+esc((f.values||[]).join(', '))+'" placeholder="adult, child, infant" onchange="edEnumValues('+i+',this.value)" aria-label="Allowed enum values"><div class="form-hint">Comma separated. Only these values are accepted in structured input. At least one is required.</div></div>';
+  }else if(f.type==='child'){
+    const options=DB.datatypes.filter(d=>d.id!==S.editor.id).map(d=>{
+      const blocked=d.fields.some(x=>x.type==='child');
+      return '<option value="'+d.id+'"'+(!blocked&&f.child===d.id?' selected':'')+(blocked?' disabled':'')+'>'+esc(d.name)+(blocked?' — has a child reference (not allowed)':'')+'</option>';
+    }).join('');
+    const blockedNames=DB.datatypes.filter(d=>d.id!==S.editor.id&&d.fields.some(x=>x.type==='child')).map(d=>d.name);
+    sub='<div class="field-sub"><span class="fs-label">Child data type</span><select class="form-control" onchange="edChild('+i+',this.value)" aria-label="Child data type"><option value="">Select a data type…</option>'+options+'</select>'
+      +'<div class="form-hint">One level only.'+(blockedNames.length?' '+esc(blockedNames.join(', '))+' already reference'+(blockedNames.length===1?'s':'')+' a child, so '+(blockedNames.length===1?'it is':'they are')+' disabled.':'')+'</div></div>';
+  }
+  return '<div class="field-block"><div class="field-row">'
+    +'<input class="form-control" value="'+esc(f.name)+'" placeholder="field_name" aria-label="Field '+(i+1)+' name" oninput="edFieldName('+i+',this.value)">'
+    +'<select class="form-control" onchange="edFieldType('+i+',this.value)" aria-label="Field '+(i+1)+' type">'+opts+'</select>'
+    +'<label class="chk" title="Required"><input type="checkbox"'+(f.required?' checked':'')+' onchange="edFieldReq('+i+',this.checked)" aria-label="Field '+(i+1)+' required">Req</label>'
+    +'<label class="chk" title="Is list (array)"><input type="checkbox"'+(f.list?' checked':'')+' onchange="edFieldList('+i+',this.checked)" aria-label="Field '+(i+1)+' is a list">List</label>'
+    +'<div class="icon-btns"><button class="icon-btn" onclick="edMove('+i+',-1)" '+(i===0?'disabled':'')+' title="Move up" aria-label="Move field up">↑</button>'
+    +'<button class="icon-btn" onclick="edMove('+i+',1)" '+(i===count-1?'disabled':'')+' title="Move down" aria-label="Move field down">↓</button>'
+    +'<button class="icon-btn" onclick="edRemoveField('+i+')" title="Remove field" aria-label="Remove field">×</button></div></div>'+sub+'</div>';
+}
+function edFieldName(i,v){S.editor.draft.fields[i].name=v;updateEdPreview();}
+function edFieldType(i,v){
+  const f=S.editor.draft.fields[i];f.type=v;
+  if(v==='enum'){if(!f.values)f.values=['adult','child','infant'];}
+  else delete f.values;
+  if(v==='child'){const cand=DB.datatypes.find(d=>d.id!==S.editor.id&&!d.fields.some(x=>x.type==='child'));if(cand)f.child=cand.id;}
+  else delete f.child;
+  renderEditor();
+}
+function edChild(i,id){S.editor.draft.fields[i].child=id||undefined;renderEditor();}
+function edEnumValues(i,v){S.editor.draft.fields[i].values=v.split(',').map(s=>s.trim()).filter(Boolean);updateEdPreview();}
+function edFieldReq(i,v){S.editor.draft.fields[i].required=v;updateEdPreview();}
+function edFieldList(i,v){S.editor.draft.fields[i].list=v;updateEdPreview();}
+function edMove(i,d){const a=S.editor.draft.fields,j=i+d;if(j<0||j>=a.length)return;[a[i],a[j]]=[a[j],a[i]];renderEditor();}
+function edRemoveField(i){S.editor.draft.fields.splice(i,1);renderEditor();}
+function edAddField(){S.editor.draft.fields.push({name:'',type:'string',required:false,list:false});renderEditor();}
+function updateEdPreview(){
+  const pre=$('edPreview');if(!pre)return;
+  pre.textContent=JSON.stringify(toSchema(S.editor.draft),null,2);
+  const m=$('edPreviewMeta');if(m)m.textContent=previewMeta(S.editor.draft);
+}
+function edDiscardSource(){const ed=S.editor;ed.blocked=false;ed.tabError=null;ed.sourceDirty=false;ed.schemaText=JSON.stringify(toSchema(ed.draft),null,2);renderEditor();}
+function sourceTab(){
+  const ed=S.editor;
+  let h='';
+  if(ed.schemaMsg){
+    h+='<div class="alert alert-'+(ed.schemaMsg.kind==='error'?'error':'success')+'"><span style="font-size:15px">'+(ed.schemaMsg.kind==='error'?'⚠️':'✅')+'</span><div>'+esc(ed.schemaMsg.text)+'</div></div>';
+  }
+  h+='<div class="form-group"><label for="edSource">Schema source (JSON)</label>'
+    +'<textarea class="form-control mono" id="edSource" rows="15" spellcheck="false" style="font-size:12px;line-height:1.6" oninput="edSourceInput(this.value)" aria-describedby="edSourceHint">'+esc(ed.schemaText)+'</textarea>'
+    +'<div class="form-hint" id="edSourceHint">Paste or copy this definition. Save writes the same data type as the guided view; switching views never silently discards content. Child references use <span class="mono">ref</span> + <span class="mono">fields</span>.</div></div>';
+  h+='<div class="flex gap-2" style="flex-wrap:wrap"><button class="btn btn-sm btn-secondary" onclick="validateSource()">Validate</button>'
+    +'<button class="btn btn-sm btn-secondary" onclick="applySource()">Apply to guided fields</button>'
+    +'<button class="btn btn-sm btn-secondary" onclick="copySource()">Copy</button></div>';
+  return h;
+}
+function edSourceInput(v){S.editor.schemaText=v;S.editor.sourceDirty=true;S.editor.blocked=false;}
+function validateSource(){
+  const ed=S.editor,res=parseSchema(ed.schemaText);
+  ed.schemaMsg=res.error?{kind:'error',text:res.error}:{kind:'ok',text:'Schema is valid. '+res.fields.length+' field'+(res.fields.length===1?'':'s')+'; switching to the guided view keeps this definition.'};
+  renderEditor();
+}
+function applySource(){
+  const ed=S.editor,res=parseSchema(ed.schemaText);
+  if(res.error){ed.schemaMsg={kind:'error',text:res.error};renderEditor();return;}
+  ed.draft.fields=res.fields;ed.sourceDirty=false;ed.blocked=false;
+  ed.schemaMsg={kind:'ok',text:'Applied to the guided editor.'};renderEditor();
+}
+function copySource(){
+  const ta=$('edSource');if(!ta)return;ta.select();
+  try{document.execCommand('copy');toast('Schema copied to clipboard.','success');}catch(e){toast('Copy is unavailable in this browser sandbox.','warning');}
+}
+function editorValidation(){
+  const ed=S.editor,d=ed.draft,errs=[];
+  if(!d.name.trim())errs.push('A data type name is required.');
+  if(!d.slug.trim())errs.push('A slug is required.');
+  else if(!/^[a-z][a-z0-9-]*$/.test(d.slug))errs.push('Slug must start with a letter and contain only lowercase letters, numbers and hyphens.');
+  if(DB.datatypes.some(x=>x.id!==ed.id&&(x.name.toLowerCase()===d.name.trim().toLowerCase()||x.slug===d.slug.trim())))errs.push('Another data type already uses this name or slug. Names are unique per tenant.');
+  if(!d.fields.length)errs.push('At least one field is required.');
+  const usedAsChild=!!ed.id&&DB.datatypes.some(x=>x.id!==ed.id&&x.fields.some(f=>f.type==='child'&&f.child===ed.id));
+  if(usedAsChild&&d.fields.some(f=>f.type==='child'))errs.push('“'+d.name+'” is used as a child data type, so it cannot reference another data type. Child references are one level only.');
+  const seen=new Set();
+  d.fields.forEach((f,i)=>{
+    const at='Field '+(i+1);
+    if(!f.name.trim())errs.push(at+' needs a name.');
+    else{
+      if(!/^[a-z][a-z0-9_]*$/.test(f.name))errs.push(at+' (“'+f.name+'”) must be lowercase letters, numbers or underscore.');
+      if(seen.has(f.name.toLowerCase()))errs.push('Duplicate field name “'+f.name+'”. Field names must be unique.');
+      seen.add(f.name.toLowerCase());
+    }
+    if(f.type==='enum'&&(!f.values||!f.values.length))errs.push(at+' (“'+(f.name||'unnamed')+'”) is an enum and needs at least one allowed value.');
+    if(f.type==='child'){
+      if(!f.child)errs.push(at+' (“'+(f.name||'unnamed')+'”) must reference a child data type.');
+      else{const c=dt(f.child);if(c&&c.fields.some(x=>x.type==='child'))errs.push('Nested child reference: “'+c.name+'” itself references a child. Only one level is supported.');}
+    }
+  });
+  return errs;
+}
+function saveEditor(){
+  const ed=S.editor;
+  ed.permDenied=false;
+  if(ed.tab==='source'&&ed.sourceDirty){
+    const res=parseSchema(ed.schemaText);
+    if(res.error){ed.schemaMsg={kind:'error',text:res.error};ed.errors=[res.error];renderEditor();toast('Invalid schema source — nothing was saved.','error');return;}
+    ed.draft.fields=res.fields;
+    if(res.name)ed.draft.name=res.name;
+    if(res.slug)ed.draft.slug=res.slug;
+    if(res.description!==undefined)ed.draft.description=res.description;
+  }
+  const errs=editorValidation();
+  if(errs.length){ed.errors=errs;renderEditor();toast('Fix the highlighted problems before saving.','error');return;}
+  ed.errors=[];
+  if(S.permission==='viewer'){ed.permDenied=true;renderEditor();toast('403 Forbidden — you cannot manage data types.','error');return;}
+  const d=ed.draft;
+  if(ed.id){const target=dt(ed.id);Object.assign(target,{name:d.name,slug:d.slug,description:d.description,fields:JSON.parse(JSON.stringify(d.fields)),updated:'2026-11-21'});toast('Data type “'+d.name+'” updated. All consumers reflect the change on next load.','success');}
+  else{DB.datatypes.push({id:'dt-'+Date.now(),name:d.name,slug:d.slug,description:d.description,fields:JSON.parse(JSON.stringify(d.fields)),updated:'2026-11-21'});toast('Data type “'+d.name+'” created.','success');}
+  S.empty=false;closeDialog('edDialog');renderAll();
+}
+function showValidationDemo(){
+  go('datatypes');
+  const ed={id:'dt-flight-request'};
+  openEditor('dt-flight-request');
+  S.editor.tab='source';
+  S.editor.schemaText=JSON.stringify({name:'Flight Request',slug:'flight-request',fields:[
+    {name:'origin',type:'string',required:true},
+    {name:'passengers',type:'array',required:true,items:{type:'object',ref:'booking-confirmation'}}]},null,2);
+  S.editor.sourceDirty=true;
+  validateSource();
+  toast('Schema source now contains a nested child reference — try Validate or Save.','warning');
+}
+
+/* ═══════════ DELETE ═══════════ */
+function openDelete(id){
+  S.deleteId=id;const d=dt(id),refs=parentRefs(id);
+  let h='<div style="display:flex;gap:12px;align-items:flex-start"><span style="font-size:30px;flex-shrink:0">⚠️</span><div style="flex:1">'
+    +'<div style="font-size:15px;font-weight:600;margin-bottom:6px">Delete “'+esc(d.name)+'”?</div>';
+  if(refs.length){
+    h+='<div style="font-size:12.5px;color:var(--text-secondary);line-height:1.55">This data type cannot be deleted while it is referenced. Remove these dependents first:</div>'
+      +'<ul style="margin:10px 0 0 18px;font-size:12.5px;line-height:1.7">'+refs.map(r=>'<li>'+esc(r.name)+' <span class="text-secondary">— '+esc(r.detail)+'</span></li>').join('')+'</ul>'
+      +'<div class="alert alert-error hide" style="margin:12px 0 0"><b>Deletion blocked.</b> '+refs.length+' dependent'+(refs.length===1?'':'s')+' must be updated first.</div>';
+  }else{
+    h+='<div style="font-size:12.5px;color:var(--text-secondary);line-height:1.55">This cannot be undone. Historical results keep their recorded payload. After deletion the name becomes available again.</div>';
+  }
+  h+='</div></div>';
+  $('delBody').innerHTML=h;
+  $('delFooter').innerHTML='<button class="btn btn-secondary" onclick="closeDialog(\'deleteDialog\')">Cancel</button>'
+    +(refs.length?'<button class="btn btn-danger" disabled title="Resolve dependents first">Delete</button>':'<button class="btn btn-danger" onclick="confirmDelete()">Delete</button>');
+  openDialog('deleteDialog');
+  const cancel=$('delFooter').querySelector('button');if(cancel)cancel.focus();
+}
+function confirmDelete(){
+  if(S.permission==='viewer'){toast('403 Forbidden — you cannot delete data types.','error');return;}
+  const d=dt(S.deleteId);DB.datatypes=DB.datatypes.filter(x=>x.id!==S.deleteId);
+  closeDialog('deleteDialog');renderAll();toast('Data type “'+d.name+'” deleted. Its name is available again.','success');
+}
+
+/* ═══════════ AGENT TYPES ═══════════ */
+function resultTypeChip(a){
+  if(a.mode==='conversational')return '<span class="chip chip-gray">Text (chat)</span>';
+  return '<span class="chip '+({typed:'chip-green',json:'chip-blue',markdown:'chip-purple',text:'chip-gray'}[a.outputType]||'chip-gray')+'">'+({typed:'Typed',json:'JSON',markdown:'Markdown',text:'Text'}[a.outputType]||a.outputType)+'</span>';
+}
+function renderAgents(){
+  $('agentBody').innerHTML=DB.agents.map(a=>{
+    const inC=a.inputType==='typed'&&dt(a.inputDataType)?'<span class="chip chip-green">Typed · '+esc(dt(a.inputDataType).name)+'</span>':a.inputType==='conversation'?'<span class="chip chip-gray">Conversation</span>':'<span class="chip chip-outline">None · free prompt</span>';
+    const outDT=a.outputType==='typed'&&dt(a.outputDataType)?esc(dt(a.outputDataType).name):'<span class="text-secondary">—</span>';
+    return '<tr><td><div class="row-title">'+esc(a.name)+'</div><div class="row-sub mono">'+esc(a.slug)+(a.legacy?' · legacy':'')+'</div></td>'
+      +'<td>'+(a.mode==='conversational'?'<span class="chip chip-purple">Conversational</span>':'<span class="chip chip-gray">Non-conversational</span>')+'</td>'
+      +'<td>'+inC+'</td><td>'+resultTypeChip(a)+'</td><td>'+outDT+'</td>'
+      +'<td><div class="actions-cell"><button class="btn btn-xs btn-secondary" onclick="openAgent(\''+a.id+'\')">Open definition</button></div></td></tr>';
+  }).join('');
+}
+
+/* ═══════════ AGENT DEFINITION DIALOG ═══════════ */
+function openAgent(id){
+  const a=id?agent(id):{id:null,name:'',slug:'',mode:'standard',model:'gpt-4.1',inputType:'none',inputDataType:null,outputType:'text',outputDataType:null};
+  S.agentDlg={draft:JSON.parse(JSON.stringify(a)),errors:[],preview:{input:true,output:true},permDenied:false};
+  $('agentTitle').textContent=id?'Edit Agent Type':'Create Agent Type';
+  openDialog('agentDialog');renderAgentDialog();
+  const f=$('agName');if(f)f.focus();
+}
+function renderAgentDialog(){
+  const st=S.agentDlg,d=st.draft,conv=d.mode==='conversational';
+  let h='';
+  if(st.permDenied)h+='<div class="alert alert-error" role="alert"><span style="font-size:15px">🔒</span><div><strong>403 Forbidden — permission denied.</strong><br>You need <span class="mono">agent:update</span> on agent types. Nothing was saved.</div></div>';
+  if(st.errors.length)h+='<div class="alert alert-error" role="alert"><span style="font-size:15px">⚠️</span><div><strong>Contract is incomplete.</strong><ul style="margin:6px 0 0 18px">'+st.errors.map(e=>'<li>'+e+'</li>').join('')+'</ul></div></div>';
+  h+='<div class="form-row"><div class="form-group"><label for="agName">Name<span class="req">*</span></label><input class="form-control" id="agName" value="'+esc(d.name)+'" oninput="agMeta(\'name\',this.value)" placeholder="e.g. Flight Request Intake"></div>'
+    +'<div class="form-group"><label for="agModel">Model</label><select class="form-control" id="agModel" onchange="agMeta(\'model\',this.value)">'
+    +['gpt-4.1','gpt-4.1-mini','claude-sonnet-4'].map(m=>'<option'+(d.model===m?' selected':'')+'>'+m+'</option>').join('')+'</select></div></div>';
+  h+='<div class="form-group"><label>Mode</label><div class="seg" role="group" aria-label="Agent mode">'
+    +'<button class="'+(conv?'':'active')+'" onclick="agMode(\'standard\')">Non-conversational</button>'
+    +'<button class="'+(conv?'active':'')+'" onclick="agMode(\'conversational\')">Conversational</button></div>'
+    +'<div class="form-hint">'+(conv?'Conversational agents carry the unified envelope internally and in logs; the chat surface is unchanged.':'Non-conversational agents can be given typed input and output contracts.')+'</div></div>';
+
+  /* INPUT */
+  h+='<div class="contract-box'+(conv?' disabled':'')+'"><h4>Input<span class="chip chip-gray">contract</span></h4>';
+  const inOpts=[['none','No input · free prompt'],['typed','Typed · structured fields'],['conversation','Conversation turn']];
+  h+='<div class="radio-row">'+inOpts.map(([v,l])=>{
+    const dis=conv?v!=='conversation':v==='conversation';
+    const why=conv?(v!=='conversation'?'Conversational agents keep the chat input':'')
+      :(v==='conversation'?'Only a conversational agent takes chat turns — switch Mode to enable this':'');
+    return '<label class="radio-card'+(d.inputType===v?' active':'')+(dis?' disabled':'')+'"'+(why?' title="'+why+'"':'')+'><input type="radio" name="inType"'+(d.inputType===v?' checked':'')+(dis?' disabled':'')+' onchange="agInputType(\''+v+'\')">'+l+'</label>';
+  }).join('')+'</div>';
+  if(!conv)h+='<div class="cb-note">Conversation turns are available only on conversational agents; non-conversational agents take no input or a typed contract.</div>';
+  if(conv)h+='<div class="cb-note">Conversational input is the chat turn — typed input entry does not apply here (out of scope for this epic).</div>';
+  if(d.inputType==='typed'){
+    h+='<div class="form-group" style="margin-top:10px"><label for="agInDT">Input data type<span class="req">*</span></label><select class="form-control" id="agInDT" onchange="agDataType(\'input\',this.value)"><option value="">Select a data type…</option>'
+      +DB.datatypes.map(x=>'<option value="'+x.id+'"'+(d.inputDataType===x.id?' selected':'')+'>'+esc(x.name)+'</option>').join('')+'</select>'
+      +'<div class="form-hint">Assigning an input data type makes structured input mandatory for this agent. The registry is the single definition.</div></div>';
+    if(!d.inputDataType)h+='<div class="inline-err">Typed input requires a data type. The configuration cannot be saved until one is selected.</div>';
+    h+=previewBlock('input',d.inputDataType);
+  }
+  h+='</div>';
+
+  /* OUTPUT */
+  h+='<div class="contract-box'+(conv?' disabled':'')+'"><h4>Result / output<span class="chip chip-gray">declared type</span></h4>';
+  const outOpts=[['typed','Typed'],['json','JSON'],['markdown','Markdown'],['text','Text']];
+  h+='<div class="radio-row">'+outOpts.map(([v,l])=>{
+    const dis=conv&&v==='typed';
+    return '<label class="radio-card'+(d.outputType===v?' active':'')+(dis?' disabled':'')+'"'+(dis?' title="Data types are not supported on conversational agents"':'')+'><input type="radio" name="outType"'+(d.outputType===v?' checked':'')+(dis?' disabled':'')+' onchange="agOutputType(\''+v+'\')">'+l+'</label>';
+  }).join('')+'</div>';
+  h+='<div class="form-group" style="margin-top:10px"><label for="agOutDT">Output data type</label>'
+    +'<select class="form-control" id="agOutDT" onchange="agDataType(\'output\',this.value)"'+(d.outputType!=='typed'?' disabled aria-describedby="agOutDTHint"':'')+'>'
+    +'<option value="">'+(d.outputType==='typed'?'Select a data type…':'No data type attached')+'</option>'
+    +DB.datatypes.map(x=>'<option value="'+x.id+'"'+(d.outputDataType===x.id?' selected':'')+'>'+esc(x.name)+'</option>').join('')+'</select>'
+    +'<div class="form-hint" id="agOutDTHint">'+(d.outputType==='typed'?'Typed results are validated against this data type. A validation failure still completes the run and shows the raw payload.':'A data type can only be attached when the result type is <b>Typed</b>. The platform prevents silent conversion, so this selector stays disabled.')+'</div></div>';
+  if(d.outputType==='typed'&&!d.outputDataType)h+='<div class="inline-err">Result type “Typed” requires an output data type.</div>';
+  if(d.outputType==='typed')h+=previewBlock('output',d.outputDataType);
+  h+='<div class="contract-meta"><span class="chip '+({typed:'chip-green',json:'chip-blue',markdown:'chip-purple',text:'chip-gray'}[d.outputType])+'">Declared result type: '+({typed:'Typed',json:'JSON',markdown:'Markdown',text:'Text'}[d.outputType])+'</span>'
+    +'<span class="chip '+(['typed','json'].includes(d.outputType)?'chip-green':'chip-yellow')+'">'+(['typed','json'].includes(d.outputType)?'Scriptable boundary':'Semantic step · not fully scriptable')+'</span></div>';
+  if(d.outputType==='markdown')h+='<div class="cb-note">Delegation records this type with the hand-off, so a parent step and the optimizer can tell this result is free text. A workflow containing this boundary is never reported as fully scriptable.</div>';
+  h+='</div>';
+  $('agentBodyDlg').innerHTML=h;
+  $('agentFooter').innerHTML='<span class="mf-left">Preview is read-only — edit the data type in the registry.</span><button class="btn btn-secondary" onclick="closeDialog(\'agentDialog\')">Cancel</button><button class="btn btn-primary" onclick="saveAgent()">Save Agent Type</button>';
+}
+function previewBlock(side,id){
+  const st=S.agentDlg,open=st.preview[side],d=id?dt(id):null;
+  let h='<div class="preview-toggle"><div class="pt-head"><span>'+(side==='input'?'Input':'Output')+' schema preview</span>'
+    +'<button class="btn btn-xs btn-secondary" onclick="agTogglePreview(\''+side+'\')" aria-expanded="'+open+'">'+(open?'Hide':'Show')+' preview</button></div>';
+  if(open){
+    if(!id)h+='<div class="form-hint" style="margin-top:8px">Select a data type to preview its schema.</div>';
+    else if(!d)h+='<div class="inline-err" style="margin-top:8px">This data type is no longer available in the registry.</div>';
+    else{
+      h+='<div style="margin-top:8px">'+schemaTableHTML(d)+'<div class="form-hint">Read-only · resolved from the registry · updates immediately when the selection changes.</div></div>';
+    }
+  }
+  return h+'</div>';
+}
+function schemaTableHTML(d){
+  let rows='';
+  d.fields.forEach(f=>{
+    rows+='<tr><td class="st-name">'+esc(f.name)+(f.required?'<span class="req">*</span>':'')+'</td><td class="st-type">'+esc(fieldTypeText(f))+'</td></tr>';
+    if(f.type==='child'&&dt(f.child)){
+      dt(f.child).fields.forEach(cf=>{
+        rows+='<tr class="st-sub"><td class="st-name">↳ '+esc(cf.name)+(cf.required?'<span class="req">*</span>':'')+'</td><td class="st-type">'+esc(fieldTypeText(cf))+'</td></tr>';
+      });
+    }
+  });
+  return '<table class="schema-table"><tbody>'+rows+'</tbody></table><div class="schema-cap">'+d.fields.length+' field'+(d.fields.length===1?'':'s')+' · '+esc(d.slug)+'</div>';
+}
+function agMeta(k,v){S.agentDlg.draft[k]=v;}
+function agMode(m){
+  const d=S.agentDlg.draft;d.mode=m;
+  if(m==='conversational'){d.inputType='conversation';d.inputDataType=null;d.outputType='text';d.outputDataType=null;}
+  else if(d.inputType==='conversation')d.inputType='none';
+  S.agentDlg.errors=[];renderAgentDialog();
+}
+function agInputType(v){const d=S.agentDlg.draft;d.inputType=v;if(v!=='typed')d.inputDataType=null;S.agentDlg.errors=[];renderAgentDialog();}
+function agOutputType(v){
+  const d=S.agentDlg.draft,hadDT=!!d.outputDataType;d.outputType=v;
+  if(v!=='typed'&&d.outputDataType){d.outputDataType=null;toast('Data type detached — only a Typed result can carry one.','warning');}
+  if(v==='typed'&&hadDT)S.agentDlg.preview.output=true;
+  S.agentDlg.errors=[];renderAgentDialog();
+}
+function agDataType(side,id){
+  const d=S.agentDlg.draft;
+  if(side==='input')d.inputDataType=id||null;else d.outputDataType=id||null;
+  S.agentDlg.preview[side]=true;S.agentDlg.errors=[];renderAgentDialog();
+}
+function agTogglePreview(side){S.agentDlg.preview[side]=!S.agentDlg.preview[side];renderAgentDialog();}
+function saveAgent(){
+  const st=S.agentDlg,d=st.draft,errs=[];
+  if(!d.name.trim())errs.push('An agent type name is required.');
+  if(d.mode!=='conversational'&&d.inputType==='conversation')errs.push('Conversation turns are only available on conversational agents.');
+  if(d.inputType==='typed'&&!d.inputDataType)errs.push('Typed input requires an input data type.');
+  if(d.outputType==='typed'&&!d.outputDataType)errs.push('Result type “Typed” requires an output data type.');
+  if(d.outputType!=='typed'&&d.outputDataType)errs.push('A data type cannot be attached to a non-typed output.');
+  st.errors=errs;
+  if(errs.length){renderAgentDialog();toast('The contract is incomplete — nothing was saved.','error');return;}
+  if(S.permission==='viewer'){st.permDenied=true;renderAgentDialog();toast('403 Forbidden — you cannot manage agent types.','error');return;}
+  const target=d.id?agent(d.id):null;
+  if(target)Object.assign(target,d);
+  else{DB.agents.push({...d,id:'at-'+Date.now(),slug:d.name.toLowerCase().replace(/[^a-z0-9]+/g,'-')});}
+  closeDialog('agentDialog');renderAll();toast('Agent type “'+d.name+'” saved with its declared contract.','success');
+}
+
+/* ═══════════ LAUNCH / STRUCTURED INPUT ═══════════ */
+function renderLaunch(){
+  const L=S.launch;
+  $('agentTiles').innerHTML=DB.agents.filter(a=>['at-flight','at-legacy','at-chat'].includes(a.id)).map(a=>{
+    const inC=a.inputType==='typed'&&dt(a.inputDataType)?'Typed input · '+dt(a.inputDataType).name:a.inputType==='conversation'?'Conversation':'Free prompt';
+    return '<button class="agent-tile'+(L.agent===a.id?' active':'')+'" onclick="pickAgent(\''+a.id+'\')">'
+      +'<div class="at-name">'+(a.mode==='conversational'?'💬':'🤖')+' '+esc(a.name)+'</div>'
+      +'<div class="at-meta">'+esc(inC)+'</div>'
+      +'<div class="at-chips">'+resultTypeChip(a)+'</div></button>';
+  }).join('');
+  if(L.agent==='at-flight')$('launchBody').innerHTML=structuredForm();
+  else if(L.agent==='at-legacy')$('launchBody').innerHTML=freePromptForm();
+  else $('launchBody').innerHTML=conversationForm();
+  if(L.result)$('launchBody').insertAdjacentHTML('afterbegin','<div class="section-title">Result</div>'+resultCard(L.result));
+}
+function pickAgent(id){S.launch.agent=id;S.launch.errors={};S.launch.tried=false;S.launch.result=null;renderLaunch();}
+function structuredForm(){
+  const L=S.launch,f=L.form,e=L.errors,contract=dt('dt-flight-request');
+  const sum=Object.keys(e).length;
+  let h='<div class="card form-card"><div class="card-header"><h3>Flight Request Intake</h3><span class="chip chip-green">Input: '+esc(contract.name)+'</span></div><div class="card-body">';
+  h+='<div class="alert alert-info" style="margin-bottom:14px"><span style="font-size:15px">📐</span><div><strong>Structured entry.</strong> This form is generated from the <span class="mono">flight-request</span> data type. Passengers are repeatable rows of the child <span class="mono">passenger</span> type — no comma-separated string.</div></div>';
+  if(L.tried&&sum)h+='<div class="alert alert-error" role="alert"><span style="font-size:15px">⚠️</span><div><strong>'+sum+' problem'+(sum===1?'':'s')+' must be fixed.</strong> The run was not started and nothing was sent to the agent.</div></div>';
+  h+='<div class="form-row"><div class="form-group"><label for="lf-origin">Origin<span class="req">*</span></label><input class="form-control'+(e.origin?' invalid':'')+'" id="lf-origin" value="'+esc(f.origin)+'" placeholder="MEL" maxlength="3" onchange="lfSet(\'origin\',this.value)" aria-describedby="lf-origin-err"><div class="field-error'+(e.origin?' visible':'')+'" id="lf-origin-err">'+esc(e.origin||'')+'</div></div>'
+    +'<div class="form-group"><label for="lf-dest">Destination<span class="req">*</span></label><input class="form-control'+(e.destination?' invalid':'')+'" id="lf-dest" value="'+esc(f.destination)+'" placeholder="SYD" maxlength="3" onchange="lfSet(\'destination\',this.value)" aria-describedby="lf-dest-err"><div class="field-error'+(e.destination?' visible':'')+'" id="lf-dest-err">'+esc(e.destination||'')+'</div></div></div>';
+  h+='<div class="form-group" style="max-width:260px"><label for="lf-date">Departure date<span class="req">*</span></label><input type="date" class="form-control'+(e.departure_date?' invalid':'')+'" id="lf-date" value="'+esc(f.departure_date)+'" min="2026-11-21" onchange="lfSet(\'departure_date\',this.value)" aria-describedby="lf-date-err"><div class="field-error'+(e.departure_date?' visible':'')+'" id="lf-date-err">'+esc(e.departure_date||'')+'</div></div>';
+  h+='<div class="form-group"><div class="field-label">Passengers<span class="req">*</span> <span class="text-xs text-secondary">· list of '+esc(dt('dt-passenger').name)+'</span></div>';
+  if(e.passengers)h+='<div class="inline-err">'+esc(e.passengers)+'</div>';
+  h+='<div class="pax-box"><div class="pax-head"><div>Name</div><div>Type</div><div>Bags</div><div></div></div>';
+  f.passengers.forEach((p,i)=>{
+    h+='<div class="pax-row"><div><input class="form-control'+(e['p'+i+'_name']?' invalid':'')+'" value="'+esc(p.name)+'" placeholder="Full name" aria-label="Passenger '+(i+1)+' name" onchange="lfPax('+i+',\'name\',this.value)">'
+      +(e['p'+i+'_name']?'<div class="field-error visible">'+esc(e['p'+i+'_name'])+'</div>':'')+'</div>'
+      +'<select class="form-control" aria-label="Passenger '+(i+1)+' type" onchange="lfPax('+i+',\'type\',this.value)">'+['adult','child','infant'].map(t=>'<option'+(p.type===t?' selected':'')+'>'+t+'</option>').join('')+'</select>'
+      +'<div><input type="number" min="0" step="1" class="form-control'+(e['p'+i+'_bags']?' invalid':'')+'" value="'+esc(p.bags)+'" placeholder="0" aria-label="Passenger '+(i+1)+' bags" onchange="lfPax('+i+',\'bags\',this.value)">'
+      +(e['p'+i+'_bags']?'<div class="field-error visible">'+esc(e['p'+i+'_bags'])+'</div>':'')+'</div>'
+      +'<button class="icon-btn" title="Remove passenger" aria-label="Remove passenger '+(i+1)+'" onclick="lfRemovePax('+i+')"'+(f.passengers.length===1?' disabled':'')+'>×</button></div>';
+  });
+  h+='<button class="btn btn-xs btn-secondary add-row" onclick="lfAddPax()">+ Add passenger</button></div>'
+    +'<div class="form-hint">Enum fields offer only their allowed values. Dates, numbers and booleans use type-appropriate controls. At least one adult is required.</div></div>';
+  h+='<div class="flex gap-2 items-center" style="margin-top:16px;flex-wrap:wrap">'
+    +'<button class="btn btn-primary" onclick="submitFlight()"'+(L.running?' disabled':'')+'>'+(L.running?'<span class="spinner" style="width:14px;height:14px;border-width:2px"></span> Running…':'▶ Run agent')+'</button>'
+    +'<button class="btn btn-secondary" onclick="fillSample()">Fill sample (MEL → SYD)</button>'
+    +'<button class="btn btn-secondary" onclick="clearFlight()">Clear</button></div>';
+  return h+'</div></div>';
+}
+function freePromptForm(){
+  const L=S.launch,a=agent('at-legacy');
+  return '<div class="card form-card"><div class="card-header"><h3>'+esc(a.name)+'</h3><span class="chip chip-gray">No input contract · free prompt</span></div><div class="card-body">'
+    +'<div class="alert alert-info"><span style="font-size:15px">ℹ️</span><div><strong>Unchanged for agents with no input data type.</strong> The single free-prompt field is kept as today. The result still arrives in the unified envelope with a declared result type.</div></div>'
+    +'<div class="form-group"><label for="lf-prompt">Prompt</label><textarea class="form-control" id="lf-prompt" rows="4" placeholder="Summarise this week’s MEL–SYD operational performance for the ops stand-up.">'+esc(L.freePrompt||'')+'</textarea></div>'
+    +'<div class="flex gap-2"><button class="btn btn-primary" onclick="submitFree()">▶ Run agent</button><span class="text-xs text-secondary" style="align-self:center">Legacy agent · result type normalised from “auto” to Text</span></div>'
+    +'</div></div>';
+}
+function conversationForm(){
+  return '<div class="card form-card"><div class="card-header"><h3>Booking Assistant</h3><span class="chip chip-purple">Conversational</span></div><div class="card-body">'
+    +'<div class="alert alert-info"><span style="font-size:15px">💬</span><div><strong>Conversation UX is unchanged.</strong> A failed turn carries the envelope internally and in logs; the chat error surface the user sees does not change. Typed input and typed output do not apply to conversational turns in this epic.</div></div>'
+    +'<div class="pax-box" style="background:#fff"><div class="md"><p><b>You:</b> Can you check whether booking QE7X2M can be moved to the 16:40?</p><p><b>Booking Assistant:</b> QF418 at 16:40 has 3 seats in the same fare class. Moving all three passengers keeps the infant bassinet. Shall I rebook?</p></div></div>'
+    +'<button class="btn btn-secondary" style="margin-top:12px" onclick="toast(\'Conversation surface is unchanged in this prototype.\',\'info\')">Open chat session</button></div></div>';
+}
+function lfSet(k,v){S.launch.form[k]=v;if(S.launch.tried)revalidateFlight();}
+function lfPax(i,k,v){S.launch.form.passengers[i][k]=v;if(S.launch.tried)revalidateFlight();}
+function lfAddPax(){S.launch.form.passengers.push({name:'',type:'adult',bags:''});renderLaunch();}
+function lfRemovePax(i){if(S.launch.form.passengers.length===1)return;S.launch.form.passengers.splice(i,1);if(S.launch.tried)revalidateFlight();else renderLaunch();}
+function fillSample(){
+  S.launch.form={origin:'MEL',destination:'SYD',departure_date:'2026-12-04',passengers:[
+    {name:'Jordan Lee',type:'adult',bags:'2'},{name:'Ava Lee',type:'child',bags:'1'},{name:'Mia Lee',type:'infant',bags:'0'}]};
+  S.launch.errors={};S.launch.tried=false;renderLaunch();toast('Sample request filled. Try removing every adult to see the domain rule.','info');
+}
+function clearFlight(){S.launch.form={origin:'',destination:'',departure_date:'',passengers:[{name:'',type:'adult',bags:''}]};S.launch.errors={};S.launch.tried=false;renderLaunch();}
+function validateFlight(f){
+  const e={},today='2026-11-21';
+  if(!f.origin.trim())e.origin='Origin is required.';
+  if(!f.destination.trim())e.destination='Destination is required.';
+  else if(f.origin.trim()&&f.origin.trim().toUpperCase()===f.destination.trim().toUpperCase())e.destination='Destination must be different from origin.';
+  if(!f.departure_date)e.departure_date='Departure date is required.';
+  else if(f.departure_date<today)e.departure_date='Departure date cannot be in the past.';
+  if(!f.passengers.length)e.passengers='At least one passenger is required.';
+  else{
+    f.passengers.forEach((p,i)=>{
+      if(!p.name.trim())e['p'+i+'_name']='Name is required.';
+      const b=String(p.bags).trim();
+      if(b!==''&&(!/^\d+$/.test(b)))e['p'+i+'_bags']='Bags must be a whole number ≥ 0.';
+    });
+    if(!f.passengers.some(p=>p.type==='adult'))e.passengers='At least one adult passenger is required — children and infants must travel with an adult.';
+  }
+  return e;
+}
+function revalidateFlight(){S.launch.errors=validateFlight(S.launch.form);renderLaunch();}
+function submitFlight(){
+  S.launch.tried=true;
+  const errs=validateFlight(S.launch.form);
+  S.launch.errors=errs;
+  if(Object.keys(errs).length){renderLaunch();toast('Invalid input — the run was not started.','error');return;}
+  S.launch.running=true;S.launch.result=null;renderLaunch();
+  setTimeout(()=>{
+    const f=S.launch.form;
+    S.launch.running=false;
+    S.launch.result={exec:'EXE-9F44',agent:'Flight Request Intake',when:'just now',status:'succeeded',resultType:'typed',dataType:'dt-booking',validation:'valid',boundary:'scriptable',meta:'LLM run · 3.9s · input validated before start',
+      payload:{pnr:'QE7X2M',status:'confirmed',total_price:f.passengers.length>2?612.4:418.9,passengers:f.passengers.map(p=>({name:p.name,type:p.type,bags:Number(p.bags||0)}))}};
+    renderLaunch();
+    const el=document.querySelector('#launchBody .result-card');if(el&&el.scrollIntoView)el.scrollIntoView({behavior:'smooth',block:'start'});
+    toast('Run completed — one envelope, declared result type Typed.','success');
+  },900);
+}
+function submitFree(){
+  S.launch.result={exec:'EXE-9F51',agent:'Weekly Ops Narrative',when:'just now',status:'succeeded',resultType:'text',dataType:null,validation:null,boundary:'semantic',meta:'Legacy agent · free prompt · result type Text',
+    payload:'MEL–SYD ran 94.2% on time. Two engineering delays exceeded 90 minutes. Rebooking volumes were within the seasonal band; no escalations were required.'};
+  renderLaunch();toast('Result delivered with a declared Text result type.','info');
+}
+
+/* ═══════════ RESULTS ═══════════ */
+function renderResults(){
+  $('resultsList').innerHTML=RESULTS.map(r=>resultCard(r)).join('');
+}
+const TYPE_CHIP={typed:'chip-green',json:'chip-blue',markdown:'chip-purple',text:'chip-gray'};
+const TYPE_NAME={typed:'Typed',json:'JSON',markdown:'Markdown',text:'Text'};
+function resultCard(r){
+  const d=r.dataType?dt(r.dataType):null;
+  let h='<div class="result-card"><div class="result-head"><div class="rh-main"><div class="rh-id">'+esc(r.exec)+'</div><div class="rh-agent">'+esc(r.agent)+' · '+esc(r.when)+'</div></div><div class="rh-chips">'
+    +'<span class="chip '+(r.status==='succeeded'?'chip-green':'chip-red')+'"><span class="dot '+(r.status==='succeeded'?'dot-green':'dot-red')+'"></span>'+esc(r.status)+'</span>'
+    +'<span class="chip '+TYPE_CHIP[r.resultType]+'">'+TYPE_NAME[r.resultType]+'</span>'
+    +'<span class="chip chip-outline">'+esc(r.meta)+'</span></div></div><div class="result-body">';
+  h+='<div class="env-grid">'
+    +'<div class="env-cell"><span class="k">Execution status</span><span class="v">'+esc(r.status)+'</span></div>'
+    +'<div class="env-cell"><span class="k">Result type</span><span class="v">'+esc(r.resultType)+'</span></div>'
+    +'<div class="env-cell"><span class="k">Data type</span><span class="v">'+(d?esc(d.slug):'—')+'</span></div>'
+    +'<div class="env-cell"><span class="k">Validation</span><span class="v"'+(r.validation==='invalid'?' style="color:var(--error)"':'')+'>'+esc(r.validation||'—')+'</span></div></div>';
+  if(r.status==='failed'){
+    h+='<div class="alert alert-error" style="margin-bottom:12px"><span style="font-size:15px">✖</span><div><strong>Execution failed — the envelope is still returned.</strong><br>'+esc(r.failure)+'</div></div>';
+    h+='<div class="script-hint fail"><span>⛔</span><div><b>No payload.</b> Status and the declared contract are preserved so the boundary stays traceable in the execution log, repository and exports. Nothing is reinterpreted.</div></div>';
+  }else if(r.validation==='invalid'){
+    h+='<div class="alert alert-warning" style="margin-bottom:12px"><span style="font-size:15px">⚠️</span><div><strong>Payload did not match the declared contract — the run still completed.</strong><br>The result is recorded with a failed validation status and the raw result is shown below as the fallback, unchanged from today. The declared result type and data type stay as configured.</div></div>';
+    h+='<pre class="code code-light" style="white-space:pre-wrap;max-height:none">'+esc(r.raw||'')+'</pre>';
+    h+='<div class="script-hint sem"><span>🔀</span><div><b>Recorded, not coerced.</b> Nothing was rewritten or revalidated: the payload is kept as raw text beside its contract, so the operator can see exactly what the agent returned.</div></div>';
+  }else if(r.resultType==='typed'){
+    h+=renderTyped(r.payload);
+    h+='<div class="script-hint ok"><span>✅</span><div><b>Typed boundary — scriptable.</b> The payload was validated against <span class="mono">'+esc(d?d.slug:'contract')+'</span> and is JSON in every surface (repository, delegation, third-party delivery).</div></div>';
+  }else if(r.resultType==='markdown'){
+    h+='<div class="md">'+renderMd(r.payload)+'</div>';
+    h+='<div class="script-hint sem"><span>🔀</span><div><b>Semantic step — not scriptable.</b> This delegated result arrived with a declared result type of <b>Markdown</b>. A model must interpret the hand-off, so the workflow cannot be reported as fully scriptable. The optimizer is given this result and its contract, not an assumption.</div></div>';
+  }else if(r.resultType==='json'){
+    h+='<pre class="code">'+jsonHtml(r.payload)+'</pre>';
+    h+='<div class="script-hint ok"><span>✅</span><div><b>JSON boundary — scriptable.</b> Every step in this workflow declared Typed or JSON, so optimization may report it as fully scriptable.</div></div>';
+  }else{
+    h+='<div class="code code-light" style="white-space:pre-wrap;max-height:none">'+esc(r.payload)+'</div>';
+    h+='<div class="script-hint sem"><span>🔀</span><div><b>Text boundary — semantic step.</b> This legacy agent’s <span class="mono">auto</span> value is normalised to <span class="mono">text</span> on read. Historical results are not rewritten or revalidated.</div></div>';
+  }
+  return h+'</div></div>';
+}
+function renderTyped(obj){
+  let h='<div class="kv">';
+  Object.entries(obj).forEach(([k,v])=>{
+    if(Array.isArray(v)){
+      const keys=v.length?Object.keys(v[0]):[];
+      h+='<div class="kv-row"><div class="kv-k">'+esc(k)+'<div class="text-xs" style="font-weight:400;color:#94A3B8">list</div></div><div class="kv-v"><table class="kv-table"><thead><tr>'+keys.map(x=>'<th>'+esc(x)+'</th>').join('')+'</tr></thead><tbody>'
+        +v.map(row=>'<tr>'+keys.map(x=>'<td>'+esc(row[x])+'</td>').join('')+'</tr>').join('')+'</tbody></table></div></div>';
+    }else{
+      h+='<div class="kv-row"><div class="kv-k">'+esc(k)+'</div><div class="kv-v">'+esc(v)+'</div></div>';
+    }
+  });
+  return h+'</div>';
+}
+function renderMd(src){
+  const out=[];let inList=false;
+  src.trim().split('\n').forEach(line=>{
+    if(/^\s*[-*]\s+/.test(line)){
+      if(!inList){out.push('<ul>');inList=true;}
+      out.push('<li>'+mdInline(line.replace(/^\s*[-*]\s+/,''))+'</li>');return;
+    }
+    if(inList){out.push('</ul>');inList=false;}
+    if(/^###\s+/.test(line))out.push('<h5>'+mdInline(line.replace(/^###\s+/,''))+'</h5>');
+    else if(/^##\s+/.test(line))out.push('<h4>'+mdInline(line.replace(/^##\s+/,''))+'</h4>');
+    else if(line.trim()==='')out.push('');
+    else out.push('<p>'+mdInline(line)+'</p>');
+  });
+  if(inList)out.push('</ul>');
+  return out.join('');
+}
+function mdInline(s){return s.replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>').replace(/`(.+?)`/g,'<code>$1</code>').replace(/\*(.+?)\*/g,'<em>$1</em>');}
+function jsonHtml(obj){
+  return esc(JSON.stringify(obj,null,2))
+    .replace(/&quot;([^&]+?)&quot;:/g,'<span class="j-key">&quot;$1&quot;</span>:')
+    .replace(/: &quot;([^&]*?)&quot;/g,': <span class="j-str">&quot;$1&quot;</span>')
+    .replace(/: (-?\d+\.?\d*)/g,': <span class="j-num">$1</span>')
+    .replace(/: (true|false|null)/g,': <span class="j-bool">$1</span>');
+}
+
+/* ═══════════ STATES ═══════════ */
+function simulateLoading(){
+  go('datatypes');S.loading=true;S.empty=false;renderDataTypes();
+  setTimeout(()=>{S.loading=false;renderDataTypes();toast('Data types loaded.','success');},1400);
+}
+function setEmptyRegistry(){go('datatypes');S.loading=false;S.empty=true;renderDataTypes();toast('Showing the empty-registry state.','info');}
+
+/* ═══════════ RENDER ALL ═══════════ */
+function renderAll(){renderDataTypes();renderAgents();renderLaunch();renderResults();}
+renderAll();
+</script>
+</body>
+</html>

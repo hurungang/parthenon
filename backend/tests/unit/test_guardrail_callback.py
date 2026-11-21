@@ -31,6 +31,7 @@ def _make_state(**kwargs):
     state.started_at = kwargs.get("started_at", None)
     state.timeout_seconds = kwargs.get("timeout_seconds", None)
     state.delegation_depth = kwargs.get("delegation_depth", 0)
+    state.tree_depth = kwargs.get("tree_depth", 0)
     state.max_delegation_depth = kwargs.get("max_delegation_depth", None)
     state.delegated_steps = kwargs.get("delegated_steps", 0)
     state.max_delegated_steps = kwargs.get("max_delegated_steps", None)
@@ -269,6 +270,55 @@ async def test_on_tool_start_raises_when_delegation_depth_exceeded():
         await cb.on_tool_start(serialized={}, input_str="test")
 
     assert exc_info.value.reason == "delegation_depth"
+
+
+@pytest.mark.asyncio
+async def test_on_tool_start_reads_seeded_tree_depth_when_delegation_depth_is_zero():
+    """Both depth fields represent the same chain depth: a seeded tree_depth
+    (persisted recorded depth) is enforced even before any in-run delegation."""
+    from app.services.agents.guardrail_callback import GuardrailCallback, GuardrailStop
+
+    state = _make_state(tree_depth=3, delegation_depth=0, max_delegation_depth=2)
+    cb = GuardrailCallback(guardrail_state=state, session_id="sess-1")
+
+    with pytest.raises(GuardrailStop) as exc_info:
+        await cb.on_tool_start(serialized={}, input_str="test")
+
+    assert exc_info.value.reason == "delegation_depth"
+    assert exc_info.value.details["delegation_depth"] == 3
+    assert exc_info.value.details["max_delegation_depth"] == 2
+
+
+@pytest.mark.asyncio
+async def test_on_tool_start_honours_configured_maximum_above_one():
+    """A configured maximum of 5 allows depth 5 and blocks depth 6 (no cap at 1)."""
+    from app.services.agents.guardrail_callback import GuardrailCallback, GuardrailStop
+    from app.services.agents.guardrails import RuntimeGuardrailState
+
+    def _state(depth: int) -> RuntimeGuardrailState:
+        return RuntimeGuardrailState(
+            max_iterations=10,
+            max_delegation_depth=5,
+            max_delegated_steps=20,
+            execution_timeout_seconds=300,
+            token_budget=None,
+            token_enforcement_mode="observe",
+            token_fallback_mode="observe_and_log",
+            conversational_token_visibility_mode="enabled",
+            conversational_continuation_policy="allow",
+            policy_snapshot_id="configured-5",
+            delegation_depth=depth,
+            tree_depth=depth,
+        )
+
+    await GuardrailCallback(
+        guardrail_state=_state(5), session_id="sess-5"
+    ).on_tool_start(serialized={}, input_str="test")
+
+    with pytest.raises(GuardrailStop):
+        await GuardrailCallback(
+            guardrail_state=_state(6), session_id="sess-6"
+        ).on_tool_start(serialized={}, input_str="test")
 
 
 def test_guardrail_stop_has_reason_and_details():

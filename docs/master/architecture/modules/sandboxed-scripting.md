@@ -71,38 +71,63 @@ JSON-able dict.
 ## Model-authored composition (two-layer plan model)
 
 The base implementation plan stays a plain high-level step list. The
-workflow composition is authored by the **opt-in optimization step of the
-Run Agent flow**: when the user launches an agent with no fresh optimized
-plan, the flow offers "Run with optimization" or "Skip optimization";
-opting in launches a **command-driven side execution** whose prompt is the
-stored `optimize-and-verify` command mission (a `CommandPrompt`) plus the
-user's real task. The side execution reads its own state first (existing
-scripts, execution logs, prior optimized plan — skipping re-authoring when
-nothing is wrong), and when authoring is needed it authors the full
-composition — sandboxed Python script segments (`python_source` per
-scriptable step), LLM bridge steps, decision steps, and the `fully_scripted`
-mark — verifying each script against the real integration (the verification
-IS the real run). On success it persists an **`OptimizedImplementationPlan`**
-(a separate entity from the base `AgentPlan`); "Retire plan" marks the row
-`retired` so the next run re-triggers the optimized-plan check.
+workflow composition is authored by a **separate Optimize action** — never a
+mode of Run. A normal run uses the agent's own system and skill instructions
+on the agent type's runtime model and never becomes an optimization mission.
 
-**Mandatory self-reflection before authoring.** Reading the agent's own state
-is a required pre-authoring step, in a fixed order: **scripts → execution
-logs → prior optimized plan** (then the base plan, the source of truth for
-what the workflow must do). Logs include past failures and are read for their
-errors. The run may **skip re-authoring entirely** when the state is healthy
-and unchanged — recent executions succeeded, a fresh `ready` optimized plan
-exists, and scripts still match the base plan's intent — and must state that
-it skipped. This prevents both stale-state authoring and redoing good work.
+```mermaid
+flowchart LR
+    OP[Operator] -->|Run| EXEC[Execution<br/>script-first · LLM fallback]
+    OP -->|"Generate plan<br/>(explicit only)"| AUTH{Authoring model<br/>configured?}
+    OP -->|Optimize| GATE{Successful execution<br/>and authoring model?}
+    GATE -->|no| OFF[Disabled with explanation]
+    GATE -->|yes| OPT[Optimization command run<br/>bounded state read]
+    AUTH -->|no| OFF
+    AUTH -->|yes| PLAN[(Implementation plan)]
+    OPT --> OPLAN[(Optimized plan<br/>+ authored scripts)]
+    OPLAN -->|ready and fresh| EXEC
+    EXEC -->|"optimized script falls back"| MARK[requires_fix<br/>+ recorded feedback]
+    MARK -->|re-optimize| OPT
+```
 
-**Failure visibility and retire state (Optimized Plan tab).** When
-optimize-and-verify ends in `needs_feedback`, the run must persist a concise
-failure reason on the plan's `error` field (populating it is mandatory in the
-authoring mission; the field already existed). The Optimized Plan tab renders
-that stored reason as a warning/error alert, so an operator can see what to
-fix or how to steer feedback instead of guessing. Retire always refreshes the
-launch-dialog state, and when no active plan exists it renders an explicit
-**"nothing to retire"** state rather than being a silent no-op.
+**Authoring happens on one workspace model, on request only.** Every
+authoring path — Skill/SOP workflow generation, implementation plans, and
+optimized plans — resolves the tenant's **authoring model** setting on
+Control Center; the agent type's runtime model never authors plans, so a
+cheap runtime model cannot cap plan quality. When the setting is unset,
+disabled, or removed, generation and Optimize are unavailable with a clear
+message and **no fallback model**. Nothing is authored on agent create or
+update, on a configuration change, or on a schedule — the Plan Preview is an
+explicit Generate action. Conversational agent types have no plan or
+optimization surface.
+
+**Bounded, realistic verification.** The optimization run reads the agent's
+current plan and a bounded, latest-first window of execution logs, authors
+the composition (sandboxed Python script segments, LLM bridges, decision
+steps, and the `fully_scripted` mark), and verifies **script syntax plus
+correct tool invocation** — not identical results — with an explicit
+high-confidence stop rule. On success it persists an
+**`OptimizedImplementationPlan`** (a separate entity from the base
+`AgentPlan`).
+
+**Plan status and requires-fix.** Status spans `generating`, `ready`,
+`needs_feedback`, `failed`, `requires_fix`, and `retired`. A `ready` plan
+whose later execution falls back is marked **`requires_fix`** with
+auto-recorded feedback: it is never re-served as healthy, and execution stays
+on the model-driven path. Re-optimization never reopens a plan — a new plan is
+authored and the prior one is retained as `retired`. No unattended
+re-optimization runs.
+
+**Conversational optimization.** The same flow is also reachable as an
+**optimization-mode conversation on the agent type itself** — no separate
+optimizer agent, identity, or role: the session *is* the agent type, so its
+role and tool grants are inherently the scope and can never be widened. The
+operator sees activity, can be asked what is missing, and replay against
+recorded reference data stays the default. When replay cannot prove a script,
+the only escape is a **single explicitly approved live test**: one saved
+script version runs once in the sandbox under the agent's own identity, and
+the approval is consumed in Control Center so no standing live access can be
+inherited. Deny, silence, timeout, or expiry leaves the session replay-only.
 
 The shipped Optimized Plan / Scripts UI is captured as an interactive
 prototype in [docs/master/ux/prototype/](../../ux/prototype/index.html) — that
@@ -118,10 +143,11 @@ No step is ever auto-appended — the previous hardcoded
 `semantic____render` append was removed.
 
 **Serving rule (freshness gate):** the Script-First Dispatcher serves the
-optimized composition only while it is ready **and newer than the base
-plan**: `fully_scripted` → zero-LLM script; otherwise the scripts are
-exposed as invocable tools and the LLM orchestrates. An absent, stale, or
-failed optimized plan falls back to the base plan's LLM path.
+optimized composition only while it is ready, fresh, and **not** marked
+`requires_fix`: `fully_scripted` → zero-LLM script; otherwise the scripts are
+exposed as invocable tools and the LLM orchestrates. An absent, stale,
+requires-fix, or failed optimized plan falls back to the base plan's LLM
+path.
 
 ## Execution, fallback & accounting
 
@@ -206,3 +232,10 @@ Segregated services (sandbox and mock layer are in-process AR components;
 recordings persist through a CC internal endpoint); scripts run only in AR;
 only CC connects to PostgreSQL; scripts receive no credentials; scripts'
 only egress is the injected MCP client.
+
+Optimization adds no privilege surface: plan authoring, the optimizer and
+authoring model settings, the requires-fix flag, and the single-use live-test
+approval ledger all live in Control Center, while Agent Runtime receives only
+model and mission identifiers. An approved live test is one sandbox run of one
+approved script version under the agent type's own identity and existing
+grants — it grants no new tools, no credential, and no standing access.

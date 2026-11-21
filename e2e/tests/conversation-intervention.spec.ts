@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test'
-import { standardSetup } from './_helpers'
+import { apiIsReachable, standardSetup } from './_helpers'
 
 /**
  * E2E tests for Conversational Agent Intervention.
@@ -205,6 +205,10 @@ test.describe('Conversational Agent Intervention (Mocked)', () => {
 // ── Real Backend Integration variant ─────────────────────────────────────────
 
 test.describe('Real Backend Integration - Conversational Agent Intervention', () => {
+  test.beforeEach(async ({ request }) => {
+    test.skip(!(await apiIsReachable(request)), 'Live backend not reachable on :8000')
+  })
+
   test('GET /api/v1/conversations returns 200', async ({ page }) => {
     // Direct API call - no mocks
     const response = await page.request.get('http://localhost:8000/api/v1/conversations', {

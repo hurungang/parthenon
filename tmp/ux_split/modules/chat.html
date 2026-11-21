@@ -1,0 +1,1042 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Chat — Conversations, Interventions & Sessions</title>
+<link rel="stylesheet" href="../shared/styles.css">
+</head>
+<body data-page="chat" data-default-view="chat">
+
+<div class="app-shell">
+
+<!-- ═══════════════════════════════ SIDEBAR ═══════════════════════════════ -->
+<nav class="sidebar" aria-label="Primary navigation">
+  <div class="sidebar-logo">
+    <h1>⚡ Parthenon</h1>
+    <small>Enterprise AI Harness</small>
+  </div>
+
+  <!-- Dashboard -->
+  <a class="nav-item" data-view="dashboard" href="../index.html#view-dashboard"><span class="nav-icon">🏠</span>Dashboard</a>
+
+  <!-- Project Showcase -->
+  <a class="nav-item" data-view="project-showcase" href="../index.html#view-project-showcase"><span class="nav-icon">🌐</span>Project Showcase</a>
+
+  <div class="nav-parent-group" id="nav-agents" data-group="agents">
+    <a class="nav-parent-group-label" href="agents.html#view-agent-roles" role="button" aria-expanded="true">
+      <span>🤖 Agents</span>
+      <span class="toggle-icon" aria-hidden="true">▼</span>
+    </a>
+    <div class="nav-children">
+      <a class="nav-item sub-item" data-view="agent-roles" data-group="agents" href="agents.html#view-agent-roles"><span class="nav-icon">👤</span>Agent Roles</a>
+      <a class="nav-item sub-item" data-view="agent-identities" data-group="agents" href="agents.html#view-agent-identities"><span class="nav-icon">🆔</span>Agent Identities</a>
+      <a class="nav-item sub-item" data-view="agents" data-group="agents" href="agents.html#view-agents"><span class="nav-icon">🤖</span>Agent Types</a>
+      <a class="nav-item sub-item" data-view="agent-management-panel" data-group="agents" href="agent-panel.html#view-agent-management-panel"><span class="nav-icon">🎛️</span>Agent Management Panel</a>
+      <a class="nav-item sub-item" data-view="agent-executions" data-group="agents" href="executions.html#view-agent-executions"><span class="nav-icon">▶️</span>Agent Executions</a>
+      <a class="nav-item sub-item" data-view="runtime-monitor" data-group="agents" href="executions.html#view-runtime-monitor"><span class="nav-icon">🕸️</span>Agent Runtime Monitor</a>
+      <a class="nav-item sub-item" data-view="agent-trails" data-group="agents" href="executions.html#view-agent-trails"><span class="nav-icon">📋</span>Agent Trails</a>
+      <a class="nav-item sub-item" data-view="skills" data-group="agents" href="skills-sops.html#view-skills"><span class="nav-icon">🔧</span>Skills</a>
+      <a class="nav-item sub-item" data-view="sops" data-group="agents" href="skills-sops.html#view-sops"><span class="nav-icon">📋</span>SOPs</a>
+      <a class="nav-item sub-item" data-view="schedules" data-group="agents" href="schedules.html#view-schedules"><span class="nav-icon">📅</span>Schedules</a>
+      <a class="nav-item sub-item" data-view="chat" data-group="agents" href="#view-chat"><span class="nav-icon">💬</span>Chat Sessions</a>
+      <a class="nav-item sub-item" data-view="conversational-intervention" data-group="agents" href="#view-conversational-intervention"><span class="nav-icon">💬</span>Conversational Intervention</a>
+      <a class="nav-item sub-item" data-view="intervene-requests" data-group="agents" href="#view-intervene-requests"><span class="nav-icon">🛑</span>Intervene Requests</a>
+      <a class="nav-item sub-item" data-view="data-types" data-group="agents" href="data-results.html#view-data-types"><span class="nav-icon">📐</span>Data Types</a>
+      <a class="nav-item sub-item" data-view="agent-outputs" data-group="agents" href="data-results.html#view-agent-outputs"><span class="nav-icon">📤</span>Agent Outputs</a>
+      <a class="nav-item sub-item" data-view="agent-logs" data-group="agents" href="executions.html#view-agent-logs"><span class="nav-icon">🧾</span>Agent Logs</a>
+    </div>
+  </div>
+
+  <div class="nav-parent-group" id="nav-results" data-group="results">
+    <a class="nav-parent-group-label" href="data-results.html#view-results" role="button" aria-expanded="true">
+      <span>📊 Results</span>
+      <span class="toggle-icon" aria-hidden="true">▼</span>
+    </a>
+    <div class="nav-children">
+      <a class="nav-item sub-item" data-view="results" data-group="results" href="data-results.html#view-results"><span class="nav-icon">📊</span>Result Repository</a>
+    </div>
+  </div>
+
+  <div class="nav-parent-group locked-open" id="nav-integrations" data-group="integrations">
+    <a class="nav-parent-group-label" href="integrations.html#view-mcp-hub" role="button" aria-expanded="true">
+      <span>🌐 Integrations</span>
+      <span class="toggle-icon" aria-hidden="true">▼</span>
+    </a>
+    <div class="nav-children">
+      <a class="nav-item sub-item" data-view="mcp-hub" data-group="integrations" href="integrations.html#view-mcp-hub"><span class="nav-icon">🔌</span>MCP Hub</a>
+      <a class="nav-item sub-item" data-view="notifications" data-group="integrations" href="integrations.html#view-notifications"><span class="nav-icon">🔔</span>Notification Integration</a>
+      <a class="nav-item sub-item" data-view="api-keys" data-group="integrations" href="integrations.html#view-api-keys"><span class="nav-icon">🔑</span>API Keys</a>
+      <a class="nav-item sub-item" data-view="agent-clients" data-group="integrations" href="integrations.html#view-agent-clients"><span class="nav-icon">🤝</span>Agent Client</a>
+      <a class="nav-item sub-item" data-view="gateway" data-group="integrations" href="integrations.html#view-gateway"><span class="nav-icon">🛰️</span>Agent Gateway</a>
+    </div>
+  </div>
+
+  <div class="nav-parent-group" id="nav-system" data-group="system">
+    <a class="nav-parent-group-label" href="system.html#view-observability" role="button" aria-expanded="true">
+      <span>⚙️ System</span>
+      <span class="toggle-icon" aria-hidden="true">▼</span>
+    </a>
+    <div class="nav-children">
+      <a class="nav-item sub-item" data-view="observability" data-group="system" href="system.html#view-observability"><span class="nav-icon">📊</span>Observability</a>
+      <a class="nav-item sub-item" data-view="permissions" data-group="system" href="system.html#view-permissions"><span class="nav-icon">🔐</span>Permissions</a>
+      <a class="nav-item sub-item" data-view="system-config" data-group="system" href="system.html#view-system-config"><span class="nav-icon">⚙️</span>System Config</a>
+      <a class="nav-item sub-item" data-view="model-configs" data-group="system" href="system.html#view-model-configs"><span class="nav-icon">🧩</span>Model Configs</a>
+      <a class="nav-item sub-item" data-view="decision-tools" data-group="system" href="decision.html#view-decision-tools"><span class="nav-icon">⚖️</span>Decision Tools</a>
+      <a class="nav-item sub-item" data-view="sysone-providers" data-group="system" href="decision.html#view-sysone-providers"><span class="nav-icon">🧠</span>Decision Model Providers</a>
+      <a class="nav-item sub-item" data-view="security-audit" data-group="system" href="system.html#view-security-audit"><span class="nav-icon">🛡️</span>Security Audit</a>
+    </div>
+  </div>
+
+  <div class="nav-parent-group" id="nav-tenant-admin" data-group="tenant-admin">
+    <a class="nav-parent-group-label" href="tenancy.html#view-tenant-settings" role="button" aria-expanded="true">
+      <span>🏢 Tenant Admin</span>
+      <span class="toggle-icon" aria-hidden="true">▼</span>
+    </a>
+    <div class="nav-children">
+      <a class="nav-item sub-item" data-view="tenant-settings" data-group="tenant-admin" href="tenancy.html#view-tenant-settings"><span class="nav-icon">⚙️</span>Tenant Settings</a>
+      <a class="nav-item sub-item" data-view="tenant-members" data-group="tenant-admin" href="tenancy.html#view-tenant-members"><span class="nav-icon">👥</span>Members</a>
+      <a class="nav-item sub-item" data-view="tenant-identity-providers" data-group="tenant-admin" href="tenancy.html#view-tenant-identity-providers"><span class="nav-icon">🔑</span>Identity Providers</a>
+    </div>
+  </div>
+
+  <div class="nav-parent-group" id="nav-platform" data-group="platform" style="display:none">
+    <a class="nav-parent-group-label" href="tenancy.html#view-platform-settings" role="button" aria-expanded="true">
+      <span>🛡️ Platform</span>
+      <span class="toggle-icon" aria-hidden="true">▼</span>
+    </a>
+    <div class="nav-children">
+      <a class="nav-item sub-item" data-view="platform-settings" data-group="platform" href="tenancy.html#view-platform-settings"><span class="nav-icon">⚙️</span>Platform Settings</a>
+      <a class="nav-item sub-item" data-view="platform-tenants" data-group="platform" href="tenancy.html#view-platform-tenants"><span class="nav-icon">🏢</span>Tenants</a>
+      <a class="nav-item sub-item" data-view="platform-audit" data-group="platform" href="tenancy.html#view-platform-audit"><span class="nav-icon">🛡️</span>Platform Security Audit</a>
+    </div>
+  </div>
+
+</nav>
+<!-- ═══════════════════════════════ MAIN WRAPPER ═══════════════════════════════ -->
+<div class="main-wrapper">
+  <!-- TOP BAR -->
+  <div class="topbar">
+    <div class="topbar-title" id="topbar-title">Agents</div>
+    <div class="topbar-actions">
+      <span class="chip chip-yellow" id="oidc-sa-indicator" style="display:none">🔑 Super Admin</span>
+      <span class="chip chip-blue" id="tenant-ctx-chip" style="display:none">🏢 <span id="tenant-ctx-name"></span></span>
+      <button class="btn-icon" title="Notifications">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg>
+        <span class="badge">3</span>
+      </button>
+      <div class="avatar" title="Alex Harper — Admin">AH</div>
+    </div>
+  </div>
+
+  <!-- MAIN CONTENT -->
+  <div class="main-content">
+
+<!-- ═══════════════════════════════ VIEW: CHAT ═══════════════════════════════ -->
+<div id="view-chat" class="view">
+  <!-- improve-agent-response-rendering banner -->
+  <div class="change-banner-improve" style="margin-bottom:12px">
+    <div class="cbi-icon">R</div>
+    <div class="cbi-body">
+      <h4>Content-Type-Aware Rendering &amp; Maximize <span class="cb-tag" style="margin-left:6px;vertical-align:middle;font-size:10px">improve-agent-response-rendering</span></h4>
+      <p>Agent messages now auto-detect HTML content and render it inline. Click the <strong>maximize icon</strong> (↔) on any agent message to expand into full-view. <strong>ContentRenderer</strong> handles HTML/markdown/plain-text detection; <strong>MaximizableContent</strong> wraps each agent response with a maximize affordance.</p>
+    </div>
+  </div>
+  <div class="chat-shell">
+    <!-- Left panel -->
+    <div class="chat-left">
+      <div style="padding:14px 16px;border-bottom:1px solid var(--border);flex-shrink:0">
+        <button class="btn btn-primary w-full" style="justify-content:center">+ New Chat</button>
+      </div>
+      <div style="padding:10px 16px 4px;flex-shrink:0">
+        <label style="font-size:11px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.5px">Agent</label>
+        <select class="form-control" style="margin-top:4px;font-size:13px">
+          <option selected>data-analyst</option>
+          <option>pr-reviewer</option>
+          <option>report-generator</option>
+          <option>incident-bot</option>
+        </select>
+      </div>
+      <div style="padding:8px 16px;font-size:11px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.5px">Recent</div>
+      <div class="conv-list">
+        <div class="conv-item active">
+          <div class="conv-item-agent">data-analyst</div>
+          <div class="conv-item-summary">Analyze Q3 sales data</div>
+          <div class="conv-item-time">2 min ago</div>
+        </div>
+        <div class="conv-item">
+          <div class="conv-item-agent">pr-reviewer</div>
+          <div class="conv-item-summary">Review PR #142</div>
+          <div class="conv-item-time">1 hour ago</div>
+        </div>
+        <div class="conv-item">
+          <div class="conv-item-agent">report-generator</div>
+          <div class="conv-item-summary">Weekly summary request</div>
+          <div class="conv-item-time">Yesterday</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Right chat window -->
+    <div class="chat-right">
+      <div class="chat-header">
+        <div style="width:36px;height:36px;border-radius:50%;background:var(--primary);color:#fff;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;flex-shrink:0">DA</div>
+        <div class="chat-header-info">
+          <h4>data-analyst</h4>
+          <small>gpt-4o-mini · <span class="status-dot dot-green" style="vertical-align:middle"></span> Connected</small>
+        </div>
+        <div style="margin-left:auto;display:flex;gap:8px">
+          <button class="btn btn-sm btn-primary" onclick="dvPlayDelegationFlow(false)">Play Delegation Flow</button>
+          <button class="btn btn-sm btn-secondary" onclick="dvPlayDelegationFlow(true)">Play Timeout</button>
+          <button class="btn btn-sm btn-secondary">📜 History</button>
+          <button class="btn btn-sm btn-secondary">⚙️</button>
+        </div>
+      </div>
+
+      <div class="chat-messages" id="chat-messages">
+        <div class="status-pill" id="dvChatStatus">
+          <span class="mini-spinner"></span>
+          <span id="dvChatStatusText">Thinking…</span>
+          <span class="dots" id="dvChatDots"><span></span><span></span><span></span></span>
+        </div>
+
+        <div class="snippet-card" id="dvSnippetCard">
+          <div class="snippet-head" onclick="dvToggleSnippet()">
+            <div>
+              <div class="snippet-title">Delegation Progress</div>
+              <div class="snippet-meta" id="dvSnippetMeta">Folded by default - 0 snippets</div>
+              <div class="snippet-preview" id="dvSnippetPreview">No delegation snippets yet.</div>
+            </div>
+            <button class="btn-ghost" type="button" id="dvSnippetToggleText">Show Details</button>
+          </div>
+          <div class="snippet-body" id="dvSnippetBody">
+            <div class="snippet-list" id="dvSnippetList"></div>
+          </div>
+          <div style="padding:0 12px 10px;display:none" id="dvViewLogsWrap">
+            <button class="btn-ghost" type="button">View Execution Logs</button>
+          </div>
+        </div>
+
+        <!-- User message -->
+        <div class="msg msg-user">
+          <div class="msg-bubble">Can you analyze the Q3 sales figures from the database and summarize key trends?</div>
+        </div>
+        <!-- Agent message -->
+        <div class="msg msg-agent">
+          <div style="width:28px;height:28px;border-radius:50%;background:#E0E7FF;color:#4338CA;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0">DA</div>
+          <div class="content-wrap">
+            <div class="msg-bubble" style="padding-right:28px">I'll start by querying the Q3 sales data. One moment...</div>
+            <button class="maximize-icon-btn" onclick="maxOpen('chat-msg-1','Agent Response &mdash; data-analyst')" title="Maximize content">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 3v7h-2V6.41l-6.3 6.3-1.41-1.41L17.59 5H14V3h7z"/><path d="M3 21v-7h2v3.59l6.3-6.3 1.41 1.41L6.41 19H10v2H3z"/></svg>
+            </button>
+          </div>
+        </div>
+        <!-- Tool call -->
+        <div class="msg-tool">🔧 Calling <strong>db-query.execute_query</strong> with args: <span style="color:#0F172A">{ query: "SELECT region, SUM(revenue)..." }</span></div>
+        <!-- Agent with markdown-like content -->
+        <div class="msg msg-agent">
+          <div style="width:28px;height:28px;border-radius:50%;background:#E0E7FF;color:#4338CA;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0">DA</div>
+          <div class="content-wrap">
+            <div class="msg-bubble" style="max-width:420px;padding-right:28px">
+              Here's what I found in the Q3 data:<br><br>
+              <strong>Revenue:</strong> $4.2M (&uarr; 8% vs Q2)<br>
+              <strong>Top Region:</strong> APAC ($1.8M)<br>
+              <strong>Notable:</strong> Enterprise segment grew 23%<br><br>
+              Would you like me to save this as a result or create a visual report?
+            </div>
+            <button class="maximize-icon-btn" onclick="maxOpen('chat-msg-2','Agent Response &mdash; data-analyst')" title="Maximize content">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 3v7h-2V6.41l-6.3 6.3-1.41-1.41L17.59 5H14V3h7z"/><path d="M3 21v-7h2v3.59l6.3-6.3 1.41 1.41L6.41 19H10v2H3z"/></svg>
+            </button>
+          </div>
+        </div>
+        </div>
+        <!-- Agent question card -->
+        <div style="max-width:460px;margin-left:4px">
+          <div class="msg-question">
+            <div class="msg-question-title">🤖 Agent needs your input</div>
+            <div class="msg-question-text">Should I also include a Year-over-Year comparison in the analysis?</div>
+            <div class="msg-question-actions">
+              <button class="btn btn-sm btn-primary" onclick="answerQuestion('Yes, include YoY comparison')">Yes</button>
+              <button class="btn btn-sm btn-secondary" onclick="answerQuestion('No, skip YoY comparison')">No</button>
+              <input id="custom-answer" class="form-control" style="width:200px;padding:6px 10px" placeholder="Custom answer...">
+              <button class="btn btn-sm btn-secondary" onclick="answerQuestion(document.getElementById('custom-answer').value)">Send</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="chat-input-area">
+        <input class="chat-input" id="chat-input" placeholder="Message data-analyst..." onkeydown="if(event.key==='Enter')sendChatMsg()">
+        <button class="btn btn-primary" onclick="sendChatMsg()">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+          Send
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════ VIEW: CONVERSATIONAL AGENT INTERVENTION ═══════════════════════════════ -->
+<div id="view-conversational-intervention" class="view">
+  <div class="view-header">
+    <div><h2>Conversational Agent Intervention</h2><div class="view-desc">Live demo: inline intervention dialog surfaced during agent delegation in a conversation</div></div>
+    <div style="display:flex;gap:8px">
+      <button class="btn btn-secondary btn-sm" onclick="ciReset()">↺ Reset Demo</button>
+    </div>
+  </div>
+
+  <div class="conv-demo-shell" id="ciShell">
+    <!-- Messages area -->
+    <div class="conv-demo-msgs" id="ciMessages">
+      <div style="text-align:center;padding:60px 20px;color:var(--text-secondary);font-size:13px">
+        <div style="font-size:36px;margin-bottom:8px">💬</div>
+        <div>Click a demo step below to see the conversation flow</div>
+      </div>
+    </div>
+    <!-- Meta panel -->
+    <div class="conv-demo-meta">
+      <div class="card" style="padding:12px">
+        <div style="font-size:11px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Demo Steps</div>
+        <div style="display:flex;flex-direction:column;gap:4px" id="ciStepButtons"></div>
+      </div>
+      <div class="card" style="padding:12px">
+        <div style="font-size:11px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Chat Status</div>
+        <span class="chip chip-green" id="ciStatusChip">connected</span>
+      </div>
+      <div class="card" style="padding:12px">
+        <div style="font-size:11px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Intervention Queue</div>
+        <div style="font-size:12px;color:var(--text-secondary)" id="ciQueueStatus">Empty</div>
+      </div>
+    </div>
+  </div>
+  <!-- Input area (outside shell to match real layout) -->
+  <div style="margin-top:0;border:1px solid var(--border);border-top:none;border-radius:0 0 var(--radius) var(--radius);overflow:hidden;background:var(--surface)">
+    <div class="conv-demo-input-area" id="ciInputArea" style="border-top:none">
+      <input type="text" id="ciInput" placeholder="Type your message..." disabled>
+      <button class="btn btn-primary btn-sm" id="ciSendBtn" disabled>Send</button>
+    </div>
+    <div class="chat-input-blocked" id="ciInputBlocked" style="display:none">
+      <span>⚠</span><span>Waiting for your intervention response...</span>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════ VIEW: INTERVENE REQUESTS ═══════════════════════════════ -->
+<div id="view-intervene-requests" class="view">
+  <div class="view-header">
+    <div><h2>Intervene Requests</h2><div class="view-desc">Review and respond to agent requests for human input — including those from conversational sessions</div></div>
+    <button class="btn btn-secondary btn-sm" onclick="irRefreshMock()">↻ Refresh</button>
+  </div>
+
+  <!-- Stats row -->
+  <div class="metrics-grid">
+    <div class="metric-card">
+      <div class="metric-label">Pending Requests</div>
+      <div class="metric-value" style="color:var(--warning)" id="irPendingCount">4</div>
+      <div class="metric-delta delta-neutral">Across all agents</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-label">Avg Response Time</div>
+      <div class="metric-value">2m 14s</div>
+      <div class="metric-delta delta-up">↓ 18% this week</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-label">Resolved Today</div>
+      <div class="metric-value" style="color:var(--success)">12</div>
+      <div class="metric-delta delta-up">↑ 3 vs yesterday</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-label">Resolution Rate</div>
+      <div class="metric-value">94%</div>
+      <div class="metric-delta delta-up">+2.4%</div>
+    </div>
+  </div>
+
+  <!-- Filter chips -->
+  <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap">
+    <button class="btn btn-sm btn-primary" id="irFilterAll" onclick="irFilter('all')">All</button>
+    <button class="btn btn-sm btn-secondary" id="irFilterApproval" onclick="irFilter('approval')">Approval</button>
+    <button class="btn btn-sm btn-secondary" id="irFilterChoice" onclick="irFilter('choice')">Choice</button>
+    <button class="btn btn-sm btn-secondary" id="irFilterText" onclick="irFilter('text')">Text</button>
+  </div>
+
+  <!-- Pending table -->
+  <div class="card" style="margin-bottom:20px">
+    <div class="card-header"><h3>Pending Requests <span class="chip chip-yellow" id="irPendingBadge">4</span></h3></div>
+    <div class="card-body" style="padding:0">
+      <div class="table-wrap" style="border:none;border-radius:0;box-shadow:none">
+        <table id="irPendingTable">
+          <thead><tr>
+            <th>Agent</th><th>Execution ID</th><th>Context</th><th>Reason</th><th>Type</th><th>Received</th><th>Wait</th><th style="text-align:right">Actions</th>
+          </tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Responded history table -->
+  <div class="card">
+    <div class="card-header"><h3>Response History</h3></div>
+    <div class="card-body" style="padding:0">
+      <div class="table-wrap" style="border:none;border-radius:0;box-shadow:none">
+        <table id="irHistoryTable">
+          <thead><tr>
+            <th>Agent</th><th>Execution ID</th><th>Type</th><th>Response</th><th>Responded By</th><th>Responded At</th>
+          </tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+  </div><!-- /main-content -->
+</div><!-- /main-wrapper -->
+</div><!-- /app-shell -->
+
+<!-- Sessions Drawer -->
+<div id="drawer-overlay" class="drawer-overlay" onclick="closeSessions()"></div>
+
+<div id="drawer-sessions" class="drawer">
+  <div class="drawer-header">
+    <h3 id="drawer-sessions-title">Sessions</h3>
+    <button class="modal-close" onclick="closeSessions()">✕</button>
+  </div>
+  <div class="drawer-body">
+    <div id="sessions-list">
+      <div class="session-item">
+        <div class="session-info">
+          <div class="session-name font-mono">session-default</div>
+          <div class="session-binding text-secondary">Auth: api_key</div>
+        </div>
+        <span class="chip chip-green">Active</span>
+        <button class="btn-icon-sm">🗑️</button>
+      </div>
+      <div class="session-item">
+        <div class="session-info">
+          <div class="session-name font-mono">session-analyst</div>
+          <div class="session-binding text-secondary">Auth: bearer_token</div>
+        </div>
+        <span class="chip chip-green">Active</span>
+        <button class="btn-icon-sm">🗑️</button>
+      </div>
+      <div class="session-item">
+        <div class="session-info">
+          <div class="session-name font-mono">session-debug</div>
+          <div class="session-binding text-secondary">Auth: none</div>
+        </div>
+        <span class="chip chip-gray">Inactive</span>
+        <button class="btn-icon-sm">🗑️</button>
+      </div>
+    </div>
+    <div id="add-session-form" class="inline-form" style="display:none">
+      <div class="form-group">
+        <label>Session Name</label>
+        <input class="form-control" placeholder="e.g. session-new">
+      </div>
+      <div class="form-group">
+        <label>Description</label>
+        <textarea class="form-control" rows="2" placeholder="Session description..."></textarea>
+      </div>
+      <div class="form-group">
+        <label>Auth Type</label>
+        <select class="form-control">
+          <option>API Key</option>
+          <option>Bearer Token</option>
+          <option>Basic Auth</option>
+          <option>OAuth2</option>
+          <option>None</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Credentials</label>
+        <input class="form-control" type="password" placeholder="api key, token, etc.">
+      </div>
+      <div style="display:flex;gap:8px;margin-top:16px;">
+        <button class="btn btn-primary btn-sm">Save Session</button>
+        <button class="btn btn-secondary btn-sm" onclick="hideAddSession()">Cancel</button>
+      </div>
+    </div>
+  </div>
+  <div class="drawer-footer">
+    <button class="btn btn-secondary" onclick="showAddSession()">+ Add Session</button>
+  </div>
+</div>
+
+<!-- Conversation Detail Drawer -->
+<div id="drawer-conv-overlay" class="drawer-overlay" onclick="closeConvDetail()"></div>
+
+<div id="drawer-conv" class="drawer" style="width:560px;right:-560px">
+  <div class="drawer-header">
+    <h3>CONV-0041 — pr-reviewer</h3>
+    <button class="modal-close" onclick="closeConvDetail()">✕</button>
+  </div>
+  <div class="drawer-body">
+    <div style="margin-bottom:16px;padding-bottom:16px;border-bottom:1px solid var(--border)">
+      <div style="display:flex;gap:16px;flex-wrap:wrap;font-size:12px;color:var(--text-secondary)">
+        <span>Date: <strong style="color:var(--text-primary)">Today 11:15</strong></span>
+        <span>Status: <span class="chip chip-blue" style="font-size:11px">Completed</span></span>
+        <span>Turns: <strong style="color:var(--text-primary)">8</strong> (incl. intervention)</span>
+      </div>
+    </div>
+    <div class="timeline">
+      <div class="timeline-item user-turn">
+        <div class="timeline-stamp">14:32:01</div>
+        <div class="timeline-content">
+          <div class="timeline-role role-user">User</div>
+          <div class="timeline-text">Please review PR #142 — auth token refactor</div>
+        </div>
+      </div>
+      <div class="timeline-item agent-turn">
+        <div class="timeline-stamp">14:32:03</div>
+        <div class="timeline-content">
+          <div class="timeline-role role-agent">Agent</div>
+          <div class="timeline-text">Initializing PR review. Fetching PR details...</div>
+        </div>
+      </div>
+      <div class="timeline-item tool-turn">
+        <div class="timeline-stamp">14:32:04</div>
+        <div class="timeline-content">
+          <div class="timeline-role role-tool">Tool Call</div>
+          <div class="timeline-tool">🔧 github.list_issues — { repo: "company/auth-service", pr: 142 }</div>
+        </div>
+      </div>
+      <div class="timeline-item tool-turn">
+        <div class="timeline-stamp">14:32:06</div>
+        <div class="timeline-content">
+          <div class="timeline-role role-tool">Tool Call</div>
+          <div class="timeline-tool">🔧 github.create_pr — { title: "Review: PR #142", body: "..." }</div>
+        </div>
+      </div>
+      <div class="timeline-item agent-turn">
+        <div class="timeline-stamp">14:32:09</div>
+        <div class="timeline-content">
+          <div class="timeline-role role-agent">Agent</div>
+          <div class="timeline-text">PR #142 review complete. I found 2 potential issues:<br>
+            (1) Token expiry not handled in refresh flow<br>
+            (2) Missing rate limit on /auth/token endpoint<br>
+            Shall I create GitHub issues for these?
+          </div>
+        </div>
+      </div>
+      <!-- Intervention request & response turns (audit trail) -->
+      <div class="timeline-item intervene-turn">
+        <div class="timeline-stamp">14:32:22</div>
+        <div class="timeline-content">
+          <div class="timeline-role role-intervene">intervene_request</div>
+          <div class="timeline-intervene">⚠ approval · Delegated sub-agent (PR Checker, depth 2) requests confirmation to create issues.<br>Request ID: intv-req-7a3f · Status: responded</div>
+        </div>
+      </div>
+      <div class="timeline-item intervene-response-turn">
+        <div class="timeline-stamp">14:32:38</div>
+        <div class="timeline-content">
+          <div class="timeline-role role-intervene-resp">intervene_response</div>
+          <div class="timeline-intervene-resp">✓ Approved · Response: "Yes, create the issues" · By: Alex Harper<br>Response paired to intv-req-7a3f</div>
+        </div>
+      </div>
+      <div class="timeline-item user-turn">
+        <div class="timeline-stamp">14:32:45</div>
+        <div class="timeline-content">
+          <div class="timeline-role role-user">User</div>
+          <div class="timeline-text">Yes, create the issues</div>
+        </div>
+      </div>
+      <div class="timeline-item tool-turn">
+        <div class="timeline-stamp">14:32:46</div>
+        <div class="timeline-content">
+          <div class="timeline-role role-tool">Tool Call ×2</div>
+          <div class="timeline-tool">🔧 github.create_issue — { title: "Token expiry not handled..." }<br>🔧 github.create_issue — { title: "Missing rate limit on /auth/token" }</div>
+        </div>
+      </div>
+      <div class="timeline-item agent-turn">
+        <div class="timeline-stamp">14:33:01</div>
+        <div class="timeline-content">
+          <div class="timeline-role role-agent">Agent</div>
+          <div class="timeline-text">Created issues #287 and #288. PR review complete.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ CONTROL CENTER ASSISTANT (global floating launcher) ═══ -->
+<button class="asst-fab" id="asst-fab" onclick="asstOpen()" title="Control Center Assistant" aria-label="Control Center Assistant">🤖</button>
+<div class="asst-overlay" id="asst-overlay" onclick="if(event.target===this)asstClose()">
+  <div class="asst-dialog" id="asst-dialog" role="dialog" aria-label="Control Center Assistant conversation">
+    <div class="asst-head">
+      <span style="font-size:20px">🤖</span>
+      <h3 id="asst-title">Control Center Assistant</h3>
+      <span class="chip chip-green" id="asst-conn-chip">Connected</span>
+      <div class="asst-head-right">
+        <button class="btn-icon" id="asst-fs-btn" onclick="asstToggleFullscreen()" title="Toggle fullscreen">⛶</button>
+        <button class="btn-icon" onclick="asstClose()" title="Close">✕</button>
+      </div>
+    </div>
+
+    <div class="asst-body">
+      <div class="asst-alert" id="asst-model-alert" style="display:none">
+        <span>⚠️</span>
+        <div style="flex:1">
+          <b>The assistant needs a model configured for this workspace</b>
+          No model is configured for this workspace yet. An administrator can select one under System Config → Assistant model.
+          <div style="margin-top:8px"><button class="btn btn-secondary btn-sm" onclick="asstGoConfigure()">Configure model</button></div>
+        </div>
+      </div>
+
+      <div class="asst-paper-wrap">
+        <div class="asst-paper" id="asst-messages"></div>
+      </div>
+    </div>
+
+    <div class="asst-input-row">
+      <textarea class="chat-input" id="asst-input" rows="1" placeholder="Type a message… (Enter to send)" onkeydown="asstOnKey(event)" oninput="asstAutoGrow(this)"></textarea>
+      <button class="btn btn-primary" id="asst-send" onclick="asstSend()">Send</button>
+    </div>
+
+    <div class="asst-foot">
+      <button class="btn btn-secondary btn-sm" id="asst-btn-sessions" onclick="asstOpenSessions()">🗂 View All Sessions</button>
+      <button class="btn btn-secondary btn-sm" id="asst-btn-new" onclick="asstNewSession()">＋ New Session</button>
+      <span class="spacer"></span>
+      <button class="btn btn-sm" id="asst-btn-end" style="background:#fff;border:1px solid #FECACA;color:#B91C1C" onclick="asstOpenEnd()">⏹ End Session</button>
+      <button class="btn btn-secondary btn-sm" onclick="asstClose()">Exit</button>
+    </div>
+  </div>
+</div>
+<div class="asst-overlay" id="asst-sessions-overlay" onclick="if(event.target===this)asstCloseSessions()">
+  <div class="asst-dialog" style="width:min(620px,100%);height:auto;max-height:85vh" role="dialog" aria-label="All sessions for this agent">
+    <div class="asst-head">
+      <h3>All sessions for this agent</h3>
+      <div class="asst-head-right"><button class="btn-icon" onclick="asstCloseSessions()" title="Close">✕</button></div>
+    </div>
+    <div class="asst-body" style="overflow-y:auto;padding-bottom:14px">
+      <div class="asst-sess-filters">
+        <label class="toggle"><input type="checkbox" id="asst-show-ended" onchange="asstShowEnded(this.checked)"><span class="toggle-slider"></span><span style="font-size:12px">Show ended sessions</span></label>
+        <label style="display:inline-flex;align-items:center;gap:6px">From <input type="date" class="form-control" id="asst-sess-from" style="width:150px;padding:5px 8px;font-size:12px" onchange="asstDateChange()"></label>
+        <label style="display:inline-flex;align-items:center;gap:6px">To <input type="date" class="form-control" id="asst-sess-to" style="width:150px;padding:5px 8px;font-size:12px" onchange="asstDateChange()"></label>
+      </div>
+      <div id="asst-sessions-list"></div>
+      <div class="asst-pager" style="justify-content:center">
+        <span class="asst-pager-btns" id="asst-sessions-pager"></span>
+      </div>
+    </div>
+    <div class="asst-foot">
+      <span class="spacer"></span>
+      <button class="btn btn-secondary btn-sm" onclick="asstCloseSessions()">Cancel</button>
+    </div>
+  </div>
+</div>
+<div class="asst-overlay" id="asst-preview-overlay" onclick="if(event.target===this)asstClosePreview()">
+  <div class="asst-dialog" style="width:90vw;height:80vh" role="dialog" aria-label="Approval Preview">
+    <div class="asst-head">
+      <h3>Approval Preview</h3>
+      <div class="asst-head-right"><button class="btn-icon" onclick="asstClosePreview()" title="Collapse">⤡</button></div>
+    </div>
+    <div class="asst-body" id="asst-preview-body" style="overflow-y:auto;padding-bottom:14px;display:block;font-size:13px;line-height:1.6"></div>
+    <div class="asst-foot">
+      <button class="btn btn-secondary btn-sm" onclick="asstClosePreview()">Collapse</button>
+      <span class="spacer"></span>
+      <button class="btn btn-sm" style="background:#fff;border:1px solid #FECACA;color:#B91C1C" onclick="asstResolve(false)">✕ Deny</button>
+      <button class="btn btn-sm" style="background:#16A34A;color:#fff" onclick="asstResolve(true)">✓ Approve</button>
+    </div>
+  </div>
+</div>
+<div class="asst-overlay" id="asst-end-overlay" onclick="if(event.target===this)asstCloseEnd()">
+  <div class="asst-dialog" style="width:min(560px,100%);height:auto" role="dialog" aria-label="End Conversation Session">
+    <div class="asst-head">
+      <h3>End Conversation Session</h3>
+      <div class="asst-head-right"><button class="btn-icon" onclick="asstCloseEnd()" title="Close">✕</button></div>
+    </div>
+    <div class="asst-body" style="padding-bottom:16px">
+      <p style="font-size:13px;line-height:1.6">This will close the session. You can still view its history but cannot resume it.</p>
+      <p class="text-sm text-secondary" style="line-height:1.6;margin-top:8px">Any in-flight execution for this session is terminated. The next time you open the assistant it starts a <b>new</b> session instead of resuming this one.</p>
+    </div>
+    <div class="asst-foot">
+      <span class="spacer"></span>
+      <button class="btn btn-secondary btn-sm" onclick="asstCloseEnd()">Cancel</button>
+      <button class="btn btn-sm" style="background:#C62828;color:#fff" onclick="asstConfirmEnd()">End Session</button>
+    </div>
+  </div>
+</div>
+
+<script src="../shared/app.js"></script>
+<script src="../shared/assistant.js"></script>
+<script src="../shared/max-dialog.js"></script>
+<!-- ═══ conv-intervention ═══ -->
+<script>
+// ═══════════════════════════════ CONVERSATIONAL INTERVENTION DEMO ═══════════════════════════════
+(function(){
+  var ciStep = -1;
+  var ciChoice = null;
+
+  var ciSteps = [
+    { id:'ci-start', label:'1. Start Conversation', desc:'User initiates chat with CS agent' },
+    { id:'ci-delegate', label:'2. Agent Delegates', desc:'Agent delegates to Fraud Check sub-agent' },
+    { id:'ci-intervene', label:'3. Intervention Request', desc:'Sub-agent calls human_intervene — dialog appears' },
+    { id:'ci-respond', label:'4. User Responds', desc:'User approves; conversation resumes' },
+    { id:'ci-dismiss', label:'5. Dismiss Demo', desc:'User cancels an intervention request' }
+  ];
+
+  function ciBuildSteps() {
+    var el = document.getElementById('ciStepButtons');
+    el.innerHTML = '';
+    ciSteps.forEach(function(s, i){
+      var btn = document.createElement('button');
+      btn.className = 'btn btn-sm btn-secondary';
+      btn.style.textAlign = 'left';
+      btn.style.justifyContent = 'flex-start';
+      btn.innerHTML = '<span style="font-size:10px;color:var(--text-secondary);width:18px;flex-shrink:0">' + (i+1) + '.</span> ' + s.label + '<br><span style="font-size:10px;color:var(--text-secondary);font-weight:400">' + s.desc + '</span>';
+      btn.onclick = (function(idx){ return function(){ ciRunStep(idx); }; })(i);
+      el.appendChild(btn);
+    });
+  }
+
+  function ciClear() {
+    var msgs = document.getElementById('ciMessages');
+    msgs.innerHTML = '';
+  }
+
+  function ciAddMsg(type, content) {
+    var msgs = document.getElementById('ciMessages');
+    var div = document.createElement('div');
+    div.style.cssText = 'display:flex;gap:8px;max-width:85%';
+    if (type === 'user') {
+      div.style.alignSelf = 'flex-end';
+      div.style.flexDirection = 'row-reverse';
+      div.innerHTML = '<div style="padding:8px 12px;background:var(--primary);color:#fff;border-radius:12px 12px 2px 12px;font-size:12.5px;line-height:1.4">' + content + '</div>';
+    } else if (type === 'agent') {
+      div.style.alignSelf = 'flex-start';
+      div.innerHTML = '<div style="width:26px;height:26px;border-radius:50%;background:var(--primary);color:#fff;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;flex-shrink:0">CS</div><div style="padding:8px 12px;background:#F1F5F9;border-radius:12px 12px 12px 2px;font-size:12.5px;line-height:1.4;color:var(--text-primary)">' + content + '</div>';
+    } else if (type === 'tool') {
+      div.style.alignSelf = 'flex-start';
+      div.style.marginLeft = '20px';
+      div.innerHTML = '<div style="padding:6px 10px;background:#F8FAFC;border:1px solid var(--border);border-radius:4px;font-size:11px;color:var(--text-secondary);font-family:monospace;display:flex;gap:6px;align-items:center"><span>🔧</span><span>' + content + '</span></div>';
+    } else if (type === 'fraud') {
+      div.style.alignSelf = 'flex-start';
+      div.innerHTML = '<div style="width:26px;height:26px;border-radius:50%;background:#7C3AED;color:#fff;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;flex-shrink:0">FC</div><div style="padding:8px 12px;background:#EDE9FE;color:#4C1D95;border-radius:12px 12px 12px 2px;font-size:11.5px;line-height:1.4">' + content + '</div>';
+    } else if (type === 'delegation') {
+      div.style.alignSelf = 'flex-start';
+      div.style.marginLeft = '10px';
+      div.innerHTML = '<div style="padding:8px 12px;background:#EDE9FE;border:1px solid #7C3AED;border-left:3px solid #7C3AED;border-radius:var(--radius);font-size:12px;color:#4C1D95">' + content + '</div>';
+    } else if (type === 'intervene-resp') {
+      div.className = 'iv-resp-msg';
+      div.innerHTML = '<div class="iv-resp-bubble"><div class="iv-resp-label">' + content + '</div><div style="font-size:11px;color:#6D28D9">Response recorded in audit trail</div></div>';
+    } else if (type === 'pending') {
+      div.style.alignSelf = 'flex-start';
+      div.innerHTML = '<div style="display:flex;align-items:center;gap:10px;padding:8px 14px;background:#FFF8E1;border:1px solid #FFE0B2;border-radius:var(--radius);font-size:12px;font-weight:600;color:#92400E"><div style="width:16px;height:16px;border:3px solid #FFE0B2;border-top-color:#FF9800;border-radius:50%;animation:ivSpin 0.9s linear infinite;flex-shrink:0"></div><span>Waiting for your input</span></div>';
+    } else if (type === 'thinking') {
+      div.style.alignSelf = 'flex-start';
+      div.innerHTML = '<div style="display:flex;align-items:center;gap:8px;padding:8px 14px;border-radius:24px;font-size:12px;font-weight:600;color:#1E3A8A;background:#EDF5FF;border:1px solid #CFE3FF"><span style="display:inline-flex;gap:3px"><span style="width:4px;height:4px;border-radius:50%;background:currentColor;opacity:.25;animation:pulse 1.2s infinite"></span><span style="width:4px;height:4px;border-radius:50%;background:currentColor;opacity:.25;animation:pulse 1.2s infinite .15s"></span><span style="width:4px;height:4px;border-radius:50%;background:currentColor;opacity:.25;animation:pulse 1.2s infinite .3s"></span></span><span>Fraud Check Agent is analysing…</span></div>';
+    }
+    msgs.appendChild(div);
+    msgs.scrollTop = msgs.scrollHeight;
+  }
+
+  function ciBlockInput(reason) {
+    var input = document.getElementById('ciInput');
+    var send = document.getElementById('ciSendBtn');
+    var blocked = document.getElementById('ciInputBlocked');
+    input.disabled = true; send.disabled = true;
+    input.value = '';
+    if (reason) { input.placeholder = reason; blocked.style.display = 'flex'; }
+    else { blocked.style.display = 'none'; }
+  }
+
+  function ciEnableInput() {
+    var input = document.getElementById('ciInput');
+    var send = document.getElementById('ciSendBtn');
+    var blocked = document.getElementById('ciInputBlocked');
+    input.disabled = false; send.disabled = false;
+    input.placeholder = 'Type your message...';
+    blocked.style.display = 'none';
+    document.getElementById('ciStatusChip').textContent = 'connected';
+    document.getElementById('ciStatusChip').className = 'chip chip-green';
+    document.getElementById('ciQueueStatus').textContent = 'Empty';
+  }
+
+  function ciSetStatus(status, queueText) {
+    var chip = document.getElementById('ciStatusChip');
+    if (status === 'waiting') {
+      chip.textContent = 'waiting_for_human';
+      chip.className = 'chip chip-yellow';
+    } else if (status === 'thinking') {
+      chip.textContent = 'thinking';
+      chip.className = 'chip chip-blue';
+    } else {
+      chip.textContent = 'connected';
+      chip.className = 'chip chip-green';
+    }
+    if (queueText) document.getElementById('ciQueueStatus').textContent = queueText;
+  }
+
+  function ciRemoveInterventionDialog() {
+    var dlg = document.querySelector('#ciMessages .intervene-dialog-card');
+    if (dlg) dlg.remove();
+  }
+
+  function ciAddInterventionDialog(type, reason, choices) {
+    ciRemoveInterventionDialog();
+    var msgs = document.getElementById('ciMessages');
+    var card = document.createElement('div');
+    card.className = 'intervene-dialog-card';
+
+    var typeLabel = '', typeCls = '';
+    if (type === 'approval') { typeLabel = 'Approval Required'; typeCls = 'iv-type-approval'; }
+    else if (type === 'choice') { typeLabel = 'Choice Required'; typeCls = 'iv-type-choice'; }
+    else { typeLabel = 'Text Input Required'; typeCls = 'iv-type-text'; }
+
+    var body = '';
+    if (type === 'approval') {
+      body = '<div class="iv-reason">' + reason + '</div><div class="iv-approval-btns"><button class="btn iv-btn-approve" onclick="ciRespondApproval(true)">✓ Approve</button><button class="btn iv-btn-deny" onclick="ciRespondApproval(false)">✕ Deny</button></div>';
+    } else if (type === 'choice') {
+      body = '<div class="iv-reason">' + reason + '</div><div class="iv-choices">';
+      choices.forEach(function(c){
+        body += '<div class="iv-choice-opt" data-val="' + c + '" onclick="ciSelectChoice(this,\'' + c.replace(/'/g,"\\'") + '\')"><div class="iv-radio"></div><span>' + c + '</span></div>';
+      });
+      body += '</div><div style="margin-top:10px;display:flex;justify-content:flex-end"><button class="btn btn-primary btn-sm" id="ciChoiceConfirmBtn" disabled onclick="ciConfirmChoice()">Confirm Selection</button></div>';
+    }
+    card.innerHTML = '<div class="intervene-dialog-header"><div class="intervene-dialog-icon">⚠</div><div class="intervene-dialog-info"><h4>Fraud Check Agent requires your input</h4><div class="iv-meta">Delegated by Customer Support Agent — depth 2</div><div class="iv-type-badge ' + typeCls + '">' + typeLabel + '</div></div></div><div class="intervene-dialog-body">' + body + '</div><div class="intervene-dialog-dismiss"><button class="btn-ghost" onclick="ciDismissIntervention()">Dismiss / Cancel</button></div>';
+    msgs.appendChild(card);
+    msgs.scrollTop = msgs.scrollHeight;
+  }
+
+  window.ciRespondApproval = function(approved) {
+    ciRemoveInterventionDialog();
+    ciAddMsg('intervene-resp', 'Intervention Response · ' + (approved ? 'Approved' : 'Denied'));
+    ciEnableInput();
+    ciSetStatus('connected', 'Empty');
+    ciAddMsg('agent', 'Thank you for confirming. The fraud check has been completed.');
+  };
+
+  window.ciSelectChoice = function(el, value) {
+    ciChoice = value;
+    document.querySelectorAll('#ciMessages .iv-choice-opt').forEach(function(o){ o.classList.remove('sel'); });
+    el.classList.add('sel');
+    var btn = document.getElementById('ciChoiceConfirmBtn');
+    if (btn) btn.disabled = false;
+  };
+
+  window.ciConfirmChoice = function() {
+    if (!ciChoice) return;
+    ciRemoveInterventionDialog();
+    ciAddMsg('intervene-resp', 'Intervention Response · Selected: ' + ciChoice);
+    ciEnableInput();
+    ciSetStatus('connected', 'Empty');
+    ciChoice = null;
+  };
+
+  window.ciDismissIntervention = function() {
+    ciRemoveInterventionDialog();
+    ciAddMsg('intervene-resp', 'Intervention Cancelled — user dismissed the request');
+    ciEnableInput();
+    ciSetStatus('connected', 'Empty');
+    ciAddMsg('agent', 'The fraud check was cancelled. How would you like to proceed?');
+  };
+
+  window.ciRunStep = function(idx) {
+    ciStep = idx;
+    ciClear();
+    ciRemoveInterventionDialog();
+    ciChoice = null;
+
+    switch (ciSteps[idx].id) {
+      case 'ci-start':
+        ciAddMsg('user', "Hi, I just noticed a transaction on my account was flagged. Can you check what happened?");
+        setTimeout(function(){ ciAddMsg('agent', "Of course! Let me look into that for you. Can you provide the transaction ID?"); }, 300);
+        setTimeout(function(){ ciAddMsg('user', "Sure — transaction ID is TXN-2026-8842, amount was $2,450 to an overseas vendor."); }, 600);
+        setTimeout(function(){ ciAddMsg('agent', "I can see that transaction. The amount triggered our fraud detection. Let me delegate a detailed analysis to our Fraud Check Agent."); }, 900);
+        ciEnableInput();
+        ciSetStatus('thinking');
+        break;
+      case 'ci-delegate':
+        ciAddMsg('user', "Hi, I just noticed a transaction on my account was flagged. Can you check what happened?");
+        ciAddMsg('agent', "Of course! Let me look into that for you.");
+        ciAddMsg('user', "Sure — TXN-2026-8842, $2,450 to an overseas vendor.");
+        ciAddMsg('agent', "Let me delegate a detailed analysis to our Fraud Check Agent.");
+        ciAddMsg('tool', 'Calling agent_delegate → fraud-check-agent');
+        ciAddMsg('delegation', '<strong>↳ Delegated to Fraud Check Agent</strong><br><span style="font-size:11px">depth 2 · fraud analysis</span>');
+        ciAddMsg('thinking', '');
+        ciEnableInput();
+        ciSetStatus('delegating');
+        break;
+      case 'ci-intervene':
+        ciAddMsg('user', "Hi, I just noticed a transaction on my account was flagged.");
+        ciAddMsg('agent', "Let me delegate a detailed analysis to our Fraud Check Agent.");
+        ciAddMsg('tool', 'Calling agent_delegate → fraud-check-agent');
+        ciAddMsg('delegation', '<strong>↳ Delegated to Fraud Check Agent</strong> — depth 2');
+        ciAddMsg('fraud', "I've analysed the transaction. Risk indicators present but not definitive. I need human confirmation.");
+        ciAddMsg('tool', 'Fraud Check Agent calling system____human_intervene (type: approval)');
+        ciAddMsg('pending', '');
+        ciAddInterventionDialog('approval', 'Transaction TXN-2026-8842 for $2,450 has medium risk indicators (3 of 7 positive). Should the Fraud Check Agent proceed with the full investigation?');
+        ciBlockInput('Waiting for your intervention response...');
+        ciSetStatus('waiting', '<span style="color:var(--warning);font-weight:600">1 pending</span>');
+        break;
+      case 'ci-respond':
+        ciAddMsg('user', "Hi, I just noticed a transaction on my account was flagged.");
+        ciAddMsg('agent', "Let me delegate a detailed analysis to our Fraud Check Agent.");
+        ciAddMsg('tool', 'Calling agent_delegate → fraud-check-agent');
+        ciAddMsg('delegation', '<strong>↳ Delegated to Fraud Check Agent</strong> — depth 2');
+        ciAddMsg('fraud', "I've analysed the transaction. Need human confirmation.");
+        ciAddMsg('tool', 'system____human_intervene → resolved');
+        ciAddMsg('intervene-resp', 'Intervention Response · Approved');
+        ciAddMsg('agent', "Thank you. The fraud check investigation is in progress and will report back shortly.");
+        ciEnableInput();
+        ciSetStatus('thinking');
+        break;
+      case 'ci-dismiss':
+        ciAddMsg('user', "I need to review a flagged transaction from yesterday.");
+        ciAddMsg('agent', "Let me pull that up. Delegating to Fraud Check Agent.");
+        ciAddMsg('tool', 'Calling agent_delegate → fraud-check-agent (compliance check)');
+        ciAddMsg('delegation', '<strong>↳ Delegated to Fraud Check Agent</strong> — depth 2');
+        ciAddMsg('fraud', "This requires compliance officer sign-off. Seeking human input…");
+        ciAddMsg('tool', 'system____human_intervene (type: approval) — "Compliance review needed"');
+        ciAddMsg('pending', '');
+        ciAddInterventionDialog('approval', 'Transaction TXN-2026-9910 requires compliance officer approval before proceeding. Do you authorise this review?');
+        ciBlockInput('Waiting for your intervention response...');
+        ciSetStatus('waiting', '<span style="color:var(--warning);font-weight:600">1 pending</span>');
+        break;
+    }
+  };
+
+  function ciReset() {
+    ciStep = -1; ciChoice = null;
+    ciClear(); ciRemoveInterventionDialog();
+    ciEnableInput();
+    ciSetStatus('connected', 'Empty');
+    var msgs = document.getElementById('ciMessages');
+    msgs.innerHTML = '<div style="text-align:center;padding:60px 20px;color:var(--text-secondary);font-size:13px"><div style="font-size:36px;margin-bottom:8px">💬</div><div>Click a demo step to see the conversation flow</div></div>';
+  }
+
+  window.ciReset = ciReset;
+  ciBuildSteps();
+})();
+
+// ═══════════════════════════════ INTERVENE REQUESTS ═══════════════════════════════
+(function(){
+  var irFilterType = 'all';
+
+  var mockPending = [
+    { id:'req-001', agent_name:'Fraud Check Agent', agent_session_id:'sess-a3f2c1b9', conversation_session_id:'conv-8f3a2c', delegation_depth:2, reason:'Transaction TXN-2026-8842 shows medium risk. Proceed?', intervention_type:'approval', created_at: new Date(Date.now()-120000).toISOString() },
+    { id:'req-002', agent_name:'Compliance Bot', agent_session_id:'sess-b7e9d4a1', conversation_session_id:null, delegation_depth:0, reason:'Report #442 requires sign-off before submission', intervention_type:'approval', created_at: new Date(Date.now()-300000).toISOString() },
+    { id:'req-003', agent_name:'Data Analyst Agent', agent_session_id:'sess-c1d5f7e3', conversation_session_id:'conv-7a1b3c', delegation_depth:3, reason:'Classify the sensitivity of discovered PII data', intervention_type:'choice', created_at: new Date(Date.now()-480000).toISOString() },
+    { id:'req-004', agent_name:'Report Generator', agent_session_id:'sess-d9a2b3c4', conversation_session_id:null, delegation_depth:0, reason:'Please provide additional context for the Q3 summary', intervention_type:'text', created_at: new Date(Date.now()-900000).toISOString() }
+  ];
+
+  var mockHistory = [
+    { id:'h001', agent_name:'PR Reviewer', agent_session_id:'sess-e5f6g7h8', intervention_type:'approval', response:{approval_value:true,operator_user_name:'Alex Harper'}, created_at: new Date(Date.now()-1800000).toISOString(), responded_at: new Date(Date.now()-1700000).toISOString() },
+    { id:'h002', agent_name:'Fraud Check Agent', agent_session_id:'sess-i9j0k1l2', intervention_type:'choice', response:{selected_choice:'Medium Risk — Full investigation',operator_user_name:'Alex Harper'}, created_at: new Date(Date.now()-3600000).toISOString(), responded_at: new Date(Date.now()-3500000).toISOString() },
+    { id:'h003', agent_name:'Data Analyst', agent_session_id:'sess-m3n4o5p6', intervention_type:'text', response:{text_value:'Customer has history with this vendor — 3 prior transactions',operator_user_name:'Sam Smith'}, created_at: new Date(Date.now()-5400000).toISOString(), responded_at: new Date(Date.now()-5300000).toISOString() }
+  ];
+
+  function timeAgo(d) { var s = Math.floor((Date.now()-new Date(d).getTime())/1000); if(s<60)return s+'s'; var m = Math.floor(s/60); if(m<60)return m+'m'; return Math.floor(m/60)+'h'; }
+  function fmtTime(d) { return new Date(d).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}); }
+
+  function irRender() {
+    var filtered = irFilterType === 'all' ? mockPending : mockPending.filter(function(r){ return r.intervention_type === irFilterType; });
+    irRenderPending(filtered);
+    irRenderHistory();
+    document.getElementById('irPendingCount').textContent = mockPending.length;
+    document.getElementById('irPendingBadge').textContent = mockPending.length;
+  }
+
+  function irRenderPending(list) {
+    var tbody = document.querySelector('#irPendingTable tbody');
+    tbody.innerHTML = '';
+    if (list.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:24px;color:var(--text-secondary)">No pending intervention requests</td></tr>';
+      return;
+    }
+    list.forEach(function(r){
+      var typeChip = '';
+      if (r.intervention_type === 'approval') typeChip = '<span class="chip chip-yellow">Approval</span>';
+      else if (r.intervention_type === 'choice') typeChip = '<span class="chip chip-blue">Choice</span>';
+      else typeChip = '<span class="chip chip-green">Text</span>';
+
+      var ctxChip = r.conversation_session_id
+        ? '<span class="chip chip-purple" style="font-size:10px">In Conversation</span>' + (r.delegation_depth > 0 ? '<br><span style="font-size:10px;color:var(--text-secondary)">Depth: ' + r.delegation_depth + '</span>' : '')
+        : '<span style="font-size:11px;color:var(--text-secondary)">Standalone</span>';
+
+      var tr = document.createElement('tr');
+      tr.innerHTML = '<td><strong>' + r.agent_name + '</strong></td>' +
+        '<td><span class="font-mono text-sm">' + r.agent_session_id.slice(0,8) + '</span></td>' +
+        '<td>' + ctxChip + '</td>' +
+        '<td><span style="max-width:200px;display:inline-block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + r.reason + '</span></td>' +
+        '<td>' + typeChip + '</td>' +
+        '<td class="text-secondary">' + fmtTime(r.created_at) + '</td>' +
+        '<td><span class="chip chip-yellow" style="border:1px solid #FDE68A">' + timeAgo(r.created_at) + '</span></td>' +
+        '<td align="right"><button class="btn btn-xs btn-primary" onclick="irRespond(\'' + r.id + '\')">Respond</button></td>';
+      tbody.appendChild(tr);
+    });
+  }
+
+  function irRenderHistory() {
+    var tbody = document.querySelector('#irHistoryTable tbody');
+    tbody.innerHTML = '';
+    mockHistory.forEach(function(r){
+      var typeChip = '';
+      if (r.intervention_type === 'approval') typeChip = '<span class="chip chip-yellow">Approval</span>';
+      else if (r.intervention_type === 'choice') typeChip = '<span class="chip chip-blue">Choice</span>';
+      else typeChip = '<span class="chip chip-green">Text</span>';
+
+      var respLabel = '—';
+      var respColor = 'gray';
+      if (r.response) {
+        if (r.response.approval_value === true) { respLabel = 'Approved'; respColor = 'green'; }
+        else if (r.response.approval_value === false) { respLabel = 'Rejected'; respColor = 'red'; }
+        else if (r.response.selected_choice) { respLabel = r.response.selected_choice; respColor = 'blue'; }
+        else if (r.response.text_value) { respLabel = r.response.text_value.slice(0, 40); respColor = 'purple'; }
+      }
+
+      var tr = document.createElement('tr');
+      tr.innerHTML = '<td><strong>' + r.agent_name + '</strong></td>' +
+        '<td><span class="font-mono text-sm">' + r.agent_session_id.slice(0,8) + '</span></td>' +
+        '<td>' + typeChip + '</td>' +
+        '<td><span class="chip chip-' + respColor + '">' + respLabel + '</span></td>' +
+        '<td>' + (r.response && r.response.operator_user_name || '—') + '</td>' +
+        '<td class="text-secondary">' + (r.responded_at ? new Date(r.responded_at).toLocaleString() : '—') + '</td>';
+      tbody.appendChild(tr);
+    });
+  }
+
+  window.irFilter = function(type) {
+    irFilterType = type;
+    ['All','Approval','Choice','Text'].forEach(function(t){
+      var btn = document.getElementById('irFilter' + t);
+      if (btn) { btn.className = 'btn btn-sm ' + (type === t.toLowerCase() ? 'btn-primary' : 'btn-secondary'); }
+    });
+    irRender();
+  };
+
+  window.irRespond = function(reqId) {
+    var req = mockPending.find(function(r){ return r.id === reqId; });
+    if (!req) return;
+    // Simulate response: remove from pending, add to history
+    mockPending = mockPending.filter(function(r){ return r.id !== reqId; });
+    mockHistory.unshift({
+      id: 'h' + Date.now(),
+      agent_name: req.agent_name,
+      agent_session_id: req.agent_session_id,
+      intervention_type: req.intervention_type,
+      response: { approval_value: true, operator_user_name: 'Alex Harper' },
+      created_at: req.created_at,
+      responded_at: new Date().toISOString()
+    });
+    irRender();
+    // Show toast
+    var t = document.createElement('div');
+    t.style.cssText = 'position:fixed;bottom:24px;left:50%;transform:translateX(-50%);padding:10px 18px;border-radius:8px;background:#F0FDF4;color:#166534;font-size:13px;font-weight:500;box-shadow:0 4px 12px rgba(0,0,0,0.15);z-index:3000;animation:toastIn 0.25s ease';
+    t.textContent = '✓ Response submitted for ' + req.agent_name;
+    document.body.appendChild(t);
+    setTimeout(function(){ t.style.opacity='0'; t.style.transition='opacity 0.3s'; setTimeout(function(){ t.remove(); },300); },2500);
+  };
+
+  window.irRefreshMock = function() { irRender(); };
+
+  // Initial render on page load (if view shown)
+  irRender();
+})();
+
+</script>
+<script src="../shared/page-init.js"></script>
+</body>
+</html>

@@ -95,16 +95,19 @@ def _canonical_preview(old: dict, approved: dict, name: str) -> str:
     return "\n".join(lines)
 
 
-async def _approve_confirmation(conv_id: uuid.UUID):
-    from app.agent_runtime import conversation_resume
+def _resume_with(monkeypatch: pytest.MonkeyPatch, approved: bool) -> None:
+    """Simulate the operator's durable resume value.
 
-    assert conversation_resume.resolve(conv_id, {"approval_value": True})
+    The in-process ``conversation_resume`` registry is retired: a paused
+    conversational turn now resumes through LangGraph ``interrupt()`` with the
+    operator's value replayed on the resumed task, so the test stubs that
+    primitive instead of the old registry.
+    """
+    import langgraph.types as lg_types
 
-
-async def _reject_confirmation(conv_id: uuid.UUID):
-    from app.agent_runtime import conversation_resume
-
-    assert conversation_resume.resolve(conv_id, {"approval_value": False})
+    monkeypatch.setattr(
+        lg_types, "interrupt", lambda payload: {"approval_value": approved}
+    )
 
 
 @pytest.mark.asyncio
@@ -182,16 +185,13 @@ async def test_assistant_agent_type_update_full_flow(cc_client, cc_app, allow_al
         agent_type_id=agent_id,
         conv_session_id=str(conv_id),
     )
-    import asyncio
-
-    approver = asyncio.create_task(_approve_confirmation(conv_id))
+    _resume_with(monkeypatch, approved=True)
     result_json = await intervention._arun(
         intervention_type="approval",
         reason="Update Agent Type: e2e-agent",
         choices=None,
         prompt=preview,
     )
-    await approver
     import json
 
     payload = json.loads(result_json)
@@ -240,7 +240,6 @@ async def test_assistant_agent_type_update_rejection_writes_nothing(cc_client, c
     and the persisted record keeps its prior state."""
     from unittest.mock import AsyncMock
 
-    from app.agent_runtime import conversation_resume
     from app.services.agents.langchain_system_tools import LangChainHumanInterveneTool
 
     role = await _invoke(cc_client, "create_agent_role", {"name": "rej-role", "data": {}})
@@ -271,14 +270,12 @@ async def test_assistant_agent_type_update_rejection_writes_nothing(cc_client, c
         agent_type_id=agent_id,
         conv_session_id=str(conv_id),
     )
-    import asyncio
     import json
 
-    rejecter = asyncio.create_task(_reject_confirmation(conv_id))
+    _resume_with(monkeypatch, approved=False)
     result_json = await intervention._arun(
         intervention_type="approval", reason="Update Agent Type: rej-agent", choices=None, prompt=preview
     )
-    await rejecter
     payload = json.loads(result_json)
     assert payload["status"] == "resolved"
     assert payload["approval_value"] is False

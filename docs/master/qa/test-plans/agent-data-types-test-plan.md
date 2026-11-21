@@ -84,7 +84,7 @@ Covers the Agent Data Type registry (CRUD), Agent Outputs query/admin page, type
 
 **Test files:**
 - [backend/tests/test_agent_outputs_api.py](../../../../backend/tests/test_agent_outputs_api.py) — Backend: agent output query, export, persistence, FK constraints
-- [backend/tests/test_save_result_typed.py](../../../../backend/tests/test_save_result_typed.py) — Backend: typed save_result path, valid/invalid/fallback scenarios
+- [backend/tests/test_output_validation.py](../../../../backend/tests/test_output_validation.py) — Backend: typed output schema validation, valid/invalid/optional-field scenarios
 - [frontend/src/__tests__/AgentOutputsPage.test.tsx](../../../../frontend/src/__tests__/AgentOutputsPage.test.tsx) — Frontend: filter bar, dynamic table columns, row detail, CSV export trigger, loading/empty/error states
 
 ---

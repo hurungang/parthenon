@@ -77,6 +77,11 @@ def _make_skill(skill_id=None, instructions=None, tool_ids=None):
         t.name = f"tool-{i}"
         t.description = None
         t.input_schema = None  # None → assemble_tool_section omits schema block (no JSON error)
+        # SkillRead.tool_bindings exposes these as required strings.
+        t.original_name = f"tool-{i}"
+        t.server = MagicMock()
+        t.server.slug = "demo"
+        t.server.name = "Demo Server"
         b.tool = t
         bindings.append(b)
     m.tool_bindings = bindings
@@ -379,6 +384,11 @@ def _make_binding_with_tool(
     t.name = name
     t.description = description
     t.input_schema = input_schema  # None → schema block omitted by assemble_tool_section
+    # SkillRead.tool_bindings requires serializable strings here.
+    t.original_name = name
+    t.server = MagicMock()
+    t.server.slug = "demo"
+    t.server.name = "Demo Server"
     b.tool = t
     return b
 

@@ -178,6 +178,10 @@ class TestCrashRetryAfterCommit:
         assert stored.write_applied is True
         first_summary = stored.applied_effect_summary
         assert first_summary is not None
+        # The per-call summary lives in the effects map (top-level fields are
+        # the compatibility mirror of the latest effect).
+        assert len(first_summary["effects"]) == 1
+        (first_effect,) = first_summary["effects"].values()
 
         # Simulate the process crash + retry: the handler must never run again.
         async def _boom(*_args: Any, **_kwargs: Any) -> dict:
@@ -192,7 +196,7 @@ class TestCrashRetryAfterCommit:
         replay = retry.json()["result"]
         assert replay["duplicate_dispatch"] is True
         assert replay["write_applied"] is True
-        assert replay["applied_effect_summary"] == first_summary
+        assert replay["applied_effect_summary"] == first_effect
         assert await _skill_count(db_session, name) == 1
 
     @pytest.mark.asyncio

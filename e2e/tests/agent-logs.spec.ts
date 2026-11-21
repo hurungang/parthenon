@@ -154,6 +154,33 @@ async function setupLogViewerPage(page: import('@playwright/test').Page) {
   )
 }
 
+// ── Section / toggle helpers ───────────────────────────────────────────────────
+
+/** The collapsible "Agent Working Steps" header (role=button with aria-expanded). */
+function workingStepsToggle(page: import('@playwright/test').Page) {
+  return page
+    .getByText('Agent Working Steps', { exact: true })
+    .locator('xpath=ancestor::*[@role="button"][1]')
+}
+
+/** The working-steps section renders expanded by default — only click when collapsed. */
+async function expandWorkingSteps(page: import('@playwright/test').Page) {
+  const toggle = workingStepsToggle(page)
+  if ((await toggle.getAttribute('aria-expanded')) === 'false') {
+    await toggle.click()
+  }
+  await expect(toggle).toHaveAttribute('aria-expanded', 'true')
+}
+
+/** The Friendly/Raw switch — clicking the visible label is flaky, click the control. */
+function rawModeSwitch(page: import('@playwright/test').Page) {
+  return page.getByRole('switch', { name: /Raw Output/i })
+}
+
+async function setRawMode(page: import('@playwright/test').Page, raw: boolean) {
+  await rawModeSwitch(page).setChecked(raw)
+}
+
 // ── Tests ──────────────────────────────────────────────────────────────────────
 
 test.describe('Agent Log Viewer', () => {
@@ -232,11 +259,8 @@ test.describe('Agent Log Viewer', () => {
     // Wait for the Working Steps section to render
     await expect(page.getByText('Agent Working Steps')).toBeVisible({ timeout: 10000 })
 
-    // Expand the top-level working steps section.
-    const toggleEl = page
-      .getByText('Agent Working Steps', { exact: true })
-      .locator('xpath=ancestor::*[@role="button"][1]')
-    await toggleEl.click()
+    // Expand the top-level working steps section (already open by default).
+    await expandWorkingSteps(page)
 
     // After expanding, step messages should be visible
     await expect(page.getByText('Initial LLM reasoning call')).toBeVisible({ timeout: 5000 })
@@ -250,18 +274,14 @@ test.describe('Agent Log Viewer', () => {
 
     await expect(page.getByText('Agent Working Steps')).toBeVisible({ timeout: 10000 })
 
-    // Expand the section.
-    const toggleEl = page
-      .getByText('Agent Working Steps', { exact: true })
-      .locator('xpath=ancestor::*[@role="button"][1]')
-    await toggleEl.click()
+    // Expand the section (no-op when already expanded).
+    await expandWorkingSteps(page)
     await expect(page.getByText('Initial LLM reasoning call')).toBeVisible({ timeout: 5000 })
 
     // Collapse by clicking again
-    const hideToggleEl = page
-      .getByText('Agent Working Steps', { exact: true })
-      .locator('xpath=ancestor::*[@role="button"][1]')
-    await hideToggleEl.click()
+    await workingStepsToggle(page).click()
+    await expect(workingStepsToggle(page)).toHaveAttribute('aria-expanded', 'false')
+    await expect(page.getByText('Initial LLM reasoning call')).not.toBeVisible({ timeout: 5000 })
     await expect(page.getByText('Agent Working Steps')).toBeVisible({ timeout: 5000 })
   })
 
@@ -272,22 +292,19 @@ test.describe('Agent Log Viewer', () => {
 
     await expect(page.getByText('Agent Working Steps')).toBeVisible({ timeout: 10000 })
 
-    // First expand the working steps section.
-    const toggleEl = page
-      .getByText('Agent Working Steps', { exact: true })
-      .locator('xpath=ancestor::*[@role="button"][1]')
-    await toggleEl.click()
+    // First expand the working steps section (no-op when already expanded).
+    await expandWorkingSteps(page)
 
     // Find a step that has a detail expand button (tool_call with data)
     await expect(page.getByText('Calling QueryTool with SQL query')).toBeVisible({ timeout: 5000 })
 
     // Click the expand detail button for that step
-    const expandBtn = page.locator('[aria-label="Expand detail"]').first()
+    const expandBtn = page.locator('[aria-label="Expand detail"]:visible').first()
     await expandBtn.click()
 
     // After clicking, the Tooltip title changes from 'Expand detail' to 'Collapse detail'
     // so the button's aria-label changes too — check for the collapse button being visible
-    const collapseBtn = page.locator('[aria-label="Collapse detail"]').first()
+    const collapseBtn = page.locator('[aria-label="Collapse detail"]:visible').first()
     await expect(collapseBtn).toBeVisible({ timeout: 5000 })
   })
 
@@ -298,25 +315,22 @@ test.describe('Agent Log Viewer', () => {
 
     await expect(page.getByText('Agent Working Steps')).toBeVisible({ timeout: 10000 })
 
-    // Expand working steps section
-    await page
-      .getByText('Agent Working Steps', { exact: true })
-      .locator('xpath=ancestor::*[@role="button"][1]')
-      .click()
+    // Expand working steps section (no-op when already expanded)
+    await expandWorkingSteps(page)
 
     await expect(page.getByText('Calling QueryTool with SQL query')).toBeVisible({ timeout: 5000 })
 
     // Expand detail
-    const expandBtn = page.locator('[aria-label="Expand detail"]').first()
+    const expandBtn = page.locator('[aria-label="Expand detail"]:visible').first()
     await expandBtn.click()
     // After expand, aria-label changes to 'Collapse detail'
-    const collapseBtn = page.locator('[aria-label="Collapse detail"]').first()
+    const collapseBtn = page.locator('[aria-label="Collapse detail"]:visible').first()
     await expect(collapseBtn).toBeVisible({ timeout: 5000 })
 
     // Collapse detail — click the collapse button
     await collapseBtn.click({ force: true })
     // After collapse, the expand button appears again
-    await expect(page.locator('[aria-label="Expand detail"]').first()).toBeVisible({ timeout: 5000 })
+    await expect(page.locator('[aria-label="Expand detail"]:visible').first()).toBeVisible({ timeout: 5000 })
   })
 
   test('Toggle to raw mode hides friendly panels', async ({ page }) => {
@@ -326,9 +340,9 @@ test.describe('Agent Log Viewer', () => {
 
     await expect(page.getByText('Execution Summary')).toBeVisible({ timeout: 10000 })
 
-    // Click the "Raw Output" label text (inside FormControlLabel) to toggle the switch
-    // MUI Switch inputProps aria-label is on the hidden input — click the visible label instead
-    await page.getByText('Raw Output', { exact: true }).click()
+    // Flip the Friendly/Raw switch (aria-label on the hidden input).
+    await setRawMode(page, true)
+    await expect(rawModeSwitch(page)).toBeChecked()
 
     // Friendly panels should disappear
     await expect(page.getByText('Execution Summary')).not.toBeVisible({ timeout: 5000 })
@@ -342,8 +356,8 @@ test.describe('Agent Log Viewer', () => {
 
     await expect(page.getByText('Execution Log')).toBeVisible({ timeout: 10000 })
 
-    // Click the "Raw Output" label text to switch to raw mode
-    await page.getByText('Raw Output', { exact: true }).click()
+    // Flip the Friendly/Raw switch to raw mode
+    await setRawMode(page, true)
 
     // Raw log pre block should appear
     const rawBlock = page.locator('pre[aria-label="Raw execution log output"]')
@@ -361,8 +375,8 @@ test.describe('Agent Log Viewer', () => {
 
     await expect(page.getByText('Execution Log')).toBeVisible({ timeout: 10000 })
 
-    // Click the "Raw Output" label text to switch to raw mode
-    await page.getByText('Raw Output', { exact: true }).click()
+    // Flip the Friendly/Raw switch to raw mode
+    await setRawMode(page, true)
 
     // Copy button should be visible in raw mode
     const copyBtn = page.locator('[aria-label="Copy Raw Log"]')
@@ -376,12 +390,12 @@ test.describe('Agent Log Viewer', () => {
 
     await expect(page.getByText('Execution Summary')).toBeVisible({ timeout: 10000 })
 
-    // Click "Raw Output" label to switch to raw mode
-    await page.getByText('Raw Output', { exact: true }).click()
+    // Flip to raw mode
+    await setRawMode(page, true)
     await expect(page.getByText('Execution Summary')).not.toBeVisible({ timeout: 5000 })
 
-    // Click "Raw Output" label again to switch back to friendly mode
-    await page.getByText('Raw Output', { exact: true }).click()
+    // Flip back to friendly mode
+    await setRawMode(page, false)
     await expect(page.getByText('Execution Summary')).toBeVisible({ timeout: 5000 })
     await expect(page.getByText('Agent Working Steps')).toBeVisible({ timeout: 5000 })
   })

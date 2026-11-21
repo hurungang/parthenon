@@ -1,0 +1,1499 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Parthenon UX Prototype — Hub</title>
+<link rel="stylesheet" href="shared/styles.css">
+</head>
+<body data-page="index" data-default-view="dashboard">
+
+<!-- ═══ LOGIN PAGE (shown on demand from the prototype map) ═══ -->
+<div id="login-page" class="login-page" style="display:none">
+  <div class="login-card">
+    <div class="login-header">
+      <div class="logo-icon">⚡</div>
+      <h1>Parthenon</h1>
+      <p style="font-size:13px;color:var(--text-secondary)">Enterprise AI Harness Platform</p>
+    </div>
+
+    <!-- Loading -->
+    <div id="login-state-loading" class="login-state active">
+      <div class="login-body" style="text-align:center;padding:32px 0">
+        <div class="spinner"></div>
+        <p class="text-secondary">Discovering identity providers...</p>
+      </div>
+    </div>
+    <!-- Find your workspace (multi-tenant-support): unified workspace-address entry for EVERYONE —
+         customers and the platform itself (workspace root). Break-glass super-admin entry lives ONLY here
+         and at the root workspace card — never on customer workspace cards. -->
+    <div id="login-state-findws" class="login-state">
+      <div class="login-body">
+        <div class="form-group">
+          <label>Workspace address</label>
+          <div style="display:flex;align-items:stretch">
+            <span style="padding:8px 10px;background:#F1F5F9;border:1px solid var(--border);border-right:none;border-radius:var(--radius-sm) 0 0 var(--radius-sm);font-family:monospace;font-size:13px;color:var(--text-secondary);white-space:nowrap">https://</span>
+            <input class="form-control" id="mt-find-slug" placeholder="acme" style="border-radius:0;font-family:monospace" oninput="mtFindClear()" onkeydown="if(event.key==='Enter')mtFindSubmit()">
+            <span style="padding:8px 10px;background:#F1F5F9;border:1px solid var(--border);border-left:none;border-radius:0 var(--radius-sm) var(--radius-sm) 0;font-family:monospace;font-size:13px;color:var(--text-secondary);white-space:nowrap">.parthenon.app</span>
+          </div>
+          <div id="mt-find-err" class="form-error" style="display:none">No workspace found at this address.</div>
+        </div>
+        <label style="display:flex;align-items:center;gap:8px;font-size:13px;margin:2px 0 12px;cursor:pointer">
+          <input type="checkbox" id="mt-find-remember" checked style="accent-color:var(--primary)"> Remember this workspace
+        </label>
+        <button class="btn btn-primary btn-block" onclick="mtFindSubmit()">Continue</button>
+        <div class="login-divider"><span>demo shortcuts</span></div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px">
+          <button class="btn btn-sm btn-secondary" onclick="mtQuick('acme')">acme (customer)</button>
+          <button class="btn btn-sm btn-secondary" onclick="mtQuick('globex')">globex (no own IdP)</button>
+          <button class="btn btn-sm btn-secondary" onclick="mtQuick('root')">root (platform)</button>
+        </div>
+        <!-- Break-glass: rendered only when no workspace is bound (tenancy-off root) or at the root workspace -->
+        <button class="btn btn-ghost btn-block" id="mt-breakglass-link" onclick="mtToggleBreakglass()" style="font-size:12.5px;color:var(--text-secondary);padding:8px">Super-admin sign-in (break-glass) ▾</button>
+        <div id="mt-breakglass-form" style="display:none;margin-top:10px">
+          <div class="form-group"><label>Username</label><input type="text" class="form-control" id="mt-sa-user" value="admin"></div>
+          <div class="form-group"><label>Password</label><input type="password" class="form-control" id="mt-sa-pass" value="admin123"></div>
+          <button class="btn btn-primary btn-block" onclick="oidcLoginAsSuperAdmin()">Sign in to the root workspace</button>
+        </div>
+      </div>
+    </div>
+    <!-- Setup Wizard -->
+    <div id="login-state-setup" class="login-state">
+      <div class="login-body">
+        <div class="alert alert-warning">
+          <div><strong style="display:block;margin-bottom:2px">Application Not Accessible</strong>No identity provider configured and super admin is not enabled.</div>
+        </div>
+        <button class="btn btn-primary btn-block" onclick="oidcGoToSetup()">Go to Setup Wizard</button>
+      </div>
+    </div>
+    <!-- Super Admin Only -->
+    <div id="login-state-saonly" class="login-state">
+      <div class="login-body">
+        <div class="alert alert-info">
+          <div><strong style="display:block;margin-bottom:2px">Super Admin Required</strong>Log in as Super Admin to configure OIDC authentication.</div>
+        </div>
+        <div class="form-group"><label>Username</label><input type="text" class="form-control" id="oidc-sa-user" placeholder="Enter username" value="admin"></div>
+        <div class="form-group"><label>Password</label><input type="password" class="form-control" id="oidc-sa-pass" placeholder="Enter password" value="admin123"></div>
+        <div id="oidc-login-error-saonly" class="form-error">Invalid credentials.</div>
+        <button class="btn btn-primary btn-block" onclick="oidcLoginAsSuperAdmin()" style="margin-top:8px">Sign In as Super Admin</button>
+      </div>
+    </div>
+    <!-- Both -->
+    <div id="login-state-both" class="login-state">
+      <div class="login-body">
+        <p id="mt-ws-line" style="font-size:12px;color:var(--text-secondary);margin-bottom:10px"></p>
+        <button class="oidc-login-btn" onclick="oidcSimulateLogin()"><span class="oidc-icon">🔐</span>Login with Identity Provider</button>
+        <div class="login-divider"><span>or</span></div>
+        <button class="btn btn-ghost btn-block" id="oidc-sa-btn-both" onclick="oidcShowSAForm()" style="font-size:13px;color:var(--text-secondary);padding:8px">Super-admin sign-in (break-glass)</button>
+        <div id="oidc-sa-inline-form" style="display:none;margin-top:12px">
+          <div class="form-group"><label>Username</label><input type="text" class="form-control" id="oidc-sa-user-both" placeholder="Username" value="admin"></div>
+          <div class="form-group"><label>Password</label><input type="password" class="form-control" id="oidc-sa-pass-both" placeholder="Password" value="admin123"></div>
+          <div id="oidc-login-error-both" class="form-error">Invalid credentials.</div>
+          <button class="btn btn-primary btn-block" onclick="oidcLoginAsSuperAdmin()" style="margin-top:4px">Sign In as Super Admin</button>
+        </div>
+      </div>
+    </div>
+    <!-- OIDC Only -->
+    <div id="login-state-oidconly" class="login-state">
+      <div class="login-body">
+        <button class="oidc-login-btn" onclick="oidcSimulateLogin()"><span class="oidc-icon">🔐</span>Login with Identity Provider</button>
+      </div>
+    </div>
+    <div class="login-footer"><p>Secure authentication via OIDC/OAuth2 &bull; Parthenon v2.0</p></div>
+  </div>
+  <!-- Demo: Login State Switcher -->
+  <div class="login-state-demo" id="oidc-demo-switcher">
+    <div class="lsd-title">Demo: Login State</div>
+    <button style="background:#F1F5F9;color:#475569" onclick="oidcSetState('loading')">Loading</button>
+    <button style="background:#EDE9FE;color:#6D28D9" onclick="oidcSetState('findws')">Find Workspace</button>
+    <button style="background:#FCE7F3;color:#9D174D" onclick="tpOpen()" title="TenantSessionGate → TenantPicker: multi-org user whose token is not yet tenant-bound">Tenant Picker</button>
+    <button style="background:#FEF3C7;color:#92400E" onclick="oidcSetState('setup')">Setup</button>
+    <button style="background:#DBEAFE;color:#1D4ED8" onclick="oidcSetState('saonly')">SA Only</button>
+    <button style="background:#DCFCE7;color:#15803D" onclick="oidcSetState('both')">Both</button>
+    <button style="background:#FEE2E2;color:#B91C1C" onclick="oidcSetState('oidconly')">OIDC Only</button>
+  </div>
+</div>
+
+<div class="app-shell">
+
+<!-- ═══════════════════════════════ SIDEBAR ═══════════════════════════════ -->
+<nav class="sidebar" aria-label="Primary navigation">
+  <div class="sidebar-logo">
+    <h1>⚡ Parthenon</h1>
+    <small>Enterprise AI Harness</small>
+  </div>
+
+  <!-- Dashboard -->
+  <a class="nav-item" data-view="dashboard" href="#view-dashboard"><span class="nav-icon">🏠</span>Dashboard</a>
+
+  <!-- Project Showcase -->
+  <a class="nav-item" data-view="project-showcase" href="#view-project-showcase"><span class="nav-icon">🌐</span>Project Showcase</a>
+
+  <div class="nav-parent-group" id="nav-agents" data-group="agents">
+    <a class="nav-parent-group-label" href="modules/agents.html#view-agent-roles" role="button" aria-expanded="true">
+      <span>🤖 Agents</span>
+      <span class="toggle-icon" aria-hidden="true">▼</span>
+    </a>
+    <div class="nav-children">
+      <a class="nav-item sub-item" data-view="agent-roles" data-group="agents" href="modules/agents.html#view-agent-roles"><span class="nav-icon">👤</span>Agent Roles</a>
+      <a class="nav-item sub-item" data-view="agent-identities" data-group="agents" href="modules/agents.html#view-agent-identities"><span class="nav-icon">🆔</span>Agent Identities</a>
+      <a class="nav-item sub-item" data-view="agents" data-group="agents" href="modules/agents.html#view-agents"><span class="nav-icon">🤖</span>Agent Types</a>
+      <a class="nav-item sub-item" data-view="agent-management-panel" data-group="agents" href="modules/agent-panel.html#view-agent-management-panel"><span class="nav-icon">🎛️</span>Agent Management Panel</a>
+      <a class="nav-item sub-item" data-view="agent-executions" data-group="agents" href="modules/executions.html#view-agent-executions"><span class="nav-icon">▶️</span>Agent Executions</a>
+      <a class="nav-item sub-item" data-view="runtime-monitor" data-group="agents" href="modules/executions.html#view-runtime-monitor"><span class="nav-icon">🕸️</span>Agent Runtime Monitor</a>
+      <a class="nav-item sub-item" data-view="agent-trails" data-group="agents" href="modules/executions.html#view-agent-trails"><span class="nav-icon">📋</span>Agent Trails</a>
+      <a class="nav-item sub-item" data-view="skills" data-group="agents" href="modules/skills-sops.html#view-skills"><span class="nav-icon">🔧</span>Skills</a>
+      <a class="nav-item sub-item" data-view="sops" data-group="agents" href="modules/skills-sops.html#view-sops"><span class="nav-icon">📋</span>SOPs</a>
+      <a class="nav-item sub-item" data-view="schedules" data-group="agents" href="modules/schedules.html#view-schedules"><span class="nav-icon">📅</span>Schedules</a>
+      <a class="nav-item sub-item" data-view="chat" data-group="agents" href="modules/chat.html#view-chat"><span class="nav-icon">💬</span>Chat Sessions</a>
+      <a class="nav-item sub-item" data-view="conversational-intervention" data-group="agents" href="modules/chat.html#view-conversational-intervention"><span class="nav-icon">💬</span>Conversational Intervention</a>
+      <a class="nav-item sub-item" data-view="intervene-requests" data-group="agents" href="modules/chat.html#view-intervene-requests"><span class="nav-icon">🛑</span>Intervene Requests</a>
+      <a class="nav-item sub-item" data-view="data-types" data-group="agents" href="modules/data-results.html#view-data-types"><span class="nav-icon">📐</span>Data Types</a>
+      <a class="nav-item sub-item" data-view="agent-outputs" data-group="agents" href="modules/data-results.html#view-agent-outputs"><span class="nav-icon">📤</span>Agent Outputs</a>
+      <a class="nav-item sub-item" data-view="agent-logs" data-group="agents" href="modules/executions.html#view-agent-logs"><span class="nav-icon">🧾</span>Agent Logs</a>
+    </div>
+  </div>
+
+  <div class="nav-parent-group" id="nav-results" data-group="results">
+    <a class="nav-parent-group-label" href="modules/data-results.html#view-results" role="button" aria-expanded="true">
+      <span>📊 Results</span>
+      <span class="toggle-icon" aria-hidden="true">▼</span>
+    </a>
+    <div class="nav-children">
+      <a class="nav-item sub-item" data-view="results" data-group="results" href="modules/data-results.html#view-results"><span class="nav-icon">📊</span>Result Repository</a>
+    </div>
+  </div>
+
+  <div class="nav-parent-group locked-open" id="nav-integrations" data-group="integrations">
+    <a class="nav-parent-group-label" href="modules/integrations.html#view-mcp-hub" role="button" aria-expanded="true">
+      <span>🌐 Integrations</span>
+      <span class="toggle-icon" aria-hidden="true">▼</span>
+    </a>
+    <div class="nav-children">
+      <a class="nav-item sub-item" data-view="mcp-hub" data-group="integrations" href="modules/integrations.html#view-mcp-hub"><span class="nav-icon">🔌</span>MCP Hub</a>
+      <a class="nav-item sub-item" data-view="notifications" data-group="integrations" href="modules/integrations.html#view-notifications"><span class="nav-icon">🔔</span>Notification Integration</a>
+      <a class="nav-item sub-item" data-view="api-keys" data-group="integrations" href="modules/integrations.html#view-api-keys"><span class="nav-icon">🔑</span>API Keys</a>
+      <a class="nav-item sub-item" data-view="agent-clients" data-group="integrations" href="modules/integrations.html#view-agent-clients"><span class="nav-icon">🤝</span>Agent Client</a>
+      <a class="nav-item sub-item" data-view="gateway" data-group="integrations" href="modules/integrations.html#view-gateway"><span class="nav-icon">🛰️</span>Agent Gateway</a>
+    </div>
+  </div>
+
+  <div class="nav-parent-group" id="nav-system" data-group="system">
+    <a class="nav-parent-group-label" href="modules/system.html#view-observability" role="button" aria-expanded="true">
+      <span>⚙️ System</span>
+      <span class="toggle-icon" aria-hidden="true">▼</span>
+    </a>
+    <div class="nav-children">
+      <a class="nav-item sub-item" data-view="observability" data-group="system" href="modules/system.html#view-observability"><span class="nav-icon">📊</span>Observability</a>
+      <a class="nav-item sub-item" data-view="permissions" data-group="system" href="modules/system.html#view-permissions"><span class="nav-icon">🔐</span>Permissions</a>
+      <a class="nav-item sub-item" data-view="system-config" data-group="system" href="modules/system.html#view-system-config"><span class="nav-icon">⚙️</span>System Config</a>
+      <a class="nav-item sub-item" data-view="model-configs" data-group="system" href="modules/system.html#view-model-configs"><span class="nav-icon">🧩</span>Model Configs</a>
+      <a class="nav-item sub-item" data-view="decision-tools" data-group="system" href="modules/decision.html#view-decision-tools"><span class="nav-icon">⚖️</span>Decision Tools</a>
+      <a class="nav-item sub-item" data-view="sysone-providers" data-group="system" href="modules/decision.html#view-sysone-providers"><span class="nav-icon">🧠</span>Decision Model Providers</a>
+      <a class="nav-item sub-item" data-view="security-audit" data-group="system" href="modules/system.html#view-security-audit"><span class="nav-icon">🛡️</span>Security Audit</a>
+    </div>
+  </div>
+
+  <div class="nav-parent-group" id="nav-tenant-admin" data-group="tenant-admin">
+    <a class="nav-parent-group-label" href="modules/tenancy.html#view-tenant-settings" role="button" aria-expanded="true">
+      <span>🏢 Tenant Admin</span>
+      <span class="toggle-icon" aria-hidden="true">▼</span>
+    </a>
+    <div class="nav-children">
+      <a class="nav-item sub-item" data-view="tenant-settings" data-group="tenant-admin" href="modules/tenancy.html#view-tenant-settings"><span class="nav-icon">⚙️</span>Tenant Settings</a>
+      <a class="nav-item sub-item" data-view="tenant-members" data-group="tenant-admin" href="modules/tenancy.html#view-tenant-members"><span class="nav-icon">👥</span>Members</a>
+      <a class="nav-item sub-item" data-view="tenant-identity-providers" data-group="tenant-admin" href="modules/tenancy.html#view-tenant-identity-providers"><span class="nav-icon">🔑</span>Identity Providers</a>
+    </div>
+  </div>
+
+  <div class="nav-parent-group" id="nav-platform" data-group="platform" style="display:none">
+    <a class="nav-parent-group-label" href="modules/tenancy.html#view-platform-settings" role="button" aria-expanded="true">
+      <span>🛡️ Platform</span>
+      <span class="toggle-icon" aria-hidden="true">▼</span>
+    </a>
+    <div class="nav-children">
+      <a class="nav-item sub-item" data-view="platform-settings" data-group="platform" href="modules/tenancy.html#view-platform-settings"><span class="nav-icon">⚙️</span>Platform Settings</a>
+      <a class="nav-item sub-item" data-view="platform-tenants" data-group="platform" href="modules/tenancy.html#view-platform-tenants"><span class="nav-icon">🏢</span>Tenants</a>
+      <a class="nav-item sub-item" data-view="platform-audit" data-group="platform" href="modules/tenancy.html#view-platform-audit"><span class="nav-icon">🛡️</span>Platform Security Audit</a>
+    </div>
+  </div>
+
+</nav>
+<!-- ═══════════════════════════════ MAIN WRAPPER ═══════════════════════════════ -->
+<div class="main-wrapper">
+  <!-- TOP BAR -->
+  <div class="topbar">
+    <div class="topbar-title" id="topbar-title">Dashboard</div>
+    <div class="topbar-actions">
+      <span class="chip chip-yellow" id="oidc-sa-indicator" style="display:none">🔑 Super Admin</span>
+      <span class="chip chip-blue" id="tenant-ctx-chip" style="display:none">🏢 <span id="tenant-ctx-name"></span></span>
+      <button class="btn-icon" title="Notifications">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg>
+        <span class="badge">3</span>
+      </button>
+      <div class="avatar" title="Alex Harper — Admin">AH</div>
+    </div>
+  </div>
+
+  <!-- MAIN CONTENT -->
+  <div class="main-content">
+
+<div class="hub-map" id="hub-map">
+  <details>
+    <summary><strong>🧭 Prototype map</strong> — this prototype is split into one page per module area. Every screen below opens straight from disk.</summary>
+    <div class="hub-map-grid">
+      <div class="hub-map-row"><a class="hub-map-page" href="index.html">index.html</a><div class="hub-map-screens"><a href="index.html#view-dashboard">dashboard</a>, <a href="index.html#view-project-showcase">project-showcase</a>, <a href="index.html#view-setup-wizard">setup-wizard</a></div></div>
+      <div class="hub-map-row"><a class="hub-map-page" href="modules/agents.html">agents.html</a><div class="hub-map-screens"><a href="modules/agents.html#view-agents">agents</a>, <a href="modules/agents.html#view-agent-roles">agent-roles</a>, <a href="modules/agents.html#view-agent-identities">agent-identities</a></div></div>
+      <div class="hub-map-row"><a class="hub-map-page" href="modules/agent-panel.html">agent-panel.html</a><div class="hub-map-screens"><a href="modules/agent-panel.html#view-agent-management-panel">agent-management-panel</a></div></div>
+      <div class="hub-map-row"><a class="hub-map-page" href="modules/executions.html">executions.html</a><div class="hub-map-screens"><a href="modules/executions.html#view-agent-executions">agent-executions</a>, <a href="modules/executions.html#view-runtime-monitor">runtime-monitor</a>, <a href="modules/executions.html#view-agent-trails">agent-trails</a>, <a href="modules/executions.html#view-agent-logs">agent-logs</a></div></div>
+      <div class="hub-map-row"><a class="hub-map-page" href="modules/skills-sops.html">skills-sops.html</a><div class="hub-map-screens"><a href="modules/skills-sops.html#view-skills">skills</a>, <a href="modules/skills-sops.html#view-sops">sops</a></div></div>
+      <div class="hub-map-row"><a class="hub-map-page" href="modules/data-results.html">data-results.html</a><div class="hub-map-screens"><a href="modules/data-results.html#view-data-types">data-types</a>, <a href="modules/data-results.html#view-agent-outputs">agent-outputs</a>, <a href="modules/data-results.html#view-results">results</a></div></div>
+      <div class="hub-map-row"><a class="hub-map-page" href="modules/schedules.html">schedules.html</a><div class="hub-map-screens"><a href="modules/schedules.html#view-schedules">schedules</a></div></div>
+      <div class="hub-map-row"><a class="hub-map-page" href="modules/integrations.html">integrations.html</a><div class="hub-map-screens"><a href="modules/integrations.html#view-mcp-hub">mcp-hub</a>, <a href="modules/integrations.html#view-notifications">notifications</a>, <a href="modules/integrations.html#view-api-keys">api-keys</a>, <a href="modules/integrations.html#view-agent-clients">agent-clients</a>, <a href="modules/integrations.html#view-gateway">gateway</a></div></div>
+      <div class="hub-map-row"><a class="hub-map-page" href="modules/system.html">system.html</a><div class="hub-map-screens"><a href="modules/system.html#view-system-config">system-config</a>, <a href="modules/system.html#view-model-configs">model-configs</a>, <a href="modules/system.html#view-permissions">permissions</a>, <a href="modules/system.html#view-observability">observability</a>, <a href="modules/system.html#view-security-audit">security-audit</a></div></div>
+      <div class="hub-map-row"><a class="hub-map-page" href="modules/decision.html">decision.html</a><div class="hub-map-screens"><a href="modules/decision.html#view-decision-tools">decision-tools</a>, <a href="modules/decision.html#view-sysone-providers">sysone-providers</a></div></div>
+      <div class="hub-map-row"><a class="hub-map-page" href="modules/tenancy.html">tenancy.html</a><div class="hub-map-screens"><a href="modules/tenancy.html#view-tenant-settings">tenant-settings</a>, <a href="modules/tenancy.html#view-tenant-members">tenant-members</a>, <a href="modules/tenancy.html#view-tenant-identity-providers">tenant-identity-providers</a>, <a href="modules/tenancy.html#view-platform-settings">platform-settings</a>, <a href="modules/tenancy.html#view-platform-tenants">platform-tenants</a>, <a href="modules/tenancy.html#view-platform-audit">platform-audit</a></div></div>
+      <div class="hub-map-row"><a class="hub-map-page" href="modules/chat.html">chat.html</a><div class="hub-map-screens"><a href="modules/chat.html#view-chat">chat</a>, <a href="modules/chat.html#view-conversational-intervention">conversational-intervention</a>, <a href="modules/chat.html#view-intervene-requests">intervene-requests</a></div></div>
+      <div class="hub-map-row"><a class="hub-map-page" href="#" onclick="protoShowLogin();return false">login / auth states</a><div class="hub-map-screens">workspace picker, IdP sign-in, break-glass super admin, setup wizard, tenant picker</div></div>
+    </div>
+    <div class="hub-map-note">Prototype-only navigation. The sidebar above mirrors the shipped product; this map exists so every page (and every screen that is normally reached from inside another screen) can be opened directly.</div>
+  </details>
+</div>
+
+<!-- ═══════════════════════════════ VIEW: DASHBOARD (implement-dashboard-metrics) ═══════════════════════════════ -->
+<div id="view-dashboard" class="view">
+  <div class="view-header">
+    <div><h2>Dashboard</h2><div class="view-desc">Platform overview and quick actions</div></div>
+  </div>
+
+  <!-- Change Banner -->
+  <div class="change-banner">
+    <div class="cb-icon">i</div>
+    <div class="cb-body">
+      <h4>Dashboard Operational Metrics <span class="cb-tag">implement-dashboard-metrics</span></h4>
+      <p>Real-time operational overview with 12 metric cards — 8 snapshot counts and 4 time-sensitive metrics with date-range filtering. Permission-aware visibility with loading, zero, and access-denied states. Identity provider status retained in secondary section.</p>
+    </div>
+  </div>
+
+  <!-- Error Banner -->
+  <div class="dash-alert dash-alert-error" id="dash-error">
+    <span style="flex-shrink:0">⚠️</span>
+    <div style="flex:1">
+      <strong>Failed to load dashboard data</strong>
+      <button style="margin-left:12px;font-size:12px;font-weight:600;padding:3px 10px;border:1px solid #F44336;border-radius:4px;background:transparent;color:#991B1B;cursor:pointer" onclick="dashRetry()">Retry</button>
+    </div>
+  </div>
+
+  <!-- ═══════════ SECTION 1: OPERATIONAL METRICS (8 Cards) ═══════════ -->
+  <div class="section-title">Operational Metrics</div>
+
+  <div class="dash-metrics-grid" id="dash-snapshot-grid">
+    <!-- 1. Agent Types (subBreakdowns: active/running chips) -->
+    <div class="metric-card dash-card clickable" id="dash-card-agent-types" data-dash-perm="agent_types" onclick="dashClick('Agent Types')">
+      <div class="dash-lock-overlay"><span class="lock-icon">🔒</span><span class="denied-text">Access Denied</span></div>
+      <div class="dash-card-header">
+        <div class="dash-card-icon blue">🤖</div>
+        <div class="dash-card-label">Agent Types</div>
+      </div>
+      <div class="dash-card-value">12</div>
+      <div class="dash-card-sub">
+        <span class="sub-breakdown-d" style="background:#DCFCE7;color:#15803D">8 active</span>
+        <span class="sub-breakdown-d" style="background:#DBEAFE;color:#1D4ED8">3 running</span>
+      </div>
+    </div>
+
+    <!-- 2. Pending Interventions (subLabel + navigateTo) -->
+    <div class="metric-card dash-card clickable" id="dash-card-pending-interventions" data-dash-perm="interventions" onclick="dashClick('Pending Interventions','/agents/intervene')">
+      <div class="dash-lock-overlay"><span class="lock-icon">🔒</span><span class="denied-text">Access Denied</span></div>
+      <div class="dash-card-header">
+        <div class="dash-card-icon orange">🛑</div>
+        <div class="dash-card-label">Pending Interventions</div>
+      </div>
+      <div class="dash-card-value">5</div>
+      <div class="dash-card-sub"><span class="sub-label-d">Pending</span></div>
+    </div>
+
+    <!-- 3. Model Configurations (model_counts as value, vendors as subLabel + navigateTo) -->
+    <div class="metric-card dash-card clickable" id="dash-card-model-configs" data-dash-perm="model_configs" onclick="dashClick('Model Configurations','/agents/model-configs')">
+      <div class="dash-lock-overlay"><span class="lock-icon">🔒</span><span class="denied-text">Access Denied</span></div>
+      <div class="dash-card-header">
+        <div class="dash-card-icon purple">⚙️</div>
+        <div class="dash-card-label">Model Configurations</div>
+      </div>
+      <div class="dash-card-value">12</div>
+      <div class="dash-card-sub"><span class="sub-label-d">7 Vendors</span></div>
+    </div>
+
+    <!-- 4. Active Schedules (subLabel + navigateTo) -->
+    <div class="metric-card dash-card clickable" id="dash-card-active-schedules" data-dash-perm="schedules" onclick="dashClick('Active Schedules','/schedules')">
+      <div class="dash-lock-overlay"><span class="lock-icon">🔒</span><span class="denied-text">Access Denied</span></div>
+      <div class="dash-card-header">
+        <div class="dash-card-icon green">📅</div>
+        <div class="dash-card-label">Active Schedules</div>
+      </div>
+      <div class="dash-card-value">14</div>
+      <div class="dash-card-sub"><span class="sub-label-d">Active</span></div>
+    </div>
+
+    <!-- 5. Agent Identities (subLabel) -->
+    <div class="metric-card dash-card" id="dash-card-agent-identities" data-dash-perm="identities" onclick="dashClick('Agent Identities')">
+      <div class="dash-lock-overlay"><span class="lock-icon">🔒</span><span class="denied-text">Access Denied</span></div>
+      <div class="dash-card-header">
+        <div class="dash-card-icon teal">🆔</div>
+        <div class="dash-card-label">Agent Identities</div>
+      </div>
+      <div class="dash-card-value">23</div>
+      <div class="dash-card-sub"><span class="sub-label-d">Provisioned</span></div>
+    </div>
+
+    <!-- 6. Agent Roles (subLabel) -->
+    <div class="metric-card dash-card" id="dash-card-agent-roles" data-dash-perm="roles" onclick="dashClick('Agent Roles')">
+      <div class="dash-lock-overlay"><span class="lock-icon">🔒</span><span class="denied-text">Access Denied</span></div>
+      <div class="dash-card-header">
+        <div class="dash-card-icon amber">👤</div>
+        <div class="dash-card-label">Agent Roles</div>
+      </div>
+      <div class="dash-card-value">6</div>
+      <div class="dash-card-sub"><span class="sub-label-d">Defined</span></div>
+    </div>
+
+    <!-- 7. MCP Servers (subLabel + navigateTo) -->
+    <div class="metric-card dash-card clickable" id="dash-card-mcp-servers" data-dash-perm="mcp_servers" onclick="dashClick('MCP Servers','/mcp')">
+      <div class="dash-lock-overlay"><span class="lock-icon">🔒</span><span class="denied-text">Access Denied</span></div>
+      <div class="dash-card-header">
+        <div class="dash-card-icon red">🔌</div>
+        <div class="dash-card-label">MCP Servers</div>
+      </div>
+      <div class="dash-card-value">9</div>
+      <div class="dash-card-sub"><span class="sub-label-d">Registered</span></div>
+    </div>
+
+    <!-- 8. Permission Requests (subLabel + navigateTo) -->
+    <div class="metric-card dash-card clickable" id="dash-card-permission-requests" data-dash-perm="permission_requests" onclick="dashClick('Permission Requests','/permissions/access-requests')">
+      <div class="dash-lock-overlay"><span class="lock-icon">🔒</span><span class="denied-text">Access Denied</span></div>
+      <div class="dash-card-header">
+        <div class="dash-card-icon slate">🔑</div>
+        <div class="dash-card-label">Permission Requests</div>
+      </div>
+      <div class="dash-card-value">3</div>
+      <div class="dash-card-sub"><span class="sub-label-d">Pending</span></div>
+    </div>
+  </div>
+
+  <!-- ═══════════ SECTION 2: TIME-SENSITIVE METRICS (4 Cards) ═══════════ -->
+  <div class="section-title" style="margin-top:32px">Time-Sensitive Metrics</div>
+
+  <!-- Date Range Picker (draft-based with Go button) -->
+  <div class="date-range-wrap-d">
+    <div class="date-range-controls-d">
+      <label style="font-size:11px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.4px">From</label>
+      <input type="datetime-local" class="date-datetime-input-d" id="dash-draft-start" onchange="dashOnDraftChange()">
+      <span class="date-range-arrow-d">&mdash;</span>
+      <label style="font-size:11px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.4px">To</label>
+      <input type="datetime-local" class="date-datetime-input-d" id="dash-draft-end" onchange="dashOnDraftChange()">
+      <button class="go-btn-d" id="dash-go-btn" onclick="dashHandleGo()">▶ Go</button>
+      <div class="preset-btns-d" style="margin-left:4px">
+        <button class="preset-btn-d" onclick="dashPreset('hour')" id="dash-preset-hour">Last Hour</button>
+        <button class="preset-btn-d active" onclick="dashPreset('day')" id="dash-preset-day">Last 24h</button>
+        <button class="preset-btn-d" onclick="dashPreset('week')" id="dash-preset-week">Last 7d</button>
+      </div>
+    </div>
+    <div class="date-range-right-d">
+      <span class="date-range-label-d" id="dash-range-label"></span>
+      <button class="btn btn-secondary btn-sm" onclick="dashRefresh()">↻ Refresh</button>
+    </div>
+  </div>
+
+  <div class="dash-metrics-grid" id="dash-time-grid">
+    <!-- Guardrail Breach Events (single-value) -->
+    <div class="metric-card dash-card time-sensitive" id="dash-card-guardrail-breaches" data-dash-perm="guardrail_breaches" style="border-left-color:#B91C1C">
+      <div class="dash-lock-overlay"><span class="lock-icon">🔒</span><span class="denied-text">Access Denied</span></div>
+      <div class="dash-card-header">
+        <div class="dash-card-icon red">🚨</div>
+        <div class="dash-card-label">Guardrail Breach Events</div>
+      </div>
+      <div class="dash-card-value" id="dash-guardrail-value">3</div>
+    </div>
+
+    <!-- Agent Executions (dual: completed/failed) -->
+    <div class="metric-card dash-card time-sensitive" id="dash-card-agent-executions" data-dash-perm="executions" style="border-left-color:#1D4ED8">
+      <div class="dash-lock-overlay"><span class="lock-icon">🔒</span><span class="denied-text">Access Denied</span></div>
+      <div class="dash-card-header">
+        <div class="dash-card-icon blue">▶️</div>
+        <div class="dash-card-label">Agent Executions</div>
+      </div>
+      <div class="dual-value-d" id="dash-executions-value">
+        <span class="val-completed">42</span>
+        <span class="val-separator">/</span>
+        <span class="val-failed">3</span>
+      </div>
+      <div class="dash-card-sub" style="margin-top:6px"><span class="text-sm text-secondary">completed / failed</span></div>
+    </div>
+
+    <!-- Model Usage Posture Breaches (single-value) -->
+    <div class="metric-card dash-card time-sensitive" id="dash-card-posture-breaches" data-dash-perm="posture_breaches" style="border-left-color:#6D28D9">
+      <div class="dash-lock-overlay"><span class="lock-icon">🔒</span><span class="denied-text">Access Denied</span></div>
+      <div class="dash-card-header">
+        <div class="dash-card-icon purple">⚠️</div>
+        <div class="dash-card-label">Model Usage Posture Breaches</div>
+      </div>
+      <div class="dash-card-value" id="dash-posture-value">1</div>
+    </div>
+
+    <!-- Notification Delivery (dual: delivered/failed) -->
+    <div class="metric-card dash-card time-sensitive" id="dash-card-notifications" data-dash-perm="notifications" style="border-left-color:#065F46">
+      <div class="dash-lock-overlay"><span class="lock-icon">🔒</span><span class="denied-text">Access Denied</span></div>
+      <div class="dash-card-header">
+        <div class="dash-card-icon teal">📧</div>
+        <div class="dash-card-label">Notification Delivery</div>
+      </div>
+      <div class="dual-value-d" id="dash-notif-value">
+        <span class="val-completed">128</span>
+        <span class="val-separator">/</span>
+        <span class="val-failed">2</span>
+      </div>
+      <div class="dash-card-sub" style="margin-top:6px"><span class="text-sm text-secondary">delivered / failed</span></div>
+    </div>
+  </div>
+
+  <!-- ═══════════ SECTION 3: IDENTITY PROVIDER STATUS ═══════════ -->
+  <div class="section-title" style="margin-top:32px">Identity Provider Status</div>
+
+  <div class="idp-grid-d">
+    <div class="idp-card-d">
+      <div class="idp-card-content-d">
+        <div class="idp-card-icon-d">🛡️</div>
+        <div class="idp-card-info-d">
+          <div class="idp-card-title-d">User Identity Provider</div>
+          <div class="idp-card-status-d">
+            <span class="status-dot dot-green"></span>
+            Connected — Keycloak (parthenon-users)
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="idp-card-d">
+      <div class="idp-card-content-d">
+        <div class="idp-card-icon-d">🤖</div>
+        <div class="idp-card-info-d">
+          <div class="idp-card-title-d">Agent Identity Provider</div>
+          <div class="idp-card-status-d">
+            <span class="status-dot dot-green"></span>
+            Connected — Keycloak (ai_agents)
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Quick Actions -->
+  <div class="card" style="margin-top:16px">
+    <div class="card-header"><h3>Quick Actions</h3></div>
+    <div class="card-body" style="display:flex;gap:12px">
+      <button class="btn btn-primary">⚙️ Configure Identity Providers</button>
+      <button class="btn btn-secondary">🔌 MCP Hub</button>
+      <button class="btn btn-secondary">📊 Observability</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════ VIEW: PROJECT SHOWCASE ═══════════════════════════════ -->
+<div id="view-project-showcase" class="view">
+  <div class="view-header">
+    <div><h2>Project Showcase</h2><div class="view-desc">Public site deployed to GitHub Pages — architecture, security, and workflow walkthroughs for evaluators and contributors.</div></div>
+    <button class="btn btn-primary" onclick="window.open('https://github.com','_blank')">Open Showcase Site ↗</button>
+  </div>
+
+  <div class="change-banner">
+    <div class="cb-icon">🌐</div>
+    <div class="cb-body">
+      <h4>GitHub Pages Project Showcase <span class="cb-tag">github-pages-project-showcase</span></h4>
+      <p>A static marketing site presenting Parthenon's enterprise AI harness capabilities to platform evaluators, prospective contributors, and executive stakeholders. Auto-deployed on every push to main via GitHub Actions. No backend required.</p>
+    </div>
+  </div>
+
+  <div class="tabs" style="margin-top:4px">
+    <div class="tab active" onclick="switchTab(this,'showcase-arch-panel')">🏗️ Architecture</div>
+    <div class="tab" onclick="switchTab(this,'showcase-security-panel')">🛡️ Security</div>
+    <div class="tab" onclick="switchTab(this,'showcase-demo-panel')">👣 Walkthroughs</div>
+  </div>
+
+  <!-- Architecture tab -->
+  <div id="showcase-arch-panel" class="tab-panel active">
+    <div class="view-desc" style="margin-bottom:18px">Four foundational design pillars presented in the showcase site's High-Level Architecture section.</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px">
+      <div class="card">
+        <div class="card-header"><h3>🔌 SOP / Skill-Driven MCP Integration</h3></div>
+        <div class="card-body">
+          <p class="text-secondary" style="font-size:13px;line-height:1.6">Skills wrap one or more MCP tool calls into a named, permissionable unit. SOPs (Standard Operating Procedures) compose multiple Skills with sequencing logic and support agent-to-agent delegation. Each MCP server is registered with a unique slug; all its tools are synced under that namespace. Permissions are granted at the tool level — agents only see the tools their assigned Skills allow.</p>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-header"><h3>🛡️ Security &amp; Permission Control</h3></div>
+        <div class="card-body">
+          <p class="text-secondary" style="font-size:13px;line-height:1.6">Agent Roles are permission sets granting access to specific SOPs and Skills. Roles resolve to a complete, deterministic set of allowed MCP tools at execution time. Agent identities are first-class OIDC principals in a dedicated agent realm, never sharing human credentials. Agents never hold identity tokens directly — tokens are injected per tool call by the Communication Hub.</p>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-header"><h3>⚙️ Three-Service Isolation</h3></div>
+        <div class="card-body">
+          <p class="text-secondary" style="font-size:13px;line-height:1.6">
+            <strong>Control Center</strong> — sole database owner; manages CA, issues certificates, resolves permissions, maintains audit logs.<br>
+            <strong>Communication Hub</strong> — central broker for UI↔agent and agent↔agent messaging; acts as Agent Gateway for session management.<br>
+            <strong>Agent Runtime</strong> — the only service that executes agents (LangChain loop); authenticates via mTLS, never touches the database.<br>
+            Cross-service calls use certificate-based mTLS; no service shares database credentials.
+          </p>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-header"><h3>🪪 Dual Identity Support</h3></div>
+        <div class="card-body">
+          <p class="text-secondary" style="font-size:13px;line-height:1.6">
+            <strong>User Realm</strong> — human accounts; OIDC login via Keycloak or Azure EntraID; standard OAuth2 flows.<br>
+            <strong>Agent Realm</strong> — dedicated OIDC realm for AI agent identities; credentials stored encrypted, refreshed automatically.<br>
+            Agent Types define the pairing of an agent identity, role, model config, system instruction, and I/O type. Each execution validates that the agent identity is still assigned to its declared role before proceeding.
+          </p>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-header"><h3>📐 Architecture Diagram</h3><span class="text-secondary" style="font-size:12px">Flowchart: User Browser → Services → MCP Hub → PostgreSQL</span></div>
+      <div class="card-body" style="padding:0">
+        <div class="chart-placeholder" style="height:180px;border:none;border-radius:0;background:#F8FAFC;text-align:center;padding:60px 20px 0">
+          <div style="font-size:28px;margin-bottom:8px">🏗️</div>
+          <div style="font-weight:600;font-size:14px;color:var(--text-primary)">Three-Service Architecture — Mermaid flowchart</div>
+          <div class="text-secondary" style="font-size:12px;margin-top:4px">Rendered client-side from inline Mermaid source text · Dark theme with Parthenon colour tokens</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Security tab -->
+  <div id="showcase-security-panel" class="tab-panel">
+    <div class="view-desc" style="margin-bottom:18px">Three security deep-dive cards presented in the showcase site's Trust &amp; Compliance section.</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px">
+      <div class="card">
+        <div class="card-header"><h3>🔐 Tool-Level Permission Control</h3></div>
+        <div class="card-body">
+          <p class="text-secondary" style="font-size:13px;line-height:1.6">Permissions are granted at the individual MCP tool level, not at the server level. Agent Roles define which Skills an agent can invoke; at runtime, those Skills resolve to an exact, deterministic allow-list of tools. Agents cannot call any tool outside that computed set — enforced by Control Center on every request.</p>
+          <div style="margin-top:12px"><span class="chip chip-purple">SOP → Skill → Tool</span></div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-header"><h3>📜 mTLS Certificate Authentication</h3></div>
+        <div class="card-body">
+          <p class="text-secondary" style="font-size:13px;line-height:1.6">Each Agent Runtime instance receives a short-lived agent-instance certificate (24-hour validity) issued by Control Center's built-in Certificate Authority. Internal services use longer-lived service certificates (30-day validity). All inter-service calls are mutually authenticated via mTLS — no shared secrets or API keys cross service boundaries.</p>
+          <div style="margin-top:12px"><span class="chip chip-blue">24h agent-instance · 30d service</span></div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-header"><h3>🔒 Token Isolation</h3></div>
+        <div class="card-body">
+          <p class="text-secondary" style="font-size:13px;line-height:1.6">Agent Runtime instances never hold identity tokens. When an agent needs to call an MCP tool, the Communication Hub resolves the correct OIDC token for the agent identity and injects it into that specific tool call — just-in-time and scoped. Agent-instance certificates are explicitly blocked from internal management endpoints.</p>
+          <div style="margin-top:12px"><span class="chip chip-green">Just-in-time token injection</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Walkthroughs tab -->
+  <div id="showcase-demo-panel" class="tab-panel">
+    <div class="view-desc" style="margin-bottom:18px">Five guided walkthroughs presented on the showcase site, each with numbered steps and placeholder screenshots.</div>
+
+    <!-- Sub-tabs for walkthroughs -->
+    <div class="tabs" style="margin-bottom:18px;border-bottom-width:1px">
+      <div class="tab active" onclick="switchTab(this,'showcase-walk-mcp')" style="font-size:12px">1. MCP Server</div>
+      <div class="tab" onclick="switchTab(this,'showcase-walk-skill')" style="font-size:12px">2. Skill &amp; SOP</div>
+      <div class="tab" onclick="switchTab(this,'showcase-walk-role')" style="font-size:12px">3. Agent Roles</div>
+      <div class="tab" onclick="switchTab(this,'showcase-walk-agent')" style="font-size:12px">4. Agent Types &amp; Trigger</div>
+      <div class="tab" onclick="switchTab(this,'showcase-walk-logs')" style="font-size:12px">5. Execution Logs</div>
+    </div>
+
+    <!-- Walkthrough 1: MCP Server -->
+    <div id="showcase-walk-mcp" class="tab-panel active">
+      <div class="card">
+        <div class="card-header"><h3>Integrate MCP Server</h3></div>
+        <div class="card-body">
+          <ol style="padding-left:20px;display:flex;flex-direction:column;gap:10px">
+            <li style="font-size:13px;color:var(--text-primary)"><strong>Register the MCP Server</strong><br><span class="text-secondary" style="font-size:12px">In Control Center → MCP Hub, supply a unique slug, server URL, and encrypted credentials.</span></li>
+            <li style="font-size:13px;color:var(--text-primary)"><strong>Sync &amp; Verify Tools</strong><br><span class="text-secondary" style="font-size:12px">Query the MCP server's manifest and import all available tools under the slug namespace.</span></li>
+            <li style="font-size:13px;color:var(--text-primary)"><strong>Configure MCP Sessions</strong><br><span class="text-secondary" style="font-size:12px">Create named sessions that bind different identity credentials for varied OIDC contexts.</span></li>
+            <li style="font-size:13px;color:var(--text-primary)"><strong>Test Connectivity</strong><br><span class="text-secondary" style="font-size:12px">Use the built-in connection test to confirm the server is ready for Skill references.</span></li>
+          </ol>
+        </div>
+      </div>
+    </div>
+
+    <!-- Walkthrough 2: Skill & SOP -->
+    <div id="showcase-walk-skill" class="tab-panel">
+      <div class="card">
+        <div class="card-header"><h3>Create Skill &amp; SOP</h3></div>
+        <div class="card-body">
+          <ol style="padding-left:20px;display:flex;flex-direction:column;gap:10px">
+            <li style="font-size:13px;color:var(--text-primary)"><strong>Define a Skill</strong><br><span class="text-secondary" style="font-size:12px">Select which MCP tools a Skill wraps — the smallest permissionable unit in Parthenon.</span></li>
+            <li style="font-size:13px;color:var(--text-primary)"><strong>Compose an SOP</strong><br><span class="text-secondary" style="font-size:12px">Combine multiple Skills in sequence with branching logic and agent-to-agent delegation steps.</span></li>
+            <li style="font-size:13px;color:var(--text-primary)"><strong>Review the Tool Allow-List</strong><br><span class="text-secondary" style="font-size:12px">The platform automatically resolves which MCP tools the SOP will expose at runtime.</span></li>
+            <li style="font-size:13px;color:var(--text-primary)"><strong>Test the SOP</strong><br><span class="text-secondary" style="font-size:12px">Simulate execution with a mock agent identity before exposing to production agents.</span></li>
+          </ol>
+        </div>
+      </div>
+    </div>
+
+    <!-- Walkthrough 3: Agent Roles -->
+    <div id="showcase-walk-role" class="tab-panel">
+      <div class="card">
+        <div class="card-header"><h3>Create Agent Roles</h3></div>
+        <div class="card-body">
+          <ol style="padding-left:20px;display:flex;flex-direction:column;gap:10px">
+            <li style="font-size:13px;color:var(--text-primary)"><strong>Create an Agent Role</strong><br><span class="text-secondary" style="font-size:12px">Select SOPs and Skills — the platform computes the complete transitive set of accessible MCP tools.</span></li>
+            <li style="font-size:13px;color:var(--text-primary)"><strong>Assign Agent Identities</strong><br><span class="text-secondary" style="font-size:12px">Attach OIDC agent identities via the many-to-many assignment panel. Each execution validates assignments.</span></li>
+            <li style="font-size:13px;color:var(--text-primary)"><strong>Audit the Role</strong><br><span class="text-secondary" style="font-size:12px">Review creation timestamps, identity assignments, and permission resolution history in the audit trail.</span></li>
+          </ol>
+        </div>
+      </div>
+    </div>
+
+    <!-- Walkthrough 4: Agent Types & Trigger -->
+    <div id="showcase-walk-agent" class="tab-panel">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+        <div class="card">
+          <div class="card-header"><h3>⚡ Non-Conversational Trigger</h3></div>
+          <div class="card-body">
+            <ol style="padding-left:20px;display:flex;flex-direction:column;gap:10px">
+              <li style="font-size:13px;color:var(--text-primary)"><strong>Define Agent Type</strong><br><span class="text-secondary" style="font-size:12px">Set I/O to Non-Conversational, supply structured input schema and system instruction.</span></li>
+              <li style="font-size:13px;color:var(--text-primary)"><strong>Trigger via Schedule or API</strong><br><span class="text-secondary" style="font-size:12px">Use cron scheduler or Agent Gateway API with structured input payload.</span></li>
+              <li style="font-size:13px;color:var(--text-primary)"><strong>Retrieve Structured Result</strong><br><span class="text-secondary" style="font-size:12px">Agent persists output via built-in result-persistence tool. Query the Result Repository.</span></li>
+            </ol>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-header"><h3>💬 Conversational Session</h3></div>
+          <div class="card-body">
+            <ol style="padding-left:20px;display:flex;flex-direction:column;gap:10px">
+              <li style="font-size:13px;color:var(--text-primary)"><strong>Define Agent Type</strong><br><span class="text-secondary" style="font-size:12px">Set I/O to Conversational — agent maintains full conversation history across turns.</span></li>
+              <li style="font-size:13px;color:var(--text-primary)"><strong>Open a Session</strong><br><span class="text-secondary" style="font-size:12px">Web UI opens a WebSocket session via the Communication Hub. Stream responses in real time.</span></li>
+              <li style="font-size:13px;color:var(--text-primary)"><strong>Continue the Conversation</strong><br><span class="text-secondary" style="font-size:12px">Subsequent messages append to session history. Full tool call tracing in Execution Logs.</span></li>
+            </ol>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Walkthrough 5: Execution Logs -->
+    <div id="showcase-walk-logs" class="tab-panel">
+      <div class="card">
+        <div class="card-header"><h3>Execution Logs Viewer</h3></div>
+        <div class="card-body">
+          <p class="text-secondary" style="font-size:13px;margin-bottom:14px">Every agent run produces a rich, structured execution log visible in the <strong>Execution Log Viewer</strong> on the Agent Session page. Logs are captured before the first LLM call and span the entire observe-reason-act loop.</p>
+          <ul style="padding-left:20px;display:flex;flex-direction:column;gap:8px">
+            <li style="font-size:13px;color:var(--text-primary)"><strong>System context snapshot</strong><br><span class="text-secondary" style="font-size:12px">Full system instruction and user prompt captured at submission time for audit and traceability.</span></li>
+            <li style="font-size:13px;color:var(--text-primary)"><strong>Span-based hierarchy</strong><br><span class="text-secondary" style="font-size:12px">Iterations, LLM calls, tool calls, and agent-to-agent delegations grouped into collapsible spans with timestamps and icons.</span></li>
+            <li style="font-size:13px;color:var(--text-primary)"><strong>Tool call details</strong><br><span class="text-secondary" style="font-size:12px">Each MCP tool call shows input payload, raw response, and duration — expandable inline.</span></li>
+            <li style="font-size:13px;color:var(--text-primary)"><strong>Raw log toggle</strong><br><span class="text-secondary" style="font-size:12px">Switch between structured user-friendly view and raw technical log for debugging.</span></li>
+            <li style="font-size:13px;color:var(--text-primary)"><strong>OTEL integration</strong><br><span class="text-secondary" style="font-size:12px">Traces, metrics, and structured logs emitted to Prometheus, Jaeger, Loki, etc.</span></li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="section-title" style="margin-top:24px">Placeholder Screenshots</div>
+  <div class="view-desc" style="margin-bottom:12px">The showcase site uses five clearly labelled SVG placeholder images that visitors can replace with real screenshots. Each is 800×500 px with the Parthenon dark colour palette.</div>
+  <div style="display:flex;gap:8px;flex-wrap:wrap">
+    <span class="chip chip-blue">placeholder-mcp.svg</span>
+    <span class="chip chip-purple">placeholder-skill-sop.svg</span>
+    <span class="chip chip-green">placeholder-agent-roles.svg</span>
+    <span class="chip chip-yellow">placeholder-agent-trigger.svg</span>
+    <span class="chip chip-gray">placeholder-exec-logs.svg</span>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════ VIEW: SETUP WIZARD ═══════════════════════════════ -->
+<div id="view-setup-wizard" class="view">
+  <div class="view-header">
+    <div><h2>Identity Setup</h2><div class="view-desc">Configure platform authentication</div></div>
+  </div>
+  <div class="card wizard-card">
+    <div class="card-body">
+      <!-- Step indicator -->
+      <div class="wizard-steps" id="wizard-steps">
+        <div class="wizard-step">
+          <div class="step-circle active" id="sc1">1</div>
+          <div class="step-label active" id="sl1">Provider</div>
+          <div class="step-connector" id="conn1"></div>
+        </div>
+        <div class="wizard-step">
+          <div class="step-circle pending" id="sc2">2</div>
+          <div class="step-label pending" id="sl2">Configure</div>
+          <div class="step-connector" id="conn2"></div>
+        </div>
+        <div class="wizard-step">
+          <div class="step-circle pending" id="sc3">3</div>
+          <div class="step-label pending" id="sl3">Provision</div>
+          <div class="step-connector" id="conn3"></div>
+        </div>
+        <div class="wizard-step" style="flex:0">
+          <div class="step-circle pending" id="sc4">✓</div>
+          <div class="step-label pending" id="sl4">Complete</div>
+        </div>
+      </div>
+
+      <!-- Step 1: Welcome & Choose Provider -->
+      <div id="wiz-step1">
+        <div class="alert alert-warning">
+          <div><strong style="margin-bottom:2px;display:block">Application is not accessible to users</strong>No users can log in until an identity provider is configured.</div>
+        </div>
+
+        <div class="provider-grid" style="margin-top:20px;margin-bottom:24px">
+          <!-- Install Keycloak -->
+          <div class="provider-card selected" id="opt-keycloak-new" onclick="selectProvider('keycloak-new')">
+            <div class="radio-dot"></div>
+            <div class="provider-card-icon blue">🛡️</div>
+            <div class="provider-card-body">
+              <div class="provider-card-title">
+                Install Keycloak
+                <span class="chip chip-green" style="font-size:10px">Recommended</span>
+              </div>
+              <p class="provider-card-desc">Parthenon will provision a dedicated Keycloak instance automatically. Best for new deployments.</p>
+            </div>
+          </div>
+
+          <!-- Connect existing -->
+          <div class="provider-card" id="opt-existing" onclick="selectProvider('existing')">
+            <div class="radio-dot"></div>
+            <div class="provider-card-icon amber">🔗</div>
+            <div class="provider-card-body">
+              <div class="provider-card-title">Connect Existing Provider</div>
+              <p class="provider-card-desc">Connect to your organisation's existing OIDC provider.</p>
+              
+              <div class="sub-provider-row" id="existingSubOptions" style="display:none">
+                <button class="sub-provider-btn active" id="sub-keycloak" onclick="selectExistingType('keycloak', event)">🛡️ Keycloak</button>
+                <button class="sub-provider-btn" id="sub-entra" onclick="selectExistingType('entra', event)">🏢 Azure EntraID</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div style="display:flex;justify-content:flex-end">
+          <button class="btn btn-primary" onclick="goToConfig()">Configure Provider →</button>
+        </div>
+      </div>
+
+      <!-- Step 2a: New Keycloak Config -->
+      <div id="wiz-step2-kc" style="display:none">
+        <div class="section-title">Configure Keycloak Admin</div>
+        <div class="alert alert-info">
+          <div>These credentials will be used to access the Keycloak console. Store them securely.</div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Admin Username <span style="color:var(--error)">*</span></label>
+            <input class="form-control" id="kc-username" placeholder="admin" oninput="clearErr('kc-username')">
+            <div class="form-error" id="err-kc-username">Username is required.</div>
+          </div>
+          <div class="form-group">
+            <label>Realm Name</label>
+            <input class="form-control" id="kc-realm" placeholder="parthenon" oninput="clearErr('kc-realm')">
+            <div class="form-hint">Defaults to "parthenon".</div>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Admin Password <span style="color:var(--error)">*</span></label>
+            <input type="password" class="form-control" id="kc-password" placeholder="••••••••" oninput="clearErr('kc-password');clearErr('kc-confirm')">
+            <div class="form-error" id="err-kc-password">Password is required.</div>
+          </div>
+          <div class="form-group">
+            <label>Confirm Password <span style="color:var(--error)">*</span></label>
+            <input type="password" class="form-control" id="kc-confirm" placeholder="••••••••" oninput="clearErr('kc-confirm')">
+            <div class="form-error" id="err-kc-confirm">Passwords do not match.</div>
+          </div>
+        </div>
+
+        <div style="display:flex;gap:10px;margin-top:24px;justify-content:space-between">
+          <button class="btn btn-secondary" onclick="wizBack()">← Back</button>
+          <button class="btn btn-primary" onclick="validateKeycloakNew()">Install & Configure →</button>
+        </div>
+      </div>
+
+      <!-- Step 2b: Existing Provider Config -->
+      <div id="wiz-step2-ex" style="display:none">
+        <div class="section-title" id="existingProviderTitle">Connect Keycloak</div>
+        <div class="form-group">
+          <label>OIDC Provider URL <span style="color:var(--error)">*</span></label>
+          <input type="url" class="form-control" id="oidc-url" placeholder="https://auth.example.com/realms/my-realm" oninput="clearErr('oidc-url')">
+          <div class="form-error" id="err-oidc-url">URL is required.</div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Client ID <span style="color:var(--error)">*</span></label>
+            <input class="form-control" id="oidc-client-id" placeholder="parthenon-app" oninput="clearErr('oidc-client-id')">
+            <div class="form-error" id="err-oidc-client-id">Client ID is required.</div>
+          </div>
+          <div class="form-group">
+            <label>Audience</label>
+            <input class="form-control" id="oidc-audience" placeholder="parthenon-app">
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Client Secret <span style="color:var(--error)">*</span></label>
+          <input type="password" class="form-control" id="oidc-secret" placeholder="••••••••" oninput="clearErr('oidc-secret')">
+          <div class="form-error" id="err-oidc-secret">Secret is required.</div>
+        </div>
+        <div style="display:flex;gap:10px;margin-top:24px;justify-content:space-between">
+          <button class="btn btn-secondary" onclick="wizBack()">← Back</button>
+          <button class="btn btn-primary" onclick="validateExisting()">Save & Connect →</button>
+        </div>
+      </div>
+
+      <!-- Step 3: Provisioning -->
+      <div id="wiz-step3" style="display:none">
+        <div class="loading-screen">
+          <div class="spinner"></div>
+          <h2 style="font-size:20px;font-weight:600;margin-bottom:8px" id="loadingTitle">Provisioning Identity Provider…</h2>
+          <p style="font-size:14px;color:var(--text-secondary)" id="loadingSubtitle">Please do not close this window.</p>
+          <ul class="progress-steps" id="progressSteps">
+            <li class="progress-step pending" id="ps-1"><span class="step-status">○</span><span id="ps-1-text">Provisioning Keycloak container…</span></li>
+            <li class="progress-step pending" id="ps-2"><span class="step-status">○</span><span id="ps-2-text">Configuring realm…</span></li>
+            <li class="progress-step pending" id="ps-3"><span class="step-status">○</span><span id="ps-3-text">Creating admin user…</span></li>
+            <li class="progress-step pending" id="ps-4"><span class="step-status">○</span><span id="ps-4-text">Registering OIDC client…</span></li>
+            <li class="progress-step pending" id="ps-5"><span class="step-status">○</span><span id="ps-5-text">Verifying connectivity…</span></li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- Step 4: Success -->
+      <div id="wiz-step4" style="display:none">
+        <div class="wizard-success">
+          <div class="check-icon">✓</div>
+          <h3 style="font-size:20px;font-weight:700;margin-bottom:8px" id="successTitle">Platform Ready!</h3>
+          <p style="color:var(--text-secondary);margin-bottom:12px" id="successSubtitle">Parthenon has been successfully configured.</p>
+          
+          <div id="summaryGrid" style="text-align:left;max-width:400px;margin:0 auto 24px"></div>
+
+          <div style="display:flex;gap:12px;justify-content:center">
+            <button class="btn btn-secondary" onclick="nav(null,'dashboard')">Dashboard</button>
+            <button class="btn btn-primary" onclick="nav(null,'dashboard')">Go to Login →</button>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+  </div><!-- /main-content -->
+</div><!-- /main-wrapper -->
+</div><!-- /app-shell -->
+
+<!-- ═══════════════════════════════ LOGIN PAGE (refine-oidc-integration) ═══════════════════════════════ -->
+<div id="login-page" class="login-page" style="display:none">
+  <div class="login-card">
+    <div class="login-header">
+      <div class="logo-icon">⚡</div>
+      <h1>Parthenon</h1>
+      <p style="font-size:13px;color:var(--text-secondary)">Enterprise AI Harness Platform</p>
+    </div>
+
+    <!-- Loading -->
+    <div id="login-state-loading" class="login-state active">
+      <div class="login-body" style="text-align:center;padding:32px 0">
+        <div class="spinner"></div>
+        <p class="text-secondary">Discovering identity providers...</p>
+      </div>
+    </div>
+    <!-- Find your workspace (multi-tenant-support): unified workspace-address entry for EVERYONE —
+         customers and the platform itself (workspace root). Break-glass super-admin entry lives ONLY here
+         and at the root workspace card — never on customer workspace cards. -->
+    <div id="login-state-findws" class="login-state">
+      <div class="login-body">
+        <div class="form-group">
+          <label>Workspace address</label>
+          <div style="display:flex;align-items:stretch">
+            <span style="padding:8px 10px;background:#F1F5F9;border:1px solid var(--border);border-right:none;border-radius:var(--radius-sm) 0 0 var(--radius-sm);font-family:monospace;font-size:13px;color:var(--text-secondary);white-space:nowrap">https://</span>
+            <input class="form-control" id="mt-find-slug" placeholder="acme" style="border-radius:0;font-family:monospace" oninput="mtFindClear()" onkeydown="if(event.key==='Enter')mtFindSubmit()">
+            <span style="padding:8px 10px;background:#F1F5F9;border:1px solid var(--border);border-left:none;border-radius:0 var(--radius-sm) var(--radius-sm) 0;font-family:monospace;font-size:13px;color:var(--text-secondary);white-space:nowrap">.parthenon.app</span>
+          </div>
+          <div id="mt-find-err" class="form-error" style="display:none">No workspace found at this address.</div>
+        </div>
+        <label style="display:flex;align-items:center;gap:8px;font-size:13px;margin:2px 0 12px;cursor:pointer">
+          <input type="checkbox" id="mt-find-remember" checked style="accent-color:var(--primary)"> Remember this workspace
+        </label>
+        <button class="btn btn-primary btn-block" onclick="mtFindSubmit()">Continue</button>
+        <div class="login-divider"><span>demo shortcuts</span></div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px">
+          <button class="btn btn-sm btn-secondary" onclick="mtQuick('acme')">acme (customer)</button>
+          <button class="btn btn-sm btn-secondary" onclick="mtQuick('globex')">globex (no own IdP)</button>
+          <button class="btn btn-sm btn-secondary" onclick="mtQuick('root')">root (platform)</button>
+        </div>
+        <!-- Break-glass: rendered only when no workspace is bound (tenancy-off root) or at the root workspace -->
+        <button class="btn btn-ghost btn-block" id="mt-breakglass-link" onclick="mtToggleBreakglass()" style="font-size:12.5px;color:var(--text-secondary);padding:8px">Super-admin sign-in (break-glass) ▾</button>
+        <div id="mt-breakglass-form" style="display:none;margin-top:10px">
+          <div class="form-group"><label>Username</label><input type="text" class="form-control" id="mt-sa-user" value="admin"></div>
+          <div class="form-group"><label>Password</label><input type="password" class="form-control" id="mt-sa-pass" value="admin123"></div>
+          <button class="btn btn-primary btn-block" onclick="oidcLoginAsSuperAdmin()">Sign in to the root workspace</button>
+        </div>
+      </div>
+    </div>
+    <!-- Setup Wizard -->
+    <div id="login-state-setup" class="login-state">
+      <div class="login-body">
+        <div class="alert alert-warning">
+          <div><strong style="display:block;margin-bottom:2px">Application Not Accessible</strong>No identity provider configured and super admin is not enabled.</div>
+        </div>
+        <button class="btn btn-primary btn-block" onclick="oidcGoToSetup()">Go to Setup Wizard</button>
+      </div>
+    </div>
+    <!-- Super Admin Only -->
+    <div id="login-state-saonly" class="login-state">
+      <div class="login-body">
+        <div class="alert alert-info">
+          <div><strong style="display:block;margin-bottom:2px">Super Admin Required</strong>Log in as Super Admin to configure OIDC authentication.</div>
+        </div>
+        <div class="form-group"><label>Username</label><input type="text" class="form-control" id="oidc-sa-user" placeholder="Enter username" value="admin"></div>
+        <div class="form-group"><label>Password</label><input type="password" class="form-control" id="oidc-sa-pass" placeholder="Enter password" value="admin123"></div>
+        <div id="oidc-login-error-saonly" class="form-error">Invalid credentials.</div>
+        <button class="btn btn-primary btn-block" onclick="oidcLoginAsSuperAdmin()" style="margin-top:8px">Sign In as Super Admin</button>
+      </div>
+    </div>
+    <!-- Both -->
+    <div id="login-state-both" class="login-state">
+      <div class="login-body">
+        <p id="mt-ws-line" style="font-size:12px;color:var(--text-secondary);margin-bottom:10px"></p>
+        <button class="oidc-login-btn" onclick="oidcSimulateLogin()"><span class="oidc-icon">🔐</span>Login with Identity Provider</button>
+        <div class="login-divider"><span>or</span></div>
+        <button class="btn btn-ghost btn-block" id="oidc-sa-btn-both" onclick="oidcShowSAForm()" style="font-size:13px;color:var(--text-secondary);padding:8px">Super-admin sign-in (break-glass)</button>
+        <div id="oidc-sa-inline-form" style="display:none;margin-top:12px">
+          <div class="form-group"><label>Username</label><input type="text" class="form-control" id="oidc-sa-user-both" placeholder="Username" value="admin"></div>
+          <div class="form-group"><label>Password</label><input type="password" class="form-control" id="oidc-sa-pass-both" placeholder="Password" value="admin123"></div>
+          <div id="oidc-login-error-both" class="form-error">Invalid credentials.</div>
+          <button class="btn btn-primary btn-block" onclick="oidcLoginAsSuperAdmin()" style="margin-top:4px">Sign In as Super Admin</button>
+        </div>
+      </div>
+    </div>
+    <!-- OIDC Only -->
+    <div id="login-state-oidconly" class="login-state">
+      <div class="login-body">
+        <button class="oidc-login-btn" onclick="oidcSimulateLogin()"><span class="oidc-icon">🔐</span>Login with Identity Provider</button>
+      </div>
+    </div>
+    <div class="login-footer"><p>Secure authentication via OIDC/OAuth2 &bull; Parthenon v2.0</p></div>
+  </div>
+  <!-- Demo: Login State Switcher -->
+  <div class="login-state-demo" id="oidc-demo-switcher">
+    <div class="lsd-title">Demo: Login State</div>
+    <button style="background:#F1F5F9;color:#475569" onclick="oidcSetState('loading')">Loading</button>
+    <button style="background:#EDE9FE;color:#6D28D9" onclick="oidcSetState('findws')">Find Workspace</button>
+    <button style="background:#FCE7F3;color:#9D174D" onclick="tpOpen()" title="TenantSessionGate → TenantPicker: multi-org user whose token is not yet tenant-bound">Tenant Picker</button>
+    <button style="background:#FEF3C7;color:#92400E" onclick="oidcSetState('setup')">Setup</button>
+    <button style="background:#DBEAFE;color:#1D4ED8" onclick="oidcSetState('saonly')">SA Only</button>
+    <button style="background:#DCFCE7;color:#15803D" onclick="oidcSetState('both')">Both</button>
+    <button style="background:#FEE2E2;color:#B91C1C" onclick="oidcSetState('oidconly')">OIDC Only</button>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════ DASHBOARD METRICS DEMO CONTROLS ═══════════════════════════════ -->
+<div class="demo-panel-d" id="dash-demo-panel">
+  <div class="demo-panel-title-d">Dashboard Demo Controls</div>
+  <div class="demo-row-d">
+    <span class="demo-label-d">All Cards Loading</span>
+    <label class="toggle"><input type="checkbox" id="dash-toggle-loading" onchange="dashToggleLoading(this.checked)"><span class="toggle-slider"></span></label>
+  </div>
+  <div class="demo-divider-d"></div>
+  <div class="demo-row-d">
+    <span class="demo-label-d">Show Error Banner</span>
+    <label class="toggle"><input type="checkbox" id="dash-toggle-error" onchange="dashToggleError(this.checked)"><span class="toggle-slider"></span></label>
+  </div>
+  <div class="demo-divider-d"></div>
+  <div class="demo-row-d">
+    <span class="demo-label-d">Permission Simulation</span>
+  </div>
+  <div class="demo-role-preset-d" style="margin-bottom:6px">
+    <button class="demo-btn-d active" onclick="dashPermPreset('full')">Full Access</button>
+    <button class="demo-btn-d" onclick="dashPermPreset('operator')">Operator</button>
+    <button class="demo-btn-d" onclick="dashPermPreset('limited')">Limited</button>
+    <button class="demo-btn-d" onclick="dashPermPreset('none')">No Access</button>
+  </div>
+  <div class="demo-divider-d"></div>
+  <div class="demo-row-d">
+    <span class="demo-label-d">Zero Counts</span>
+    <label class="toggle"><input type="checkbox" id="dash-toggle-zero" onchange="dashToggleZero(this.checked)"><span class="toggle-slider"></span></label>
+  </div>
+</div>
+
+<!-- Dashboard Toast -->
+<div class="dash-toast-container" id="dash-toast-container"></div>
+
+<!-- Tenant Picker (TenantSessionGate → TenantPicker) -->
+<div class="modal-overlay" id="tenantPickerModal" onclick="if(event.target===this)tpClose()">
+  <div class="modal" style="max-width:400px">
+    <div class="modal-header" style="text-align:center;display:block"><h3>🏢<br>Choose an organization</h3><button class="modal-close" onclick="tpClose()">×</button></div>
+    <div class="modal-body">
+      <p style="font-size:12px;color:var(--text-secondary);text-align:center;margin-bottom:14px">You are a member of multiple organizations. Pick one to continue — each organization signs in with its own identity provider.</p>
+      <div id="tpList"></div>
+      <p style="font-size:11px;color:var(--text-secondary);text-align:center;margin-top:12px" id="tpCurrent"></p>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ CONTROL CENTER ASSISTANT (global floating launcher) ═══ -->
+<button class="asst-fab" id="asst-fab" onclick="asstOpen()" title="Control Center Assistant" aria-label="Control Center Assistant">🤖</button>
+<div class="asst-overlay" id="asst-overlay" onclick="if(event.target===this)asstClose()">
+  <div class="asst-dialog" id="asst-dialog" role="dialog" aria-label="Control Center Assistant conversation">
+    <div class="asst-head">
+      <span style="font-size:20px">🤖</span>
+      <h3 id="asst-title">Control Center Assistant</h3>
+      <span class="chip chip-green" id="asst-conn-chip">Connected</span>
+      <div class="asst-head-right">
+        <button class="btn-icon" id="asst-fs-btn" onclick="asstToggleFullscreen()" title="Toggle fullscreen">⛶</button>
+        <button class="btn-icon" onclick="asstClose()" title="Close">✕</button>
+      </div>
+    </div>
+
+    <div class="asst-body">
+      <div class="asst-alert" id="asst-model-alert" style="display:none">
+        <span>⚠️</span>
+        <div style="flex:1">
+          <b>The assistant needs a model configured for this workspace</b>
+          No model is configured for this workspace yet. An administrator can select one under System Config → Assistant model.
+          <div style="margin-top:8px"><button class="btn btn-secondary btn-sm" onclick="asstGoConfigure()">Configure model</button></div>
+        </div>
+      </div>
+
+      <div class="asst-paper-wrap">
+        <div class="asst-paper" id="asst-messages"></div>
+      </div>
+    </div>
+
+    <div class="asst-input-row">
+      <textarea class="chat-input" id="asst-input" rows="1" placeholder="Type a message… (Enter to send)" onkeydown="asstOnKey(event)" oninput="asstAutoGrow(this)"></textarea>
+      <button class="btn btn-primary" id="asst-send" onclick="asstSend()">Send</button>
+    </div>
+
+    <div class="asst-foot">
+      <button class="btn btn-secondary btn-sm" id="asst-btn-sessions" onclick="asstOpenSessions()">🗂 View All Sessions</button>
+      <button class="btn btn-secondary btn-sm" id="asst-btn-new" onclick="asstNewSession()">＋ New Session</button>
+      <span class="spacer"></span>
+      <button class="btn btn-sm" id="asst-btn-end" style="background:#fff;border:1px solid #FECACA;color:#B91C1C" onclick="asstOpenEnd()">⏹ End Session</button>
+      <button class="btn btn-secondary btn-sm" onclick="asstClose()">Exit</button>
+    </div>
+  </div>
+</div>
+<div class="asst-overlay" id="asst-sessions-overlay" onclick="if(event.target===this)asstCloseSessions()">
+  <div class="asst-dialog" style="width:min(620px,100%);height:auto;max-height:85vh" role="dialog" aria-label="All sessions for this agent">
+    <div class="asst-head">
+      <h3>All sessions for this agent</h3>
+      <div class="asst-head-right"><button class="btn-icon" onclick="asstCloseSessions()" title="Close">✕</button></div>
+    </div>
+    <div class="asst-body" style="overflow-y:auto;padding-bottom:14px">
+      <div class="asst-sess-filters">
+        <label class="toggle"><input type="checkbox" id="asst-show-ended" onchange="asstShowEnded(this.checked)"><span class="toggle-slider"></span><span style="font-size:12px">Show ended sessions</span></label>
+        <label style="display:inline-flex;align-items:center;gap:6px">From <input type="date" class="form-control" id="asst-sess-from" style="width:150px;padding:5px 8px;font-size:12px" onchange="asstDateChange()"></label>
+        <label style="display:inline-flex;align-items:center;gap:6px">To <input type="date" class="form-control" id="asst-sess-to" style="width:150px;padding:5px 8px;font-size:12px" onchange="asstDateChange()"></label>
+      </div>
+      <div id="asst-sessions-list"></div>
+      <div class="asst-pager" style="justify-content:center">
+        <span class="asst-pager-btns" id="asst-sessions-pager"></span>
+      </div>
+    </div>
+    <div class="asst-foot">
+      <span class="spacer"></span>
+      <button class="btn btn-secondary btn-sm" onclick="asstCloseSessions()">Cancel</button>
+    </div>
+  </div>
+</div>
+<div class="asst-overlay" id="asst-preview-overlay" onclick="if(event.target===this)asstClosePreview()">
+  <div class="asst-dialog" style="width:90vw;height:80vh" role="dialog" aria-label="Approval Preview">
+    <div class="asst-head">
+      <h3>Approval Preview</h3>
+      <div class="asst-head-right"><button class="btn-icon" onclick="asstClosePreview()" title="Collapse">⤡</button></div>
+    </div>
+    <div class="asst-body" id="asst-preview-body" style="overflow-y:auto;padding-bottom:14px;display:block;font-size:13px;line-height:1.6"></div>
+    <div class="asst-foot">
+      <button class="btn btn-secondary btn-sm" onclick="asstClosePreview()">Collapse</button>
+      <span class="spacer"></span>
+      <button class="btn btn-sm" style="background:#fff;border:1px solid #FECACA;color:#B91C1C" onclick="asstResolve(false)">✕ Deny</button>
+      <button class="btn btn-sm" style="background:#16A34A;color:#fff" onclick="asstResolve(true)">✓ Approve</button>
+    </div>
+  </div>
+</div>
+<div class="asst-overlay" id="asst-end-overlay" onclick="if(event.target===this)asstCloseEnd()">
+  <div class="asst-dialog" style="width:min(560px,100%);height:auto" role="dialog" aria-label="End Conversation Session">
+    <div class="asst-head">
+      <h3>End Conversation Session</h3>
+      <div class="asst-head-right"><button class="btn-icon" onclick="asstCloseEnd()" title="Close">✕</button></div>
+    </div>
+    <div class="asst-body" style="padding-bottom:16px">
+      <p style="font-size:13px;line-height:1.6">This will close the session. You can still view its history but cannot resume it.</p>
+      <p class="text-sm text-secondary" style="line-height:1.6;margin-top:8px">Any in-flight execution for this session is terminated. The next time you open the assistant it starts a <b>new</b> session instead of resuming this one.</p>
+    </div>
+    <div class="asst-foot">
+      <span class="spacer"></span>
+      <button class="btn btn-secondary btn-sm" onclick="asstCloseEnd()">Cancel</button>
+      <button class="btn btn-sm" style="background:#C62828;color:#fff" onclick="asstConfirmEnd()">End Session</button>
+    </div>
+  </div>
+</div>
+
+<script src="shared/app.js"></script>
+<script src="shared/assistant.js"></script>
+<script src="shared/max-dialog.js"></script>
+<script src="shared/oidc.js"></script>
+<!-- ═══ oidc-login ═══ -->
+<script>
+/* ── OIDC Global State ── */
+var oidcLoginState = 'loading';
+var oidcTestTarget = 'user';
+var oidcTestLoginTarget = 'user';
+var oidcSuperAdminEnabled = true;
+var oidcLoginTestRun = 0;
+var oidcLoggedInSA = false;
+
+/* ── OIDC Login State Machine ── */
+function oidcSetState(state) {
+  oidcLoginState = state;
+  document.querySelectorAll('.login-state').forEach(function(el){el.classList.remove('active');});
+  var t = document.getElementById('login-state-'+state);
+  if (t) t.classList.add('active');
+  if (state === 'loading') {
+    setTimeout(function(){ if (oidcLoginState==='loading') oidcSetState('saonly'); }, 1500);
+  }
+}
+
+function oidcShowSAForm() {
+  var f = document.getElementById('oidc-sa-inline-form');
+  f.style.display = f.style.display==='none'?'block':'none';
+}
+
+function oidcGoToSetup() {
+  document.getElementById('login-page').style.display='none';
+  showView('setup-wizard');
+  mcFlashToast('Redirecting to Setup Wizard...');
+  document.getElementById('oidc-demo-switcher').style.display='none';
+}
+
+function oidcLoginAsSuperAdmin() {
+  oidcLoggedInSA = true;
+  localStorage.setItem('super_admin_token','simulated');
+  mtBindWorkspace('root', true); // break-glass super admin signs into the ROOT workspace with platform access
+  document.getElementById('login-page').style.display='none';
+  document.getElementById('oidc-sa-indicator').style.display='inline-flex';
+  document.querySelector('.avatar').textContent='SA';
+  mcFlashToast('Authenticated as Super Admin — root workspace (platform access)');
+  document.getElementById('oidc-demo-switcher').style.display='none';
+}
+
+function oidcSimulateLogin() {
+  mtBindWorkspace(mtCurrentSlug || 'acme', false); // workspace-bound OIDC sign-in (root without platform role shows no Platform group)
+  document.getElementById('login-page').style.display='none';
+  document.getElementById('oidc-sa-indicator').style.display='none';
+  document.querySelector('.avatar').textContent='JD';
+  oidcLoggedInSA = false;
+  mcFlashToast('Authenticated via Identity Provider (John Doe)');
+  document.getElementById('oidc-demo-switcher').style.display='none';
+}
+</script>
+<!-- ═══ dashboard ═══ -->
+<script>
+// ═══════════════════════════════ DASHBOARD METRICS SCRIPT ═══════════════════════════════
+(function() {
+  'use strict';
+  window.DASH = {
+    startTime: null,
+    endTime: null,
+    isLoading: false,
+    zeroMode: false,
+    permissionSet: {
+      agent_types:true, interventions:true, model_configs:true, schedules:true,
+      identities:true, roles:true, mcp_servers:true, guardrail_breaches:true,
+      executions:true, posture_breaches:true, permission_requests:true, notifications:true
+    }
+  };
+
+  var SNAPSHOT_DATA = {
+    'dash-card-agent-types':          {value:'12',type:'breakdowns',sub:'<span class="sub-breakdown-d" style="background:#DCFCE7;color:#15803D">8 active</span> <span class="sub-breakdown-d" style="background:#DBEAFE;color:#1D4ED8">3 running</span>'},
+    'dash-card-pending-interventions':{value:'5',type:'label',sub:'Pending'},
+    'dash-card-model-configs':        {value:'12',type:'label',sub:'7 Vendors'},
+    'dash-card-active-schedules':     {value:'14',type:'label',sub:'Active'},
+    'dash-card-agent-identities':     {value:'23',type:'label',sub:'Provisioned'},
+    'dash-card-agent-roles':          {value:'6',type:'label',sub:'Defined'},
+    'dash-card-mcp-servers':          {value:'9',type:'label',sub:'Registered'},
+    'dash-card-permission-requests':  {value:'3',type:'label',sub:'Pending'}
+  };
+
+  var TIME_DATA = {
+    hour:  {guardrail:'0',execCompleted:'8',execFailed:'1',posture:'0',notifDelivered:'22',notifFailed:'0'},
+    day:   {guardrail:'3',execCompleted:'42',execFailed:'3',posture:'1',notifDelivered:'128',notifFailed:'2'},
+    week:  {guardrail:'18',execCompleted:'312',execFailed:'21',posture:'6',notifDelivered:'872',notifFailed:'11'},
+    custom:{guardrail:'0',execCompleted:'0',execFailed:'0',posture:'0',notifDelivered:'0',notifFailed:'0'}
+  };
+
+  function getPresetKey() {
+    if (!DASH.startTime || !DASH.endTime) return 'day';
+    var durH = (DASH.endTime - DASH.startTime) / 3600000;
+    if (durH <= 1.05 && durH >= .95) return 'hour';
+    if (durH <= 24.5 && durH >= 23.5) return 'day';
+    if (durH <= 170 && durH >= 165) return 'week';
+    return 'custom';
+  }
+
+  function toDTLocal(d) {
+    var p = function(n){return String(n).padStart(2,'0')};
+    return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate())+'T'+p(d.getHours())+':'+p(d.getMinutes());
+  }
+
+  function fmtRange(s,e) {
+    var o = {month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'};
+    return s.toLocaleDateString('en-US',o).replace(',','') + ' \u2014 ' + e.toLocaleDateString('en-US',o).replace(',','');
+  }
+
+  function toast(msg,type) {
+    var c = document.getElementById('dash-toast-container');
+    var t = document.createElement('div');
+    t.className = 'dash-toast dash-toast-' + (type||'info');
+    t.textContent = msg;
+    c.appendChild(t);
+    setTimeout(function(){t.style.opacity='0';t.style.transform='translateY(-12px)';t.style.transition='all .3s ease';setTimeout(function(){t.remove()},300)},2500);
+  }
+
+  // INIT
+  function dashInit() {
+    var now = new Date();
+    var ago = new Date(now.getTime() - 86400000);
+    DASH.startTime = ago; DASH.endTime = now;
+    var ds = document.getElementById('dash-draft-start');
+    var de = document.getElementById('dash-draft-end');
+    if (ds) ds.value = toDTLocal(ago);
+    if (de) de.value = toDTLocal(now);
+    var rl = document.getElementById('dash-range-label');
+    if (rl) rl.textContent = fmtRange(ago, now);
+    dashUpdatePresetBtns('day');
+  }
+
+  // Draft change => show Go button
+  window.dashOnDraftChange = function() {
+    var ds = document.getElementById('dash-draft-start');
+    var de = document.getElementById('dash-draft-end');
+    if (!ds || !de || !ds.value || !de.value) return;
+    var s = new Date(ds.value), e = new Date(de.value);
+    if (isNaN(s) || isNaN(e)) return;
+    var chg = DASH.startTime && DASH.endTime && (s.getTime() !== DASH.startTime.getTime() || e.getTime() !== DASH.endTime.getTime());
+    document.getElementById('dash-go-btn').classList.toggle('visible', chg);
+    if (chg) dashUpdatePresetBtns(null);
+  };
+
+  // Go button
+  window.dashHandleGo = function() {
+    var ds = document.getElementById('dash-draft-start');
+    var de = document.getElementById('dash-draft-end');
+    if (!ds || !de || !ds.value || !de.value) return;
+    var s = new Date(ds.value), e = new Date(de.value);
+    if (isNaN(s) || isNaN(e)) return;
+    DASH.startTime = s; DASH.endTime = e;
+    document.getElementById('dash-go-btn').classList.remove('visible');
+    document.getElementById('dash-range-label').textContent = fmtRange(s, e);
+    dashUpdatePresetBtns(null);
+    dashUpdateTimeCards();
+  };
+
+  // Presets
+  window.dashPreset = function(key) {
+    var now = new Date(), start;
+    switch(key) {
+      case 'hour': start = new Date(now.getTime() - 3600000); break;
+      case 'day':  start = new Date(now.getTime() - 86400000); break;
+      case 'week': start = new Date(now.getTime() - 604800000); break;
+      default: return;
+    }
+    DASH.startTime = start; DASH.endTime = now;
+    document.getElementById('dash-draft-start').value = toDTLocal(start);
+    document.getElementById('dash-draft-end').value = toDTLocal(now);
+    document.getElementById('dash-go-btn').classList.remove('visible');
+    document.getElementById('dash-range-label').textContent = fmtRange(start, now);
+    dashUpdatePresetBtns(key);
+    dashUpdateTimeCards();
+    toast('Range set: ' + fmtRange(start, now), 'info');
+  };
+
+  function dashUpdatePresetBtns(active) {
+    ['hour','day','week'].forEach(function(k){
+      var b = document.getElementById('dash-preset-'+k);
+      if (b) b.classList.toggle('active', k===active);
+    });
+  }
+
+  // Refresh button
+  window.dashRefresh = function() {
+    toast('Data refreshed', 'success');
+  };
+
+  // Click handler for cards
+  window.dashClick = function(name, path) {
+    if (path) toast('Navigate to: ' + path + ' (prototype only)', 'info');
+  };
+
+  // Error banner
+  window.dashToggleError = function(v) {
+    document.getElementById('dash-error').style.display = v ? 'flex' : 'none';
+  };
+  window.dashRetry = function() {
+    document.getElementById('dash-error').style.display = 'none';
+    toast('Retrying...', 'info');
+  };
+
+  // Loading
+  window.dashToggleLoading = function(v) {
+    DASH.isLoading = v;
+    document.querySelectorAll('.dash-card').forEach(function(c){
+      if (v) c.classList.add('loading');
+      else { c.classList.remove('loading'); dashApplyPermToCard(c); }
+    });
+  };
+
+  // Time-sensitive card update
+  function dashUpdateTimeCards() {
+    if (!DASH.startTime || !DASH.endTime) return;
+    var pk = getPresetKey();
+    var d = TIME_DATA[pk] || TIME_DATA.custom;
+    var z = DASH.zeroMode;
+
+    // Guardrail Breaches
+    var gv = z ? 0 : parseInt(d.guardrail);
+    var gc = document.getElementById('dash-card-guardrail-breaches');
+    if (gc) {
+      var gve = gc.querySelector('.dash-card-value');
+      if (gve) gve.textContent = String(gv);
+      gc.classList.toggle('dash-card-zero', gv===0 && !DASH.isLoading && !dashIsDenied('guardrail_breaches'));
+    }
+
+    // Agent Executions
+    var ec=z?0:parseInt(d.execCompleted), ef=z?0:parseInt(d.execFailed);
+    var ac = document.getElementById('dash-card-agent-executions');
+    if (ac) {
+      var cEl = ac.querySelector('.val-completed'); if(cEl) cEl.textContent = String(ec);
+      var fEl = ac.querySelector('.val-failed'); if(fEl) fEl.textContent = String(ef);
+      ac.classList.toggle('dash-card-zero', (ec===0&&ef===0) && !DASH.isLoading && !dashIsDenied('executions'));
+    }
+
+    // Posture Breaches
+    var pv = z?0:parseInt(d.posture);
+    var pc = document.getElementById('dash-card-posture-breaches');
+    if (pc) {
+      var pve = pc.querySelector('.dash-card-value');
+      if(pve) pve.textContent = String(pv);
+      pc.classList.toggle('dash-card-zero', pv===0 && !DASH.isLoading && !dashIsDenied('posture_breaches'));
+    }
+
+    // Notification Delivery
+    var nd=z?0:parseInt(d.notifDelivered), nf=z?0:parseInt(d.notifFailed);
+    var nc = document.getElementById('dash-card-notifications');
+    if (nc) {
+      var ndEl=nc.querySelector('.val-completed'); if(ndEl) ndEl.textContent = String(nd);
+      var nfEl=nc.querySelector('.val-failed'); if(nfEl) nfEl.textContent = String(nf);
+      nc.classList.toggle('dash-card-zero', (nd===0&&nf===0) && !DASH.isLoading && !dashIsDenied('notifications'));
+    }
+
+    dashApplyAllPerms();
+    if (DASH.isLoading) {
+      document.querySelectorAll('.dash-card').forEach(function(c){c.classList.add('loading')});
+    }
+  }
+
+  function setDashVal(cardId, val) {
+    var c = document.getElementById(cardId);
+    if (!c) return;
+    var v = c.querySelector('.dash-card-value');
+    if (v) v.textContent = val;
+  }
+
+  // Permission states
+  function dashIsDenied(key) { return DASH.permissionSet.hasOwnProperty(key) && !DASH.permissionSet[key]; }
+
+  window.dashPermPreset = function(name) {
+    document.querySelectorAll('.demo-role-preset-d .demo-btn-d').forEach(function(b){b.classList.remove('active')});
+    event.target.classList.add('active');
+    var sets = {
+      full:{agent_types:1,interventions:1,model_configs:1,schedules:1,identities:1,roles:1,mcp_servers:1,guardrail_breaches:1,executions:1,posture_breaches:1,permission_requests:1,notifications:1},
+      operator:{agent_types:1,interventions:1,model_configs:0,schedules:1,identities:0,roles:0,mcp_servers:0,guardrail_breaches:1,executions:1,posture_breaches:0,permission_requests:0,notifications:0},
+      limited:{agent_types:1,interventions:0,model_configs:1,schedules:0,identities:0,roles:0,mcp_servers:0,guardrail_breaches:0,executions:1,posture_breaches:0,permission_requests:0,notifications:0},
+      none:{agent_types:0,interventions:0,model_configs:0,schedules:0,identities:0,roles:0,mcp_servers:0,guardrail_breaches:0,executions:0,posture_breaches:0,permission_requests:0,notifications:0}
+    };
+    var s = sets[name];
+    Object.keys(s).forEach(function(k){DASH.permissionSet[k] = !!s[k]});
+    dashApplyAllPerms();
+    toast('Permission preset: ' + name, 'info');
+  };
+
+  function dashApplyPermToCard(card) {
+    var k = card.getAttribute('data-dash-perm');
+    if (k && dashIsDenied(k)) {
+      card.classList.add('permission-denied');
+      card.classList.remove('loading');
+      card.classList.remove('dash-card-zero');
+    } else {
+      card.classList.remove('permission-denied');
+    }
+  }
+
+  function dashApplyAllPerms() {
+    document.querySelectorAll('.dash-card[data-dash-perm]').forEach(dashApplyPermToCard);
+  }
+
+  // Zero counts
+  window.dashToggleZero = function(v) {
+    DASH.zeroMode = v;
+    if (v) {
+      Object.keys(SNAPSHOT_DATA).forEach(function(id){
+        setDashVal(id, '0');
+        var c = document.getElementById(id);
+        if (c) {
+          var sEl = c.querySelector('.dash-card-sub');
+          if (sEl) sEl.innerHTML = '<span class="sub-label-d">' + (SNAPSHOT_DATA[id].type==='label'?'none':'0 active / 0 running') + '</span>';
+          if (!dashIsDenied(c.getAttribute('data-dash-perm')) && !DASH.isLoading) c.classList.add('dash-card-zero');
+        }
+      });
+    } else {
+      Object.keys(SNAPSHOT_DATA).forEach(function(id){
+        var d = SNAPSHOT_DATA[id];
+        setDashVal(id, d.value);
+        var c = document.getElementById(id);
+        if (c) {
+          var sEl = c.querySelector('.dash-card-sub');
+          if (sEl) sEl.innerHTML = d.type==='label' ? '<span class="sub-label-d">'+d.sub+'</span>' : d.sub;
+          if (!dashIsDenied(c.getAttribute('data-dash-perm')) && !DASH.isLoading) c.classList.remove('dash-card-zero');
+        }
+      });
+    }
+    dashUpdateTimeCards();
+  };
+
+  // Boot
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', dashInit);
+  else dashInit();
+})();
+</script>
+<!-- ═══ tenant-picker ═══ -->
+<script>
+/* Tenant picker — TenantSessionGate → TenantPicker (one session = one tenant) */
+var TP_MEMBERSHIPS=[{id:'t1',name:'Acme Corporation',slug:'acme',role:'Tenant admin',isDefault:true,current:true},{id:'t2',name:'Globex Industries',slug:'globex',role:'Member',isDefault:false,current:false}];
+function tpOpen(){
+  var l=document.getElementById('tpList');
+  l.innerHTML=TP_MEMBERSHIPS.map(function(m){
+    return '<div class="picker-item'+(m.current?' selected':'')+'" style="display:flex;align-items:center;gap:12px;padding:11px 12px;border-radius:8px;cursor:pointer'+(m.current?';background:#EFF6FF;outline:1px solid #BFDBFE':'')+'" onclick="tpPick(\''+m.id+'\')">'+
+      '<span style="font-size:22px">🏢</span><div style="flex:1"><div style="font-weight:500">'+m.name+(m.isDefault?' <span class="chip" style="background:#DBEAFE;color:#1D4ED8">Default</span>':'')+'</div><div style="font-size:12px;color:var(--text-secondary)">'+m.role+'</div></div>'+(m.current?'<span style="font-size:12px;color:var(--text-secondary)">current</span>':'')+'</div>';
+  }).join('');
+  var cur=TP_MEMBERSHIPS.find(function(m){return m.current;});
+  document.getElementById('tpCurrent').textContent=cur?('Signed in as a member of '+cur.name+' — selecting it continues into the workspace.'):'';
+  document.getElementById('tenantPickerModal').style.display='flex';
+}
+function tpPick(id){
+  var m=TP_MEMBERSHIPS.find(function(x){return x.id===id;});tpClose();
+  if(m.current){toast('Continue with current tenant — session bound, straight into '+m.name+'.','info');}
+  else{toast('One session = one tenant: re-running OIDC sign-in against '+m.name+"'s identity provider (fresh token with matching tenant claim required).",'info');}
+}
+function tpClose(){document.getElementById('tenantPickerModal').style.display='none';}
+</script>
+<script src="shared/login.js"></script>
+<script src="shared/page-init.js"></script>
+</body>
+</html>

@@ -1,6 +1,9 @@
 # UX Prototype Updates — Conversation Agent Sessions
 
-## Required Updates to `docs/master/ux/prototype/index.html`
+## Required Updates to the master prototype
+
+> The prototype is now split: this surface lives in `docs/master/ux/prototype/modules/chat.html`
+> (conversation + intervention) and `modules/agents.html` (Agent Type details dialog).
 
 The following UI components need to be added to the UX prototype to reflect the conversation agent sessions feature:
 
@@ -16,7 +19,9 @@ The following UI components need to be added to the UX prototype to reflect the 
 
 - **Header**: "Conversation Sessions" title and "Start New Conversation" button (primary action)
 - **Session List Table**:
-  - Columns: Title, Status, Last Active, Actions
+  - Columns: Title, Status, Turn, Last Active, Actions
+  - Turn: resume basis of the paused turn — `Waiting for your input` / `Resumed · continuing` /
+    `Resolved` / `No longer resumable`
   - Title: Auto-generated session title (or "Untitled" placeholder)
   - Status: Chip component (Active, Closed, Archived)
   - Last Active: Relative timestamp (e.g., "2 hours ago")
@@ -71,6 +76,21 @@ The following UI components need to be added to the UX prototype to reflect the 
 **Reason**: Output type is implicit for conversation agents (they always return conversational responses)
 
 ## Visual Design Notes
+
+### Resume state (resumable-agent-turn-persistence)
+
+The Sessions tab and the chat header share one vocabulary: **Waiting for your input** (amber),
+**Resumed · continuing** (blue), **Resolved** (green), **No longer resumable** (grey). "Waiting" is
+only shown while the server returns a live resume id, so the badge and the answerability of the
+pause never drift apart.
+
+### Activity state (persistent-agent-activity-state)
+
+One indicator tracks the turn (`thinking`, `using a tool`, `delegating`, `waiting`, `waiting for your
+input`, terminal `finished` / `failed` / `timed out`). It is rendered from the persisted activity
+state, so the same indicator — and no empty window — appears after a reload or reconnect. The amber
+"Waiting for your input" treatment replaces the indefinite thinking dots while an intervention is
+open.
 
 ### Status Chips
 - **Active**: Green background, "Active" text

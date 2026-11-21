@@ -31,7 +31,7 @@ This module introduces a new primitive — the **client** — that grants third-
 | Component | Description |
 |-----------|-------------|
 | Client auth middleware | Detects client credentials, calls CC resolution over mTLS, enforces origin + rate limit, and attaches the resolved client context (tokens held CH-side only) |
-| Rate limiting | Per-client Redis counters with per_minute/per_hour/per_day windows |
+| Rate limiting | Per-client in-memory counters (per Communication Hub process) with per_minute/per_hour/per_day windows |
 | Integration gateway | `/integrate/*` router: conversational chat (stateful sessions), typed submit (async sessions, non-conversational types only), widget/theme config serving, SDK distribution |
 
 ### SDKs and Example
@@ -156,7 +156,7 @@ Server-side state is the resolved client context held by the CH client-auth midd
 |--------|------|-------------|------|
 | `ParthenonClient` / `ParthenonChat` | module | JS SDK: client + embeddable widget | `sdk/parthenon-js/index.js` |
 | `Client` | class | Python SDK: request/response + server-side | `sdk/parthenon-python/parthenon/client.py` |
-| `AgentClientDemoApp` | app | Standalone demo app (proxy + chat/form UI) | `agent-client-demo-app/demo_app/main.py` |
+| `app` | FastAPI app | Standalone demo app (proxy + chat/form UI) | `agent-client-demo-app/demo_app/main.py` |
 | `start.sh` / `stop.sh` / `start.ps1` / `stop.ps1` | scripts | Run the demo app on port 7002 | `agent-client-demo-app/` |
 
 ### Tests

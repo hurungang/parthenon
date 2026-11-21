@@ -113,7 +113,13 @@ test.describe('Agent Clients - Mocked Management', () => {
     // Searchable agent-type dropdown.
     await page.getByRole('combobox', { name: /Agent type|agentClients\.agentType/ }).click()
     await page.getByRole('option', { name: 'Triage' }).click()
-    await page.getByRole('button', { name: /Save|common\.save/ }).click()
+    // Save stays disabled for a publishable client with no allowed origin —
+    // switch to the secret (server-side) credential type.
+    await page.locator('[role="combobox"]').filter({ hasText: 'publishable' }).click()
+    await page.getByRole('option', { name: /secret/i }).click()
+    const save = page.getByRole('button', { name: /Save|common\.save/ })
+    await expect(save).toBeEnabled()
+    await save.click()
     await expect(page.locator('input[readonly]')).toHaveValue('phn_cl_sk_e2e_secret')
   })
 })

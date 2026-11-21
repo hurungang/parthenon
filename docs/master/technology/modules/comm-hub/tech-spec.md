@@ -6,6 +6,8 @@ The communication hub is the central message broker for real-time interactions i
 
 The hub also serves as the **mTLS gateway** for agent-to-tool calls. Every inbound tool request from an Agent Runtime presents a client certificate; `CertificateAuthorizationMiddleware` extracts it, validates it with the Control Center, and fetches the authorised identity token before forwarding the call. Agents never supply their own tokens — the Control Center is the sole token issuer at call time.
 
+The hub is also the **conversation transport**: it prepares/relays conversation turns, mirrors Agent Runtime status into persisted activity, dispatches an answered pause exactly once, relays paused-turn checkpoints to Control Center, and forwards an operator-approved live script test to Agent Runtime. It remains transport-only: no database, no persistence, no signing.
+
 ---
 
 ## Key Components
@@ -42,10 +44,13 @@ The hub also serves as the **mTLS gateway** for agent-to-tool calls. Every inbou
 | Protocol | Path | Purpose |
 |----------|------|---------|
 | `WebSocket` | `/ws/sessions/{session_id}` | Bidirectional real-time messaging for user ↔ agent chat |
-| `POST` | `/internal/agent/resume/{session_id}` | Resume a suspended agent session after an intervene response; forwards resume signal from Control Center to Agent Runtime |
-| `MCP` | `/mcp` (Streamable HTTP) | MCP JSON-RPC endpoint (`initialize` / `tools/list` / `tools/call`) for external MCP clients, authenticated by API key |
+| `POST` | `/internal/agent/resume/{session_id}` | Resume a suspended agent session after an intervene response; conversation-scoped resumes are dispatched once, instance-independent, and persist one outcome |
+| `PUT` | `/internal/checkpoint/{conv_session_id}` | AR-facing checkpoint save, relayed to Control Center |
+| `GET` | `/internal/checkpoint/{conv_session_id}` | AR-facing checkpoint load, relayed from Control Center |
+| `POST` | `/internal/live-test/run` | CC → AR relay for one operator-approved live script run |
+| `MCP` | `/mcp` (Streamable HTTP) | MCP JSON-RPC endpoint (`initialize` / `tools/list` / `tools/call`) for external MCP clients, authenticated by API key or OAuth Bearer |
 | `MCP` | `/mcp/sse`, `/mcp/sse/messages` | MCP Server-Sent Events transport (stream + message posting) |
-| `MCP Tool` | `load_skills` | MCP system tool: discover all skills (including SOPs) accessible to the authenticated agent. Accepts optional `since` parameter (ISO 8601 timestamp) for incremental sync — only skills updated after the given timestamp are returned. |
+| `MCP Tool` | `load_skills` | MCP system tool: discover all skills (including SOPs) accessible to the authenticated agent; optional `since` for incremental sync |
 
 ---
 
@@ -127,7 +132,7 @@ Communication Hub is tenant-bound via signed headers since the multi-tenant supp
 | internal execute/resume/terminate forwarders | routers (modified) | Re-emit CC's original signed headers to AR (`forward_tenant_headers`) so executions bind to the tenant | `backend/app/communication_hub/api/internal/agent_execute.py` (+ `agent_resume.py`, `agent_terminate.py`) |
 | session dispatch / A2A / MCP server & tool registry | modules (reference) | Unchanged — scoped by the middleware-bound session tenant and CC's tenant-scoped resolves | `backend/app/communication_hub/` |
 
-## Strict Tenant Isolation (as-built — strict-tenant-isolation change)
+## Strict Tenant Isolation
 
 The hub is tenant-bound end to end:
 
@@ -136,7 +141,7 @@ The hub is tenant-bound end to end:
 - The MCP protocol server's `tools/list` / `tools/call` are per-tenant for API-key-authenticated clients via `ToolRegistryBridge`.
 - The WebSocket chat endpoint authenticates both token kinds (user JWT and platform-account JWT), binds the connection's tenant, and signs the tenant context for the CC loopback call.
 
-### As-built Code Reference Map additions
+### Strict Tenant Isolation — Code Reference Map
 
 | Symbol | Type | Description | File |
 |--------|------|-------------|------|
@@ -151,7 +156,7 @@ The hub is tenant-bound end to end:
 
 ---
 
-## Script-Tool Routing (sandboxed-scripting-and-llm-mocking change)
+## Script-Tool Routing
 
 Communication Hub routes `script____<name>` virtual tools to Agent Runtime sandbox execution (full details: [sandboxed-scripting module](../sandboxed-scripting/tech-spec.md)).
 
@@ -162,9 +167,9 @@ Communication Hub routes `script____<name>` virtual tools to Agent Runtime sandb
 
 ---
 
-## Control Center Assistant — MCP OAuth plane, cc routing and chat hardening (control-center-chatbot change)
+## Control Center Assistant — MCP OAuth plane, cc routing and chat hardening
 
-The hub gained a second MCP authentication plane and carried the transport-hardening work for the in-app assistant (full details: [agents module](../agents/tech-spec.md)).
+The hub gained a second MCP authentication plane and carried the transport-hardening work for the in-app assistant (full details: [agents — assistant](../agents/assistant.md)).
 
 **Dual identity plane on `/mcp`.** The existing API-key middleware is unchanged; a parallel OAuth/OIDC Bearer middleware validates the *user's* token, resolves identity, permission scope and tenant, and seeds the MCP session with that context. The identity token stays server-side (never returned to the client), exactly as on the API-key path. Both planes converge on one session-building helper, so both transports share identical authorization semantics.
 
@@ -208,6 +213,28 @@ The hub gained a second MCP authentication plane and carried the transport-harde
 | `ConversationTurnError` + `_conversation_turn_error_from_http_status` / `_conversation_turn_error_from_guardrail_stop` / `_persist_and_surface_turn_error` | class + functions (new) | Structured `{"type": "chat_error", "code", "message"}` surfacing: AR's pre-model 400 maps to `assistant_model_not_configured`, guardrail stops to `iteration_limit` / `guardrail_<reason>` with actionable copy, and the error turn is persisted through the structured-error pattern | `backend/app/api/ws/chat.py` |
 | `conversation_sessions_default_window_days` | setting (new) | Default listing window (7 days) mirrored to the sessions API/UI | `backend/app/core/config.py` |
 
+### Conversation activity, pause/resume and optimizer transport
+
+The hub carries the persisted-activity pipeline, the durable pause/resume relay, and the optimizer's live-test relay (full details: [conversations module](../conversations/tech-spec.md), [agents plans & optimization](../agents/plans-optimization.md)).
+
+| Symbol | Type | Description | File |
+|--------|------|-------------|------|
+| `ControlCenterDataClient` (activity) | class methods | `upsert_conversation_activity`, `get_conversation_activity`, `touch_conversation_activity` — the only CH→CC activity calls, via `internal_httpx_client` | `backend/app/communication_hub/data_client.py` |
+| `_activity_state_message` | function (extended) | Connect hydration: persisted activity + `active_resume_id`, resume state, terminal reason and message | `backend/app/api/ws/chat.py` |
+| `_persist_activity_transition` | function | Persists each AR status transition to CC and pushes the normalized status to the live socket | `backend/app/api/ws/chat.py` |
+| `_thinking_heartbeat_loop` | function | Keepalive status beats; each beat touches the CC activity row so a live-but-quiet turn stays fresh and the heartbeat stops on a pause | `backend/app/api/ws/chat.py` |
+| `status_ping` / `status_pong` | WS messages | `status_pong` reports the persisted activity state (plus pending-intervention flag) instead of in-memory booleans | `backend/app/api/ws/chat.py` |
+| `forward_resume_session` | endpoint (extended) | Conversation-scoped resumes dispatch a supervised background turn, stream/persist status, persist one outcome, push one reply; returns a resume status enum | `backend/app/communication_hub/api/internal/agent_resume.py` |
+| `_dispatch_conversation_resume` | function | Single-dispatch guard + stored-outcome short-circuit; combined with the AR claim yields one resume and one outcome | `backend/app/communication_hub/api/internal/agent_resume.py` |
+| `_activity_heartbeat_loop` | function | Beats the activity row while a *resumed* turn streams, so a quiet-but-live resumed turn is not terminalised | `backend/app/communication_hub/api/internal/agent_resume.py` |
+| `terminal_message_for_reason` / `terminal_status_for_reason` | functions | Terminal notification text/status for durably unresumable turns, keyed by CC's reason code | `backend/app/communication_hub/api/internal/agent_resume.py` |
+| `save_turn_checkpoint` / `load_turn_checkpoint` | endpoints | AR-facing checkpoint save/load relayed to CC (size-guarded, never inspected) | `backend/app/communication_hub/api/internal/turn_checkpoint.py` |
+| `ControlCenterDataClient` (resume) | class methods | `save_conversation_turn_resume`, `save_conversation_turn_checkpoint`, `claim_conversation_turn_resume`, `complete_conversation_turn_resume` relays | `backend/app/communication_hub/data_client.py` |
+| `route_tool_call` (idempotency) | endpoint (modified) | Forwards the turn idempotency key on management tool calls | `backend/app/communication_hub/api/internal/tool_routing.py` |
+| `intervene_request` (`live_test` block) | WS message (extended) | Live dispatch and reconnect re-surface carry `live_test` (ledger id, status, expiry, script version/name, tool-call preview) so the approval card renders identically | `backend/app/communication_hub/intervention_router.py` |
+| `POST /internal/live-test/run` | endpoint | CC → AR relay of the approved script payload; transport only | `backend/app/communication_hub/api/internal/live_test_forwarding.py` |
+| `run_conversation_turn` (paused stream) | function (extended) | Handles a stream that ends with a `paused` chunk instead of a reply | `backend/app/api/ws/chat.py` |
+
 ### Tests
 
 | Symbol | Type | Description | File |
@@ -215,4 +242,7 @@ The hub gained a second MCP authentication plane and carried the transport-harde
 | `test_oauth_bearer_auth` | test | OAuth plane on `/mcp*`: JWT discrimination, identity/tenant resolution, fail-closed denial, no token leakage into the session payload | `backend/tests/unit/test_oauth_bearer_auth.py` |
 | `test_cc_tool_registry_bridge` | test | `cc____` catalog listing, per-tool grant filtering, management dispatch with `user_sub`, delete/out-of-scope denial | `backend/tests/unit/test_cc_tool_registry_bridge.py` |
 | `test_mcp_protocol_server` | test | JSON-RPC contract and the shared session/auth gate across both transports | `backend/tests/unit/test_mcp_protocol_server.py` |
+| `test_resume_router_dispatch` | test | Single dispatch / single outcome under duplicate answers; paused-stream handling | `backend/tests/communication_hub/test_resume_router_dispatch.py` |
+| `test_resume_activity_heartbeat` | test | Resumed-turn activity beats start and stop on success/failure | `backend/tests/communication_hub/test_resume_activity_heartbeat.py` |
+| `test_live_test_forwarding` | test | Live-test payload forwarded verbatim via `internal_httpx_client`; no identity material | `backend/tests/communication_hub/test_live_test_forwarding.py` |
 | `conversation-intervention.spec.ts` | E2E test | Conversational HITL round-trip (approval preview → response → resume) over the WS channel | `e2e/tests/conversation-intervention.spec.ts` |

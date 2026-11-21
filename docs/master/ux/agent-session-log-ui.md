@@ -17,6 +17,18 @@ The agent session log UI presents agent execution logs in a clear, accessible fo
 - Ensure the UI is accessible and usable for non-technical users (clear language, no jargon)
 - Validate usability and comprehension through user testing with business and compliance personas
 
+## Conversation Activity (as shipped)
+
+- A conversational turn always shows one activity indicator while it is live — `thinking`,
+  `using a tool`, `delegating`, `waiting for a delegated response`, `waiting for your input` — and
+  the same indicator becomes the terminal label (`finished`, `failed`, `timed out`) when the turn
+  ends. It is never left spinning, and a reload or reconnect restores the persisted state.
+- When a turn pauses for human input the indicator switches to `Waiting for your input` in place;
+  there is no blank window between the agent's message and the intervention request.
+- A paused turn that can no longer be resumed shows one reason-specific terminal card
+  (`expired`, pause point lost, stopped unexpectedly) with what happened, what was not written, a
+  next step and **Ask again** / **Dismiss** — never a generic timeout message.
+
 ## Out of Scope
 - Backend log capture or storage changes
 - Export formats (CSV, PDF, etc.)

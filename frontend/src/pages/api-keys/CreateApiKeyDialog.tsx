@@ -152,8 +152,11 @@ export function CreateApiKeyDialog({ open, onClose, onCreated }: CreateApiKeyDia
               />
 
               <FormControl fullWidth required>
-                <InputLabel>{t('apiKeys.agentIdentity')}</InputLabel>
+                <InputLabel id="create-api-key-identity-label">
+                  {t('apiKeys.agentIdentity')}
+                </InputLabel>
                 <Select
+                  labelId="create-api-key-identity-label"
                   value={identityId}
                   label={t('apiKeys.agentIdentity')}
                   onChange={(e) => setIdentityId(e.target.value)}
@@ -167,8 +170,11 @@ export function CreateApiKeyDialog({ open, onClose, onCreated }: CreateApiKeyDia
               </FormControl>
 
               <FormControl fullWidth required disabled={!identityId}>
-                <InputLabel>{t('apiKeys.agentRole')}</InputLabel>
+                <InputLabel id="create-api-key-role-label">
+                  {t('apiKeys.agentRole')}
+                </InputLabel>
                 <Select
+                  labelId="create-api-key-role-label"
                   value={roleId}
                   label={t('apiKeys.agentRole')}
                   onChange={(e) => setRoleId(e.target.value)}

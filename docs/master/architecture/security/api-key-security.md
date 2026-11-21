@@ -4,7 +4,7 @@
 
 API keys provide an alternative authentication credential for external third-party AI agents (Claude Code, Cursor, custom agents) connecting to the Communication Hub. Keys now authenticate the standard MCP protocol handshake (SSE + Streamable HTTP) in addition to the existing REST skills-loading endpoint. Keys are provisioned by platform administrators in Control Center and validated over existing mTLS service certificates — no new trust model is introduced. The permission model and identity-token isolation are unchanged.
 
-**Tenant binding**: under multi-tenancy, API keys are issued and validated per tenant — key validation resolves the owning tenant from the request's tenant context, and the resulting MCP session is bound to that tenant. A key cannot authenticate to, or reach resources of, any other tenant; key lifecycle and authentication events carry tenant attribution in audit logs. See [Multi-Tenancy Architecture](../multi-tenancy.md).
+**Tenant binding**: under multi-tenancy, API keys are issued and validated per tenant — key validation resolves the owning tenant from the request's tenant context, and the resulting MCP session is bound to that tenant. A key cannot authenticate to, or reach resources of, any other tenant; key lifecycle and authentication events carry tenant attribution in audit logs. See [Multi-Tenancy Architecture](../modules/multi-tenancy.md).
 
 **Parallel OAuth path**: the same MCP server also accepts the *user's* OIDC Bearer token, which authenticates the session as that user and carries the user's own permission scope. API keys and OAuth tokens are distinguishable credentials with separate session scopes; management tooling is governed by per-tool permission parity on either path. See [Control Center Assistant Security](control-center-assistant.md).
 
@@ -70,7 +70,7 @@ The internal validation endpoint is restricted to the Communication Hub caller s
 
 ## Two Credential Classes
 
-Third-party [agent integration](../product/features/third-party-agent-integration.md) introduces a second, separate credential class. The two classes are distinct and governed independently:
+Third-party [agent integration](../../product/features/third-party-agent-integration.md) introduces a second, separate credential class. The two classes are distinct and governed independently:
 
 | | **API Keys** | **Clients** |
 |---|---|---|

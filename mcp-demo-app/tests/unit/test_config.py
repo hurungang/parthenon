@@ -40,7 +40,8 @@ def test_settings_missing_keycloak_url(monkeypatch):
     from app.config import AppSettings
 
     with pytest.raises((ValidationError, Exception)):
-        AppSettings()
+        # Ignore any developer `.env` so the missing env var is actually missing.
+        AppSettings(_env_file=None)
 
 
 def test_settings_missing_keycloak_client_id(monkeypatch):
@@ -50,7 +51,8 @@ def test_settings_missing_keycloak_client_id(monkeypatch):
     from app.config import AppSettings
 
     with pytest.raises((ValidationError, Exception)):
-        AppSettings()
+        # Ignore any developer `.env` so the missing env var is actually missing.
+        AppSettings(_env_file=None)
 
 
 def test_settings_missing_hub_base_url(monkeypatch):
@@ -60,7 +62,8 @@ def test_settings_missing_hub_base_url(monkeypatch):
     from app.config import AppSettings
 
     with pytest.raises((ValidationError, Exception)):
-        AppSettings()
+        # Ignore any developer `.env` so the missing env var is actually missing.
+        AppSettings(_env_file=None)
 
 
 def test_settings_missing_app_base_url(monkeypatch):
@@ -70,4 +73,5 @@ def test_settings_missing_app_base_url(monkeypatch):
     from app.config import AppSettings
 
     with pytest.raises((ValidationError, Exception)):
-        AppSettings()
+        # Ignore any developer `.env` so the missing env var is actually missing.
+        AppSettings(_env_file=None)

@@ -1,31 +1,27 @@
-import { test, expect } from '@playwright/test'
+import { test, expect, type Page } from '@playwright/test'
 import { standardSetup } from './_helpers'
 
 /**
- * E2E tests for the improve-role-policy-management feature.
+ * E2E tests for role policy management (Roles tab of /user-permissions).
  *
- * Covers:
- * - Adding a policy statement via dropdowns (AddStatementDialog)
- * - Removing a policy statement (PolicyEditor)
- * - Viewing JSON for a role (JSONViewModal)
- * - Copying JSON to clipboard
- * - Cloning a role (CloneRoleDialog)
- * - Error handling: 409 on duplicate clone name
- * - Real backend integration test (no mocks)
+ * Current UI: each role row exposes three actions — "Edit Policy" (opens
+ * `RolePolicyDialog`), "Clone Role" (`CloneRoleDialog`) and "Delete".
+ * Policy statements are no longer edited inline in the table; the dialog owns
+ * the form view (policy cards with in-place editing), the JSON view and the
+ * batch save (`PUT /user-roles/{id}/policies/batch`).
  *
- * All API calls are intercepted via page.route() mocks unless marked as real backend.
+ * All API calls are intercepted via page.route() mocks unless marked as
+ * real backend.
  */
 
 const JSON_HEADERS = { 'Content-Type': 'application/json' }
 
 const MOCK_RESOURCE_TYPES = [
-  { resource_type: 'user', actions: ['create', 'read', 'update', 'delete', 'manage'] },
-  { resource_type: 'role', actions: ['read', 'manage'] },
-  { resource_type: 'group', actions: ['create', 'read', 'update', 'delete', 'manage'] },
-  { resource_type: 'tag', actions: ['read', 'manage'] },
-  { resource_type: 'agent', actions: ['create', 'read', 'update', 'delete', 'execute'] },
-  { resource_type: 'mcp_server', actions: ['create', 'read', 'update', 'delete', 'execute', 'manage'] },
-  { resource_type: 'skill', actions: ['create', 'read', 'update', 'delete', 'execute'] },
+  { resource_type: 'agent::roles', actions: ['read', 'manage'] },
+  { resource_type: 'agent::management', actions: ['create', 'read', 'update', 'delete', 'execute'] },
+  { resource_type: 'agent::skills', actions: ['create', 'read', 'update', 'delete', 'execute'] },
+  { resource_type: 'integration::mcp_hub', actions: ['create', 'read', 'update', 'delete', 'manage'] },
+  { resource_type: 'system::permissions', actions: ['create', 'read', 'update', 'delete', 'manage'] },
 ]
 
 const MOCK_ROLES = [
@@ -63,7 +59,7 @@ const MOCK_ROLE_DETAIL = {
     {
       id: 'policy-001',
       effect: 'allow',
-      module: 'agent',
+      module: 'agent::roles',
       actions: [{ id: 'a1', action: 'read' }, { id: 'a2', action: 'execute' }],
       resources: [],
       tag_conditions: [{ id: 'tc1', tag_key: 'env', tag_value: 'prod' }],
@@ -72,7 +68,7 @@ const MOCK_ROLE_DETAIL = {
     {
       id: 'policy-002',
       effect: 'deny',
-      module: 'role',
+      module: 'system::permissions',
       actions: [{ id: 'a3', action: 'manage' }],
       resources: [],
       tag_conditions: [],
@@ -95,8 +91,8 @@ const MOCK_TAGS = [
   },
 ]
 
-async function setupRoleMocks(page: import('@playwright/test').Page) {
-  await page.route('**/api/v1/user-roles**', (route) => {
+async function setupRoleMocks(page: Page) {
+  await page.route(/\/api\/v1\/user-roles.*$/, (route) => {
     const url = route.request().url()
     const method = route.request().method()
 
@@ -122,31 +118,32 @@ async function setupRoleMocks(page: import('@playwright/test').Page) {
       return
     }
 
+    // Match /{id}/policies/batch PUT (batch save)
+    if (url.match(/\/user-roles\/[^/]+\/policies\/batch$/) && method === 'PUT') {
+      const body = JSON.parse(route.request().postData() || '{}')
+      const saved = (body.policies || []).map((p: Record<string, unknown>, i: number) => ({
+        id: `saved-policy-${i}`,
+        effect: p.effect || 'allow',
+        module: p.module || '',
+        actions: (p.actions as { action: string }[] | undefined)?.map((a, idx) => ({
+          id: `a-${idx}`,
+          action: a.action,
+        })) ?? [],
+        resources: p.resources || [],
+        tag_conditions: p.tag_conditions || [],
+        created_at: '2024-01-01T00:00:00Z',
+      }))
+      route.fulfill({ status: 200, headers: JSON_HEADERS, body: JSON.stringify(saved) })
+      return
+    }
+
     // Match /{id}/policies/{policyId} DELETE
     if (url.match(/\/user-roles\/[^/]+\/policies\/[^/]+$/) && method === 'DELETE') {
       route.fulfill({ status: 204 })
       return
     }
 
-    // Match /{id}/policies POST
-    if (url.match(/\/user-roles\/[^/]+\/policies$/) && method === 'POST') {
-      route.fulfill({
-        status: 201,
-        headers: JSON_HEADERS,
-        body: JSON.stringify({
-          id: 'policy-new',
-          effect: 'allow',
-          module: 'agent',
-          actions: [{ id: 'a-new', action: 'read' }],
-          resources: [],
-          tag_conditions: [],
-          created_at: '2024-01-01T00:00:00Z',
-        }),
-      })
-      return
-    }
-
-    // Match /{id} GET (role detail)
+    // Match /{id} GET (role detail — includes policy_statements)
     if (url.match(/\/user-roles\/[^/]+$/) && method === 'GET') {
       route.fulfill({
         status: 200,
@@ -164,36 +161,36 @@ async function setupRoleMocks(page: import('@playwright/test').Page) {
     })
   })
 
-  await page.route('**/api/v1/policy/resource-types', (route) =>
+  await page.route(/\/api\/v1\/policy\/resource-types$/, (route) =>
     route.fulfill({
       status: 200,
       headers: JSON_HEADERS,
       body: JSON.stringify(MOCK_RESOURCE_TYPES),
-    })
+    }),
   )
 
-  await page.route('**/api/v1/tags**', (route) =>
+  await page.route(/\/api\/v1\/user-tags\/definitions(\?.*)?$/, (route) =>
     route.fulfill({
       status: 200,
       headers: JSON_HEADERS,
       body: JSON.stringify(MOCK_TAGS),
-    })
+    }),
   )
 
   // Groups, users, access requests — empty responses so nav doesn't error
-  await page.route('**/api/v1/groups**', (route) =>
+  await page.route(/\/api\/v1\/user-groups(\?.*)?$/, (route) =>
     route.fulfill({
       status: 200,
       headers: JSON_HEADERS,
       body: JSON.stringify([]),
-    })
+    }),
   )
-  await page.route('**/api/v1/platform-users**', (route) =>
+  await page.route(/\/api\/v1\/platform-users(\?.*)?$/, (route) =>
     route.fulfill({
       status: 200,
       headers: JSON_HEADERS,
       body: JSON.stringify([]),
-    })
+    }),
   )
 }
 
@@ -201,17 +198,36 @@ async function setupRoleMocks(page: import('@playwright/test').Page) {
  * Navigate to the Roles tab on the /user-permissions page.
  * PermissionsPage uses tab navigation (not sub-routes), so direct
  * navigation to /permissions/roles does not exist.
- *
- * Uses waitForLoadState('load') instead of 'networkidle' to avoid timing out
- * on background traffic (OTEL batch exports, Vite HMR, etc.) that prevents
- * networkidle from being reached within the 30s test budget.
  */
-async function gotoRolesTab(page: import('@playwright/test').Page) {
+async function gotoRolesTab(page: Page) {
   await page.goto('/user-permissions')
   await page.waitForLoadState('load')
-  // Wait for the Roles tab to become visible (handles async auth + identity-status checks)
   await page.getByRole('tab', { name: 'Roles' }).waitFor({ state: 'visible', timeout: 15000 })
   await page.getByRole('tab', { name: 'Roles' }).click()
+  await expect(page.getByText('Admin Role')).toBeVisible({ timeout: 10000 })
+}
+
+/** Opens RolePolicyDialog for the Admin Role row and waits for the detail load. */
+async function openPolicyDialog(page: Page) {
+  await gotoRolesTab(page)
+
+  const adminRow = page.getByRole('row').filter({ hasText: 'Admin Role' }).first()
+  await adminRow.getByRole('button', { name: 'Edit Policy' }).click()
+
+  const dialog = page.getByRole('dialog')
+  await expect(dialog).toBeVisible()
+  // The dialog renders its cards only after GET /user-roles/{id} resolves.
+  await expect(dialog.locator('.MuiCard-root').first()).toBeVisible({ timeout: 10000 })
+  return dialog
+}
+
+/** MUI Select for the policy effect (no label association → scope by FormControl). */
+function effectSelect(scope: import('@playwright/test').Locator) {
+  return scope
+    .locator('.MuiFormControl-root')
+    .filter({ hasText: 'Effect' })
+    .first()
+    .getByRole('combobox')
 }
 
 // ---------------------------------------------------------------------------
@@ -233,46 +249,27 @@ test.describe('Roles Page', () => {
 })
 
 // ---------------------------------------------------------------------------
-// 2. View JSON modal opens and shows formatted JSON
+// 2. JSON view of RolePolicyDialog
 // ---------------------------------------------------------------------------
 
-test.describe('JSONViewModal', () => {
+test.describe('Role Policy JSON View', () => {
   test.beforeEach(async ({ page }) => {
     await standardSetup(page)
     await setupRoleMocks(page)
   })
 
-  test('View JSON button opens modal with formatted JSON', async ({ page }) => {
-    await gotoRolesTab(page)
+  test('JSON toggle shows the policy document in a monospace editor', async ({ page }) => {
+    const dialog = await openPolicyDialog(page)
 
-    await expect(page.getByText('Admin Role')).toBeVisible({ timeout: 10000 })
+    await dialog.getByRole('button', { name: 'JSON' }).click()
 
-    // Find and click the View JSON button (data-testid or aria-label)
-    const jsonButton = page.locator('[aria-label*="json" i], [aria-label*="JSON"], button:has([data-testid*="json"]):first-of-type').first()
-    if (await jsonButton.isVisible()) {
-      await jsonButton.click()
-    } else {
-      // Try clicking any icon button in the Admin Role row
-      const adminRow = page.getByRole('row').filter({ hasText: 'Admin Role' })
-      const iconButtons = adminRow.locator('button')
-      const count = await iconButtons.count()
-      if (count > 0) {
-        // Click the last few icon buttons to find view JSON
-        for (let i = 0; i < count; i++) {
-          const btn = iconButtons.nth(i)
-          const label = await btn.getAttribute('aria-label')
-          if (label && label.toLowerCase().includes('json')) {
-            await btn.click()
-            break
-          }
-        }
-      }
-    }
+    const editor = dialog.locator('textarea')
+    await expect(editor.first()).toBeVisible()
 
-    // Whether dialog opens or not, verify page is stable
-    await page.waitForLoadState('networkidle')
-    // The page should not have crashed
-    await expect(page.locator('body')).not.toHaveText(/error/i, { timeout: 3000 }).catch(() => {})
+    const json = await editor.first().inputValue()
+    expect(json).toContain('"policies"')
+    expect(json).toContain('"module": "agent::roles"')
+    expect(json).toContain('"module": "system::permissions"')
   })
 })
 
@@ -289,79 +286,35 @@ test.describe('CloneRoleDialog', () => {
   test('Clone dialog pre-fills source role name with Copy prefix', async ({ page }) => {
     await gotoRolesTab(page)
 
-    await expect(page.getByText('Admin Role')).toBeVisible({ timeout: 10000 })
-
-    // Look for clone button in the Admin Role row
     const adminRow = page.getByRole('row').filter({ hasText: 'Admin Role' }).first()
-    const cloneButton = adminRow.locator('button').filter({ hasText: /clone/i }).first()
+    await adminRow.getByRole('button', { name: 'Clone Role' }).click()
 
-    if (await cloneButton.isVisible()) {
-      await cloneButton.click()
-    } else {
-      // Try icon buttons with clone aria-label
-      const iconBtns = adminRow.locator('button')
-      const count = await iconBtns.count()
-      for (let i = 0; i < count; i++) {
-        const btn = iconBtns.nth(i)
-        const label = await btn.getAttribute('aria-label')
-        if (label && label.toLowerCase().includes('clone')) {
-          await btn.click()
-          break
-        }
-      }
-    }
-
-    // If dialog opened, check pre-filled name
     const dialog = page.getByRole('dialog')
-    if (await dialog.isVisible({ timeout: 3000 }).catch(() => false)) {
-      const nameInput = dialog.locator('input').first()
-      const value = await nameInput.inputValue()
-      // Name should contain source role name or "Copy"
-      expect(value).toMatch(/Admin Role|Copy/i)
-    }
+    await expect(dialog).toBeVisible()
+
+    const nameInput = dialog.getByLabel('Name')
+    await expect(nameInput).toHaveValue('Copy of Admin Role')
   })
 
   test('Clone dialog submission creates new role and closes', async ({ page }) => {
     await gotoRolesTab(page)
 
-    await expect(page.getByText('Admin Role')).toBeVisible({ timeout: 10000 })
-
-    // Try to find and click clone button
     const adminRow = page.getByRole('row').filter({ hasText: 'Admin Role' }).first()
-    const iconBtns = adminRow.locator('button')
-    const count = await iconBtns.count()
-    let clicked = false
-
-    for (let i = 0; i < count; i++) {
-      const btn = iconBtns.nth(i)
-      const label = await btn.getAttribute('aria-label')
-      if (label && label.toLowerCase().includes('clone')) {
-        await btn.click()
-        clicked = true
-        break
-      }
-    }
-
-    if (!clicked) {
-      // Skip gracefully if clone button not found by aria-label
-      test.skip()
-      return
-    }
+    await adminRow.getByRole('button', { name: 'Clone Role' }).click()
 
     const dialog = page.getByRole('dialog')
-    await expect(dialog).toBeVisible({ timeout: 5000 })
+    await expect(dialog).toBeVisible()
 
-    // Submit
-    const submitBtn = dialog.locator('button[type="submit"], button').filter({ hasText: /clone/i }).first()
-    if (await submitBtn.isEnabled()) {
-      await submitBtn.click()
-      await expect(dialog).not.toBeVisible({ timeout: 5000 })
-    }
+    const submitBtn = dialog.getByRole('button', { name: 'Clone Role' })
+    await expect(submitBtn).toBeEnabled()
+    await submitBtn.click()
+
+    await expect(dialog).not.toBeVisible({ timeout: 5000 })
   })
 
   test('Clone dialog shows error on 409 duplicate name', async ({ page }) => {
     // Override clone to return 409
-    await page.route('**/api/v1/user-roles/**/clone', (route) => {
+    await page.route(/\/api\/v1\/user-roles\/[^/]+\/clone$/, (route) => {
       route.fulfill({
         status: 409,
         headers: JSON_HEADERS,
@@ -371,224 +324,151 @@ test.describe('CloneRoleDialog', () => {
 
     await gotoRolesTab(page)
 
-    await expect(page.getByText('Admin Role')).toBeVisible({ timeout: 10000 })
-
     const adminRow = page.getByRole('row').filter({ hasText: 'Admin Role' }).first()
-    const iconBtns = adminRow.locator('button')
-    const count = await iconBtns.count()
-    let clicked = false
-
-    for (let i = 0; i < count; i++) {
-      const btn = iconBtns.nth(i)
-      const label = await btn.getAttribute('aria-label')
-      if (label && label.toLowerCase().includes('clone')) {
-        await btn.click()
-        clicked = true
-        break
-      }
-    }
-
-    if (!clicked) {
-      test.skip()
-      return
-    }
+    await adminRow.getByRole('button', { name: 'Clone Role' }).click()
 
     const dialog = page.getByRole('dialog')
-    await expect(dialog).toBeVisible({ timeout: 5000 })
+    await expect(dialog).toBeVisible()
 
-    const submitBtn = dialog.locator('button').filter({ hasText: /clone/i }).first()
-    if (await submitBtn.isEnabled()) {
-      await submitBtn.click()
-      // Dialog should remain open after error
-      await expect(dialog).toBeVisible({ timeout: 3000 })
-    }
+    await dialog.getByRole('button', { name: 'Clone Role' }).click()
+
+    // Dialog stays open and surfaces the backend message
+    await expect(dialog).toBeVisible({ timeout: 3000 })
+    await expect(dialog.getByRole('alert')).toContainText('already exists')
   })
 })
 
 // ---------------------------------------------------------------------------
-// 4. PolicyEditor: expand role and view statements
+// 4. RolePolicyDialog form view: loaded statements
 // ---------------------------------------------------------------------------
 
-test.describe('PolicyEditor', () => {
+test.describe('RolePolicyDialog policy cards', () => {
   test.beforeEach(async ({ page }) => {
     await standardSetup(page)
     await setupRoleMocks(page)
   })
 
-  test('expanding a role row shows PolicyEditor with statements', async ({ page }) => {
-    await gotoRolesTab(page)
+  test('opening a role shows one card per policy statement', async ({ page }) => {
+    const dialog = await openPolicyDialog(page)
 
-    await expect(page.getByText('Admin Role')).toBeVisible({ timeout: 10000 })
+    const cards = dialog.locator('.MuiCard-root')
+    await expect(cards).toHaveCount(2)
 
-    // Try to expand the row by clicking it or an expand button
-    const adminRow = page.getByRole('row').filter({ hasText: 'Admin Role' }).first()
-    await adminRow.click()
-
-    // After expanding, policy editor should show statements or add button
-    await page.waitForTimeout(1000)
-    // Verify page is stable
-    await expect(page.locator('body')).toBeVisible()
+    // Module + compact summary are rendered for each statement
+    await expect(cards.nth(0).getByText('agent::roles')).toBeVisible()
+    await expect(cards.nth(0).getByText(/Effect: Allow/)).toBeVisible()
+    await expect(cards.nth(1).getByText('system::permissions')).toBeVisible()
+    await expect(cards.nth(1).getByText(/Effect: Deny/)).toBeVisible()
   })
 
-  test('Add Statement button is visible in PolicyEditor', async ({ page }) => {
-    await gotoRolesTab(page)
+  test('Add Policy button is visible in the dialog', async ({ page }) => {
+    const dialog = await openPolicyDialog(page)
 
-    await expect(page.getByText('Admin Role')).toBeVisible({ timeout: 10000 })
-
-    // Expand
-    await page.getByRole('row').filter({ hasText: 'Admin Role' }).first().click()
-    await page.waitForTimeout(500)
-
-    // Look for add statement/policy button
-    const addBtn = page.getByRole('button').filter({ hasText: /add.*statement|add.*policy/i }).first()
-    if (await addBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
-      await expect(addBtn).toBeVisible()
-    }
+    await expect(dialog.getByRole('button', { name: 'Add Policy' })).toBeVisible()
   })
 })
 
 // ---------------------------------------------------------------------------
-// 5. AddStatementDialog: dropdowns from resource types API
+// 5. Adding a policy statement inside RolePolicyDialog
 // ---------------------------------------------------------------------------
 
-test.describe('AddStatementDialog', () => {
+test.describe('Add Policy Statement', () => {
   test.beforeEach(async ({ page }) => {
     await standardSetup(page)
     await setupRoleMocks(page)
   })
 
-  test('Add Statement dialog opens with resource type dropdown', async ({ page }) => {
-    await gotoRolesTab(page)
+  test('Add Policy opens an editable card with resource type, effect and actions', async ({
+    page,
+  }) => {
+    const dialog = await openPolicyDialog(page)
 
-    await expect(page.getByText('Admin Role')).toBeVisible({ timeout: 10000 })
+    await dialog.getByRole('button', { name: 'Add Policy' }).click()
 
-    // Expand row
-    await page.getByRole('row').filter({ hasText: 'Admin Role' }).first().click()
-    await page.waitForTimeout(500)
+    // New card is created in edit mode
+    const cards = dialog.locator('.MuiCard-root')
+    await expect(cards).toHaveCount(3)
+    const newCard = cards.nth(2)
 
-    // Click Add Statement/Policy button
-    const addBtn = page.getByRole('button').filter({ hasText: /add.*statement|add.*policy/i }).first()
-    if (await addBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
-      await addBtn.click()
+    await expect(newCard.getByLabel('Resource Type')).toBeVisible()
+    // MUI Select without an InputLabel association — locate via its FormControl
+    await expect(effectSelect(newCard)).toBeVisible()
+    await expect(effectSelect(newCard)).toHaveText('Allow')
 
-      const dialog = page.getByRole('dialog')
-      if (await dialog.isVisible({ timeout: 3000 }).catch(() => false)) {
-        // Resource type dropdown should exist
-        const resourceTypeLabel = dialog.getByText(/resource type/i).first()
-        await expect(resourceTypeLabel).toBeVisible({ timeout: 3000 })
-      }
-    }
+    const actions = newCard.getByRole('combobox').nth(2)
+    await expect(actions).toBeVisible()
+    // Actions are disabled until a resource type is chosen
+    await expect(actions).toHaveAttribute('placeholder', 'Select a resource type first')
   })
 
-  test('Add Statement dialog shows Resource IDs section', async ({ page }) => {
-    await gotoRolesTab(page)
+  test('Resource IDs section appears once a resource type is set', async ({ page }) => {
+    const dialog = await openPolicyDialog(page)
 
-    await expect(page.getByText('Admin Role')).toBeVisible({ timeout: 10000 })
+    await dialog.getByRole('button', { name: 'Add Policy' }).click()
+    const newCard = dialog.locator('.MuiCard-root').nth(2)
 
-    // Click the expand button (has aria-label "Expand" from app.expand i18n key)
-    await page.getByRole('button', { name: /^expand$/i }).first().click()
+    // Module is required before a resource ID row can be added
+    await newCard.getByLabel('Resource Type').fill('agent::roles')
+    // Close the autocomplete option list — it overlays the card actions
+    await page.keyboard.press('Escape')
+    await expect(newCard.getByRole('combobox').nth(2)).toHaveAttribute(
+      'placeholder',
+      'Select actions',
+    )
 
-    const addBtn = page.getByRole('button').filter({ hasText: /add.*statement|add.*policy/i }).first()
-    if (!await addBtn.isVisible({ timeout: 5000 }).catch(() => false)) {
-      test.skip()
-      return
-    }
+    const addResourceBtn = newCard.getByRole('button', { name: 'Add Resource ID' })
+    await expect(addResourceBtn).toBeVisible()
+    await addResourceBtn.click()
 
-    await addBtn.click()
-
-    const dialog = page.getByRole('dialog')
-    await expect(dialog).toBeVisible({ timeout: 5000 })
-
-    // Resource IDs section must be visible in the dialog
-    await expect(dialog.getByText(/resource.*id/i).first()).toBeVisible({ timeout: 3000 })
-
-    // Add Resource ID button must be present
-    const addResBtn = dialog.getByRole('button').filter({ hasText: /add.*resource/i }).first()
-    await expect(addResBtn).toBeVisible({ timeout: 3000 })
+    // Resource IDs section + editable id field
+    await expect(newCard.getByText('Resource IDs (Optional)')).toBeVisible()
+    await expect(newCard.getByPlaceholder('e.g. abc-123 or * for all')).toBeVisible()
   })
 })
 
 // ---------------------------------------------------------------------------
-// 6. PolicyEditor resource ID display
+// 6. Policy cards display resource IDs
 // ---------------------------------------------------------------------------
 
-test.describe('PolicyEditor Resource IDs', () => {
-  test('policy cards display resource ID chips in resource_type:resource_id format', async ({ page }) => {
+test.describe('Policy Editor Resource IDs', () => {
+  test('policy cards display the bound resource IDs', async ({ page }) => {
     await standardSetup(page)
+    await setupRoleMocks(page)
 
-    // Override mock to return a role with resources in policy_statements
     const roleWithResources = {
-      id: 'role-001',
-      name: 'Admin Role',
-      description: 'Full admin access',
-      is_active: true,
-      is_system: false,
-      role_type: 'user_defined',
+      ...MOCK_ROLE_DETAIL,
       policy_count: 1,
-      user_assignment_count: 0,
-      group_assignment_count: 0,
-      created_at: '2024-01-01T00:00:00Z',
-      updated_at: '2024-01-01T00:00:00Z',
       policy_statements: [
         {
           id: 'policy-with-res',
           effect: 'allow',
-          module: 'agent',
+          module: 'agent::roles',
           actions: [{ id: 'a1', action: 'execute' }],
-          resources: [
-            { id: 'r1', resource_type: 'agent', resource_id: 'agent-test-999' },
-          ],
+          resources: [{ id: 'r1', resource_type: 'agent::roles', resource_id: 'agent-test-999' }],
           tag_conditions: [],
           created_at: '2024-01-01T00:00:00Z',
         },
       ],
     }
 
-    // Catch-all for any unmocked API request — prevents real backend returning 401 and
-    // triggering the login redirect. Specific routes below take priority (FILO order).
-    await page.route('**/api/v1/**', (route) =>
-      route.fulfill({ status: 200, headers: JSON_HEADERS, body: JSON.stringify([]) })
-    )
-
-    await page.route('**/api/v1/user-roles**', (route) => {
-      const url = route.request().url()
-      const method = route.request().method()
-      if (url.match(/\/user-roles\/[^/]+$/) && method === 'GET') {
-        route.fulfill({
-          status: 200,
-          headers: JSON_HEADERS,
-          body: JSON.stringify(roleWithResources),
-        })
-        return
-      }
+    // Higher priority than setupRoleMocks (registered last wins)
+    await page.route(/\/api\/v1\/user-roles\/role-001(\?.*)?$/, (route) =>
       route.fulfill({
         status: 200,
         headers: JSON_HEADERS,
-        body: JSON.stringify([MOCK_ROLES[0]]),
-      })
-    })
-    await page.route('**/api/v1/policy/resource-types', (route) =>
-      route.fulfill({ status: 200, headers: JSON_HEADERS, body: JSON.stringify(MOCK_RESOURCE_TYPES) })
+        body: JSON.stringify(roleWithResources),
+      }),
     )
 
-    await gotoRolesTab(page)
+    const dialog = await openPolicyDialog(page)
 
-    await expect(page.getByText('Admin Role')).toBeVisible({ timeout: 10000 })
+    // Compact summary reports the resource count
+    const card = dialog.locator('.MuiCard-root').first()
+    await expect(card.getByText(/Resource IDs \(Optional\): 1/)).toBeVisible()
 
-    // Click expand and wait for the useRole detail call to complete
-    const [response] = await Promise.all([
-      page.waitForResponse((res) => /\/user-roles\/[^/]+$/.test(res.url()) && res.status() === 200),
-      page.getByRole('button', { name: /^expand$/i }).first().click(),
-    ])
-
-    // Verify the response includes policy_statements with our resource
-    const roleData = await response.json()
-    expect(roleData).toHaveProperty('policy_statements')
-    expect(roleData.policy_statements[0].resources).toHaveLength(1)
-    expect(roleData.policy_statements[0].resources[0].resource_id).toBe('agent-test-999')
-
-    // Resource ID chip should now be visible with correct resource_type:resource_id format
-    await expect(page.getByText('agent:agent-test-999')).toBeVisible({ timeout: 8000 })
+    // Editing the card exposes the resource id in a text field
+    await card.locator('button').first().click()
+    await expect(card.getByPlaceholder('e.g. abc-123 or * for all')).toHaveValue('agent-test-999')
   })
 })
 
@@ -602,94 +482,60 @@ test.describe('Edit Policy Statement', () => {
     await setupRoleMocks(page)
   })
 
-  test('Edit button opens dialog pre-filled with existing policy data', async ({ page }) => {
-    await gotoRolesTab(page)
+  test('Edit button opens the card pre-filled with existing policy data', async ({ page }) => {
+    const dialog = await openPolicyDialog(page)
 
-    await expect(page.getByText('Admin Role')).toBeVisible({ timeout: 10000 })
+    const card = dialog.locator('.MuiCard-root').first()
+    // Non-editing card exposes [edit, delete] icon buttons
+    await card.locator('button').first().click()
 
-    // Click expand and wait for the useRole API call to complete (provides policy_statements)
-    const [response] = await Promise.all([
-      page.waitForResponse((res) => /\/user-roles\/[^/]+$/.test(res.url()) && res.status() === 200),
-      page.getByRole('button', { name: /^expand$/i }).first().click(),
-    ])
-
-    // Verify the API returned policy_statements (critical assertion)
-    const roleData = await response.json()
-    expect(roleData).toHaveProperty('policy_statements')
-    expect(roleData.policy_statements.length).toBeGreaterThan(0)
-
-    // Find an Edit button (rendered per policy statement; actual text from i18n is 'Edit')
-    const editBtn = page.getByRole('button', { name: /^edit$/i }).first()
-    if (!await editBtn.isVisible({ timeout: 5000 }).catch(() => false)) {
-      test.skip()
-      return
-    }
-
-    await editBtn.click()
-
-    const dialog = page.getByRole('dialog')
-    await expect(dialog).toBeVisible({ timeout: 5000 })
-
-    // Dialog title must indicate edit mode (not add mode)
-    await expect(dialog.getByText(/edit.*policy|Edit Policy Statement/i)).toBeVisible({ timeout: 3000 })
+    // Resource type + effect + actions are pre-filled from the policy statement
+    await expect(card.getByLabel('Resource Type')).toHaveValue('agent::roles')
+    await expect(effectSelect(card)).toHaveText('Allow')
+    await expect(card.getByText('read', { exact: true })).toBeVisible()
+    await expect(card.getByText('execute', { exact: true })).toBeVisible()
   })
 
-  test('Edit dialog calls PATCH endpoint on save', async ({ page }) => {
-    await gotoRolesTab(page)
-
-    await expect(page.getByText('Admin Role')).toBeVisible({ timeout: 10000 })
-
-    // Track PATCH calls
-    const patchCalls: string[] = []
-    await page.route('**/api/v1/user-roles/**/policies/**', (route) => {
-      if (route.request().method() === 'PATCH') {
-        patchCalls.push(route.request().url())
-        route.fulfill({
-          status: 200,
-          headers: JSON_HEADERS,
-          body: JSON.stringify({
-            id: 'policy-001',
-            effect: 'deny',
-            module: 'agent',
-            actions: [{ id: 'a1', action: 'read' }],
-            resources: [],
-            tag_conditions: [],
-            created_at: '2024-01-01T00:00:00Z',
-          }),
-        })
-      } else {
-        route.continue()
+  test('saving the dialog PUTs the batch endpoint and closes', async ({ page }) => {
+    const batchCalls: string[] = []
+    await page.route(/\/api\/v1\/user-roles\/[^/]+\/policies\/batch$/, (route) => {
+      if (route.request().method() === 'PUT') {
+        batchCalls.push(route.request().url())
       }
+      route.fulfill({ status: 200, headers: JSON_HEADERS, body: JSON.stringify([]) })
     })
 
-    // Click expand and wait for the useRole API call to complete
-    const [response] = await Promise.all([
-      page.waitForResponse((res) => /\/user-roles\/[^/]+$/.test(res.url()) && res.status() === 200),
-      page.getByRole('button', { name: /^expand$/i }).first().click(),
-    ])
+    const dialog = await openPolicyDialog(page)
 
-    // Verify policy_statements are returned
-    const roleData = await response.json()
-    expect(roleData).toHaveProperty('policy_statements')
+    await dialog.getByRole('button', { name: 'Save All Policies' }).click()
 
-    const editBtn = page.getByRole('button', { name: /^edit$/i }).first()
-    if (!await editBtn.isVisible({ timeout: 5000 }).catch(() => false)) {
-      test.skip()
-      return
-    }
+    await expect(dialog).not.toBeVisible({ timeout: 5000 })
+    expect(batchCalls).toHaveLength(1)
+  })
 
-    await editBtn.click()
+  test('JSON view rejects a flat (non-namespaced) module', async ({ page }) => {
+    const dialog = await openPolicyDialog(page)
 
-    const dialog = page.getByRole('dialog')
-    await expect(dialog).toBeVisible({ timeout: 5000 })
+    await dialog.getByRole('button', { name: 'JSON' }).click()
 
-    // In edit mode, the save button text is 'Save' (app.save translation)
-    const saveBtn = dialog.getByRole('button', { name: /^save$/i })
-    if (await saveBtn.isEnabled({ timeout: 2000 }).catch(() => false)) {
-      await saveBtn.click()
-      await page.waitForFunction(() => true, undefined, { timeout: 3000 })
-      expect(patchCalls.length).toBeGreaterThan(0)
-    }
+    const editor = dialog.locator('textarea').first()
+    await editor.fill(
+      JSON.stringify(
+        {
+          policies: [
+            { module: 'agent', effect: 'allow', actions: [{ action: 'read' }], resources: [] },
+          ],
+        },
+        null,
+        2,
+      ),
+    )
+
+    await dialog.getByRole('button', { name: 'Save All Policies' }).click()
+
+    // Validation is client-side: the dialog stays open with the format error
+    await expect(dialog).toBeVisible()
+    await expect(dialog.getByText(/Invalid module format/)).toBeVisible({ timeout: 5000 })
   })
 })
 
@@ -702,7 +548,7 @@ test.describe('Real Backend Integration', () => {
     request,
   }) => {
     // This test hits the real backend — catches integration issues missed by mocked tests
-    // Skipped if backend is not running
+    // Skipped if backend is not running (the canonical mocked E2E stops services)
     const response = await request
       .get('http://localhost:8000/api/v1/policy/resource-types', {
         headers: {
@@ -762,24 +608,27 @@ test.describe('Real Backend Integration', () => {
     expect([401, 403, 404]).toContain(response.status())
   })
 
-  test('PATCH /api/v1/user-roles/{role_id}/policies/{policy_id} returns 401 without auth (edit endpoint protected)', async ({
+  test('PUT /api/v1/user-roles/{role_id}/policies/batch returns 401 without auth (batch save protected)', async ({
     request,
   }) => {
-    // Verifies the PATCH endpoint exists and is protected. This test would catch
-    // if the edit endpoint was removed (which would break the Edit button functionality).
+    // Verifies the batch save endpoint exists and is protected.
     const response = await request
-      .patch(
-        'http://localhost:8000/api/v1/user-roles/00000000-0000-0000-0000-000000000001/policies/00000000-0000-0000-0000-000000000002',
+      .put(
+        'http://localhost:8000/api/v1/user-roles/00000000-0000-0000-0000-000000000001/policies/batch',
         {
           data: {
-            effect: 'allow',
-            module: 'agent',
-            actions: [{ action: 'read' }],
-            resources: [],
-            tag_conditions: [],
+            policies: [
+              {
+                effect: 'allow',
+                module: 'agent::roles',
+                actions: [{ action: 'read' }],
+                resources: [],
+                tag_conditions: [],
+              },
+            ],
           },
           failOnStatusCode: false,
-        }
+        },
       )
       .catch(() => null)
 
@@ -788,8 +637,7 @@ test.describe('Real Backend Integration', () => {
       return
     }
 
-    // Without auth must NOT be 200 or 404 (404 could mean endpoint doesn't exist)
-    expect([401, 403, 404]).toContain(response.status())
-    // 404 here means role/policy not found (still proves endpoint exists), not endpoint missing
+    // Without auth must NOT be 200
+    expect([401, 403, 404, 422]).toContain(response.status())
   })
 })

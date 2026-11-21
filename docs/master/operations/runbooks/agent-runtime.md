@@ -119,3 +119,36 @@ Resolving stuck sessions, permission failures, OAuth expiry, timeouts, and queue
 1. Check `permission.cache_invalidated` log events for frequency and the affected `role_ids`.
 2. If the invalidation rate is normal but the hit rate is still low, the LRU cache capacity is the constraint — increase `AGENT_PERMISSION_CACHE_SIZE` in the backend environment configuration.
 3. If bulk role mutations are the cause, schedule them outside peak execution hours.
+
+---
+
+## 7. Paused Conversational Turns and Durable Checkpoints
+
+**Trigger Alerts**: `ResumePausePersistFailed`, `ResumeSuccessRateDegraded`, `ResumeCheckpointUnavailable`, `ResumeClaimContentionSustained`, `ResumeReaperStalled`.
+
+**Symptoms**: an approval does nothing; a turn reports "the paused turn could not be resumed"; `pause could not be persisted`; `claim lost` / `claim renewal failed`; a restarted instance cannot continue a turn it paused.
+
+**How Agent Runtime behaves on this build**
+
+- Each conversational turn runs with a durable checkpointer backed by Control Center (through the Communication Hub relay). AR holds **no** datastore path: the payload leaves AR over the existing mTLS internal client.
+- A pause flushes the checkpoint **before** the turn reports waiting. If the flush or the resume-index write fails, the turn ends `timeout_or_failed` instead of pretending to wait — a shown-as-waiting turn is always answerable.
+- The paused turn is **instance-independent**: any AR instance can claim it, load the payload, rebuild the agent, and continue with the operator's answer. Restarting or replacing AR does not orphan a pause.
+- A turn that was actively working (no pause checkpoint) has no resumable state; a restart resolves it terminally with "the assistant stopped unexpectedly…".
+- The claim lease is `CONVERSATION_TURN_CLAIM_TTL_SECONDS` (default 45 s) and is renewed while the resumed turn streams; a holder may renew its own lease, a different instance gets `409` and does not double-dispatch.
+
+**Diagnosis**
+
+1. `Durable checkpoint flushed for conversation …` must precede the `waiting_for_human` report. Absent → item 5 below (the pause failed to persist).
+2. `Resume …: checkpoint load failed`, `no loadable checkpoint — marking unresumable`, or `checkpoint unusable` → the payload is missing, consumed, or from an incompatible schema version. The turn resolves terminally; re-issue is safe (nothing was applied).
+3. `claim lost (…, holder=…)` while another instance is alive → duplicate dispatch; while the holder is dead → wait one claim TTL, then re-answer (idempotent). Never clear claim fields by hand.
+4. `claim renewal failed` repeatedly → certificate/transport trouble on the AR→CH relay; check the AR certificate and the relay 401 signature (`Turn resume relay upstream rejection … HTTP 401`).
+5. `Conversation … pause could not be persisted` → the relay refused the write (CH down or AR ahead of CH), the payload exceeded the byte cap, or CC returned 5xx (usually an unapplied migration). Fix the ordering/cap/schema, then retry the request; no write occurred.
+
+**Resolution order**
+
+1. Confirm the deployed build on all three services — the legacy "delegated step timed out or failed" message means old code handled the answer.
+2. Confirm `alembic current` reports head and the resume/checkpoint tables exist.
+3. Confirm CH is serving the checkpoint relay before AR writes pauses (AR must never be rolled forward ahead of CH).
+4. If only one instance misbehaves, remove it from the fleet rather than clearing claims; the lease will expire.
+
+Full operator procedure: [conversational-turn-recovery.md](conversational-turn-recovery.md).

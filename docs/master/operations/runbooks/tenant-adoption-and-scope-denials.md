@@ -56,4 +56,4 @@ Applies when the tenancy platform switch (`multi_tenancy_enabled`) is **on**, ty
 ## Notes
 
 - The root-tenant adoption itself cannot be rolled back row-by-row; disabling the switch keeps the root-tenant references (data-preserving, reused on re-enable).
-- For rollback of the whole feature, follow the disable-first procedure in [rollback.md](../../deployment/rollback.md) (Change-Specific Rollback: Multi-Tenant Support).
+- For rollback of the whole feature, follow the disable-first procedure in [rollback-change-specific.md](../../deployment/rollback-change-specific.md) (Change-Specific Rollback: Multi-Tenant Support).

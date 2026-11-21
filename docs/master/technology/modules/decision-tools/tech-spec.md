@@ -172,6 +172,6 @@ Strict tenant isolation (strict-tenant-isolation change): decision tools resolve
 
 - [multi-tenancy](../multi-tenancy/tech-spec.md) — strict tenant isolation model and signed header contract
 - [data-types](../data-types/tech-spec.md) — the Agent Data Type Registry decision tools derive from
-- [agents](../agents/tech-spec.md) — LLM Model Configurations availability/guardrail patterns mirrored by Decision Model Providers
+- [agents — core](../agents/core.md) — LLM Model Configurations availability/guardrail patterns mirrored by Decision Model Providers
 - [comm-hub](../comm-hub/tech-spec.md) — tool routing and MCP protocol server
 - [agent-runtime](../agent-runtime/tech-spec.md) — tenant-bound execution and downstream call forwarding

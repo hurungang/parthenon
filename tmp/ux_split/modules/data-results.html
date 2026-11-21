@@ -1,0 +1,842 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Agents — Data Types, Outputs & Results</title>
+<link rel="stylesheet" href="../shared/styles.css">
+</head>
+<body data-page="data-results" data-default-view="agent-outputs">
+
+<div class="app-shell">
+
+<!-- ═══════════════════════════════ SIDEBAR ═══════════════════════════════ -->
+<nav class="sidebar" aria-label="Primary navigation">
+  <div class="sidebar-logo">
+    <h1>⚡ Parthenon</h1>
+    <small>Enterprise AI Harness</small>
+  </div>
+
+  <!-- Dashboard -->
+  <a class="nav-item" data-view="dashboard" href="../index.html#view-dashboard"><span class="nav-icon">🏠</span>Dashboard</a>
+
+  <!-- Project Showcase -->
+  <a class="nav-item" data-view="project-showcase" href="../index.html#view-project-showcase"><span class="nav-icon">🌐</span>Project Showcase</a>
+
+  <div class="nav-parent-group" id="nav-agents" data-group="agents">
+    <a class="nav-parent-group-label" href="agents.html#view-agent-roles" role="button" aria-expanded="true">
+      <span>🤖 Agents</span>
+      <span class="toggle-icon" aria-hidden="true">▼</span>
+    </a>
+    <div class="nav-children">
+      <a class="nav-item sub-item" data-view="agent-roles" data-group="agents" href="agents.html#view-agent-roles"><span class="nav-icon">👤</span>Agent Roles</a>
+      <a class="nav-item sub-item" data-view="agent-identities" data-group="agents" href="agents.html#view-agent-identities"><span class="nav-icon">🆔</span>Agent Identities</a>
+      <a class="nav-item sub-item" data-view="agents" data-group="agents" href="agents.html#view-agents"><span class="nav-icon">🤖</span>Agent Types</a>
+      <a class="nav-item sub-item" data-view="agent-management-panel" data-group="agents" href="agent-panel.html#view-agent-management-panel"><span class="nav-icon">🎛️</span>Agent Management Panel</a>
+      <a class="nav-item sub-item" data-view="agent-executions" data-group="agents" href="executions.html#view-agent-executions"><span class="nav-icon">▶️</span>Agent Executions</a>
+      <a class="nav-item sub-item" data-view="runtime-monitor" data-group="agents" href="executions.html#view-runtime-monitor"><span class="nav-icon">🕸️</span>Agent Runtime Monitor</a>
+      <a class="nav-item sub-item" data-view="agent-trails" data-group="agents" href="executions.html#view-agent-trails"><span class="nav-icon">📋</span>Agent Trails</a>
+      <a class="nav-item sub-item" data-view="skills" data-group="agents" href="skills-sops.html#view-skills"><span class="nav-icon">🔧</span>Skills</a>
+      <a class="nav-item sub-item" data-view="sops" data-group="agents" href="skills-sops.html#view-sops"><span class="nav-icon">📋</span>SOPs</a>
+      <a class="nav-item sub-item" data-view="schedules" data-group="agents" href="schedules.html#view-schedules"><span class="nav-icon">📅</span>Schedules</a>
+      <a class="nav-item sub-item" data-view="chat" data-group="agents" href="chat.html#view-chat"><span class="nav-icon">💬</span>Chat Sessions</a>
+      <a class="nav-item sub-item" data-view="conversational-intervention" data-group="agents" href="chat.html#view-conversational-intervention"><span class="nav-icon">💬</span>Conversational Intervention</a>
+      <a class="nav-item sub-item" data-view="intervene-requests" data-group="agents" href="chat.html#view-intervene-requests"><span class="nav-icon">🛑</span>Intervene Requests</a>
+      <a class="nav-item sub-item" data-view="data-types" data-group="agents" href="#view-data-types"><span class="nav-icon">📐</span>Data Types</a>
+      <a class="nav-item sub-item" data-view="agent-outputs" data-group="agents" href="#view-agent-outputs"><span class="nav-icon">📤</span>Agent Outputs</a>
+      <a class="nav-item sub-item" data-view="agent-logs" data-group="agents" href="executions.html#view-agent-logs"><span class="nav-icon">🧾</span>Agent Logs</a>
+    </div>
+  </div>
+
+  <div class="nav-parent-group" id="nav-results" data-group="results">
+    <a class="nav-parent-group-label" href="#view-results" role="button" aria-expanded="true">
+      <span>📊 Results</span>
+      <span class="toggle-icon" aria-hidden="true">▼</span>
+    </a>
+    <div class="nav-children">
+      <a class="nav-item sub-item" data-view="results" data-group="results" href="#view-results"><span class="nav-icon">📊</span>Result Repository</a>
+    </div>
+  </div>
+
+  <div class="nav-parent-group locked-open" id="nav-integrations" data-group="integrations">
+    <a class="nav-parent-group-label" href="integrations.html#view-mcp-hub" role="button" aria-expanded="true">
+      <span>🌐 Integrations</span>
+      <span class="toggle-icon" aria-hidden="true">▼</span>
+    </a>
+    <div class="nav-children">
+      <a class="nav-item sub-item" data-view="mcp-hub" data-group="integrations" href="integrations.html#view-mcp-hub"><span class="nav-icon">🔌</span>MCP Hub</a>
+      <a class="nav-item sub-item" data-view="notifications" data-group="integrations" href="integrations.html#view-notifications"><span class="nav-icon">🔔</span>Notification Integration</a>
+      <a class="nav-item sub-item" data-view="api-keys" data-group="integrations" href="integrations.html#view-api-keys"><span class="nav-icon">🔑</span>API Keys</a>
+      <a class="nav-item sub-item" data-view="agent-clients" data-group="integrations" href="integrations.html#view-agent-clients"><span class="nav-icon">🤝</span>Agent Client</a>
+      <a class="nav-item sub-item" data-view="gateway" data-group="integrations" href="integrations.html#view-gateway"><span class="nav-icon">🛰️</span>Agent Gateway</a>
+    </div>
+  </div>
+
+  <div class="nav-parent-group" id="nav-system" data-group="system">
+    <a class="nav-parent-group-label" href="system.html#view-observability" role="button" aria-expanded="true">
+      <span>⚙️ System</span>
+      <span class="toggle-icon" aria-hidden="true">▼</span>
+    </a>
+    <div class="nav-children">
+      <a class="nav-item sub-item" data-view="observability" data-group="system" href="system.html#view-observability"><span class="nav-icon">📊</span>Observability</a>
+      <a class="nav-item sub-item" data-view="permissions" data-group="system" href="system.html#view-permissions"><span class="nav-icon">🔐</span>Permissions</a>
+      <a class="nav-item sub-item" data-view="system-config" data-group="system" href="system.html#view-system-config"><span class="nav-icon">⚙️</span>System Config</a>
+      <a class="nav-item sub-item" data-view="model-configs" data-group="system" href="system.html#view-model-configs"><span class="nav-icon">🧩</span>Model Configs</a>
+      <a class="nav-item sub-item" data-view="decision-tools" data-group="system" href="decision.html#view-decision-tools"><span class="nav-icon">⚖️</span>Decision Tools</a>
+      <a class="nav-item sub-item" data-view="sysone-providers" data-group="system" href="decision.html#view-sysone-providers"><span class="nav-icon">🧠</span>Decision Model Providers</a>
+      <a class="nav-item sub-item" data-view="security-audit" data-group="system" href="system.html#view-security-audit"><span class="nav-icon">🛡️</span>Security Audit</a>
+    </div>
+  </div>
+
+  <div class="nav-parent-group" id="nav-tenant-admin" data-group="tenant-admin">
+    <a class="nav-parent-group-label" href="tenancy.html#view-tenant-settings" role="button" aria-expanded="true">
+      <span>🏢 Tenant Admin</span>
+      <span class="toggle-icon" aria-hidden="true">▼</span>
+    </a>
+    <div class="nav-children">
+      <a class="nav-item sub-item" data-view="tenant-settings" data-group="tenant-admin" href="tenancy.html#view-tenant-settings"><span class="nav-icon">⚙️</span>Tenant Settings</a>
+      <a class="nav-item sub-item" data-view="tenant-members" data-group="tenant-admin" href="tenancy.html#view-tenant-members"><span class="nav-icon">👥</span>Members</a>
+      <a class="nav-item sub-item" data-view="tenant-identity-providers" data-group="tenant-admin" href="tenancy.html#view-tenant-identity-providers"><span class="nav-icon">🔑</span>Identity Providers</a>
+    </div>
+  </div>
+
+  <div class="nav-parent-group" id="nav-platform" data-group="platform" style="display:none">
+    <a class="nav-parent-group-label" href="tenancy.html#view-platform-settings" role="button" aria-expanded="true">
+      <span>🛡️ Platform</span>
+      <span class="toggle-icon" aria-hidden="true">▼</span>
+    </a>
+    <div class="nav-children">
+      <a class="nav-item sub-item" data-view="platform-settings" data-group="platform" href="tenancy.html#view-platform-settings"><span class="nav-icon">⚙️</span>Platform Settings</a>
+      <a class="nav-item sub-item" data-view="platform-tenants" data-group="platform" href="tenancy.html#view-platform-tenants"><span class="nav-icon">🏢</span>Tenants</a>
+      <a class="nav-item sub-item" data-view="platform-audit" data-group="platform" href="tenancy.html#view-platform-audit"><span class="nav-icon">🛡️</span>Platform Security Audit</a>
+    </div>
+  </div>
+
+</nav>
+<!-- ═══════════════════════════════ MAIN WRAPPER ═══════════════════════════════ -->
+<div class="main-wrapper">
+  <!-- TOP BAR -->
+  <div class="topbar">
+    <div class="topbar-title" id="topbar-title">Agents</div>
+    <div class="topbar-actions">
+      <span class="chip chip-yellow" id="oidc-sa-indicator" style="display:none">🔑 Super Admin</span>
+      <span class="chip chip-blue" id="tenant-ctx-chip" style="display:none">🏢 <span id="tenant-ctx-name"></span></span>
+      <button class="btn-icon" title="Notifications">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg>
+        <span class="badge">3</span>
+      </button>
+      <div class="avatar" title="Alex Harper — Admin">AH</div>
+    </div>
+  </div>
+
+  <!-- MAIN CONTENT -->
+  <div class="main-content">
+
+<!-- ═══════════════════════════════ VIEW: DATA TYPES (NEW — enhance-agent-output-system) ═══════════════ -->
+<div id="view-data-types" class="view">
+  <div class="view-header">
+    <div><h2>Agent Data Types</h2><div class="view-desc">Define reusable typed schemas for agent outputs</div></div>
+    <button class="btn btn-primary" onclick="dtOpenCreate()">+ Create Data Type</button>
+  </div>
+  <div class="table-wrap" id="dtTableWrap">
+    <table>
+      <thead><tr><th>Name</th><th>Slug</th><th>Fields</th><th>Used By</th><th>Created</th><th style="text-align:right">Actions</th></tr></thead>
+      <tbody id="dtTableBody"></tbody>
+    </table>
+  </div>
+  <div class="empty-state" id="dtEmptyState" style="display:none">
+    <div class="empty-icon">📐</div>
+    <div style="font-weight:600;color:var(--text-primary);margin-bottom:6px">No data types yet</div>
+    <div style="font-size:12px;color:var(--text-secondary);margin-bottom:20px;max-width:360px">Create your first data type to define a reusable schema for agent outputs.</div>
+    <button class="btn btn-primary" onclick="dtOpenCreate()">+ Create Data Type</button>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════ VIEW: AGENT OUTPUTS (NEW — enhance-agent-output-system) ═══════════════ -->
+<div id="view-agent-outputs" class="view">
+  <div class="view-header">
+    <div><h2>Agent Outputs</h2><div class="view-desc">Browse, filter, and export past typed agent execution results</div></div>
+    <button class="btn btn-primary" onclick="aoExportCsv()">📥 Export CSV</button>
+  </div>
+  <div class="filter-bar">
+    <div class="form-group" style="margin-bottom:0"><label style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.4px;color:var(--text-secondary)">Data Type</label>
+      <select class="form-control" id="aoFilterDataType" onchange="aoApplyFilters()" style="min-width:180px">
+        <option value="">All data types</option><option value="IncidentReport">IncidentReport</option>
+        <option value="EnrichmentResult">EnrichmentResult</option><option value="ComplianceReport">ComplianceReport</option>
+      </select></div>
+    <div class="form-group" style="margin-bottom:0"><label style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.4px;color:var(--text-secondary)">Agent Type</label>
+      <select class="form-control" id="aoFilterAgentType" onchange="aoApplyFilters()" style="min-width:180px">
+        <option value="">All agent types</option><option value="Incident Analyzer">Incident Analyzer</option>
+        <option value="Data Enrichment Agent">Data Enrichment Agent</option><option value="Compliance Auditor">Compliance Auditor</option>
+      </select></div>
+    <div class="form-group" style="margin-bottom:0"><label style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.4px;color:var(--text-secondary)">From</label>
+      <input type="date" class="form-control" id="aoFilterDateFrom" value="2026-01-01" onchange="aoApplyFilters()" style="min-width:150px"></div>
+    <div class="form-group" style="margin-bottom:0"><label style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.4px;color:var(--text-secondary)">To</label>
+      <input type="date" class="form-control" id="aoFilterDateTo" value="2026-01-31" onchange="aoApplyFilters()" style="min-width:150px"></div>
+    <button class="btn btn-sm btn-secondary" onclick="aoClearFilters()" style="margin-top:16px">Clear</button>
+  </div>
+  <div class="table-wrap" id="aoTableWrap">
+    <table>
+      <thead><tr id="aoTableHead"><th>Timestamp</th><th>Agent Type</th><th>Data Type</th><th>Priority</th><th>Summary</th><th>Status</th></tr></thead>
+      <tbody id="aoTableBody"></tbody>
+    </table>
+    <div class="empty-state" id="aoEmptyState" style="display:none">
+      <div class="empty-icon">🔍</div>
+      <div style="font-weight:600;color:var(--text-primary);margin-bottom:6px">No outputs match the selected filters</div>
+      <div style="font-size:12px;color:var(--text-secondary);margin-bottom:12px">Try adjusting your filter criteria.</div>
+      <button class="btn btn-secondary" onclick="aoClearFilters()">Clear Filters</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════ VIEW: RESULTS ═══════════════════════════════ -->
+<div id="view-results" class="view">
+  <div class="view-header">
+    <div><h2>Results</h2><div class="view-desc">Saved agent outputs and analysis reports</div></div>
+  </div>
+  <div class="tabs">
+    <div class="tab active" onclick="switchTab(this,'results-saved-panel')">📄 Saved Results</div>
+    <div class="tab" onclick="switchTab(this,'results-decision-panel')">⚖️ Decision Results</div>
+  </div>
+
+  <!-- ── Panel: Saved Results ── -->
+  <div id="results-saved-panel" class="tab-panel active">
+  <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px">
+    <div class="search-input" style="max-width:320px">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+      <input placeholder="Search results...">
+    </div>
+    <select class="form-control" style="width:200px">
+      <option>All Agents</option>
+      <option>data-analyst</option><option>pr-reviewer</option><option>report-generator</option><option>incident-bot</option>
+    </select>
+  </div>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Title</th><th>Source Agent</th><th>SOP / Skill</th><th>Saved At</th><th>Size</th><th>Actions</th></tr></thead>
+      <tbody>
+        <tr>
+          <td><strong>Q3 Sales Analysis</strong></td>
+          <td>data-analyst</td>
+          <td><span class="chip chip-gray">db-report</span></td>
+          <td class="text-secondary">Today 14:35</td>
+          <td>4.2 KB</td>
+          <td class="actions-cell">
+            <button class="btn btn-xs btn-secondary" onclick="openResultDetail()">👁 View</button>
+            <button class="btn btn-xs btn-secondary">⬇ Download</button>
+            <button class="btn-icon-sm">🗑️</button>
+          </td>
+        </tr>
+        <tr>
+          <td><strong>PR #142 Review Report</strong></td>
+          <td>pr-reviewer</td>
+          <td><span class="chip chip-gray">pr-review-workflow</span></td>
+          <td class="text-secondary">Today 11:20</td>
+          <td>2.1 KB</td>
+          <td class="actions-cell">
+            <button class="btn btn-xs btn-secondary" onclick="openResultDetail()">👁 View</button>
+            <button class="btn btn-xs btn-secondary">⬇ Download</button>
+            <button class="btn-icon-sm">🗑️</button>
+          </td>
+        </tr>
+        <tr>
+          <td><strong>Weekly Performance Summary</strong></td>
+          <td>report-generator</td>
+          <td><span class="chip chip-gray">daily-report-gen</span></td>
+          <td class="text-secondary">Yesterday</td>
+          <td>8.7 KB</td>
+          <td class="actions-cell">
+            <button class="btn btn-xs btn-secondary" onclick="openResultDetail()">👁 View</button>
+            <button class="btn btn-xs btn-secondary">⬇ Download</button>
+            <button class="btn-icon-sm">��️</button>
+          </td>
+        </tr>
+        <tr>
+          <td><strong>API Timeout Incident Report</strong></td>
+          <td>incident-bot</td>
+          <td><span class="chip chip-gray">incident-response</span></td>
+          <td class="text-secondary">2 days ago</td>
+          <td>3.4 KB</td>
+          <td class="actions-cell">
+            <button class="btn btn-xs btn-secondary" onclick="openResultDetail()">👁 View</button>
+            <button class="btn btn-xs btn-secondary">⬇ Download</button>
+            <button class="btn-icon-sm">🗑️</button>
+          </td>
+        </tr>
+        <tr>
+          <td><strong>Q2 Data Reconciliation</strong></td>
+          <td>data-analyst</td>
+          <td><span class="chip chip-gray">db-report</span></td>
+          <td class="text-secondary">3 days ago</td>
+          <td>5.1 KB</td>
+          <td class="actions-cell">
+            <button class="btn btn-xs btn-secondary" onclick="openResultDetail()">👁 View</button>
+            <button class="btn btn-xs btn-secondary">⬇ Download</button>
+            <button class="btn-icon-sm">🗑️</button>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  </div><!-- /results-saved-panel -->
+
+  <!-- ── Panel: Decision Results (system-one-decision-skills — DecisionResultView as the second tab of the results repository) ── -->
+  <div id="results-decision-panel" class="tab-panel">
+    <div class="table-wrap" style="margin-bottom:16px">
+      <table>
+        <thead><tr><th>Time</th><th>Decision Tool</th><th>Trigger</th><th style="width:130px">Confidence</th><th style="width:180px">Gate Outcome</th><th style="text-align:right">Actions</th></tr></thead>
+        <tbody>
+          <tr>
+            <td class="text-secondary">Today 10:42:07</td>
+            <td class="font-mono" style="font-size:12px">decision____tool_a</td>
+            <td>SOP step 3</td>
+            <td><span class="chip chip-green">0.94</span></td>
+            <td><span class="chip chip-green">✅ Acted automatically</span></td>
+            <td class="actions-cell" style="text-align:right"><button class="btn btn-xs btn-secondary" onclick="drExpand()">👁 View answers</button></td>
+          </tr>
+          <tr>
+            <td class="text-secondary">Today 10:38:51</td>
+            <td class="font-mono" style="font-size:12px">decision____tool_a</td>
+            <td>Agent: support-triage</td>
+            <td><span class="chip chip-amber">0.61</span></td>
+            <td><span class="chip chip-amber">🖐 Confirmation required</span></td>
+            <td class="actions-cell" style="text-align:right"><button class="btn btn-xs btn-secondary" onclick="drExpand()">👁 View answers</button></td>
+          </tr>
+          <tr>
+            <td class="text-secondary">Today 10:31:12</td>
+            <td class="font-mono" style="font-size:12px">decision____priority_score_doc</td>
+            <td>Agent: docs-bot</td>
+            <td><span class="chip chip-red">0.22</span></td>
+            <td><span class="chip chip-red">🚨 Escalated to human</span></td>
+            <td class="actions-cell" style="text-align:right"><button class="btn btn-xs btn-secondary" onclick="drExpand()">👁 View answers</button></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Sample execution detail — per-question typed answers, probabilities, confidence, gate -->
+    <div class="card" id="drDetail" style="display:none">
+      <div style="display:flex;align-items:center;gap:16px;margin-bottom:12px;flex-wrap:wrap">
+        <div style="min-width:70px;height:70px;border-radius:50%;background:#15803D;color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:16px">94%</div>
+        <div style="flex:1">
+          <h3 style="margin:0">decision____tool_a <span class="chip chip-gray">exec-7f3a-21</span></h3>
+          <div style="font-size:12px;color:var(--text-secondary)">Single evaluation · jev-latest — Production TypeSafe · latency 214 ms · 3 questions</div>
+        </div>
+        <button class="btn btn-xs btn-secondary" onclick="document.getElementById('drDetail').style.display='none'">Collapse</button>
+      </div>
+
+      <div style="border:1px solid var(--border);border-radius:6px;margin-bottom:14px">
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:12px 16px;border-bottom:1px solid var(--border);flex-wrap:wrap;gap:8px">
+          <div><span class="font-mono" style="font-size:12px;background:#EFF6FF;color:#1D4ED8;padding:2px 8px;border-radius:4px">q_category</span> <span class="chip chip-blue">Choice</span></div>
+          <div><strong>🔗 "billing"</strong> <span class="chip chip-gray">string</span></div>
+        </div>
+        <div style="padding:12px 16px">
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;font-size:12px"><span style="width:110px;color:var(--text-secondary)" class="font-mono">billing</span><div style="flex:1;height:8px;border-radius:4px;background:#E5E7EB;overflow:hidden"><div style="width:81%;height:100%;background:var(--primary,#2563EB)"></div></div><span class="font-mono" style="width:44px;text-align:right">0.81</span></div>
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;font-size:12px"><span style="width:110px;color:var(--text-secondary)" class="font-mono">technical</span><div style="flex:1;height:8px;border-radius:4px;background:#E5E7EB;overflow:hidden"><div style="width:11%;height:100%;background:#94A3B8"></div></div><span class="font-mono" style="width:44px;text-align:right">0.11</span></div>
+          <div style="display:flex;align-items:center;gap:10px;font-size:12px"><span style="width:110px;color:var(--text-secondary)" class="font-mono">account</span><div style="flex:1;height:8px;border-radius:4px;background:#E5E7EB;overflow:hidden"><div style="width:8%;height:100%;background:#CBD5E1"></div></div><span class="font-mono" style="width:44px;text-align:right">0.08</span></div>
+          <div style="font-size:11px;color:var(--text-secondary);margin-top:6px">Probability distribution per option · confidence 0.94</div>
+        </div>
+      </div>
+
+      <div style="border:1px solid var(--border);border-radius:6px;margin-bottom:14px">
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:12px 16px;border-bottom:1px solid var(--border);flex-wrap:wrap;gap:8px">
+          <div><span class="font-mono" style="font-size:12px;background:#EFF6FF;color:#1D4ED8;padding:2px 8px;border-radius:4px">q_urgency</span> <span class="chip chip-amber">Score</span></div>
+          <div><strong>4 / 5</strong> <span class="chip chip-gray">integer</span></div>
+        </div>
+        <div style="padding:12px 16px;font-size:12px;color:var(--text-secondary)">Legend: 1=Routine · 2=Minor inconvenience · 3=Degraded workflow · 4=Blocking, workaround exists · 5=Critical / outage · confidence 0.92</div>
+      </div>
+
+      <div style="border:1px solid var(--border);border-radius:6px;margin-bottom:14px">
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:12px 16px;border-bottom:1px solid var(--border);flex-wrap:wrap;gap:8px">
+          <div><span class="font-mono" style="font-size:12px;background:#EFF6FF;color:#1D4ED8;padding:2px 8px;border-radius:4px">q_needs_refund</span> <span class="chip chip-gray">Noul</span></div>
+          <div><strong>✅ Yes</strong> <span class="chip chip-gray">boolean</span></div>
+        </div>
+        <div style="padding:12px 16px">
+          <div style="display:flex;align-items:center;gap:10px;font-size:12px"><div style="flex:1;max-width:480px;height:8px;border-radius:4px;background:#E5E7EB;overflow:hidden"><div style="width:86%;height:100%;background:#15803D"></div></div><span class="font-mono">p = 0.86</span></div>
+          <div style="font-size:11px;color:var(--text-secondary);margin-top:6px">Yes/no with probability · confidence 0.86</div>
+        </div>
+      </div>
+
+      <div style="background:#F0FDF4;border:1px solid #86EFAC;color:#15803D;border-radius:6px;padding:14px 18px;display:flex;gap:12px;align-items:center">
+        <span style="font-size:20px">✅</span>
+        <div><strong>Act automatically</strong> — confidence 0.94 ≥ act threshold 0.90 (confirm 0.70). Result dispatched to the SOP without human review. Below confirm the tool escalates; between confirm and act it recommends review.</div>
+      </div>
+    </div>
+  </div><!-- /results-decision-panel -->
+</div>
+
+  </div><!-- /main-content -->
+</div><!-- /main-wrapper -->
+</div><!-- /app-shell -->
+
+<!-- ═══════════════════════════════ ENHANCE AGENT OUTPUT SYSTEM: DIALOGS ═══════════════════════════════ -->
+<!-- Data Type Create / Edit Dialog -->
+<div class="modal-overlay" id="dtDialog" onclick="if(event.target===this)dtCloseDialog()">
+  <div class="modal modal-lg" style="max-width:660px">
+    <div class="modal-header"><h3 id="dtDlgTitle">Create Data Type</h3><button class="modal-close" onclick="dtCloseDialog()">×</button></div>
+    <div class="modal-body">
+      <div class="form-row">
+        <div class="form-group"><label>Name</label><input class="form-control" id="dtDlgName" placeholder="e.g. Incident Report"><div class="inline-form-error" id="dtDlgNameErr"></div></div>
+        <div class="form-group"><label>Slug</label><input class="form-control" id="dtDlgSlug" placeholder="e.g. incident-report"><div class="form-hint">Auto-generated from name, editable</div><div class="inline-form-error" id="dtDlgSlugErr"></div></div>
+      </div>
+      <div class="form-group"><label>Description</label><textarea class="form-control" id="dtDlgDesc" rows="2" placeholder="Describe the purpose of this data type"></textarea></div>
+      <div class="section-title" style="display:flex;align-items:center;justify-content:space-between;margin-top:8px"><span>Fields</span><button class="btn btn-sm btn-secondary" onclick="dtAddField()">+ Add Field</button></div>
+      <div class="form-hint" style="margin-bottom:8px">At least one field is required.</div>
+      <div class="inline-form-error" id="dtDlgFieldsErr" style="margin-bottom:8px"></div>
+      <div style="display:flex;align-items:center;gap:10px;padding:6px 0;font-size:11px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.4px;border-bottom:1px solid var(--border)">
+        <div style="flex:2">Field Name</div><div style="flex:2">Type</div><div style="flex:0 0 80px;text-align:center">Required</div><div style="flex:0 0 40px"></div>
+      </div>
+      <div id="dtFieldsContainer"></div>
+      <div class="fields-empty-state" id="dtFieldsEmpty">No fields yet. Click "Add Field" to define the schema.</div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="dtCloseDialog()">Cancel</button>
+      <button class="btn btn-primary" onclick="dtSave()">Save Data Type</button>
+    </div>
+  </div>
+</div>
+
+<!-- Data Type Delete Confirmation Dialog -->
+<div class="modal-overlay" id="dtDeleteDialog" onclick="if(event.target===this)dtCloseDelete()">
+  <div class="modal" style="max-width:440px">
+    <div class="modal-header"><h3>Delete Data Type</h3><button class="modal-close" onclick="dtCloseDelete()">×</button></div>
+    <div class="modal-body">
+      <div style="display:flex;align-items:flex-start;gap:12px">
+        <span style="font-size:32px;flex-shrink:0">⚠️</span>
+        <div>
+          <div style="font-size:15px;font-weight:600;margin-bottom:6px">Delete '<span id="dtDeleteName">—</span>'?</div>
+          <div style="font-size:13px;color:var(--text-secondary)">This cannot be undone. Agent outputs keep their schema snapshot.</div>
+          <div id="dtDeleteRefWarn" style="display:none;margin-top:10px;padding:10px;background:#FFF5F5;border:1px solid #FECACA;border-radius:var(--radius-sm);font-size:12px;color:#B91C1C">
+            🚫 <span id="dtDeleteRefText"></span>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="dtCloseDelete()">Cancel</button>
+      <button class="btn btn-danger" id="dtDeleteBtn" onclick="dtConfirmDelete()">Delete</button>
+    </div>
+  </div>
+</div>
+
+<!-- Agent Outputs Detail Drawer -->
+<div class="drawer-overlay-new" id="aoDrawerOverlay" onclick="aoCloseDrawer()"></div>
+
+<div class="drawer-new" id="aoDrawer">
+  <div class="drawer-header"><h3>Agent Output Detail</h3><button class="modal-close" onclick="aoCloseDrawer()">×</button></div>
+  <div class="drawer-body" id="aoDrawerBody"></div>
+</div>
+
+<!-- ═══════════════════════════════ MAXIMIZE DIALOG (improve-agent-response-rendering) ═══════════════════════════════ -->
+<div class="max-dialog-overlay" id="maxDialogOverlay" onclick="if(event.target===this)maxClose()">
+  <div class="max-dialog">
+    <div class="max-dialog-title">
+      <h3 id="maxDialogTitle">Maximized View</h3>
+      <button class="max-dialog-close-btn" onclick="maxClose()" title="Close (Esc)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="max-dialog-content" id="maxDialogContent"></div>
+  </div>
+</div>
+
+<!-- Result Detail Drawer -->
+<div id="drawer-result-overlay" class="drawer-overlay" onclick="closeResultDetail()"></div>
+
+<div id="drawer-result" class="drawer" style="width:560px;right:-560px">
+  <div class="drawer-header">
+    <h3>Q3 Sales Analysis</h3>
+    <div style="display:flex;gap:8px">
+      <button class="btn btn-sm btn-secondary">⬇ Download</button>
+      <button class="modal-close" onclick="closeResultDetail()">✕</button>
+    </div>
+  </div>
+  <div class="drawer-body">
+    <div style="margin-bottom:16px;padding-bottom:16px;border-bottom:1px solid var(--border)">
+      <div style="display:flex;gap:16px;flex-wrap:wrap;font-size:12px;color:var(--text-secondary)">
+        <span>Agent: <strong style="color:var(--text-primary)">data-analyst</strong></span>
+        <span>SOP: <strong style="color:var(--text-primary)">db-report</strong></span>
+        <span>Saved: <strong style="color:var(--text-primary)">2025-04-23 14:35:42</strong></span>
+        <span>Trace: <span class="font-mono" style="color:var(--text-primary)">a3f2c1b9...</span></span>
+        <span>Size: <strong style="color:var(--text-primary)">4.2 KB</strong></span>
+      </div>
+    </div>
+    <div class="result-content">Q3 2025 Sales Analysis
+======================
+Revenue: $4,200,000 (↑ 8% vs Q2)
+
+Regions:
+  APAC:     $1,800,000 (43%)
+  EMEA:     $1,100,000 (26%)
+  Americas: $1,300,000 (31%)
+
+Segment Highlights:
+  Enterprise: +23% growth
+  SMB:        +4% growth
+  Consumer:   -2% decline
+
+Top Products by Revenue:
+  1. Enterprise Suite Pro  — $1,240,000
+  2. Analytics Platform    — $890,000
+  3. Data Connector Pack   — $670,000
+
+Recommendations:
+  1. Increase APAC headcount by Q4
+  2. Launch Enterprise upsell campaign
+  3. Review Consumer pricing strategy
+  4. Accelerate Analytics Platform feature roadmap</div>
+  </div>
+</div>
+
+<!-- ═══ CONTROL CENTER ASSISTANT (global floating launcher) ═══ -->
+<button class="asst-fab" id="asst-fab" onclick="asstOpen()" title="Control Center Assistant" aria-label="Control Center Assistant">🤖</button>
+<div class="asst-overlay" id="asst-overlay" onclick="if(event.target===this)asstClose()">
+  <div class="asst-dialog" id="asst-dialog" role="dialog" aria-label="Control Center Assistant conversation">
+    <div class="asst-head">
+      <span style="font-size:20px">🤖</span>
+      <h3 id="asst-title">Control Center Assistant</h3>
+      <span class="chip chip-green" id="asst-conn-chip">Connected</span>
+      <div class="asst-head-right">
+        <button class="btn-icon" id="asst-fs-btn" onclick="asstToggleFullscreen()" title="Toggle fullscreen">⛶</button>
+        <button class="btn-icon" onclick="asstClose()" title="Close">✕</button>
+      </div>
+    </div>
+
+    <div class="asst-body">
+      <div class="asst-alert" id="asst-model-alert" style="display:none">
+        <span>⚠️</span>
+        <div style="flex:1">
+          <b>The assistant needs a model configured for this workspace</b>
+          No model is configured for this workspace yet. An administrator can select one under System Config → Assistant model.
+          <div style="margin-top:8px"><button class="btn btn-secondary btn-sm" onclick="asstGoConfigure()">Configure model</button></div>
+        </div>
+      </div>
+
+      <div class="asst-paper-wrap">
+        <div class="asst-paper" id="asst-messages"></div>
+      </div>
+    </div>
+
+    <div class="asst-input-row">
+      <textarea class="chat-input" id="asst-input" rows="1" placeholder="Type a message… (Enter to send)" onkeydown="asstOnKey(event)" oninput="asstAutoGrow(this)"></textarea>
+      <button class="btn btn-primary" id="asst-send" onclick="asstSend()">Send</button>
+    </div>
+
+    <div class="asst-foot">
+      <button class="btn btn-secondary btn-sm" id="asst-btn-sessions" onclick="asstOpenSessions()">🗂 View All Sessions</button>
+      <button class="btn btn-secondary btn-sm" id="asst-btn-new" onclick="asstNewSession()">＋ New Session</button>
+      <span class="spacer"></span>
+      <button class="btn btn-sm" id="asst-btn-end" style="background:#fff;border:1px solid #FECACA;color:#B91C1C" onclick="asstOpenEnd()">⏹ End Session</button>
+      <button class="btn btn-secondary btn-sm" onclick="asstClose()">Exit</button>
+    </div>
+  </div>
+</div>
+<div class="asst-overlay" id="asst-sessions-overlay" onclick="if(event.target===this)asstCloseSessions()">
+  <div class="asst-dialog" style="width:min(620px,100%);height:auto;max-height:85vh" role="dialog" aria-label="All sessions for this agent">
+    <div class="asst-head">
+      <h3>All sessions for this agent</h3>
+      <div class="asst-head-right"><button class="btn-icon" onclick="asstCloseSessions()" title="Close">✕</button></div>
+    </div>
+    <div class="asst-body" style="overflow-y:auto;padding-bottom:14px">
+      <div class="asst-sess-filters">
+        <label class="toggle"><input type="checkbox" id="asst-show-ended" onchange="asstShowEnded(this.checked)"><span class="toggle-slider"></span><span style="font-size:12px">Show ended sessions</span></label>
+        <label style="display:inline-flex;align-items:center;gap:6px">From <input type="date" class="form-control" id="asst-sess-from" style="width:150px;padding:5px 8px;font-size:12px" onchange="asstDateChange()"></label>
+        <label style="display:inline-flex;align-items:center;gap:6px">To <input type="date" class="form-control" id="asst-sess-to" style="width:150px;padding:5px 8px;font-size:12px" onchange="asstDateChange()"></label>
+      </div>
+      <div id="asst-sessions-list"></div>
+      <div class="asst-pager" style="justify-content:center">
+        <span class="asst-pager-btns" id="asst-sessions-pager"></span>
+      </div>
+    </div>
+    <div class="asst-foot">
+      <span class="spacer"></span>
+      <button class="btn btn-secondary btn-sm" onclick="asstCloseSessions()">Cancel</button>
+    </div>
+  </div>
+</div>
+<div class="asst-overlay" id="asst-preview-overlay" onclick="if(event.target===this)asstClosePreview()">
+  <div class="asst-dialog" style="width:90vw;height:80vh" role="dialog" aria-label="Approval Preview">
+    <div class="asst-head">
+      <h3>Approval Preview</h3>
+      <div class="asst-head-right"><button class="btn-icon" onclick="asstClosePreview()" title="Collapse">⤡</button></div>
+    </div>
+    <div class="asst-body" id="asst-preview-body" style="overflow-y:auto;padding-bottom:14px;display:block;font-size:13px;line-height:1.6"></div>
+    <div class="asst-foot">
+      <button class="btn btn-secondary btn-sm" onclick="asstClosePreview()">Collapse</button>
+      <span class="spacer"></span>
+      <button class="btn btn-sm" style="background:#fff;border:1px solid #FECACA;color:#B91C1C" onclick="asstResolve(false)">✕ Deny</button>
+      <button class="btn btn-sm" style="background:#16A34A;color:#fff" onclick="asstResolve(true)">✓ Approve</button>
+    </div>
+  </div>
+</div>
+<div class="asst-overlay" id="asst-end-overlay" onclick="if(event.target===this)asstCloseEnd()">
+  <div class="asst-dialog" style="width:min(560px,100%);height:auto" role="dialog" aria-label="End Conversation Session">
+    <div class="asst-head">
+      <h3>End Conversation Session</h3>
+      <div class="asst-head-right"><button class="btn-icon" onclick="asstCloseEnd()" title="Close">✕</button></div>
+    </div>
+    <div class="asst-body" style="padding-bottom:16px">
+      <p style="font-size:13px;line-height:1.6">This will close the session. You can still view its history but cannot resume it.</p>
+      <p class="text-sm text-secondary" style="line-height:1.6;margin-top:8px">Any in-flight execution for this session is terminated. The next time you open the assistant it starts a <b>new</b> session instead of resuming this one.</p>
+    </div>
+    <div class="asst-foot">
+      <span class="spacer"></span>
+      <button class="btn btn-secondary btn-sm" onclick="asstCloseEnd()">Cancel</button>
+      <button class="btn btn-sm" style="background:#C62828;color:#fff" onclick="asstConfirmEnd()">End Session</button>
+    </div>
+  </div>
+</div>
+
+<script src="../shared/app.js"></script>
+<script src="../shared/assistant.js"></script>
+<script src="../shared/max-dialog.js"></script>
+<!-- ═══ agent-outputs + data-types ═══ -->
+<script>
+(function(){
+  // ── DATA ──
+  var dataTypes = [
+    { id:'dt-1', name:'IncidentReport', slug:'incident-report', description:'Schema for incident analysis results', fields:[
+      { name:'priority', type:'enum', enumValues:['high','medium','low'], required:true },
+      { name:'incident_date', type:'date', required:true },
+      { name:'summary', type:'string', required:true },
+      { name:'resolved', type:'boolean', required:true },
+      { name:'category', type:'enum', enumValues:['infrastructure','security','application','network'], required:false }
+    ], created:'2026-01-10', usedBy:['Incident Analyzer'] },
+    { id:'dt-2', name:'EnrichmentResult', slug:'enrichment-result', description:'Schema for data enrichment agent results', fields:[
+      { name:'source_field', type:'string', required:true },
+      { name:'enriched_value', type:'string', required:true },
+      { name:'confidence', type:'number', required:true },
+      { name:'processed_at', type:'date', required:true }
+    ], created:'2026-01-12', usedBy:['Data Enrichment Agent'] },
+    { id:'dt-3', name:'ComplianceReport', slug:'compliance-report', description:'Schema for compliance audit agent outputs', fields:[
+      { name:'check_name', type:'string', required:true },
+      { name:'status', type:'enum', enumValues:['pass','fail','warning'], required:true },
+      { name:'details', type:'string', required:false },
+      { name:'checked_at', type:'date', required:true }
+    ], created:'2026-01-14', usedBy:[] }
+  ];
+  var fieldTypes = ['string','number','boolean','date','enum'];
+  var editingDtId = null;
+
+  var agentOutputs = [
+    { id:'out-1', timestamp:'2026-01-15 14:32:18', agentType:'Incident Analyzer', dataType:'IncidentReport', status:'valid', fields:{priority:'high',incident_date:'2026-01-15',summary:'Database server db-01 high CPU usage and connection timeouts.',resolved:false,category:'infrastructure'} },
+    { id:'out-2', timestamp:'2026-01-15 13:10:05', agentType:'Incident Analyzer', dataType:'IncidentReport', status:'valid', fields:{priority:'medium',incident_date:'2026-01-15',summary:'API rate limit exceeded on payment gateway.',resolved:true,category:'application'} },
+    { id:'out-3', timestamp:'2026-01-14 09:22:44', agentType:'Data Enrichment Agent', dataType:'EnrichmentResult', status:'valid', fields:{source_field:'user.email',enriched_value:'john@acme.com',confidence:0.97,processed_at:'2026-01-14'} },
+    { id:'out-4', timestamp:'2026-01-14 07:15:30', agentType:'Incident Analyzer', dataType:'IncidentReport', status:'validation_error', fields:{priority:'critical',incident_date:'2026-01-14',summary:'Security breach detected — unauthorised admin panel access.',resolved:false,category:'security'} },
+    { id:'out-5', timestamp:'2026-01-13 16:45:12', agentType:'Incident Analyzer', dataType:'IncidentReport', status:'valid', fields:{priority:'low',incident_date:'2026-01-13',summary:'SSL certificate expiring in 14 days.',resolved:false,category:'infrastructure'} },
+    { id:'out-6', timestamp:'2026-01-12 08:05:22', agentType:'Incident Analyzer', dataType:'IncidentReport', status:'valid', fields:{priority:'high',incident_date:'2026-01-12',summary:'Production deployment failed — build timeout.',resolved:true,category:'infrastructure'} }
+  ];
+
+  function makeSlug(name) { return name.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,''); }
+  function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+  // ── DATA TYPES RENDERING ──
+  function dtRender() {
+    var body = document.getElementById('dtTableBody'), empty = document.getElementById('dtEmptyState'), wrap = document.getElementById('dtTableWrap');
+    if (!body) return;
+    if (dataTypes.length === 0) { empty.style.display = ''; wrap.style.display = 'none'; return; }
+    empty.style.display = 'none'; wrap.style.display = '';
+    body.innerHTML = dataTypes.map(function(d){
+      return '<tr><td style="font-weight:600">'+esc(d.name)+'</td><td><code style="font-size:12px;background:#F1F5F9;padding:2px 6px;border-radius:3px">'+esc(d.slug)+'</code></td>'+
+        '<td><span class="count-badge">'+d.fields.length+' field'+(d.fields.length!==1?'s':'')+'</span></td>'+
+        '<td style="font-size:12px;color:var(--text-secondary)">'+(d.usedBy.length?d.usedBy.join(', '):'—')+'</td>'+
+        '<td style="font-size:13px">'+d.created+'</td>'+
+        '<td class="actions-cell" style="text-align:right"><button class="btn btn-sm btn-secondary" onclick="dtOpenEdit(\''+d.id+'\')">Edit</button><button class="btn btn-sm btn-secondary" style="color:var(--error)" onclick="dtOpenDelete(\''+d.id+'\')">Delete</button></td></tr>';
+    }).join('');
+  }
+
+  // ── DATA TYPE DIALOG ──
+  function dtOpenCreate() {
+    editingDtId = null; document.getElementById('dtDialog').style.display = 'flex';
+    document.getElementById('dtDlgTitle').textContent = 'Create Data Type';
+    document.getElementById('dtDlgName').value = ''; document.getElementById('dtDlgSlug').value = '';
+    document.getElementById('dtDlgDesc').value = ''; document.getElementById('dtDlgNameErr').textContent = '';
+    document.getElementById('dtDlgSlugErr').textContent = ''; document.getElementById('dtDlgFieldsErr').textContent = '';
+    dtRenderFields();
+  }
+  function dtOpenEdit(id) {
+    var d = dataTypes.find(function(x){return x.id===id}); if(!d) return;
+    editingDtId = id; document.getElementById('dtDialog').style.display = 'flex';
+    document.getElementById('dtDlgTitle').textContent = 'Edit Data Type — '+d.name;
+    document.getElementById('dtDlgName').value = d.name; document.getElementById('dtDlgSlug').value = d.slug;
+    document.getElementById('dtDlgDesc').value = d.description||''; document.getElementById('dtDlgNameErr').textContent = '';
+    document.getElementById('dtDlgSlugErr').textContent = ''; document.getElementById('dtDlgFieldsErr').textContent = '';
+    dtRenderFields(d.fields);
+  }
+  function dtCloseDialog() { document.getElementById('dtDialog').style.display = 'none'; }
+  document.addEventListener('keydown', function(e){ if(e.key==='Escape'&&document.getElementById('dtDialog')&&document.getElementById('dtDialog').style.display==='flex') dtCloseDialog(); });
+
+  function dtRenderFields(fields) {
+    var container = document.getElementById('dtFieldsContainer'), empty = document.getElementById('dtFieldsEmpty');
+    var f = fields || [];
+    if (f.length === 0) { empty.style.display = ''; container.innerHTML = ''; return; }
+    empty.style.display = 'none';
+    container.innerHTML = f.map(function(ff, idx){
+      var topts = fieldTypes.map(function(t){ return '<option value="'+t+'"'+(ff.type===t?' selected':'')+'>'+t.charAt(0).toUpperCase()+t.slice(1)+'</option>'; }).join('');
+      var chk = ff.required ? ' checked' : '';
+      var en = ff.type==='enum'? '<div class="enum-editor">' + dtEnumRowsHtml(idx, ff.enumValues) + '</div>' : '';
+      return '<div class="field-row-new" data-fi="'+idx+'"><div class="field-name-col"><input type="text" class="form-control" value="'+(ff.name||'')+'" placeholder="Field name" style="font-size:13px;padding:6px 8px">'+en+'</div>'+
+        '<div class="field-type-col"><select class="form-control" onchange="dtFieldTypeChange('+idx+',this.value)" style="font-size:13px;padding:6px 8px">'+topts+'</select></div>'+
+        '<div class="field-req-col"><label class="toggle"><input type="checkbox"'+(ff.required?' checked':'')+' style="margin:0 auto"><span class="toggle-slider"></span></label></div>'+
+        '<div class="field-act-col"><button class="btn-icon-sm" onclick="dtRemoveField('+idx+')">🗑️</button></div></div>';
+    }).join('');
+  }
+  function dtAddField() {
+    var c = document.getElementById('dtFieldsContainer'), empty = document.getElementById('dtFieldsEmpty');
+    empty.style.display = 'none';
+    var idx = c.querySelectorAll('.field-row-new').length;
+    var topts = fieldTypes.map(function(t){ return '<option value="'+t+'">'+t.charAt(0).toUpperCase()+t.slice(1)+'</option>'; }).join('');
+    var row = document.createElement('div'); row.className = 'field-row-new'; row.dataset.fi = idx;
+    row.innerHTML = '<div class="field-name-col"><input type="text" class="form-control" placeholder="Field name" style="font-size:13px;padding:6px 8px"></div>'+
+      '<div class="field-type-col"><select class="form-control" onchange="dtFieldTypeChange('+idx+',this.value)" style="font-size:13px;padding:6px 8px">'+topts+'</select></div>'+
+      '<div class="field-req-col"><label class="toggle"><input type="checkbox" checked style="margin:0 auto"><span class="toggle-slider"></span></label></div>'+
+      '<div class="field-act-col"><button class="btn-icon-sm" onclick="dtRemoveField('+idx+')">🗑️</button></div>';
+    c.appendChild(row);
+  }
+  function dtRemoveField(idx) { var r = document.querySelector('#dtFieldsContainer .field-row-new[data-fi="'+idx+'"]'); if(r) r.remove(); if(!document.querySelectorAll('#dtFieldsContainer .field-row-new').length) document.getElementById('dtFieldsEmpty').style.display = ''; }
+  function dtFieldTypeChange(idx, val) {
+    var rows = document.querySelectorAll('#dtFieldsContainer .field-row-new'); var row = rows[idx]; if(!row) return;
+    var nc = row.querySelector('.field-name-col'), ex = nc.querySelector('.enum-editor'); if(ex) ex.remove();
+    if(val==='enum'){ var d=document.createElement('div');d.className='enum-editor';d.innerHTML=dtEnumRowsHtml(idx, null); nc.appendChild(d); }
+  }
+  /* Nested enum values editor (strict-tenant-isolation as-built — EnumValuesEditor.tsx):
+     one row per value, each with an optional description passed to the model. */
+  function dtEnumRowsHtml(idx, values){
+    var vs = (values||[]).map(function(v){ return typeof v==='string' ? {value:v,description:''} : {value:(v&&v.value)||'',description:(v&&v.description)||''}; });
+    var rows = vs.map(function(v){ return dtEnumRowHtml(v.value, v.description); }).join('');
+    return '<div class="form-hint" style="margin-bottom:4px">Enum values — each value may carry a description passed to the model</div>' + rows +
+      '<button class="btn btn-xs btn-secondary" style="margin-top:4px" onclick="dtAddEnumRow(this)">+ Add Value</button>';
+  }
+  function dtEnumRowHtml(value, description){
+    return '<div class="enum-row" style="display:flex;gap:8px;align-items:center;margin:5px 0">' +
+      '<input type="text" class="form-control dt-enum-val" placeholder="value" value="'+(value||'')+'" style="font-size:12px;padding:5px 8px;flex:1;min-width:100px">' +
+      '<input type="text" class="form-control dt-enum-desc" placeholder="Description (e.g. review within 30 days)" value="'+(description||'')+'" style="font-size:12px;padding:5px 8px;flex:2;min-width:160px">' +
+      '<button class="btn-icon-sm" onclick="this.parentNode.remove()" title="Remove value">🗑️</button></div>';
+  }
+  function dtAddEnumRow(btn){ btn.insertAdjacentHTML('beforebegin', dtEnumRowHtml('','')); }
+  function dtSetEnum(idx, val) { /* committed at save time from rows */ }
+  function dtGetFields() {
+    var fields = []; var rows = document.querySelectorAll('#dtFieldsContainer .field-row-new');
+    rows.forEach(function(row, idx){
+      var n = row.querySelector('.field-name-col input[type="text"]'), t = row.querySelector('.field-type-col select'), r = row.querySelector('.field-req-col input[type="checkbox"]');
+      var f = { name: n?n.value:'', type: t?t.value:'string', required: r?r.checked:true };
+      if (f.type==='enum') {
+        var evs = []; row.querySelectorAll('.enum-editor .enum-row').forEach(function(er){
+          var v = (er.querySelector('.dt-enum-val')||{value:''}).value.trim();
+          if(!v) return; var d = (er.querySelector('.dt-enum-desc')||{value:''}).value.trim();
+          evs.push(d ? {value:v, description:d} : v);
+        });
+        f.enumValues = evs;
+      }
+      if (f.name) fields.push(f);
+    });
+    return fields;
+  }
+  function dtSave() {
+    var name = (document.getElementById('dtDlgName').value||'').trim(), slug = (document.getElementById('dtDlgSlug').value||'').trim(), desc = (document.getElementById('dtDlgDesc').value||'').trim(), fields = dtGetFields(), err = false;
+    if (!name) { document.getElementById('dtDlgNameErr').textContent = 'Name is required'; err = true; }
+    if (dataTypes.some(function(d){ return d.name.toLowerCase()===name.toLowerCase() && d.id!==editingDtId; })) { document.getElementById('dtDlgNameErr').textContent = 'Duplicate name'; err = true; }
+    if (!slug) { document.getElementById('dtDlgSlugErr').textContent = 'Slug is required'; err = true; }
+    if (!fields.length) { document.getElementById('dtDlgFieldsErr').textContent = 'At least one field is required'; err = true; }
+    if (fields.some(function(f){ return !f.name; })) { document.getElementById('dtDlgFieldsErr').textContent = 'All fields must have a name'; err = true; }
+    if (err) return;
+    if (editingDtId) { var d = dataTypes.find(function(x){ return x.id===editingDtId; }); if(d){ d.name=name; d.slug=slug; d.description=desc; d.fields=fields; } }
+    else { dataTypes.push({ id:'dt-'+Date.now(), name:name, slug:slug, description:desc, fields:fields, created: new Date().toISOString().split('T')[0], usedBy:[] }); }
+    dtCloseDialog(); dtRender(); schedToast('Data type saved','sched-success');
+  }
+
+  // ── DELETE GUARD ──
+  function dtOpenDelete(id) {
+    var d = dataTypes.find(function(x){ return x.id===id; }); if(!d) return;
+    document.getElementById('dtDeleteName').textContent = d.name;
+    document.getElementById('dtDeleteRefText').textContent = d.usedBy&&d.usedBy.length>0 ? 'Cannot delete: referenced by '+d.usedBy.length+' agent type(s): '+d.usedBy.join(', ')+'.' : '';
+    document.getElementById('dtDeleteRefWarn').style.display = d.usedBy&&d.usedBy.length>0 ? '' : 'none';
+    document.getElementById('dtDeleteBtn').disabled = d.usedBy&&d.usedBy.length>0;
+    document.getElementById('dtDeleteBtn').style.opacity = d.usedBy&&d.usedBy.length>0 ? '0.5' : '1';
+    document.getElementById('dtDeleteDialog').style.display = 'flex';
+    document.getElementById('dtDeleteDialog').dataset.delId = id;
+  }
+  function dtCloseDelete() { document.getElementById('dtDeleteDialog').style.display = 'none'; }
+  function dtConfirmDelete() {
+    var id = document.getElementById('dtDeleteDialog').dataset.delId, d = dataTypes.find(function(x){ return x.id===id; }); if(!d) return;
+    if (d.usedBy&&d.usedBy.length>0) { schedToast('Cannot delete: data type is in use','sched-error'); return; }
+    dataTypes = dataTypes.filter(function(x){ return x.id!==id; }); dtCloseDelete(); dtRender(); schedToast('Data type deleted','sched-success');
+  }
+
+  // Slug auto-gen
+  (function setupSlugGen(){
+    var ni=document.getElementById('dtDlgName'); if(ni) ni.addEventListener('input', function(){ var si=document.getElementById('dtDlgSlug'); if(si&&!si.dataset.manual) si.value=makeSlug(this.value); });
+    var si=document.getElementById('dtDlgSlug'); if(si) si.addEventListener('input', function(){ this.dataset.manual='1'; });
+  })();
+
+  // ── AGENT OUTPUTS ──
+  function aoApplyFilters() {
+    var dtf = document.getElementById('aoFilterDataType').value, atf = document.getElementById('aoFilterAgentType').value;
+    var df = document.getElementById('aoFilterDateFrom').value, dt = document.getElementById('aoFilterDateTo').value;
+    var results = agentOutputs.filter(function(o){
+      if (dtf && o.dataType !== dtf) return false; if (atf && o.agentType !== atf) return false;
+      var od = o.timestamp.split(' ')[0]; if (df && od < df) return false; if (dt && od > dt) return false;
+      return true;
+    });
+    var body = document.getElementById('aoTableBody'), empty = document.getElementById('aoEmptyState');
+    if (!body) return;
+    if (!results.length) { empty.style.display = ''; body.innerHTML = ''; return; }
+    empty.style.display = 'none';
+    body.innerHTML = results.map(function(o){
+      var f = o.fields, statusBadge = o.status==='valid' ? '<span class="stat-badge stat-valid">Valid</span>' : '<span class="stat-badge stat-error">Validation Error</span>';
+      var priorityChip = f.priority ? '<span class="chip chip-'+f.priority+'">'+f.priority.charAt(0).toUpperCase()+f.priority.slice(1)+'</span>' : '—';
+      var summary = (f.summary||'').length>50 ? (f.summary||'').substring(0,50)+'...' : (f.summary||'—');
+      return '<tr style="cursor:pointer" onclick="aoOpenDrawer(\''+o.id+'\')"><td style="font-size:12px">'+o.timestamp+'</td><td style="font-weight:500">'+esc(o.agentType)+'</td><td><span class="dt-badge dt-badge-typed">'+esc(o.dataType)+'</span></td><td>'+priorityChip+'</td><td style="font-size:12px;max-width:240px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(summary)+'</td><td>'+statusBadge+'</td></tr>';
+    }).join('');
+  }
+  function aoClearFilters() { document.getElementById('aoFilterDataType').value='';document.getElementById('aoFilterAgentType').value='';document.getElementById('aoFilterDateFrom').value='';document.getElementById('aoFilterDateTo').value=''; aoApplyFilters(); }
+  function aoExportCsv() { schedToast('CSV export — '+agentOutputs.length+' rows','sched-info'); }
+
+  // ── DRAWER ──
+  function aoOpenDrawer(id) {
+    var o = agentOutputs.find(function(x){ return x.id===id; }); if(!o) return;
+    document.getElementById('aoDrawerOverlay').style.display = ''; document.getElementById('aoDrawer').classList.add('open');
+    var body = document.getElementById('aoDrawerBody'), f = o.fields;
+    var html = '<div style="margin-bottom:16px">'+
+      '<div style="display:flex;align-items:center;gap:8px;margin-bottom:12px"><span class="dt-badge dt-badge-typed">'+esc(o.dataType)+'</span>'+
+      (o.status==='valid'?'<span class="stat-badge stat-valid">Valid</span>':'<span class="stat-badge stat-error">Validation Error</span>')+'</div>'+
+      '<div style="font-size:12px;color:var(--text-secondary)"><div>Agent Type: <strong>'+esc(o.agentType)+'</strong></div><div>Timestamp: <strong>'+o.timestamp+'</strong></div></div></div>';
+    if (o.status==='validation_error') html += '<div class="valid-banner"><span class="valid-icon">⚠️</span><div class="valid-content"><div class="valid-title">Schema Validation Failed</div><div class="valid-desc">The output does not match the expected schema.</div></div></div>';
+    html += '<div class="section-title" style="margin-top:0">Field Values</div>';
+    for (var k in f) {
+      var v = f[k], dv = v;
+      if (typeof v==='boolean') dv = v ? '<span class="bool-true">✅ Yes</span>' : '<span class="bool-false">❌ No</span>';
+      else if (k==='priority') dv = '<span class="chip chip-'+v+'">'+String(v).charAt(0).toUpperCase()+String(v).slice(1)+'</span>';
+      else if (k==='status'&&v) { var cc = v==='pass'?'green':(v==='warning'?'yellow':'red'); dv = '<span class="chip chip-'+cc+'">'+String(v).charAt(0).toUpperCase()+String(v).slice(1)+'</span>'; }
+      else if (k==='confidence'&&typeof v==='number') dv = (v*100).toFixed(0)+'%';
+      html += '<div class="typed-field"><div class="typed-field-label">'+k.replace(/_/g,' ')+'</div><div class="typed-field-value">'+dv+'</div></div>';
+    }
+    body.innerHTML = html;
+  }
+  function aoCloseDrawer() { document.getElementById('aoDrawerOverlay').style.display = 'none'; document.getElementById('aoDrawer').classList.remove('open'); }
+  document.addEventListener('keydown', function(e){ if(e.key==='Escape'&&document.getElementById('aoDrawer')&&document.getElementById('aoDrawer').classList.contains('open')) aoCloseDrawer(); });
+
+  // ── TOAST ──
+  function schedToast(msg, type) { var c = document.querySelector('.sched-toast-container'); var t = document.createElement('div'); t.className='sched-toast sched-'+(type||'info'); t.textContent=msg; c.appendChild(t); setTimeout(function(){ t.remove(); },3000); }
+  window.schedToast = schedToast;
+
+  // ── ON NAVIGATION, SHOW FIRST SCREEN ──
+  var origShowView = showView;
+  showView = function(viewId) {
+    origShowView(viewId);
+    if (viewId==='data-types') dtRender();
+    if (viewId==='agent-outputs') aoApplyFilters();
+  };
+
+  // ── EXPOSE TO WINDOW ──
+  window.dtOpenCreate = dtOpenCreate; window.dtOpenEdit = dtOpenEdit; window.dtCloseDialog = dtCloseDialog;
+  window.dtAddField = dtAddField; window.dtRemoveField = dtRemoveField;
+  window.dtFieldTypeChange = dtFieldTypeChange; window.dtSetEnum = dtSetEnum; window.dtSave = dtSave;
+  window.dtOpenDelete = dtOpenDelete; window.dtCloseDelete = dtCloseDelete; window.dtConfirmDelete = dtConfirmDelete;
+  window.aoApplyFilters = aoApplyFilters; window.aoClearFilters = aoClearFilters;
+  window.aoExportCsv = aoExportCsv; window.aoOpenDrawer = aoOpenDrawer; window.aoCloseDrawer = aoCloseDrawer;
+})();
+</script>
+<script src="../shared/page-init.js"></script>
+</body>
+</html>

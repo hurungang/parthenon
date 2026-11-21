@@ -54,6 +54,7 @@ from app.core.resource_types import (
     RT_AGENT_ROLES,
     RT_AGENT_RUNTIME_CONTROL,
     RT_AGENT_SCHEDULES,
+    RT_AGENT_SCRIPTS,
     RT_AGENT_SKILLS,
     RT_AGENT_SOPS,
     RT_AGENT_TRAILS,
@@ -166,6 +167,7 @@ AGENT_MANAGER_PRESET: Final[DefaultTenantRolePreset] = DefaultTenantRolePreset(
         RT_AGENT_DATA_TYPES: frozenset({"create", "read", "update", "delete", "manage"}),
         RT_AGENT_DATA: frozenset({"read"}),
         RT_AGENT_OUTPUTS: frozenset({"read"}),
+        RT_AGENT_SCRIPTS: frozenset({"read", "manage"}),
         # Reads needed to configure agents (MCP tool visibility) and to
         # inspect the permission setup the agents rely on.
         RT_INTEGRATION_MCP_HUB: frozenset({"read"}),

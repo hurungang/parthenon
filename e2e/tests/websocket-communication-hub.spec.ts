@@ -7,12 +7,14 @@
 // 4. Control Center does NOT serve WebSocket endpoints
 
 import { test, expect } from '@playwright/test'
+import { apiIsReachable } from './_helpers'
 
 const CONTROL_CENTER_URL = process.env.CONTROL_CENTER_URL || 'http://localhost:8000'
 const COMM_HUB_URL = process.env.COMM_HUB_URL || 'http://localhost:8002'
 
 test.describe('WebSocket Communication Hub Integration', () => {
-  test('Verify Communication Hub serves WebSocket endpoint', async ({ page }) => {
+  test('Verify Communication Hub serves WebSocket endpoint', async ({ page, request }) => {
+    test.skip(!(await apiIsReachable(request)), 'Live stack not reachable — WebSocket wiring checks need the running services')
     // Check Communication Hub health endpoint
     const response = await page.request.get(`${COMM_HUB_URL}/health`)
     expect(response.status()).toBe(200)
@@ -22,7 +24,8 @@ test.describe('WebSocket Communication Hub Integration', () => {
     expect(health.status).toBe('ok')
   })
 
-  test('Verify Control Center does NOT serve WebSocket endpoint', async ({ page }) => {
+  test('Verify Control Center does NOT serve WebSocket endpoint', async ({ page, request }) => {
+    test.skip(!(await apiIsReachable(request)), 'Live stack not reachable — WebSocket wiring checks need the running services')
     // Check Control Center health (should work)
     const ccHealth = await page.request.get(`${CONTROL_CENTER_URL}/health`)
     expect(ccHealth.status()).toBe(200)

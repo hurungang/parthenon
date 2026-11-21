@@ -48,7 +48,7 @@
 **Alert:** `PassthroughJWTValidationFailureSpike` — JWT validation failures > 10% over 5 minutes
 
 1. Check the Keycloak JWKS endpoint: `GET <KEYCLOAK_URL>/realms/<realm>/protocol/openid-connect/certs`. A non-200 response means all passthrough tool calls will fail until JWKS is reachable.
-2. Review the JWKS cache TTL in `backend/app/auth.py` (default: `JWKS_CACHE_TTL = 600` seconds). If Keycloak recently rotated signing keys, the cache may be serving a stale JWKS; reduce TTL temporarily or restart the backend to flush the cache.
+2. Review the JWKS cache TTL in `backend/app/services/oidc_provider_registry.py` (`DEFAULT_JWKS_TTL`, default: 300 seconds). If Keycloak recently rotated signing keys, the cache may be serving a stale JWKS; wait for the TTL to expire or restart the backend to flush the cache.
 3. Check whether forwarded JWTs are consistently expired. A spike in JWT expiry rejections indicates the calling agent is not refreshing tokens before tool calls. Review the agent's token refresh logic.
 
 ---

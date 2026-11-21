@@ -1,5 +1,7 @@
 # Agent Runtime Security — Entities
 
+[← Data model overview](../../overview.md)
+
 ```mermaid
 erDiagram
     AgentInstanceCertificate {

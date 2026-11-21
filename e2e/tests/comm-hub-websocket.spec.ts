@@ -1,9 +1,14 @@
 import { test, expect } from '@playwright/test'
+import { apiIsReachable } from './_helpers'
 
 const CONTROL_CENTER_URL = 'http://localhost:8000'
 const COMM_HUB_URL = 'http://localhost:8002'
 
 test.describe('Communication Hub WebSocket Tests', () => {
+  test.beforeEach(async ({ request }) => {
+    test.skip(!(await apiIsReachable(request)), 'Live backend not reachable on :8000')
+  })
+
   test('Communication Hub health endpoint responds correctly', async ({ request }) => {
     const response = await request.get(`${COMM_HUB_URL}/health`)
     expect(response.status()).toBe(200)

@@ -1087,7 +1087,7 @@ export function PanelTopologyCanvas({ agentName, draft, isDirty, onNodeClick }: 
   )
 
   return (
-    <Box>
+    <Box data-testid="panel-topology-canvas">
       {!fullscreen && (
         <>
           <Box display="flex" alignItems="center" justifyContent="space-between" sx={{ mb: 0.5 }}>

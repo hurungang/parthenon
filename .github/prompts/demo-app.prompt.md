@@ -177,8 +177,16 @@ The `airline-booking-demo` change is a **live-platform** demo (MCP demo app book
 | Retire version | `Agent Type Scripts tab — agent-owned script governance > operator retires a version from the Scripts tab` | Retire action sent for a version |
 | Plan-step script link | `Agent Type Scripts tab — agent-owned script governance > plan review shows a script link on the script-backed step and opens the Scripts tab (E4a)` | Agent Preview shows a Script link on the script-backed step; clicking lands in the Scripts tab |
 | Permission gating | `Agent Type Scripts tab — agent-owned script governance > permission-gated promote surfaces via the dialog error pattern without crashing` | Permission Denied alert inside the dialog instead of a crash |
+| **Delegation Depth Configuration & Log Scoping** (remove-delegation-depth-cap) | | |
+| Depth above the former ceiling | `Delegation Depth Configuration (mocked API) > create dialog accepts a depth above 32 and submits it unchanged` | Create an agent with Max Delegation Depth 40 — configured value is submitted unchanged, no platform cap |
+| Depth edit persists | `Delegation Depth Configuration (mocked API) > Agent Properties panel accepts a depth above 32 and persists it unchanged` | Edit an existing agent's Max Delegation Depth to 40 and verify it is saved |
+| Parent log scoping | `Execution Log Scoping (mocked API) > parent log shows direct delegation only and the peek hides the child’s own delegation` | Parent log shows its own work + direct delegation; no grandchild activity leaks into the peek |
+| Drill-in to child log | `Execution Log Scoping (mocked API) > View Execution Logs drills into the child log, which shows the child’s own delegation` | "View Execution Logs" opens the delegated agent's own log, which shows its own sub-delegation |
+| Configured depth indicator | `Delegation Depth Status Display (mocked API) > shows the configured maximum for each agent type (3 and 7), not a fixed 1` | Guardrail usage shows each agent type's configured maximum, not a fixed platform value |
 
 Demo cases for this change: `docs/changes/software-3.0-agent-framework/demo-cases.md` — run with `--cases docs/changes/software-3.0-agent-framework/demo-cases.md`.
+
+Delegation-depth demo cases: `docs/changes/remove-delegation-depth-cap/demo-cases.md` — run with `--cases docs/changes/remove-delegation-depth-cap/demo-cases.md`.
 
 ## Prerequisites
 

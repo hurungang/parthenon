@@ -189,6 +189,15 @@ In the JSON Source Code view, a **Validate** button performs a client-side parse
 
 The validation is instantaneous and read-only — it does not save, modify, or otherwise affect the policy data. It exists purely to catch syntax errors early and prevent loss of work.
 
+## Conversational Management Permission Parity
+
+Management performed through conversation (the [Control Center Assistant](control-center-assistant.md), or an external agent using a user's own credentials) is not a separate permission pathway:
+
+- The same per-resource read and manage actions apply as for the equivalent web UI operation — conversational management adds no action that policy does not already grant, and requires no new grant.
+- Every conversational action executes under the requesting user's identity and is attributed to that user; a user lacking permission receives a clear denial and nothing is written.
+- Actions are tenant-scoped exactly like UI actions: the resource types resolve inside the session's tenant, and a conversational request can never reach another tenant's resources.
+- Destructive actions remain unavailable conversationally where the product forbids them (no deletion through the assistant), regardless of the user's permissions.
+
 ## Acceptance Criteria
 - Users and agents authenticate via OIDC and are assigned correct roles
 - Permissions are enforced for all actions in the Web UI
@@ -211,6 +220,7 @@ The validation is instantaneous and read-only — it does not save, modify, or o
 - Policy changes from both Form and JSON views are saved as a single batch when the administrator clicks Save
 - Module-level wildcards (`agent::*`, `integration::*`, `system::*`, `*::*`) correctly grant access to all submodules within their scope
 - Invalid or unknown resource type identifiers are rejected with a clear error message indicating the required format
+- Conversational management enforces the same per-resource actions as the web UI, under the requesting user's identity, scoped to the session's tenant, and grants nothing extra
 
 ## Out of Scope
 - Feature-specific business logic (each module has its own feature spec)

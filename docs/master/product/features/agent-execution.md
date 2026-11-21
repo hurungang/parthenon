@@ -105,6 +105,30 @@ Agents can pause execution and request human input during the observe-reason-act
 
 When an agent calls `human_intervene`, the session transitions from `running` to `waiting_for_human` state. No further LLM or tool calls are made while waiting. An operator views and responds to the request through the Web UI, and the session automatically resumes with the response value injected as the tool's return value. If the session is terminated while waiting, all pending intervene requests are automatically cancelled.
 
+### Durable Human-in-the-Loop Lifecycle
+
+A pause for human input is durable, not tied to the server process that created it:
+
+- An intervention awaiting human input survives a restart of any service in the path and can be answered later; answering it continues the work from the pause point rather than failing.
+- A response can be delivered to a turn that was paused by a different instance, so scaling, failover, and routine deployment do not strand an operator's decision.
+- A confirmed action is applied **exactly once**, even if the approval is delivered more than once (reconnect, repeated click, or an instance change mid-response); a denied or expired request applies nothing.
+- What is shown as "waiting for your input" is always answerable. A turn that genuinely can no longer be resumed resolves to one clear, actionable terminal message (naming what happened and what to do next) instead of a misleading timeout, and its input is re-enabled.
+- The visible vocabulary distinguishes **waiting for the user**, **resumed and continuing**, **resolved**, and **no longer resumable**, so an operator always knows whether their decision took effect.
+
+### Confirm-Before-Write — Canonical Worked Example
+
+The [MCP Demo App](mcp-demo-app.md) airline booking journey is the reference example of the confirm-before-write pattern in a real business flow: the agent presents a preview of the exact state-changing action (operation, subject, and a field-by-field table) and waits for approval before calling the tool. Rejecting the preview — or letting it expire — leaves the booking store untouched, which is verifiable by a follow-up read (the ticket simply does not exist). Approving performs the write once and the change is visible immediately. The same pattern governs the destructive cancel action, and the same preview-and-approve shape is used for every agent-driven management change.
+
+### Approved Live Script Runs During Optimization
+
+Optimization verifies scripts against recorded evidence by default. In the rare case where evidence cannot prove a script — or when the operator explicitly asks for a live check — a single approved live test may be run:
+
+- The operator approves one end-to-end run of the specific script under test (approved by name and version, with an informational preview of the tool calls it will make); individual tool calls are not approved one at a time.
+- The approved run executes as the agent's own operation, inside the agent's workspace, under the agent's identity and permissions — the same tenancy, permission, and safety rules that govern a normal run.
+- Each run is attributed to the agent's identity together with the operator who approved it — never to a shared, privileged, or elevated identity.
+- An approval is single-use: further live work needs a new request and a new approval, denial or expiry keeps the session replay-only, and a failed or refused run starts no further live work.
+- Live script runs and their results are visible in the agent's history and clearly distinguishable from replay verification work.
+
 ### Intervention in Conversational Delegation
 
 When a **delegated sub-agent** calls `human_intervene` during a conversational session, the intervention request is routed to the parent conversation's UI — not just to the operator dashboard. An intervention dialog (approval, choice, or text) appears inline in the chat at the point of delegation. The parent conversation pauses with a "Waiting for your input" indicator. The user responds in-place, and the response is injected into the sub-agent's execution. The conversation resumes automatically, and the response is recorded as a conversation turn. If multiple delegated sub-agents request intervention in parallel, requests are queued and presented sequentially — one intervention at a time — in the conversation UI.
@@ -141,7 +165,8 @@ When an agent type has a verified, up-to-date **optimized implementation plan** 
 - A **fully-scripted** composition completes with zero model calls.
 - Otherwise, the composition's scripts are exposed to the model as invocable tools and the model orchestrates them.
 - An absent, stale (e.g., base plan regenerated), retired, or failed optimized plan — or the failure of any script — falls back **unconditionally** to the base plan's model-driven path, with the reason recorded. A run never fails solely because a script or the optimized plan failed.
-- This preference is fixed platform behaviour; no execution-mode configuration is required from users.
+- When a fallback is attributable to the optimized plan itself (a later execution had to abandon it), the plan is marked **requires a fix** and feedback describing the failure is recorded automatically, so a known-bad plan is neither re-served silently nor lost. The operator is alerted the next time they open the agent and can re-optimize with the prior plan plus that feedback as context.
+- This preference is fixed platform behaviour; no execution-mode configuration is required from users. Optimization is triggered separately (see [Sandboxed Scripting & Model-Authored Composition](sandboxed-scripting.md)); running an agent never performs optimization.
 
 ## User Impact
 - Security administrators can verify and revoke agent instances
@@ -172,6 +197,13 @@ When an agent type has a verified, up-to-date **optimized implementation plan** 
 - Delegated sub-agent intervention requests in conversational sessions are routed to the parent conversation and surfaced as inline intervention dialogs in the conversation UI
 - Parallel intervention requests from multiple delegated sub-agents are queued and presented sequentially in the conversation — one at a time
 - The Agent Runtime Monitor surfaces intervention requests from conversational delegated agents alongside those from standalone non-conversational agents, with any node awaiting human intervention visible on the map by default carrying an alert icon
+- A pending intervention survives a restart of any service in the path and remains answerable; answering it continues the work from the pause point rather than reporting a timeout
+- A confirmation answered on an instance other than the one that paused the turn is accepted there, and the operator still sees one coherent conversation
+- A confirmed action is applied exactly once even when the approval is delivered more than once; a denied or expired confirmation applies nothing
+- A turn that genuinely cannot be resumed ends with one clear, actionable message, input is re-enabled, and the outstanding confirmation is no longer offered as actionable
+- The conversation distinguishes waiting for the user, resumed and continuing, resolved, and no longer resumable
+- An operator-approved live optimization script run executes once as the agent's own operation and is attributed to the agent together with the approving operator
+- A fallback attributable to the optimized plan marks the plan as requiring a fix and records feedback automatically, and execution continues on the model-driven path
 - When a non-conversational agent initiates delegation, the execution log displays a `delegating to <agent_type>` event in real time
 - While the non-conversational agent is waiting for a delegated sub-agent to complete, the execution log displays a `waiting` status with a visible indicator
 - When the delegated sub-agent completes and the parent agent resumes, the execution log displays a `delegation_resumed` event

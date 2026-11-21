@@ -109,6 +109,14 @@ class TestNewTables:
 
     async def test_tenancy_switch_seeded_false(self, db):
         """Pristine state: the switch row exists and is FALSE."""
+        adopted = await _scalar(
+            db, "SELECT COUNT(*) FROM tenants WHERE is_system_tenant = true"
+        )
+        if adopted:
+            pytest.skip(
+                "deployment already adopted tenancy — the seeded default was "
+                "legitimately flipped ON by an operator"
+            )
         value = await _scalar(
             db,
             "SELECT value FROM platform_settings WHERE key = 'multi_tenancy_enabled'",

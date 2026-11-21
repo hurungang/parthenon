@@ -96,6 +96,7 @@ from app.schemas.agents import (
 )
 from app.services.agents.agent_type_service import AgentTypeService
 from app.services.agents.binding_validation import validate_bindings
+from app.services.agents.guardrails import PLATFORM_DEFAULT_MAX_DELEGATION_DEPTH
 from app.services.agents.identity_service import (
     AgentIdentityConflictError,
     AgentIdentityNotFoundError,
@@ -1142,7 +1143,9 @@ class DelegationStatusResponse(BaseModel):
 
     has_active_delegation: bool = False
     current_depth: int = 0
-    max_depth: int = 1
+    #: The session agent type's CONFIGURED maximum delegation depth (never a
+    #: platform-imposed constant).  Required: the handler always resolves it.
+    max_depth: int
     active_sub_agent_slug: str | None = None
     recent_events: list[dict] = Field(default_factory=list)
 
@@ -1298,10 +1301,20 @@ async def get_delegation_status(
             "data": entry.data,
         })
 
+    # Report the session agent type's CONFIGURED maximum depth — never a
+    # platform constant.  Falls back to the platform default guardrail value
+    # (not a one-level cap) when the agent type cannot be resolved.
+    configured_max_depth = PLATFORM_DEFAULT_MAX_DELEGATION_DEPTH
+    session_agent_type = job.agent_type
+    if session_agent_type is not None:
+        session_configured_depth = session_agent_type.guardrail_max_delegation_depth
+        if isinstance(session_configured_depth, int):
+            configured_max_depth = session_configured_depth
+
     return DelegationStatusResponse(
         has_active_delegation=has_active_delegation,
         current_depth=current_depth,
-        max_depth=1,
+        max_depth=configured_max_depth,
         active_sub_agent_slug=active_sub_agent,
         recent_events=recent_event_list,
     )
@@ -1493,6 +1506,23 @@ async def create_agent_type(
             output_type=body.output_type,
             output_schema=body.output_schema,
             output_data_type_id=body.output_data_type_id,
+            # Guardrail policy supplied at creation is persisted as-is.  In
+            # particular Max Delegation Depth is the configured depth limit —
+            # dropping it here would silently reset the operator's choice to the
+            # column default.
+            guardrail_max_iterations=body.guardrail_max_iterations,
+            guardrail_max_delegation_depth=body.guardrail_max_delegation_depth,
+            guardrail_max_delegated_steps=body.guardrail_max_delegated_steps,
+            guardrail_execution_timeout_seconds=body.guardrail_execution_timeout_seconds,
+            guardrail_token_budget=body.guardrail_token_budget,
+            guardrail_token_enforcement_mode=body.guardrail_token_enforcement_mode,
+            guardrail_token_fallback_mode=body.guardrail_token_fallback_mode,
+            guardrail_conversational_token_visibility_mode=(
+                body.guardrail_conversational_token_visibility_mode
+            ),
+            guardrail_conversational_continuation_policy=(
+                body.guardrail_conversational_continuation_policy
+            ),
         )
         db.add(agent_type)
         await db.flush()

@@ -44,6 +44,15 @@ Every tenant uses **only its own identity provider**. There is no shared provide
 
 Internal endpoints between Control Center, Communication Hub, and Agent Runtime require a valid signed tenant context on every call. A request without a valid signed tenant binding is rejected — it never falls back to an unscoped or default tenant. All internal queries filter strictly by the bound tenant.
 
+### Durable Conversational Work
+
+Persisting and resuming in-flight conversational work does not widen any boundary:
+
+- The durable record of a paused turn carries status, coordination, and control information only — never identity tokens, database credentials, or decrypted secrets. No service gains new data access in order to resume a turn.
+- A resumed turn stays inside its conversation's tenant and inside the existing service boundaries: Control Center remains the only service that reads or writes the stored turn state, and the execution service continues to hold no identity material.
+- An intervention response can be relayed to a turn paused by a different instance, but the relay only carries the operator's decision — it grants no additional data access to any service.
+- Optimization artifacts — the optimization conversation, optimized plans, live-test requests, approvals, and results, and the workspace's optimization model choice — are tenant-owned and resolve only inside the owning tenant. An approved live script run executes inside the session's tenant under the agent's identity and permissions.
+
 ### System Tools Are Tenant-Scoped
 
 - `save_data` and `get_data` records always carry the calling tenant's binding and are retrieved only by that tenant — a record saved by tenant A is not retrievable by tenant B even with identical names.
@@ -76,6 +85,7 @@ Existing tenant-less (NULL-tenant) shared rows — data types, seeded skills, sc
 - Each tenant's notifications go to that tenant's own recipient group; no global/shared slot exists.
 - A tenant user cannot see or reference another tenant's (or the root tenant's) data types, skills, or jobs; scheduled jobs always execute in their owning tenant's context.
 - Agent and chat sessions are tenant-bound; one workspace's users can never reach another workspace's data, MCP servers, or decision tools.
+- A paused conversational turn is resumed only within its conversation's tenant; the durable turn information carries no sensitive material, and resumption requires no new data access for any service.
 - Every tenant authenticates solely through its own identity provider; with multi-tenancy disabled only root-tenant providers work and non-root sign-ins are rejected; there is no workspace switching.
 - With multi-tenancy disabled, all of the above behaves identically with everything bound to the root tenant.
 - Existing per-tenant unique-name behavior and per-identity-tenant OAuth token refresh continue to work (regression check).

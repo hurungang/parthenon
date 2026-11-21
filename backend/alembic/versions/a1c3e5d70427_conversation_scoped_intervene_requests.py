@@ -29,11 +29,9 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    # Only re-apply NOT NULL when no conversation-scoped rows exist.
-    op.execute(
-        "ALTER TABLE intervene_requests ALTER COLUMN agent_session_id "
-        "SET NOT NULL WHERE agent_session_id IS NOT NULL"
-    )
+    # Conversation-scoped rows (NULL agent_session_id) cannot survive the
+    # legacy NOT NULL constraint, so remove them first, then re-apply it.
+    # (PostgreSQL does not support a WHERE clause on ALTER COLUMN ... SET NOT NULL.)
     op.execute(
         "DELETE FROM intervene_requests WHERE agent_session_id IS NULL"
     )

@@ -10,6 +10,28 @@ This section contains all operational reference material for running and maintai
 - All infrastructure bootstrap operations (realm creation, DB seeding, certificate issuance) are performed via the consolidated `setup` command, which is idempotent and safe to run repeatedly.
 - Startup validation runs on every service restart; if a service fails to start, check the startup validation log events to identify which dependency is unreachable.
 - **Multi-tenancy is opt-in**: `multi_tenancy_enabled` is a database platform setting (seeded `false`) — not an environment variable. The system tenant is the **root tenant** (workspace `root`); platform routes resolve the root-tenant binding and unbound platform requests fail closed with HTTP 403. A `no_access_to_workspace` 403 is a final authorization denial, not a re-auth loop.
+- **Conversational turns are durable in Control Center**: the activity indicator and any paused confirmation survive restarts of CC, CH, or AR (nothing lives in Redis or in instance memory). The invariant to check first in any turn incident: *a turn shown as "waiting for your input" must be answerable, and an unanswerable turn must not be shown as waiting.*
+
+---
+
+## Reference Pages
+
+Both reference areas are hubs: the hub holds the operator entry content, and each topic page holds one subject's detail.
+
+| Page | Covers |
+|------|--------|
+| [logging.md](logging.md) | **Logging hub** — log levels, correlation fields, log locations and rotation, topic index |
+| [logging-platform.md](logging-platform.md) | Per-component event catalog; startup validation; configuration sources; setup tool; telemetry subsystem |
+| [logging-agents.md](logging-agents.md) | Agent Runtime session/permission/identity events; guardrail events and taxonomy |
+| [logging-security.md](logging-security.md) | Multi-tenancy events; super admin and OIDC identity; security guardrails; certificate lifecycle; internal API boundary |
+| [logging-integrations.md](logging-integrations.md) | MCP demo app; API keys and their audit table; third-party client integration |
+| [logging-control-center-assistant.md](logging-control-center-assistant.md) | Assistant management tools, MCP OAuth plane, `cc` entity guards, seed, meta-tools, catalog anomalies |
+| [logging-conversation-turns.md](logging-conversation-turns.md) | Conversation turn lifecycle, interventions, activity/resume events, grep hints |
+| [monitoring.md](monitoring.md) | **Monitoring hub** — monitoring model, readiness and health checks, topic index |
+| [monitoring-metrics.md](monitoring-metrics.md) | Key metrics by component, incl. proposed/log-derived series |
+| [monitoring-dashboards.md](monitoring-dashboards.md) | Dashboards and panel groups to create |
+| [monitoring-alerts.md](monitoring-alerts.md) | Alert names, conditions, severities, first actions |
+| [monitoring-tenancy.md](monitoring-tenancy.md) | Tenancy metrics and OTEL dimensions, tenancy alerts, isolation-boundary dashboard/alerts/metrics |
 
 ---
 
@@ -32,14 +54,17 @@ This section contains all operational reference material for running and maintai
 | **Service Segregation Boundary Enforcement** | Allowed vs denied internal calls by caller type, top deny reasons, unknown caller and certificate mismatch trends, revocation health, internal auth latency, and system-tools unauthenticated rejects |
 | **Tenancy** | Tenant resolution outcomes and fail-closed rejections, cross-tenant attempt trends by surface, per-tenant OIDC validation failures, tenant lifecycle activity, per-tenant resource usage / noisy-neighbor share (emitted only while `multi_tenancy_enabled` is on) |
 | **Control Center Assistant** | Delegated `cc____` management-action volume by outcome, permission-denial rate by resource type, delete/out-of-scope rejections, tool latency p99, identity-resolution failures, MCP OAuth auth rejections, assistant seed health, turn watchdog/LLM timeouts, conversational iteration-limit stops, intervention approval/denial/timeout counts, WebSocket disconnect/heartbeat health, and catalog anomalies |
+| **Conversational Turn Resume** | Pause → resume funnel, resume success rate, orphaned vs genuinely terminal turns, claim contention, terminal resolutions by reason, checkpoint payload size/storage/purge, resume latency p99, reaper sweep health, activity staleness (all log-derived until counters ship) |
 
-For metric definitions and alert thresholds, see [monitoring.md](monitoring.md).
+For metric definitions and alert thresholds, see [monitoring.md](monitoring.md) — the entry point for metrics, dashboards, alerts, and tenancy-gated signals.
 
-Agent execution guardrail metrics and alerts are defined in [monitoring.md](monitoring.md) under Agent Execution Guardrails.
+Agent execution guardrail metrics and alerts are defined in [monitoring-metrics.md](monitoring-metrics.md) and [monitoring-alerts.md](monitoring-alerts.md) under Agent Execution Guardrails.
 
-Control Center Assistant metrics, alerts, and the log-based fallbacks (most assistant signals are log-derived today) are defined in [monitoring.md](monitoring.md) under Control Center Assistant.
+Control Center Assistant metrics, alerts, and the log-based fallbacks (most assistant signals are log-derived today) are defined in [monitoring-metrics.md](monitoring-metrics.md) and [monitoring-alerts.md](monitoring-alerts.md) under Control Center Assistant.
 
-Boundary policy metrics and alerts for internal caller segregation are defined in [monitoring.md](monitoring.md) under Service Segregation Boundary Enforcement.
+Conversational activity and resumable-turn metrics, alerts, and the log-derived series behind them are defined in [monitoring-metrics.md](monitoring-metrics.md) and [monitoring-alerts.md](monitoring-alerts.md) under Conversational Turn Resume.
+
+Boundary policy metrics and alerts for internal caller segregation are defined in [monitoring-tenancy.md](monitoring-tenancy.md) under Service Segregation Boundary Enforcement.
 
 ---
 
@@ -52,15 +77,17 @@ Boundary policy metrics and alerts for internal caller segregation are defined i
 | Loki (aggregated) | Query via LogQL in Grafana or Loki API; all services ship structured logs via OTEL Collector |
 | Jaeger (distributed traces) | Use `trace_id` from a log line to jump to the correlated trace in Jaeger UI |
 
-For structured log fields and per-component event reference, see [logging.md](logging.md).
+For structured log fields and the per-component event reference, see [logging.md](logging.md) — the logging hub — and [logging-platform.md](logging-platform.md) for the per-component catalog.
 
-Agent execution guardrail event taxonomy, required fields, and sensitive-data exclusions are defined in [logging.md](logging.md) under Agent Execution Guardrail Events.
+Agent execution guardrail event taxonomy, required fields, and sensitive-data exclusions are defined in [logging-agents.md](logging-agents.md) under Agent Execution Guardrail Events.
 
-Boundary event catalog and required fields for allowlist enforcement are defined in [logging.md](logging.md) under Internal API Boundary Log Events.
+Boundary event catalog and required fields for allowlist enforcement are defined in [logging-security.md](logging-security.md) under Internal API Boundary Log Events.
 
-Multi-tenancy event prefixes (`tenant.resolution.*`, `tenant.claim.*`, `tenant.scope.*`, `tenant.oidc.*`, `tenant.adoption.*`, `tenant.signature.*`, `no_access_to_workspace`) and per-log-file search keywords are defined in [logging.md](logging.md) under Multi-Tenancy Log Events.
+Multi-tenancy event prefixes (`tenant.resolution.*`, `tenant.claim.*`, `tenant.scope.*`, `tenant.oidc.*`, `tenant.adoption.*`, `tenant.signature.*`, `no_access_to_workspace`) and per-log-file search keywords are defined in [logging-security.md](logging-security.md) under Multi-Tenancy Log Events.
 
-Control Center Assistant events — `cc____` management-tool outcomes, `mcp.oauth.*`, `cc` entity guards, conversation turn lifecycle, intervention lifecycle, assistant seed, meta-tool dispatch, and catalog anomalies — are defined in [logging.md](logging.md) under Control Center Assistant Events.
+Control Center Assistant events — `cc____` management-tool outcomes, `mcp.oauth.*`, `cc` entity guards, assistant seed, meta-tool dispatch, and catalog anomalies — are defined in [logging-control-center-assistant.md](logging-control-center-assistant.md); the conversation turn lifecycle is in [logging-conversation-turns.md](logging-conversation-turns.md).
+
+Conversation activity and resumable-turn events — activity upsert/hydration/touch, reaper and Terminal Resolver resolutions, pause recorded, checkpoint written/loaded/purged, claim acquired/refused, resume dispatched/de-duplicated, and terminal resolutions by reason — are defined in [logging-conversation-turns.md](logging-conversation-turns.md) under Conversation Activity and Resumable Turn Events.
 
 ---
 
@@ -77,6 +104,8 @@ The following endpoints must be included in production readiness checklists and 
 | Control Center health | `http://<cc-host>:8000/health` | `200 OK` — must be healthy before AR and CH can validate against it |
 | Agent Runtime health | `http://<ar-host>:8001/health` | `200 OK` — only after CC is healthy |
 | Communication Hub health | `http://<ch-host>:8002/health` | `200 OK` — only after CC and Redis are healthy |
+
+Conversational turn readiness (no dedicated endpoint): after startup, `control-center.log` must show the reaper started (`ConversationActivityReaper started`) with no failing-sweep errors, no stale non-terminal activity accumulating, and no sustained `Activity upsert failed` / `Activity hydration failed` / resume-relay 401 lines in `communication-hub.log`. A pause shown as "waiting for your input" must hold a live resume record; see [runbooks/conversational-turn-recovery.md](runbooks/conversational-turn-recovery.md).
 
 ---
 
@@ -98,7 +127,7 @@ The setup tool uses its own environment variables for Keycloak administration (`
 
 ### Expected Output
 
-Each operation logs structured events to stdout (see [logging.md](logging.md) for the full event reference). On success, `setup verify` emits `setup.verify.all_ok`. On partial failure, it emits `setup.verify.issues_found` with a list of specific issues.
+Each operation logs structured events to stdout (see [logging-platform.md](logging-platform.md) for the full event reference). On success, `setup verify` emits `setup.verify.all_ok`. On partial failure, it emits `setup.verify.issues_found` with a list of specific issues.
 
 ---
 
@@ -125,6 +154,7 @@ Each operation logs structured events to stdout (see [logging.md](logging.md) fo
 | [tenant-adoption-and-scope-denials.md](runbooks/tenant-adoption-and-scope-denials.md) | 403/404 spikes after enabling the tenancy switch; `tenant.adoption.*` ERROR or `oidc.registry.*` events in `control-center.log`; suspected cross-tenant isolation probing |
 | [tenant-context-missing.md](runbooks/tenant-context-missing.md) | Agent Runtime / Communication Hub reject all internal calls with `tenant context` / `rejected` after enabling the tenancy switch |
 | [control-center-assistant.md](runbooks/control-center-assistant.md) | Assistant chat fails with 401/403, permission-denied on actions the UI allows, blank/missing assistant, turns hang or time out, replies not delivered after reconnect, end-session never stops the turn, `cc` entity errors, skill tool-binding failures |
+| [conversational-turn-recovery.md](runbooks/conversational-turn-recovery.md) | A conversational turn was thinking/working/waiting across a restart, crash, or failover; a pending confirmation does nothing when answered; a turn says it is no longer resumable; "pause could not be persisted"; activity shows waiting but the turn is not answerable; checkpoint storage growing |
 | [third-party-agent-integration.md](runbooks/third-party-agent-integration.md) | `/integrate/*` calls return `origin_denied`, `rate_limited`, `invalid_credential`, or `revoked_credential`; chat hangs with `timeout_or_failed`/`guardrail_*`; client cannot reach tools or MCP hub (input-interface-only) |
 
 For boundary incidents that involve certificate class or identity problems, use [service-segregation-boundary-enforcement.md](runbooks/service-segregation-boundary-enforcement.md) for initial triage and [certificate-security.md](runbooks/certificate-security.md) for certificate lifecycle remediation.

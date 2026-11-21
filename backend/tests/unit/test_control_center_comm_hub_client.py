@@ -44,8 +44,15 @@ def test_init_uses_default_cc_cert_paths_when_env_missing() -> None:
     ):
         client = CommunicationHubClient()
 
-    assert client._cert_path == "certs/control-center/service-cert.pem"
-    assert client._key_path == "certs/control-center/service-key.pem"
+    # Relative defaults are anchored to the backend root (CWD-independent).
+    from app.core.cert_paths import resolve_cert_path
+
+    assert client._cert_path == resolve_cert_path(
+        "certs/control-center/service-cert.pem"
+    )
+    assert client._key_path == resolve_cert_path(
+        "certs/control-center/service-key.pem"
+    )
 
 
 def test_make_client_without_cert_fails_closed_outside_dev_opt_in() -> None:

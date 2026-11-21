@@ -48,11 +48,25 @@ async def _pg():
 
 class TestMigrationApplied:
     @pytest.mark.asyncio
-    async def test_alembic_version_at_change_revision(self):
+    async def test_alembic_version_includes_change_revision(self):
+        """This change's migration is in the applied chain (head may be newer)."""
         async with _pg() as conn:
             head = await conn.fetchval("SELECT version_num FROM alembic_version")
-        assert head == REVISION, (
-            f"expected migration {REVISION} applied, DB is at {head}"
+        assert head, "alembic_version is empty — no migrations applied"
+
+        from pathlib import Path
+
+        from alembic.config import Config
+        from alembic.script import ScriptDirectory
+
+        cfg = Config()
+        cfg.set_main_option(
+            "script_location", str(Path(__file__).resolve().parents[2] / "alembic")
+        )
+        script = ScriptDirectory.from_config(cfg)
+        applied = {rev.revision for rev in script.iterate_revisions(head, "base")}
+        assert REVISION in applied, (
+            f"expected migration {REVISION} in the applied chain, DB is at {head}"
         )
 
 

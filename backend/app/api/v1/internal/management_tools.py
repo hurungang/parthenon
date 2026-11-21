@@ -21,6 +21,8 @@ Endpoints:
 """
 from __future__ import annotations
 
+import hashlib
+import json
 import logging
 import uuid
 from dataclasses import dataclass
@@ -146,15 +148,59 @@ class ManagementMetaInvokeRequest(BaseModel):
 #     stored summary instead of applying the write a second time;
 #   * a denial/expiry never reaches this path at all, so it can never set
 #     ``write_applied``.
+#
+# The marker is PER CALL, not per turn: one paused turn may approve a batch of
+# management writes (e.g. create_sop + update_agent_role + update_skill).  Each
+# write is identified by a stable effect key derived from the target tool and a
+# canonical rendering of its arguments, and its summary is stored under
+# ``applied_effect_summary["effects"][effect_key]``.  A true retry (same tool,
+# same args) replays that call's own summary; reads never touch this path.
+
+
+#: Truncated SHA-256 keeps persisted effect keys compact while remaining
+#: collision-free in practice.
+_EFFECT_HASH_LENGTH = 32
+
+
+def _is_write_tool(tool_name: str, action: str) -> bool:
+    """Is this dispatch a write (deduped per call) rather than a read?
+
+    Reads bypass the applied-marker path entirely.  Every write verb is
+    ``create_*`` / ``update_*``; SOP tools report the broader ``manage`` parity
+    action rather than ``create``/``update``, so the verb is authoritative once
+    the action is not the explicit ``read`` sentinel.
+    """
+    if action == "read":
+        return False
+    verb, _, _ = tool_name.partition("_")
+    return verb in ("create", "update")
+
+
+def compute_effect_key(tool_name: str, args: dict[str, Any] | None) -> str:
+    """Stable per-call identity for a management write dispatch.
+
+    Keyed on the target tool name plus a canonical JSON rendering of the tool
+    arguments (sorted keys, compact separators, ``default=str``).  The same
+    tool with different arguments is a *different* call; an identical retry
+    yields the identical key and therefore dedupes.
+    """
+    canonical = json.dumps(
+        args or {}, sort_keys=True, separators=(",", ":"), default=str
+    )
+    digest = hashlib.sha256(
+        f"{tool_name}\x1f{canonical}".encode("utf-8")
+    ).hexdigest()
+    return f"{tool_name}:{digest[:_EFFECT_HASH_LENGTH]}"
 
 
 @dataclass
 class _AppliedMarker:
-    """Pending applied marker for the paused turn that drove this dispatch."""
+    """Pending applied marker for one confirmed write on the paused turn."""
 
     resume_id: uuid.UUID
     tool_name: str
     applied_by_user_id: uuid.UUID | None = None
+    effect_key: str | None = None
 
     def summary_for(
         self, *, verb: str, resource: str, record: Any
@@ -169,20 +215,91 @@ class _AppliedMarker:
         }
 
 
+def _duplicate_payload(
+    record: Any,
+    summary: dict[str, Any],
+    *,
+    effect_key: str | None,
+) -> dict[str, Any]:
+    """Replay envelope for an already-applied call (its OWN summary)."""
+    return {
+        "duplicate_dispatch": True,
+        "write_applied": True,
+        "resume_id": str(record.id),
+        "applied_at": record.applied_at.isoformat() if record.applied_at else None,
+        "applied_effect_summary": summary,
+        "effect_key": effect_key,
+    }
+
+
+def _find_duplicate_effect(
+    applied_summary: dict[str, Any] | None,
+    *,
+    tool_name: str,
+    effect_key: str | None,
+) -> dict[str, Any] | None:
+    """Return the stored summary for this call when it was already applied.
+
+    Resolution order:
+
+    1. exact per-call key match in the ``effects`` map;
+    2. an adopted legacy effect (``legacy:`` key) whose tool matches — preserves
+       the old exactly-once contract for a same-tool retry;
+    3. a legacy record with ``write_applied`` but no effects map whose stored
+       top-level ``tool`` matches — same-tool retry of the pre-map write.
+    """
+    from app.services.conversations.turn_resume_store import (
+        LEGACY_EFFECT_KEY_PREFIX,
+        effect_entries,
+    )
+
+    effects = effect_entries(applied_summary)
+    if effect_key is not None:
+        entry = effects.get(effect_key)
+        if isinstance(entry, dict):
+            return entry
+    for key, entry in effects.items():
+        if (
+            isinstance(key, str)
+            and key.startswith(LEGACY_EFFECT_KEY_PREFIX)
+            and isinstance(entry, dict)
+            and entry.get("tool") == tool_name
+        ):
+            return entry
+    if not effects and isinstance(applied_summary, dict):
+        if applied_summary.get("tool") == tool_name:
+            return {
+                key: value
+                for key, value in applied_summary.items()
+                if key != "effects"
+            }
+    return None
+
+
 async def _prepare_applied_marker(
     db: AsyncSession,
     turn_idempotency_key: str | None,
     tool_name: str,
     *,
     user_sub: str | None = None,
+    is_write: bool = False,
+    effect_key: str | None = None,
 ) -> tuple[_AppliedMarker | None, dict[str, Any] | None]:
     """Resolve the paused turn for a confirmed dispatch.
 
-    Returns ``(marker, duplicate_result)``.  ``duplicate_result`` is set when
-    the turn already recorded its applied write: the caller returns the stored
-    summary instead of re-applying it.  The record is read under a row lock so
-    two concurrent duplicates serialise (the loser sees the committed marker).
+    Reads (``is_write=False``) bypass this path entirely: they never dedupe and
+    never return a stored write summary, so a read after a write in the same
+    paused turn always sees current data.
+
+    For writes, returns ``(marker, duplicate_result)``.  ``duplicate_result`` is
+    set only when THIS call (same ``effect_key``) — or a legacy same-tool write —
+    was already applied: the caller returns that call's own stored summary
+    instead of re-applying it.  A DIFFERENT write in a non-terminal resume is
+    allowed to apply.  The record is read under a row lock so concurrent
+    duplicates serialise (the loser sees the committed marker).
     """
+    if not is_write:
+        return None, None
     if not turn_idempotency_key:
         return None, None
 
@@ -200,26 +317,49 @@ async def _prepare_applied_marker(
             turn_idempotency_key,
         )
         return None, None
+
+    applied_summary = (
+        record.applied_effect_summary
+        if isinstance(record.applied_effect_summary, dict)
+        else {}
+    )
     if record.write_applied:
-        logger.info(
-            "Duplicate confirmed dispatch for resume %s (tool=%s) — returning "
-            "the stored applied summary",
-            record.id,
-            tool_name,
+        if effect_key is None:
+            # Defensive legacy fallback: a write dispatched without a per-call
+            # key obeys the old turn-wide contract.
+            logger.info(
+                "Duplicate confirmed dispatch for resume %s (tool=%s) — "
+                "returning the stored applied summary",
+                record.id,
+                tool_name,
+            )
+            return None, _duplicate_payload(
+                record, applied_summary, effect_key=effect_key
+            )
+        duplicate_summary = _find_duplicate_effect(
+            applied_summary, tool_name=tool_name, effect_key=effect_key
         )
-        return None, {
-            "duplicate_dispatch": True,
-            "write_applied": True,
-            "resume_id": str(record.id),
-            "applied_at": record.applied_at.isoformat() if record.applied_at else None,
-            "applied_effect_summary": record.applied_effect_summary or {},
-        }
+        if duplicate_summary is not None:
+            logger.info(
+                "Duplicate confirmed dispatch for resume %s (tool=%s, "
+                "effect_key=%s) — returning that call's stored summary",
+                record.id,
+                tool_name,
+                effect_key,
+            )
+            return None, _duplicate_payload(
+                record, duplicate_summary, effect_key=effect_key
+            )
+        # A legacy record (no effects map) whose stored tool differs is a
+        # DIFFERENT call in the same paused turn: allowed below when the resume
+        # is still live (the store adopts the legacy summary under a legacy key).
+
     if record.is_terminal:
         # A denied / cancelled / expired / superseded pause must never apply a
         # management change — not even when a stale or duplicated dispatch still
         # carries its idempotency key.  Refusing here (before the handler runs)
         # keeps the "denial never writes" guarantee true under any retry; an
-        # *applied* terminal record was already short-circuited above.
+        # *applied* terminal call was already short-circuited above.
         state = getattr(record.state, "value", record.state)
         outcome = getattr(record.resume_outcome, "value", record.resume_outcome)
         logger.warning(
@@ -261,6 +401,7 @@ async def _prepare_applied_marker(
         resume_id=record.id,
         tool_name=tool_name,
         applied_by_user_id=applied_by_user_id,
+        effect_key=effect_key,
     ), None
 
 
@@ -285,6 +426,7 @@ async def _commit_with_applied_marker(
                 verb=verb, resource=resource, record=record
             ),
             applied_by_user_id=marker.applied_by_user_id,
+            effect_key=marker.effect_key,
         )
     await db.commit()
 
@@ -339,8 +481,16 @@ async def invoke_management_tool_meta(
         conversation_session_id=body.conversation_session_id,
         agent_type_id=body.agent_type_id,
     )
+    # The wrapper carries the OUTER turn key but the INNER tool's identity: the
+    # per-call effect key must come from the wrapped tool + its own arguments.
+    is_write = _is_write_tool(target, action)
     marker, duplicate = await _prepare_applied_marker(
-        db, turn_idempotency_key, target, user_sub=body.user_sub
+        db,
+        turn_idempotency_key,
+        target,
+        user_sub=body.user_sub,
+        is_write=is_write,
+        effect_key=compute_effect_key(target, inner_args) if is_write else None,
     )
     if duplicate is not None:
         return ManagementToolResponse(result=duplicate)
@@ -635,8 +785,16 @@ async def execute_management_tool(
             tool_name,
             turn_idempotency_key,
         )
+    is_write = _is_write_tool(tool_name, action)
     marker, duplicate = await _prepare_applied_marker(
-        db, turn_idempotency_key, tool_name, user_sub=body.user_sub
+        db,
+        turn_idempotency_key,
+        tool_name,
+        user_sub=body.user_sub,
+        is_write=is_write,
+        effect_key=(
+            compute_effect_key(tool_name, body.tool_args) if is_write else None
+        ),
     )
     if duplicate is not None:
         return ManagementToolResponse(result=duplicate)
@@ -1352,7 +1510,6 @@ _SLUG_PATTERN_RESOURCES = {"skills", "sops", "agent_types", "agent_identities", 
 _MIN_MAX_ITERATIONS = 1
 _MAX_MAX_ITERATIONS = 1000
 _MIN_MAX_DELEGATION_DEPTH = 0
-_MAX_MAX_DELEGATION_DEPTH = 32
 _MIN_MAX_DELEGATED_STEPS = 0
 _MAX_MAX_DELEGATED_STEPS = 5000
 _MIN_EXECUTION_TIMEOUT_SECONDS = 1
@@ -1372,12 +1529,16 @@ def _validate_guardrails_structured(
     guardrail_token_enforcement_mode: Any,
 ) -> None:
     """Mirror the REST guardrail contract (`_validate_guardrail_contract`) with
-    structured per-field errors (same bounds, same conversational rule)."""
+    structured per-field errors (same bounds, same conversational rule).
+
+    A bound with ``high=None`` has no platform upper limit — only the
+    non-negative floor applies (Max Delegation Depth is the sole depth limit).
+    """
     from app.db.models.agents import AgentInputType, GuardrailTokenEnforcementMode
 
-    bounds = (
+    bounds: tuple[tuple[str, int, int, int | None], ...] = (
         ("guardrail_max_iterations", guardrail_max_iterations, _MIN_MAX_ITERATIONS, _MAX_MAX_ITERATIONS),
-        ("guardrail_max_delegation_depth", guardrail_max_delegation_depth, _MIN_MAX_DELEGATION_DEPTH, _MAX_MAX_DELEGATION_DEPTH),
+        ("guardrail_max_delegation_depth", guardrail_max_delegation_depth, _MIN_MAX_DELEGATION_DEPTH, None),
         ("guardrail_max_delegated_steps", guardrail_max_delegated_steps, _MIN_MAX_DELEGATED_STEPS, _MAX_MAX_DELEGATED_STEPS),
         (
             "guardrail_execution_timeout_seconds",
@@ -1388,6 +1549,10 @@ def _validate_guardrails_structured(
     )
     err = ManagementValidationError()
     for name, value, low, high in bounds:
+        if high is None:
+            if value < low:
+                err.add(name, f"must be >= {low}", f"Provide a value of {low} or greater.")
+            continue
         if not (low <= value <= high):
             err.add(name, f"must be between {low} and {high}", f"Provide a value between {low} and {high}.")
     if guardrail_token_budget is not None and not (_MIN_TOKEN_BUDGET <= guardrail_token_budget <= _MAX_TOKEN_BUDGET):

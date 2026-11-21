@@ -6,6 +6,19 @@ from time import monotonic
 from typing import Any
 
 
+#: Platform default for Max Delegation Depth when an agent type carries no
+#: configured value.  Mirrors the ``AgentType.guardrail_max_delegation_depth``
+#: column default and is applied ONLY as a default — never as a reduction of a
+#: configured value (there is no platform-imposed depth cap).
+PLATFORM_DEFAULT_MAX_DELEGATION_DEPTH = 3
+
+#: Platform defaults for the remaining guardrail budgets, used when a caller
+#: builds guardrail state without a resolved policy snapshot.
+PLATFORM_DEFAULT_MAX_ITERATIONS = 10
+PLATFORM_DEFAULT_MAX_DELEGATED_STEPS = 20
+PLATFORM_DEFAULT_EXECUTION_TIMEOUT_SECONDS = 300
+
+
 class GuardrailStopReason:
     """Canonical guardrail stop reason taxonomy."""
 

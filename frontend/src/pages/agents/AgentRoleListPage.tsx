@@ -140,7 +140,11 @@ export function AgentRoleListPage() {
                   <TableCell>
                     <Box display="flex" gap={0.5}>
                       <Tooltip title={t('app.edit')}>
-                        <IconButton size="small" onClick={() => handleOpenEdit(role)}>
+                        <IconButton
+                          size="small"
+                          aria-label={t('app.edit')}
+                          onClick={() => handleOpenEdit(role)}
+                        >
                           <EditIcon fontSize="small" />
                         </IconButton>
                       </Tooltip>
@@ -148,6 +152,7 @@ export function AgentRoleListPage() {
                         <IconButton
                           size="small"
                           color="error"
+                          aria-label={t('app.delete')}
                           onClick={() => handleDelete(role.id, role.name)}
                         >
                           <DeleteIcon fontSize="small" />

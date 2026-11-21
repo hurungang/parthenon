@@ -2,9 +2,9 @@
 
 Covers the conversational Control Center Assistant and the OAuth MCP plane it shares: delegated `cc____` management tools, the confirmation/HITL flow, conversational turns over the Communication Hub WebSocket, and the per-tenant Control Center (`cc`) MCP entity.
 
-Related: [oidc-token-failure.md](oidc-token-failure.md) (token/JWKS/issuer), [tenant-context-missing.md](tenant-context-missing.md) (signed tenant headers), [certificate-security.md](certificate-security.md) (cert lifecycle), [service-segregation-boundary-enforcement.md](service-segregation-boundary-enforcement.md) (mTLS/allowlist denials), [agent-runtime.md](agent-runtime.md) (session stuck/timeouts).
+Related: [oidc-token-failure.md](oidc-token-failure.md) (token/JWKS/issuer), [tenant-context-missing.md](tenant-context-missing.md) (signed tenant headers), [certificate-security.md](certificate-security.md) (cert lifecycle), [service-segregation-boundary-enforcement.md](service-segregation-boundary-enforcement.md) (mTLS/allowlist denials), [agent-runtime.md](agent-runtime.md) (session stuck/timeouts), [conversational-turn-recovery.md](conversational-turn-recovery.md) (a turn paused or working across a restart/failover, resume failures, checkpoint state).
 
-Log files: `backend/logs/control-center.log`, `communication-hub.log`, `agent-runtime.log`, `otel.log`. Most assistant signals are **log-derived today** — see the Control Center Assistant sections of [monitoring.md](../monitoring.md) and [logging.md](../logging.md).
+Log files: `backend/logs/control-center.log`, `communication-hub.log`, `agent-runtime.log`, `otel.log`. Most assistant signals are **log-derived today** — see [logging-control-center-assistant.md](../logging-control-center-assistant.md) and [logging-conversation-turns.md](../logging-conversation-turns.md), plus the Control Center Assistant sections of [monitoring-metrics.md](../monitoring-metrics.md) and [monitoring-alerts.md](../monitoring-alerts.md).
 
 ---
 
@@ -86,12 +86,15 @@ Log files: `backend/logs/control-center.log`, `communication-hub.log`, `agent-ru
 
 **Triage order**
 
-1. Is a confirmation pending? `paused on human_intervene` plus `waiting_for_human` means the assistant is legitimately waiting for the operator (bounded by `conversation_intervention_timeout_seconds`). Answer or cancel the confirmation; new chat messages are blocked meanwhile and return `chat_blocked`.
+1. Is a confirmation pending? `Resume record … registered` in `control-center.log` plus a `waiting_for_human` activity means the assistant is legitimately waiting for the operator. The pause is **durable**: it survives a restart of CC, CH, or AR and is bounded by the tenant-scoped resume TTL (`conversation_turn_resume_ttl_seconds`, platform default 900 s), not by `conversation_intervention_timeout_seconds` (which governs only the legacy in-process fallback). Answer or cancel it; new chat messages are blocked meanwhile and return `chat_blocked`. If answering does nothing, go to [conversational-turn-recovery.md](conversational-turn-recovery.md) §1.
 2. `watchdog fired` without any AR log → the AR call never started or the socket/turn task was orphaned; check CH→AR connectivity and certificates (§6).
 3. `Conversation turn timed out … bound=…` in AR → the provider call exceeded `conversation_llm_timeout_seconds`. Check provider latency and the model's tool count; retry once before escalating.
 4. `reason=iteration_limit` / UI step-limit message → the agentic loop hit `max_iterations` for the assistant. Typical causes: an oversized tool catalog, repeated schema lookups, or a model that re-discovers tools each step. Reduce catalog noise (scope the user's grants), prefer `get_mcp_server` discovery results, and raise the limit only with a documented reason.
 5. `guardrail_timeout_limit_hit_total` / other stop reasons → follow [agent-execution-guardrails.md](agent-execution-guardrails.md) and [agent-runtime.md](agent-runtime.md).
 6. Persistence-tail timeouts are cosmetic for the user but leave the stored turn incomplete: verify the error turn was persisted once (no duplicates) before closing.
+7. Spinner never clears although no turn is running → the persisted activity is stale. `Terminal Resolver closed conversation … (reason=unexpectedly_terminated)` means the reaper already healed it and the client will self-correct on the next `status_pong` or reconnect; if no such line appears within ~4 minutes (staleness bound 180 s plus one sweep), follow [conversational-turn-recovery.md](conversational-turn-recovery.md) §8.
+
+> **Restart behaviour changed.** A single CC/CH/AR restart no longer orphans a pending confirmation — the pause is reloadable by any AR instance. Only genuine expiry, supersession, cancellation, or a lost checkpoint resolves a turn terminally, and each carries its own actionable message rather than the legacy "delegated step timed out or failed".
 
 ---
 
@@ -101,7 +104,7 @@ Log files: `backend/logs/control-center.log`, `communication-hub.log`, `agent-ru
 
 **Where to look**
 
-- `communication-hub.log`: `WebSocket connected` / `WebSocket disconnected: … code=… reason=…`, `WebSocket send failed for session …`, `Cancelled pending conversation turn`.
+- `communication-hub.log`: `WebSocket connected` / `WebSocket disconnected: … code=… reason=…`, `WebSocket send failed for session …`, `Cancelled pending conversation turn`, `Activity hydration failed for conversation …`, `Activity heartbeat touch failed for conversation …`.
 - DB: conversation turns for the session (user turn without an agent turn = interrupted delivery).
 - Browser: the client reconnects with the **same session id**; the newest socket becomes the live target.
 
@@ -112,6 +115,8 @@ Log files: `backend/logs/control-center.log`, `communication-hub.log`, `agent-ru
 3. Reply persisted but not shown → confirm the turn row in the Conversation Sessions view; re-open the conversation. If the row is missing, the turn was canceled (§4) or persistence failed.
 4. `code=1008` → invalid token (§1). `code=4003` → tenant binding failure ([tenant-context-missing.md](tenant-context-missing.md)).
 5. Duplicate error bubbles → dedupe guard failed; collect the session id and the watchdog log pair before escalating.
+6. Reconnect shows **no** indicator mid-turn → connect-time hydration failed. Check `Activity hydration failed` (allowlist, signed tenant headers, unapplied migration) and confirm the session's activity row has a live resume link when the turn is paused; see [conversational-turn-recovery.md](conversational-turn-recovery.md) §7.
+7. Reconnect shows "waiting for your input" but the confirmation is already dead → the confirmation should have been folded to a read-only block and the input re-enabled. Verify a `Terminal Resolver closed …` line exists for the session; if the bubble is actionable and answering fails, treat it as the orphan case (§7 of the recovery runbook).
 
 ---
 
@@ -188,6 +193,7 @@ Log files: `backend/logs/control-center.log`, `communication-hub.log`, `agent-ru
 | Management tool outcome / permission denial | `control-center.log` (HTTP status + structured detail), `communication-hub.log` (`MCP tool call:*`) |
 | `cc` entity guards | `control-center.log` (403 codes `system_managed_integration`), MCP Hub REST handlers |
 | Conversation turns / watchdog / heartbeats | `communication-hub.log`, `agent-runtime.log` |
+| Paused/durable turns, resume, checkpoint state | `control-center.log` (`Resume record`, `Checkpoint for resume`, `Terminal Resolver closed`), `communication-hub.log` (`Resume dispatch*`, `Turn resume relay*`), `agent-runtime.log` (`Durable checkpoint flushed`, `Resume …`); [conversational-turn-recovery.md](conversational-turn-recovery.md) |
 | Interventions (confirmation/HITL) | `agent-runtime.log` (pause/resume), `control-center.log` (request state), spans `intervene.*` |
 | Termination chain | `control-center.log` → `communication-hub.log` → `agent-runtime.log` (in that order) |
 | Certificate rejections | `agent-runtime.log` / `communication-hub.log` `rejected` lines; [certificate-security.md](certificate-security.md) |

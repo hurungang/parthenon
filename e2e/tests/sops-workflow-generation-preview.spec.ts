@@ -31,7 +31,9 @@ const MOCK_SOP_DETAIL = {
 async function setupSopEditorBaseMocks(page: import('@playwright/test').Page) {
   await standardSetup(page)
 
-  await page.route('**/api/v1/sops', (route) => {
+  // Generic list route FIRST (routes resolve last-registered-first) and with a
+  // trailing `**` so the `?limit=&offset=` list request matches.
+  await page.route('**/api/v1/sops**', (route) => {
     if (route.request().method() === 'GET') {
       route.fulfill({ status: 200, body: JSON.stringify([MOCK_SOP]) })
       return
@@ -39,6 +41,7 @@ async function setupSopEditorBaseMocks(page: import('@playwright/test').Page) {
     route.fulfill({ status: 200, body: JSON.stringify(MOCK_SOP) })
   })
 
+  // Detail fetch performed by the list page before opening the editor.
   await page.route('**/api/v1/sops/sop-1', (route) => {
     route.fulfill({ status: 200, body: JSON.stringify(MOCK_SOP_DETAIL) })
   })
@@ -47,17 +50,34 @@ async function setupSopEditorBaseMocks(page: import('@playwright/test').Page) {
     route.fulfill({ status: 200, body: JSON.stringify([]) })
   })
 
-  await page.route('**/api/v1/skills', (route) => {
+  await page.route('**/api/v1/skills**', (route) => {
     route.fulfill({ status: 200, body: JSON.stringify([{ id: 'skill-1', name: 'Skill 1' }]) })
   })
 
-  await page.route('**/api/v1/agents/types', (route) => {
+  await page.route('**/api/v1/agents/types**', (route) => {
     route.fulfill({ status: 200, body: JSON.stringify([]) })
   })
 
-  await page.route('**/api/v1/agents/roles', (route) => {
+  await page.route('**/api/v1/agents/roles**', (route) => {
     route.fulfill({ status: 200, body: JSON.stringify([]) })
   })
+}
+
+/**
+ * The Workflow field. `getByLabel('Workflow')` is ambiguous here because the
+ * SOP row name tooltip exposes `aria-label="Workflow SOP"` (substring match),
+ * so locate the textarea by its exact accessible name.
+ */
+function workflowField(page: import('@playwright/test').Page) {
+  return page.getByRole('textbox', { name: 'Workflow', exact: true })
+}
+
+/** Open the SOP editor for the first row (first row action is "edit"). */
+async function openFirstSopEditor(page: import('@playwright/test').Page) {
+  const row = page.locator('tbody tr').first()
+  await expect(row).toBeVisible()
+  await row.locator('button').first().click()
+  await expect(workflowField(page)).toBeVisible()
 }
 
 test.describe('SOP workflow generation and preview (mocked API)', () => {
@@ -67,9 +87,9 @@ test.describe('SOP workflow generation and preview (mocked API)', () => {
     await page.goto('/sops')
     await page.waitForLoadState('load')
 
-    await page.locator('tbody tr').first().locator('button').first().click()
+    await openFirstSopEditor(page)
 
-    await expect(page.getByLabel('Workflow')).toBeVisible()
+    await expect(workflowField(page)).toBeVisible()
     await expect(page.getByText('System Instruction')).toHaveCount(0)
   })
 
@@ -96,10 +116,10 @@ test.describe('SOP workflow generation and preview (mocked API)', () => {
     await page.goto('/sops')
     await page.waitForLoadState('load')
 
-    await page.locator('tbody tr').first().locator('button').first().click()
+    await openFirstSopEditor(page)
 
-    await page.getByLabel('Description').fill('latest sop description')
-    await page.getByLabel('Workflow').fill('Latest unsaved SOP draft')
+    await page.getByRole('textbox', { name: 'Description', exact: true }).fill('latest sop description')
+    await workflowField(page).fill('Latest unsaved SOP draft')
     await page.getByRole('button', { name: 'Preview Workflow' }).click()
 
     await expect(page.getByText('Workflow Preview (Model: gpt-4o-mini)')).toBeVisible()
@@ -126,12 +146,12 @@ test.describe('SOP workflow generation and preview (mocked API)', () => {
     await page.goto('/sops')
     await page.waitForLoadState('load')
 
-    await page.locator('tbody tr').first().locator('button').first().click()
+    await openFirstSopEditor(page)
 
-    await page.getByLabel('Workflow').fill('manual sop workflow text')
+    await workflowField(page).fill('manual sop workflow text')
     await page.getByRole('button', { name: 'Generate Workflow with AI' }).click()
 
     await expect(page.getByText(/not configured/i)).toBeVisible()
-    await expect(page.getByLabel('Workflow')).toHaveValue('manual sop workflow text')
+    await expect(workflowField(page)).toHaveValue('manual sop workflow text')
   })
 })

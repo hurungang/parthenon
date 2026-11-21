@@ -43,6 +43,31 @@ CTX = TenantContext(
 )
 
 
+@pytest.fixture(autouse=True)
+def _stub_service_certificate():
+    """Isolate tenant-header behaviour from service-certificate enforcement.
+
+    The middleware now validates the caller's service certificate on every
+    ``/internal/*`` path (the old cert-exempt bypass for execute/terminate/
+    resume was removed). These tests exercise tenant signature handling only,
+    so stub the certificate axis.
+    """
+    from app.communication_hub.middleware import control_plane as cp
+
+    valid = SimpleNamespace(
+        valid=True,
+        reason=None,
+        service_name="control-center",
+        serial_number="1",
+    )
+    with patch.object(cp, "_extract_client_cert", return_value="dummy-cert"), patch.object(
+        cp, "_load_ca_cert_pem", return_value="dummy-ca"
+    ), patch.object(cp, "_get_control_center_url", return_value=""), patch.object(
+        cp, "validate_service_cert_locally", return_value=valid
+    ):
+        yield
+
+
 @pytest.fixture
 def ch_app():
     """Minimal CH-shaped app: control-plane middleware + the cert-exempt

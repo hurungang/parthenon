@@ -190,7 +190,59 @@ This change has `has_db_changes: true`. Backend integration tests must verify sc
 | `e2e/tests/intervene.spec.ts` | Human Intervene approval response flow: submitting approval response sends API call |
 | `e2e/tests/conversation-delegation-visibility.spec.ts` | Conversation delegation status and waiting UI: thinking → delegating → waiting transitions; collapsible snippet UI; fold/expand/collapse interaction |
 
-## 8. Out of Scope for Testing
+## 8. Persisted Activity State (persistent-agent-activity-state)
+
+A single authoritative `ConversationActivity` record, written only by Control Center, replaces ephemeral process-local activity signals. It is the source of truth for the chat status bubble, `status_pong` turn-in-flight/intervention-pending answers and reconnect hydration.
+
+| Area | Why it matters |
+|---|---|
+| `ConversationActivityStore` (CC) | Only writer; atomic, idempotent upsert holds one live row per session; a terminal resolution must not overwrite a still-pending intervention |
+| Internal `PUT`/`GET` activity endpoints | Fail closed (401) without a valid service certificate + signed tenant context — a security boundary |
+| CH status pipeline | Forwards every AR transition to CC and pushes the normalized status to the live socket; hydrates persisted activity on connect (a dropped forward = stale bubble) |
+| AR emission | Emits `thinking` / `using_tool` / `delegating` / `waiting` / `waiting_for_human` / `delegation_resumed` / terminal states with state-specific context, and never touches the DB |
+| Turn bookends | `prepare-turn` → `thinking`; `append-turn` → terminal (`finished` / `failed` / `timed_out`) |
+| Reaper | Resolves stale/orphaned activity to a terminal state while protecting pending interventions on active sessions |
+| Privacy | Status-only context (tool name, delegation target, pending intervention id, detail) — never tokens/credentials/secrets; scoped per conversation and tenant |
+
+**Scenarios:**
+- WHEN the assistant works THEN the bubble matches the actual activity, updates promptly without lingering, and is visible through the tool phase (no blank gap before the intervention dialog).
+- WHEN a turn finishes, fails or times out THEN the indicator stops in a sticky terminal state; an out-of-order late `thinking` never resurrects the spinner and no spinner survives a terminal turn.
+- WHEN the assistant pauses for human input THEN "waiting for your input" is shown continuously from the pause until resolution and input stays blocked.
+- WHEN the operator reloads, reopens or reconnects mid-turn (including mid-intervention with a pending request) THEN the persisted status is hydrated immediately and matches the real state at reconnect, not at departure.
+- WHEN a turn is resumed after a service restart or on a different AR instance THEN the persisted status survives and the correct state is shown.
+- WHEN activity can no longer be resumed THEN the reaper resolves it to a terminal state — never a perpetual working/waiting indicator.
+- WHEN an answer races a terminal resolution THEN the still-pending intervention on an active session is not overwritten; repeated hydration messages are idempotent and never double-render.
+- WHEN `status_pong` is answered THEN it derives turn-in-flight/intervention-pending from persisted state, and the widened payload shape does not break older clients.
+- WHEN activity is persisted THEN a content scan finds no credential/token material and cross-tenant reads/writes are impossible.
+
+**Test files (verified present):**
+- `backend/tests/unit/conversations/test_conversation_activity_store.py` — upsert/read/terminal resolution, one row per session, terminal stickiness, enum contract
+- `backend/tests/unit/conversations/test_conversation_activity_schema.py` — model/table contract + `information_schema`/`pg_catalog` verification of the applied migration
+- `backend/tests/unit/conversations/test_conversation_activity_persistence.py` — survives a store-instance change (restart/failover), waiting-state hydration, per-session scoping
+- `backend/tests/unit/conversations/test_conversation_activity_reaper.py` — stale/orphan resolution protecting pending interventions
+- `backend/tests/unit/test_conversation_activity_endpoints.py` — internal endpoints: fail-closed 401, upsert/echo, 422 unknown state, 404 unknown session, null idle, one live row on repeated PUT
+- `backend/tests/unit/test_conversation_activity_prepare_append.py` — `thinking` on prepare, terminal state on append per final status
+- `backend/tests/unit/test_communication_hub_activity_client.py` — CH data client payload/path, 404→None, non-404 propagates
+- `backend/tests/unit/test_agent_runtime_activity_emission.py` — wire→activity mapping, message shape, per-transition forwarding, failures swallowed
+- `backend/tests/agent_runtime/test_ar_activity_persistence_boundaries.py` — AR holds no DB access and never calls CC activity endpoints; ordering; no secrets in status events
+- `backend/tests/unit/test_internal_allowlist_activity.py` — activity routes in the CH internal allowlist (403 `endpoint_not_allowlisted` regression)
+- `backend/tests/unit/test_human_intervene_persists_activity.py` — conversation-scoped `human_intervene` persists `waiting_for_human` with the pending intervention id
+- `frontend/src/__tests__/useChatSession.activityState.test.ts` — parse, connect hydration, `status_pong` reconciliation, intervention re-arm, terminal clearing
+- `frontend/src/__tests__/ConversationDialog.activityBubble.test.tsx` — continuous waiting state, hydrated pending flag, terminal clearing
+- `frontend/src/__tests__/useChatSession.interventionGap.test.ts` — thinking → using_tool → silence → intervene_request never blanks
+- `frontend/src/__tests__/useChatSession.finality.test.ts` — non-final message keeps the bubble, `final: true` clears, heartbeat restores
+- `frontend/src/__tests__/ConversationDialog.usingTool.test.tsx` — `using_tool` renders with/without an empty delegation cycle
+- `e2e/tests/conversation-activity-state.spec.ts` — mocked lifecycle + reload hydration; `Real Backend Integration - Conversation Activity State` probe (skips honestly)
+
+## 9. Durable Pause & Resumable Turns (resumable-agent-turn-persistence)
+
+A paused confirm-before-write turn is now durable: an authoritative resume index plus an opaque checkpoint payload owned by Control Center, instance-independent resume through Communication Hub to any Agent Runtime, exactly-once application of the confirmed write, and one reason-keyed terminal outcome when a turn genuinely cannot continue. The in-process resume registry is no longer consulted on the production path.
+
+Because this change spans CC, CH and AR plus a schema change, its layered coverage (including the mandatory per-service restart drills) lives in its own plan: **[Resumable Turns](resumable-turn-test-plan.md)**.
+
+Related here: the pause path must persist `waiting_for_human` activity with a non-null `active_resume_id` (§8), and `waiting_for_human` must always imply a live resume record.
+
+## 10. Out of Scope for Testing
 
 - Mobile or push-notification intervention response
 - Custom intervention types beyond Approval/Choice/Text
@@ -199,9 +251,10 @@ This change has `has_db_changes: true`. Backend integration tests must verify sc
 - Changes to the `human_intervene` tool contract itself
 - Operator dashboard UI changes (verified via regression only)
 
-## 9. Related Test Plans
+## 11. Related Test Plans
 
 - **[Human Intervene Test Plan](human-intervene-test-plan.md)** — Non-conversational intervention flow (operator dashboard, session state machine)
+- **[Resumable Turns Test Plan](resumable-turn-test-plan.md)** — Durable pause/resume, restart and failover, exactly-once confirmed writes
 - **[Conversation Sessions Test Plan](conversation-sessions-test-plan.md)** — Session lifecycle, ownership, resume, and WebSocket title updates
 - **[Agent Runtime Test Plan](agent-runtime-test-plan.md)** — Agent execution, tool calling, and HITL tool integration
 - **[Communication Hub Test Plan](communication-hub-test-plan.md)** — WebSocket routing, intervention relay, and cross-session isolation

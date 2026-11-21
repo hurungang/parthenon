@@ -42,8 +42,11 @@ LEGACY_TO_NAMESPACED = {
 }
 
 # Legacy values that existed pre-migration (15 unique legacy types)
+# Bare "agent" is NOT legacy anymore: it is a registered resource type in the
+# current manifest (RT_AGENT gates the agent-type CRUD / session surfaces), so
+# policy rows may legitimately carry module="agent".
 LEGACY_TYPES = [
-    "agent", "role", "identity", "runtime", "skill", "sop",
+    "role", "identity", "runtime", "skill", "sop",
     "model_config", "schedule", "conversation", "result",
     "intervene", "mcp_server", "notification",
     "permissions", "group", "user", "tag", "access_request",

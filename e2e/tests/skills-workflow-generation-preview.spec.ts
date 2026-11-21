@@ -27,7 +27,9 @@ const MOCK_TOOL = {
 async function setupSkillEditorBaseMocks(page: import('@playwright/test').Page) {
   await standardSetup(page)
 
-  await page.route('**/api/v1/skills', (route) => {
+  // Generic list route FIRST (routes resolve last-registered-first) and with a
+  // trailing `**` so the `?limit=&offset=` list request matches.
+  await page.route('**/api/v1/skills**', (route) => {
     if (route.request().method() === 'GET') {
       route.fulfill({ status: 200, body: JSON.stringify([MOCK_SKILL]) })
       return
@@ -43,20 +45,34 @@ async function setupSkillEditorBaseMocks(page: import('@playwright/test').Page) 
     route.fulfill({ status: 200, body: JSON.stringify([]) })
   })
 
-  await page.route('**/api/v1/mcp/tools', (route) => {
+  await page.route('**/api/v1/mcp/tools**', (route) => {
     route.fulfill({ status: 200, body: JSON.stringify([MOCK_TOOL]) })
   })
 
-  await page.route('**/api/v1/mcp/servers', (route) => {
+  await page.route('**/api/v1/mcp/servers**', (route) => {
     route.fulfill({
       status: 200,
       body: JSON.stringify([{ id: 'srv-1', slug: 'internal', name: 'Internal', base_url: 'http://x', status: 'active' }]),
     })
   })
 
-  await page.route('**/api/v1/agents/roles', (route) => {
+  await page.route('**/api/v1/agents/roles**', (route) => {
     route.fulfill({ status: 200, body: JSON.stringify([]) })
   })
+}
+
+/**
+ * Open the skill editor for the first row in EDIT mode.
+ *
+ * The row action order is view → edit → delete (SkillListPage), so the edit
+ * button is the second one. Edit mode is required: the Workflow/Description
+ * fields are disabled in view mode.
+ */
+async function openFirstSkillEditor(page: import('@playwright/test').Page) {
+  const row = page.locator('tbody tr').first()
+  await expect(row).toBeVisible()
+  await row.locator('button').nth(1).click()
+  await expect(page.getByLabel('Workflow')).toBeEnabled()
 }
 
 test.describe('Skill workflow generation and preview (mocked API)', () => {
@@ -66,7 +82,7 @@ test.describe('Skill workflow generation and preview (mocked API)', () => {
     await page.goto('/skills')
     await page.waitForLoadState('load')
 
-    await page.locator('tbody tr').first().locator('button').first().click()
+    await openFirstSkillEditor(page)
 
     await expect(page.getByLabel('Workflow')).toBeVisible()
     await expect(page.getByText('System Instruction')).toHaveCount(0)
@@ -94,7 +110,11 @@ test.describe('Skill workflow generation and preview (mocked API)', () => {
     await page.goto('/skills')
     await page.waitForLoadState('load')
 
-    await page.locator('tbody tr').first().locator('button').first().click()
+    await openFirstSkillEditor(page)
+
+    // Wait for the detail fetch to hydrate the workflow field before typing,
+    // otherwise the hydration can overwrite the unsaved draft.
+    await expect(page.getByLabel('Workflow')).toHaveValue('Initial workflow')
 
     await page.getByLabel('Description').fill('latest business description')
     await page.getByLabel('Workflow').fill('Latest unsaved draft for preview')
@@ -124,7 +144,7 @@ test.describe('Skill workflow generation and preview (mocked API)', () => {
     await page.goto('/skills')
     await page.waitForLoadState('load')
 
-    await page.locator('tbody tr').first().locator('button').first().click()
+    await openFirstSkillEditor(page)
 
     await page.getByLabel('Workflow').fill('manual workflow text')
     await page.getByRole('button', { name: 'Generate Workflow with AI' }).click()

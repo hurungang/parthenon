@@ -1124,23 +1124,31 @@ async def test_run_task_loop_ar_delegate_allowed_target_calls_a2a_request():
 # ── Guardrail state construction (_build_guardrail_state) ────────────────────
 
 
-def test__build_guardrail_state_sets_delegation_depth_to_zero():
-    """_build_guardrail_state always sets delegation_depth=0 regardless of __delegation_depth."""
+def test__build_guardrail_state_seeds_both_depths_from_recorded_job_depth():
+    """The persisted job depth seeds delegation_depth AND tree_depth."""
     from app.services.agents.runtime_executor import AgentRuntimeExecutor
 
     executor = AgentRuntimeExecutor()
 
     context = {"guardrail_policy": {"max_iterations": 5}}
 
-    # Root agent — no __delegation_depth
+    # Root agent — no recorded depth
     state = executor._build_guardrail_state(context, {})
     assert state.delegation_depth == 0
     assert state.tree_depth == 0
 
-    # Sub-agent — receives __delegation_depth=1 from parent
-    state = executor._build_guardrail_state(context, {"input_data": {"__delegation_depth": 1}})
-    assert state.delegation_depth == 0, "delegation_depth must reset to 0 for each agent instance"
-    assert state.tree_depth == 1, "tree_depth must reflect the inherited depth"
+    # Delegated child — the internal session payload records its chain depth
+    state = executor._build_guardrail_state(context, {"delegation_depth": 2})
+    assert state.delegation_depth == 2, "delegation_depth must reflect the real chain depth"
+    assert state.tree_depth == 2
+
+    # Recorded depth wins over the legacy input-data key
+    state = executor._build_guardrail_state(
+        context,
+        {"delegation_depth": 2, "input_data": {"__delegation_depth": 5}},
+    )
+    assert state.delegation_depth == 2
+    assert state.tree_depth == 2
 
 
 def test__build_guardrail_state_command_run_gets_raised_iteration_limit():
@@ -1171,8 +1179,8 @@ def test__build_guardrail_state_command_run_gets_raised_iteration_limit():
     assert state.max_iterations == 10
 
 
-def test__build_guardrail_state_sets_tree_depth_from_delegation_depth_input():
-    """_build_guardrail_state tree_depth mirrors __delegation_depth; delegation_depth stays 0."""
+def test__build_guardrail_state_sets_tree_and_delegation_depth_from_legacy_input():
+    """The legacy __delegation_depth key still seeds both depth fields."""
     from app.services.agents.runtime_executor import AgentRuntimeExecutor
 
     executor = AgentRuntimeExecutor()
@@ -1183,7 +1191,7 @@ def test__build_guardrail_state_sets_tree_depth_from_delegation_depth_input():
         state = executor._build_guardrail_state(
             context, {"input_data": {"__delegation_depth": depth}}
         )
-        assert state.delegation_depth == 0
+        assert state.delegation_depth == depth
         assert state.tree_depth == depth
 
 
@@ -1225,6 +1233,139 @@ def test__build_guardrail_state_uses_defaults_when_no_guardrail_policy():
     assert state.execution_timeout_seconds == 300
     assert state.token_budget is None
     assert state.policy_snapshot_id == "unknown"
+
+
+def test__build_agent_type_guardrail_state_uses_configured_profile():
+    """The CC-side task loop state comes from the agent type configuration."""
+    from types import SimpleNamespace
+
+    from app.db.models.agents import GuardrailTokenEnforcementMode
+    from app.services.agents.runtime_executor import AgentRuntimeExecutor
+
+    executor = AgentRuntimeExecutor()
+    agent_type_id = uuid.uuid4()
+    job = SimpleNamespace(input_data={"query": "run"}, delegation_depth=2)
+    agent_type = SimpleNamespace(
+        id=agent_type_id,
+        guardrail_max_iterations=24,
+        guardrail_max_delegation_depth=6,
+        guardrail_max_delegated_steps=100,
+        guardrail_execution_timeout_seconds=600,
+        guardrail_token_budget=5000,
+        guardrail_token_enforcement_mode=GuardrailTokenEnforcementMode.observe,
+        guardrail_token_fallback_mode="observe_and_log",
+        guardrail_conversational_token_visibility_mode="enabled",
+        guardrail_conversational_continuation_policy="allow",
+    )
+
+    state = executor._build_agent_type_guardrail_state(agent_type, job)
+
+    assert state.max_iterations == 24
+    assert state.max_delegation_depth == 6, "configured depth must not be reduced"
+    assert state.max_delegated_steps == 100
+    assert state.execution_timeout_seconds == 600
+    assert state.token_budget == 5000
+    assert state.token_enforcement_mode == "observe"
+    assert state.policy_snapshot_id == f"agent_type:{agent_type_id}"
+    assert state.delegation_depth == 2
+    assert state.tree_depth == 2
+
+
+def test__build_agent_type_guardrail_state_defaults_when_unset():
+    """Unconfigured guardrails fall back to platform defaults (depth 3, not 1)."""
+    from types import SimpleNamespace
+
+    from app.services.agents.runtime_executor import AgentRuntimeExecutor
+
+    executor = AgentRuntimeExecutor()
+    agent_type = SimpleNamespace(id=uuid.uuid4())
+    job = SimpleNamespace(input_data={}, delegation_depth=0)
+
+    state = executor._build_agent_type_guardrail_state(agent_type, job)
+
+    assert state.max_iterations == 10
+    assert state.max_delegation_depth == 3
+    assert state.max_delegated_steps == 20
+    assert state.execution_timeout_seconds == 300
+    assert state.token_budget is None
+    assert state.token_enforcement_mode == "observe"
+    assert state.token_fallback_mode == "observe_and_log"
+
+
+def test__build_agent_type_guardrail_state_reads_legacy_input_depth():
+    """A job without a recorded depth falls back to the legacy input key."""
+    from types import SimpleNamespace
+
+    from app.services.agents.runtime_executor import AgentRuntimeExecutor
+
+    executor = AgentRuntimeExecutor()
+    agent_type = SimpleNamespace(id=uuid.uuid4(), guardrail_max_delegation_depth=4)
+    job = SimpleNamespace(
+        input_data={"__delegation_depth": 3}, delegation_depth=None
+    )
+
+    state = executor._build_agent_type_guardrail_state(agent_type, job)
+
+    assert state.tree_depth == 3
+    assert state.delegation_depth == 3
+    assert state.max_delegation_depth == 4
+
+
+@pytest.mark.asyncio
+async def test__run_task_loop_seeds_context_from_configured_agent_type():
+    """The CC-side task loop takes its depth limits from the agent type row.
+
+    Captures the ``TaskAgentLoop`` construction to prove the configured maximum
+    and the job's recorded depth are used instead of the old one-level constants.
+    """
+    from types import SimpleNamespace
+
+    import app.services.agents.runtime_executor as runtime_executor_module
+    from app.db.models.agents import AgentOutputType
+    from app.services.agents.runtime_executor import AgentRuntimeExecutor
+
+    class _LoopCaptured(Exception):
+        pass
+
+    captured: dict = {}
+
+    class _CapturingLoop:
+        def __init__(self, **kwargs):
+            captured.update(kwargs)
+            raise _LoopCaptured
+
+    executor = AgentRuntimeExecutor()
+    job = SimpleNamespace(
+        id=uuid.uuid4(),
+        agent_type_id=uuid.uuid4(),
+        input_data={"query": "run"},
+        delegation_depth=2,
+    )
+    agent_type = SimpleNamespace(
+        id=uuid.uuid4(),
+        role_id=None,
+        system_instruction="You are helpful",
+        output_type=AgentOutputType.markdown,
+        output_schema=None,
+        guardrail_max_iterations=24,
+        guardrail_max_delegation_depth=7,
+        guardrail_max_delegated_steps=20,
+        guardrail_execution_timeout_seconds=300,
+        guardrail_token_budget=None,
+        guardrail_token_enforcement_mode="observe",
+        guardrail_token_fallback_mode="observe_and_log",
+        guardrail_conversational_token_visibility_mode="enabled",
+        guardrail_conversational_continuation_policy="allow",
+    )
+
+    with patch.object(runtime_executor_module, "TaskAgentLoop", _CapturingLoop):
+        with pytest.raises(_LoopCaptured):
+            await executor._run_task_loop(job, agent_type, {"save_data"}, AsyncMock())
+
+    assert captured["max_delegation_depth"] == 7, "configured depth must not be reduced to 1"
+    assert captured["delegation_depth"] == 2, "loop starts at the job's recorded depth"
+    assert captured["tree_depth"] == 2
+    assert captured["max_iterations"] == 24
 
 
 def test_runtime_guardrail_state_defaults():

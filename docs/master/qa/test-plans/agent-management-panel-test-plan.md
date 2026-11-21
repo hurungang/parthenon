@@ -171,7 +171,18 @@ Existing dialog/page tests unchanged: `AgentRoleDialog`, `AgentRoleListPage`, `A
 - Module-page standalone functionality beyond the dialog-relocation regression set
 - `backend/tests/` and `mcp-demo-app/tests/` — no backend changes; unrelated to this change
 
-## 8. Related Test Plans
+## 8. Gated Optimize Action in the Panel (separate-optimization-from-execution, 2026-11)
+
+Run is execution-only; a **separate, gate-aware Optimize action** now sits beside it.
+
+- Renders nothing for conversational agents; disabled with the localized `reason_code` copy (authoring model not configured / no longer available → re-select / no successful execution) while Run stays available; enabled once all preconditions hold.
+- Confirming launches the dedicated optimization run (never the Run dialog) and opens its execution details.
+- Legacy reason-only gate payloads still show the backend reason; other failures use the dialog error standard.
+- The draft-only save behaviour and parent-refresh assertions are unaffected.
+
+**Test files:** `frontend/src/__tests__/AgentManagementPanelPage.test.tsx`, `e2e/tests/agent-management-panel.spec.ts`. Full lifecycle: `optimizer-test-plan.md`.
+
+## 9. Related Test Plans
 
 - **[Agents UI Test Plan](agents-ui-test-plan.md)** — the module pages whose dialogs the panel reuses; source-side behavior baseline
 - **[Agent Runtime Test Plan](agent-runtime-test-plan.md)** — agent types, roles, identities, model configs backend contracts consumed by the panel

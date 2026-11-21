@@ -16,13 +16,14 @@ import {
  * "Explicit-only plan generation" + "Generate-plan gate" + "Explicit
  * Generate-plan UX"):
  *   1. Creating / saving an agent type produces no plan and fires no
- *      plan-generation request; the Plan Preview (tab 1 of the details dialog,
- *      labeled "Agent Preview") shows the explicit empty state instead.
+ *      plan-generation request; the Implementation Plan tab of the details
+ *      dialog shows the explicit empty state instead.
  *   2. Generation happens only on the explicit **Generate plan** action, and
  *      the authored plan renders in place without a page reload.
- *   3. With no usable workspace authoring model, Plan Preview shows the blocked
- *      state with the localized reason and a System Config shortcut, and the
- *      Generate plan action is disabled — nothing is dispatched.
+ *   3. With no usable workspace authoring model, the Implementation Plan tab
+ *      shows the blocked state with the localized reason and a System Config
+ *      shortcut, and the Generate plan action is disabled — nothing is
+ *      dispatched.
  *   4. Conversational agents expose no plan-generation affordances at all; the
  *      tab explains why.
  *   5. A blocked explicit generation (`412 plan_generation_unavailable`) shows
@@ -136,21 +137,29 @@ async function mockPlanApi(
 
 const GATE_OK: PlanState = { canGeneratePlan: true, reasonCode: null, regenerateRequests: [] }
 
+/**
+ * Locates the agent-type details dialog. Its accessible name is the agent type
+ * name (the DialogTitle renders it), so it is identified by its tab set.
+ */
+function agentDetailsDialog(page: Page) {
+  return page
+    .getByRole('dialog')
+    .filter({ has: page.getByRole('tab', { name: 'Implementation Plan' }) })
+}
+
 async function openAgentDialog(page: Page, name: string) {
   await page.getByText(name, { exact: true }).first().click()
-  const dialog = page
-    .getByRole('dialog')
-    .filter({ has: page.getByRole('tab', { name: 'Agent Preview' }) })
-  await expect(dialog.getByRole('tab', { name: 'Agent Preview' })).toBeVisible()
+  const dialog = agentDetailsDialog(page)
+  await expect(dialog.getByRole('tab', { name: 'Implementation Plan' })).toBeVisible()
   return dialog
 }
 
 /**
- * Opens the plan surface: tab 1 of the details dialog is the Plan Preview
- * (its visible label is "Agent Preview" after the unified-topology change).
+ * Opens the plan surface: the plan lives on its own "Implementation Plan" tab
+ * (there is no separate plan-preview modal or "Agent Preview" tab).
  */
-async function openPlanPreviewTab(dialog: ReturnType<Page['getByRole']>) {
-  await dialog.getByRole('tab', { name: 'Agent Preview' }).click()
+async function openPlanTab(dialog: ReturnType<Page['getByRole']>) {
+  await dialog.getByRole('tab', { name: 'Implementation Plan' }).click()
 }
 
 async function gotoAgentsList(page: Page) {
@@ -220,7 +229,8 @@ test.describe('Agent Plan Mode — explicit-only generation (mocked)', () => {
 
     await markNoReload(page)
 
-    // Select the seeded agent and edit it in place.
+    // Select the seeded agent and edit it in place (the panel's property bar
+    // owns editing; the pending-changes tray owns saving).
     await page.getByRole('button', { name: AGENT_NAME }).click()
     await expect(page.getByRole('heading', { name: AGENT_NAME, exact: true })).toBeVisible()
     const descInput = page.getByLabel('Description')
@@ -230,16 +240,14 @@ test.describe('Agent Plan Mode — explicit-only generation (mocked)', () => {
 
     // The save persisted exactly once…
     await expect(page.getByText('saved', { exact: true })).toBeVisible()
-    expect(world.agentPutBodies).toHaveLength(1)
+    await expect.poll(() => world.agentPutBodies.length).toBe(1)
     // …and no plan generation was scheduled by create/update.
     assertNoGenerationRequests(world, state)
 
     // Plan Preview shows the explicit empty state — no plan was authored.
     await page.getByLabel('View').click()
-    const dialog = page
-      .getByRole('dialog')
-      .filter({ has: page.getByRole('tab', { name: 'Agent Preview' }) })
-    await openPlanPreviewTab(dialog)
+    const dialog = agentDetailsDialog(page)
+    await openPlanTab(dialog)
     const empty = dialog.getByTestId('plan-empty-state')
     await expect(empty).toBeVisible()
     await expect(empty.getByText(EMPTY_TITLE)).toBeVisible()
@@ -280,10 +288,8 @@ test.describe('Agent Plan Mode — explicit-only generation (mocked)', () => {
 
     // The created agent's Plan Preview opens on the empty state.
     await page.getByLabel('View').click()
-    const dialog = page
-      .getByRole('dialog')
-      .filter({ has: page.getByRole('tab', { name: 'Agent Preview' }) })
-    await openPlanPreviewTab(dialog)
+    const dialog = agentDetailsDialog(page)
+    await openPlanTab(dialog)
     await expect(dialog.getByTestId('plan-empty-state')).toBeVisible()
     await expect(dialog.getByTestId('plan-generate')).toBeVisible()
   })
@@ -295,7 +301,7 @@ test.describe('Agent Plan Mode — explicit-only generation (mocked)', () => {
 
     const dialog = await openAgentDialog(page, AGENT_NAME)
     await markNoReload(page)
-    await openPlanPreviewTab(dialog)
+    await openPlanTab(dialog)
 
     const generate = dialog.getByTestId('plan-generate')
     await expect(generate).toBeVisible()
@@ -331,7 +337,7 @@ test.describe('Agent Plan Mode — explicit-only generation (mocked)', () => {
     if (!(await gotoAgentsList(page))) return
 
     const dialog = await openAgentDialog(page, AGENT_NAME)
-    await openPlanPreviewTab(dialog)
+    await openPlanTab(dialog)
 
     const blocked = dialog.getByTestId('plan-generation-blocked')
     await expect(blocked).toBeVisible()
@@ -368,7 +374,7 @@ test.describe('Agent Plan Mode — explicit-only generation (mocked)', () => {
     await expect(convRow.getByTestId('optimize-agent-action')).toHaveCount(0)
 
     const dialog = await openAgentDialog(page, CONV_NAME)
-    await openPlanPreviewTab(dialog)
+    await openPlanTab(dialog)
 
     await expect(dialog.getByTestId('plan-conversational-unavailable')).toHaveText(
       CONVERSATIONAL_COPY,
@@ -397,7 +403,7 @@ test.describe('Agent Plan Mode — explicit-only generation (mocked)', () => {
     if (!(await gotoAgentsList(page))) return
 
     const dialog = await openAgentDialog(page, AGENT_NAME)
-    await openPlanPreviewTab(dialog)
+    await openPlanTab(dialog)
     await expect(dialog.getByText('Initialize Context')).toBeVisible()
 
     await dialog.getByTestId('plan-regenerate').click()

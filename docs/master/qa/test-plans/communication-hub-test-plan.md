@@ -25,6 +25,23 @@
 - Session context retrieved correctly for resumed sessions
 - Concurrent sessions do not bleed context across session boundaries
 
+### Conversational Resume Dispatch & Checkpoint Relay (resumable-agent-turn-persistence)
+- A conversational intervention answer is dispatched to Agent Runtime **once** and produces **one** outcome turn under duplicate or concurrent responses (stored-outcome short-circuit; no second reply pushed).
+- The live socket receives exactly one reply per turn; a reply produced while the turn is re-pausing during resume is withheld until the new pause point is persisted.
+- Checkpoint save/load payloads are relayed **byte-for-byte**; signed tenant headers are forwarded from CC and never minted or re-signed by CH.
+- A payload above the configured byte cap is rejected with a typed relay error (413) and nothing is forwarded; CC 4xx/5xx repays as typed errors.
+- CH persists none of the resume/checkpoint state (no DB access) and reaches CC only through the shared internal egress client.
+- A dispatch failure caused by service unavailability is retryable (transient), never surfaced as a terminal turn failure while the confirmation is still valid.
+
+**Test files:** `backend/tests/communication_hub/test_resume_router_dispatch.py`, `backend/tests/communication_hub/test_turn_checkpoint_relay.py`, `backend/tests/integration/test_multitenant_auth_chain.py`, `backend/tests/integration/test_internal_allowlist_partitioning.py`.
+
+### Conversational Activity Status Pipeline (persistent-agent-activity-state)
+- Every Agent Runtime activity transition is forwarded to Control Center and the normalized status is pushed to the live socket (a dropped forward = a stale bubble).
+- On connect, CH hydrates the persisted activity record so a reconnecting client sees the in-flight state immediately.
+- Status forwarding failures are swallowed and never break the turn; the activity routes are present in the CH internal allowlist (403 `endpoint_not_allowlisted` regression).
+
+**Test files:** `backend/tests/unit/test_communication_hub_activity_client.py`, `backend/tests/unit/test_internal_allowlist_activity.py`.
+
 ### Tool Authorization Flow (Security Segregation)
 - Communication Hub requests authorization from Control Center for every tool call (no bypass or caching of auth decisions)
 - Communication Hub caller scope is enforced by Control Center allowlist (hub can call only hub-allowlisted internal endpoints)

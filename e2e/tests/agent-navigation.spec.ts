@@ -1,6 +1,12 @@
 import { test, expect } from '@playwright/test'
 import { standardSetup } from './_helpers'
 
+// The Agent Types table hides the Role column below `lg` (1200px) and the
+// Identity column below `xl` (1536px). Desktop Chrome's default 1280px
+// viewport therefore never renders the Identity column, so this spec runs at a
+// wide viewport to exercise both resolved-name columns.
+test.use({ viewport: { width: 1600, height: 1000 } })
+
 // ── Mock data ──────────────────────────────────────────────────────────────────
 
 const MOCK_ROLE = {
@@ -71,6 +77,26 @@ const MOCK_AGENT_TYPE_WITH_PLAN = {
   },
 }
 
+// Composed plan/optimize gate (GET /agents/types/{id}/optimization-gate).
+// Typed agent with an authoring model configured but no successful execution
+// yet — the surface renders normally and the gate does not poll aggressively.
+const MOCK_OPTIMIZATION_GATE = {
+  can_optimize: false,
+  successful_executions: 0,
+  reason: 'At least one successful execution is required.',
+  can_generate_plan: true,
+  workflow_model_configured: true,
+  workflow_model_id: 'gpt-4o',
+  is_conversational: false,
+  reason_code: 'no_successful_execution',
+  optimization_conversation_available: true,
+  optimization_conversation_reason_code: 'no_successful_execution',
+  optimizer_model_configured: true,
+  optimizer_model_id: 'gpt-4o',
+  optimizer_model_source: 'inherited',
+  optimizer_model_reason_code: null,
+}
+
 const MOCK_SESSION = {
   id: 'session-abcdef12',
   agent_type_id: 'at-nav-1',
@@ -87,19 +113,30 @@ const MOCK_SESSION = {
 
 // ── Shared setup ───────────────────────────────────────────────────────────────
 
+/**
+ * Registers every API mock this spec needs.
+ *
+ * Patterns end with `**` because the app appends pagination/filter query
+ * params (`?limit=25&offset=0`), which a pattern without the trailing wildcard
+ * would never match — the request would then hit the (stopped) backend and the
+ * page would render a network error instead of data.
+ *
+ * Playwright resolves routes last-registered-first, so generic collection
+ * routes are registered BEFORE the more specific item/sub-resource routes.
+ */
 async function setupAgentNavPage(page: import('@playwright/test').Page) {
   await standardSetup(page)
 
-  // Single agent type detail — registered first (lower priority, LIFO)
-  await page.route('**/api/v1/agents/types', (route) =>
+  // ── Agent types ────────────────────────────────────────────────────────────
+  // Collection (also matches the id-less `useAgentTypes()` call).
+  await page.route('**/api/v1/agents/types**', (route) =>
     route.fulfill({
       status: 200,
       contentType: 'application/json',
       body: JSON.stringify([MOCK_AGENT_TYPE]),
     }),
   )
-
-  // Single agent type by ID — registered after (higher priority)
+  // Single agent type by ID — registered after (higher priority).
   await page.route('**/api/v1/agents/types/at-nav-1', (route) =>
     route.fulfill({
       status: 200,
@@ -107,35 +144,19 @@ async function setupAgentNavPage(page: import('@playwright/test').Page) {
       body: JSON.stringify(MOCK_AGENT_TYPE),
     }),
   )
-
-  // Individual session detail — for AgentJobPage in execution details dialog
-  await page.route('**/api/v1/agents/sessions/session-abcdef12', (route) =>
+  // Plan/optimize precondition gate — read by the details dialog and the
+  // Optimize action.
+  await page.route('**/api/v1/agents/types/*/optimization-gate', (route) =>
     route.fulfill({
       status: 200,
       contentType: 'application/json',
-      body: JSON.stringify(MOCK_SESSION),
+      body: JSON.stringify(MOCK_OPTIMIZATION_GATE),
     }),
   )
 
-  // Session logs — for AgentJobPage log viewer
-  await page.route('**/api/v1/agents/sessions/session-abcdef12/logs', (route) =>
-    route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify([]),
-    }),
-  )
-
-  // Session execution logs — for AgentJobPage execution log section
-  await page.route('**/api/v1/agents/sessions/session-abcdef12/execution-logs', (route) =>
-    route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify([]),
-    }),
-  )
-
-  // Sessions list (with or without query params) — must come after specific session routes
+  // ── Execution sessions ─────────────────────────────────────────────────────
+  // Sessions collection (executions page, dialog Execution Logs tab, embedded
+  // executions dialog) — registered first so the item routes below win.
   await page.route('**/api/v1/agents/sessions**', (route) =>
     route.fulfill({
       status: 200,
@@ -143,46 +164,94 @@ async function setupAgentNavPage(page: import('@playwright/test').Page) {
       body: JSON.stringify([MOCK_SESSION]),
     }),
   )
+  // Individual session detail — for AgentJobPage in execution details dialog.
+  await page.route('**/api/v1/agents/sessions/session-abcdef12', (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(MOCK_SESSION),
+    }),
+  )
+  // Session logs — for AgentJobPage log viewer.
+  await page.route('**/api/v1/agents/sessions/session-abcdef12/logs', (route) =>
+    route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([]) }),
+  )
+  // Session execution logs — for AgentJobPage execution log section.
+  await page.route('**/api/v1/agents/sessions/session-abcdef12/execution-logs', (route) =>
+    route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([]) }),
+  )
 
-  // Roles list — returns populated data for table column name resolution
-  await page.route('**/api/v1/agents/roles', (route) =>
+  // ── Roles ──────────────────────────────────────────────────────────────────
+  // Roles collection — returns populated data for table column name resolution.
+  await page.route('**/api/v1/agents/roles**', (route) =>
     route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([MOCK_ROLE]) }),
   )
-  // Individual role by ID — for AgentRoleViewDialog
+  // Individual role by ID — for AgentRoleViewDialog.
   await page.route('**/api/v1/agents/roles/role-1', (route) =>
     route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(MOCK_ROLE) }),
   )
-  // Role sub-resources — for AgentRoleDialog (edit form)
+  // Role sub-resources — for AgentRoleDialog (edit form).
   await page.route('**/api/v1/agents/roles/role-1/identities', (route) =>
     route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([]) }),
   )
   await page.route('**/api/v1/agents/roles/role-1/mcp-sessions', (route) =>
     route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([]) }),
   )
-  await page.route('**/api/v1/agents/roles/role-1/mcp-tools', (route) =>
+  await page.route('**/api/v1/agents/roles/role-1/mcp-tools**', (route) =>
+    route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([]) }),
+  )
+  // Delegation preview used by AgentRoleDialog — must be a string[] of agent
+  // type names, otherwise the dialog renders objects as React children.
+  await page.route('**/api/v1/agents/roles/role-1/allowed-agent-types**', (route) =>
     route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([]) }),
   )
 
-  // Identities list — returns populated data for table column name resolution
-  await page.route('**/api/v1/agents/identities', (route) =>
-    route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([MOCK_IDENTITY]) }),
+  // ── Identities ─────────────────────────────────────────────────────────────
+  // Identities collection — returns populated data for table column resolution.
+  await page.route('**/api/v1/agents/identities**', (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify([MOCK_IDENTITY]),
+    }),
   )
-  // Individual identity by ID — for AgentIdentityViewDialog
+  // Individual identity by ID — for AgentIdentityViewDialog.
   await page.route('**/api/v1/agents/identities/identity-1', (route) =>
-    route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(MOCK_IDENTITY) }),
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(MOCK_IDENTITY),
+    }),
   )
 
-  // SOPs and skills — needed when AgentRoleDialog (edit form) opens
-  await page.route('**/api/v1/sops', (route) =>
+  // SOPs and skills — needed when AgentRoleDialog (edit form) opens.
+  await page.route('**/api/v1/sops**', (route) =>
     route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([]) }),
   )
-  await page.route('**/api/v1/skills', (route) =>
+  await page.route('**/api/v1/skills**', (route) =>
     route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([]) }),
   )
 
-  // Conversations (Agent Logs page)
+  // MCP hub lists — read by AgentRoleDialog's tool preview.
+  await page.route('**/api/v1/mcp/servers**', (route) =>
+    route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([]) }),
+  )
+  await page.route('**/api/v1/mcp/tools**', (route) =>
+    route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([]) }),
+  )
+
+  // Conversations (Conversation History tab).
   await page.route('**/api/v1/conversations**', (route) =>
     route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([]) }),
+  )
+
+  // Intervention metrics polled by the app shell.
+  await page.route('**/api/v1/intervene/metrics**', (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ pending_count: 0 }),
+    }),
   )
 }
 
@@ -203,52 +272,63 @@ test.describe('Agents nav group', () => {
     await page.goto('/agents')
     await page.waitForLoadState('networkidle')
 
-    // Child items should be visible when group is expanded (default)
-    await expect(page.getByRole('button', { name: 'Agent Types' })).toBeVisible({ timeout: 10000 })
-    await expect(page.getByRole('button', { name: 'Agent Executions' })).toBeVisible({
+    // The group containing the active route auto-expands, so its child items
+    // are visible even though groups start collapsed.
+    // "Agent Management" is the current label of the `nav.agentTypes` entry.
+    // (`exact` avoids also matching "Agent Management Panel".)
+    await expect(page.getByRole('button', { name: 'Agent Management', exact: true })).toBeVisible({
       timeout: 10000,
     })
-    await expect(page.getByRole('button', { name: 'Agent Logs' })).toBeVisible({ timeout: 10000 })
+    await expect(page.getByRole('button', { name: 'Agent Management Panel' })).toBeVisible({
+      timeout: 10000,
+    })
     await expect(page.getByRole('button', { name: 'Agent Roles' })).toBeVisible({ timeout: 10000 })
     await expect(page.getByRole('button', { name: 'Agent Identities' })).toBeVisible({
       timeout: 10000,
     })
+    await expect(page.getByRole('button', { name: 'Agent Trails' })).toBeVisible({ timeout: 10000 })
   })
 
   test('collapses and expands nav group on header click', async ({ page }) => {
     await setupAgentNavPage(page)
-    await page.goto('/agents')
+    // Navigate to a route outside the Agents group: the group containing the
+    // active route is force-expanded, so collapse/expand can only be observed
+    // from a different module.
+    await page.goto('/dashboard')
     await page.waitForLoadState('networkidle')
 
-    // Verify "Agent Types" is visible (expanded)
-    await expect(page.getByRole('button', { name: 'Agent Types' })).toBeVisible({ timeout: 10000 })
-
-    // Click the group header to collapse
-    await page.getByRole('button', { name: /^Agents$/i }).click()
-
-    // Child items should be hidden after collapse
-    await expect(page.getByRole('button', { name: 'Agent Types' })).not.toBeVisible({
+    // Groups start collapsed when none of their children is active.
+    await expect(page.getByRole('button', { name: 'Agent Roles' })).not.toBeVisible({
       timeout: 5000,
     })
 
-    // Click again to expand
+    // Click the group header to expand
     await page.getByRole('button', { name: /^Agents$/i }).click()
+    await expect(page.getByRole('button', { name: 'Agent Roles' })).toBeVisible({ timeout: 5000 })
 
-    // Child items visible again
-    await expect(page.getByRole('button', { name: 'Agent Types' })).toBeVisible({ timeout: 5000 })
+    // Click again to collapse
+    await page.getByRole('button', { name: /^Agents$/i }).click()
+    await expect(page.getByRole('button', { name: 'Agent Roles' })).not.toBeVisible({
+      timeout: 5000,
+    })
   })
 
-  test('clicking Agent Executions navigates to /agents/executions', async ({ page }) => {
+  test('clicking Agent Trails navigates to /agent-trails', async ({ page }) => {
     await setupAgentNavPage(page)
     await page.goto('/agents')
     await page.waitForLoadState('networkidle')
 
-    await page.getByRole('button', { name: 'Agent Executions' }).click()
+    // Agent Executions and Conversation History were consolidated into the
+    // single "Agent Trails" entry (tabs inside the page).
+    await page.getByRole('button', { name: 'Agent Trails' }).click()
     await page.waitForLoadState('networkidle')
 
-    expect(page.url()).toContain('/agents/executions')
-    // The page heading is an h4, distinct from the nav button
-    await expect(page.getByRole('heading', { name: 'Agent Executions' })).toBeVisible({
+    expect(page.url()).toContain('/agent-trails')
+    await expect(
+      page.getByRole('heading', { name: 'Agent Trails', exact: true }),
+    ).toBeVisible({ timeout: 10000 })
+    // The executions trail is the first tab inside the page.
+    await expect(page.getByRole('tab', { name: 'Agent Executions' })).toBeVisible({
       timeout: 10000,
     })
   })
@@ -322,7 +402,7 @@ test.describe('Agent Executions page', () => {
     await page.goto('/agents/executions')
     await page.waitForLoadState('networkidle')
 
-    // Open the filter dropdown — click the first MUI Select combobox (agent type is first filter)
+    // Open the agent type filter — it is the first MUI Select on the page.
     const filterCombobox = page.locator('[aria-haspopup="listbox"]').first()
     await filterCombobox.click()
 
@@ -355,7 +435,7 @@ test.describe('Agent Type Details Dialog', () => {
     await expect(page.getByRole('dialog')).toBeVisible({ timeout: 10000 })
   })
 
-  test('dialog shows agent type name and Details tab', async ({ page }) => {
+  test('dialog shows agent type name and its tabs', async ({ page }) => {
     await setupAgentNavPage(page)
     await page.goto('/agents')
     await page.waitForLoadState('networkidle')
@@ -370,9 +450,12 @@ test.describe('Agent Type Details Dialog', () => {
       timeout: 10000,
     })
 
-    // Three tabs should be visible
+    // Tabs: the former "Plan Preview" tab is now "Implementation Plan".
     await expect(page.getByRole('tab', { name: 'Details' })).toBeVisible({ timeout: 10000 })
-    await expect(page.getByRole('tab', { name: 'Plan Preview' })).toBeVisible({ timeout: 10000 })
+    await expect(page.getByRole('tab', { name: 'Agent Topology' })).toBeVisible({ timeout: 10000 })
+    await expect(page.getByRole('tab', { name: 'Implementation Plan' })).toBeVisible({
+      timeout: 10000,
+    })
     await expect(page.getByRole('tab', { name: 'Execution Logs' })).toBeVisible({ timeout: 10000 })
   })
 
@@ -386,30 +469,47 @@ test.describe('Agent Type Details Dialog', () => {
 
     // Model ID should be displayed
     await expect(page.getByRole('dialog').getByText('gpt-4o')).toBeVisible({ timeout: 10000 })
-    // System instruction
+    // System instruction (Details tab label is "System Prompt")
     await expect(
       page.getByRole('dialog').getByText(/You are a research assistant/),
     ).toBeVisible({ timeout: 10000 })
   })
 
-  test('dialog Details tab shows execution guardrails', async ({ page }) => {
+  // NOTE (product gap, not a spec drift fix): the Details tab no longer renders
+  // the "Execution Guardrails" block — guardrails are now edited in the Agent
+  // Management Panel / Agent Type form. The test still verifies the values are
+  // reachable from the details dialog, via its Edit action.
+  test('details dialog Edit action exposes execution guardrails', async ({ page }) => {
     await setupAgentNavPage(page)
     await page.goto('/agents')
     await page.waitForLoadState('networkidle')
 
     await page.getByRole('cell', { name: 'Research Agent' }).click()
-    await expect(page.getByRole('dialog')).toBeVisible({ timeout: 10000 })
+    const detailsDialog = page.getByRole('dialog').first()
+    await expect(detailsDialog).toBeVisible({ timeout: 10000 })
 
-    await expect(page.getByRole('dialog').getByText('Execution Guardrails')).toBeVisible({
-      timeout: 10000,
-    })
-    await expect(page.getByRole('dialog').getByText('10')).toBeVisible({ timeout: 10000 })
-    await expect(
-      page.getByRole('dialog').getByText('observe_and_log', { exact: true }),
-    ).toBeVisible({ timeout: 10000 })
+    // Edit on the details dialog opens the agent type form.
+    await detailsDialog.getByRole('button', { name: 'Edit' }).click()
+
+    const editDialog = page.getByRole('dialog', { name: 'Edit Agent Type' }).first()
+    await expect(editDialog).toBeVisible({ timeout: 10000 })
+
+    // Guardrails live in a collapsed accordion.
+    await editDialog.getByText('Execution Guardrails').click()
+
+    await expect(editDialog.getByRole('spinbutton', { name: 'Max Iterations' })).toHaveValue(
+      '10',
+    )
+    // MUI Selects in this app carry no accessible name (their InputLabel has no
+    // id), so the field is located through its FormControl wrapper.
+    const fallbackField = editDialog
+      .locator('.MuiFormControl-root')
+      .filter({ hasText: 'Token Fallback Mode' })
+      .first()
+    await expect(fallbackField.getByRole('combobox')).toHaveText('Observe and log')
   })
 
-  test('switching to Plan Preview tab shows no-plan placeholder when plan is null', async ({
+  test('switching to Implementation Plan tab shows no-plan placeholder when plan is null', async ({
     page,
   }) => {
     await setupAgentNavPage(page)
@@ -419,15 +519,15 @@ test.describe('Agent Type Details Dialog', () => {
     await page.getByRole('cell', { name: 'Research Agent' }).click()
     await expect(page.getByRole('dialog')).toBeVisible({ timeout: 10000 })
 
-    await page.getByRole('tab', { name: 'Plan Preview' }).click()
+    await page.getByRole('tab', { name: 'Implementation Plan' }).click()
 
-    // Should show placeholder text
-    await expect(page.getByRole('dialog').getByText(/No plan generated/i)).toBeVisible({
-      timeout: 5000,
-    })
+    // Empty-state placeholder
+    await expect(
+      page.getByRole('dialog').getByText(/No implementation plan yet/i),
+    ).toBeVisible({ timeout: 5000 })
   })
 
-  test('Plan Preview tab shows plan steps when plan is populated', async ({ page }) => {
+  test('Implementation Plan tab shows plan steps when plan is populated', async ({ page }) => {
     await setupAgentNavPage(page)
 
     // Override the single agent type route with one that has a plan
@@ -445,7 +545,7 @@ test.describe('Agent Type Details Dialog', () => {
     await page.getByRole('cell', { name: 'Research Agent' }).click()
     await expect(page.getByRole('dialog')).toBeVisible({ timeout: 10000 })
 
-    await page.getByRole('tab', { name: 'Plan Preview' }).click()
+    await page.getByRole('tab', { name: 'Implementation Plan' }).click()
 
     // Plan step name should be visible
     await expect(page.getByText('Gather Sources')).toBeVisible({ timeout: 10000 })
@@ -479,21 +579,9 @@ test.describe('Agent Type Details Dialog', () => {
     // Click "View All Executions" button
     await page.getByRole('button', { name: /View All Executions/i }).click()
 
-    // Should open a second dialog with executions list
+    // Should open a second dialog with the executions dashboard
     await expect(page.getByRole('dialog', { name: /Agent Executions/ })).toBeVisible({ timeout: 10000 })
   })
-
-  // TODO: Add test for execution details dialog once dialog rendering issue is resolved
-  // test('clicking View on an execution opens execution details dialog', async ({ page }) => {
-  //   await setupAgentNavPage(page)
-  //   await page.goto('/agents')
-  //   await page.waitForLoadState('networkidle')
-  //   await page.getByRole('cell', { name: 'Research Agent' }).click()
-  //   await expect(page.getByRole('dialog')).toBeVisible({ timeout: 10000 })
-  //   await page.getByRole('tab', { name: 'Execution Logs' }).click()
-  //   await page.getByRole('button', { name: 'View' }).first().click()
-  //   await expect(page.getByText('Execution Details')).toBeVisible({ timeout: 10000 })
-  // })
 
   test('clicking identity name in Details tab opens identity view dialog', async ({ page }) => {
     await setupAgentNavPage(page)
@@ -555,7 +643,12 @@ test.describe('Agent Type Details Dialog', () => {
     await expect(page.getByRole('dialog', { name: 'Agent Role' })).toBeVisible({ timeout: 10000 })
   })
 
-  test('role view dialog has Edit button that opens role edit form', async ({ page }) => {
+  // NOTE (product gap): the details dialog now reuses AgentRoleDialog in
+  // read-only `view` mode, which exposes no Edit action — roles are edited from
+  // the Agent Roles list page. The test verifies both halves of that behaviour.
+  test('role view dialog is read-only; role edit form opens from the Agent Roles page', async ({
+    page,
+  }) => {
     await setupAgentNavPage(page)
     await page.goto('/agents')
     await page.waitForLoadState('networkidle')
@@ -566,13 +659,18 @@ test.describe('Agent Type Details Dialog', () => {
     await expect(page.getByRole('button', { name: 'Research Role' })).toBeVisible({ timeout: 10000 })
     await page.getByRole('button', { name: 'Research Role' }).click()
 
-    await expect(page.getByRole('dialog', { name: 'Agent Role' })).toBeVisible({ timeout: 10000 })
-    const editBtn = page
-      .getByRole('dialog', { name: 'Agent Role' })
-      .getByRole('button', { name: 'Edit' })
-    await expect(editBtn).toBeVisible({ timeout: 5000 })
+    const roleDialog = page.getByRole('dialog', { name: 'Agent Role' })
+    await expect(roleDialog).toBeVisible({ timeout: 10000 })
 
-    await editBtn.click()
+    // Read-only view: no Edit action inside the dialog, Close only.
+    await expect(roleDialog.getByRole('button', { name: 'Edit' })).toHaveCount(0)
+    await roleDialog.getByRole('button', { name: 'Close' }).click()
+
+    // Role editing lives on the Agent Roles list page.
+    await page.goto('/agents/roles')
+    await page.waitForLoadState('networkidle')
+
+    await page.getByRole('button', { name: 'Edit' }).first().click()
 
     // Role edit form dialog should open
     await expect(page.getByRole('dialog', { name: 'Edit Agent Role' })).toBeVisible({
@@ -598,31 +696,29 @@ test.describe('Agent Type Details Dialog', () => {
 // ── Nav menu order ─────────────────────────────────────────────────────────────
 
 test.describe('Nav menu order', () => {
-  test('Agent Roles and Agent Identities appear above Agent Types in the nav', async ({
+  test('Agent Roles and Agent Identities appear above Agent Management in the nav', async ({
     page,
   }) => {
     await setupAgentNavPage(page)
     await page.goto('/agents')
     await page.waitForLoadState('networkidle')
 
-    await expect(page.getByRole('button', { name: 'Agent Roles' })).toBeVisible({ timeout: 10000 })
+    const rolesButton = page.getByRole('button', { name: 'Agent Roles' })
+    const identitiesButton = page.getByRole('button', { name: 'Agent Identities' })
+    const typesButton = page.getByRole('button', { name: 'Agent Management', exact: true })
+    const trailsButton = page.getByRole('button', { name: 'Agent Trails' })
 
-    const rolesY =
-      (await page.getByRole('button', { name: 'Agent Roles' }).boundingBox())?.y ?? 0
-    const identitiesY =
-      (await page.getByRole('button', { name: 'Agent Identities' }).boundingBox())?.y ?? 0
-    const typesY =
-      (await page.getByRole('button', { name: 'Agent Types' }).boundingBox())?.y ?? 0
-    const executionsY =
-      (await page.getByRole('button', { name: 'Agent Executions' }).boundingBox())?.y ?? 0
-    const logsY =
-      (await page.getByRole('button', { name: 'Agent Logs' }).boundingBox())?.y ?? 0
+    await expect(rolesButton).toBeVisible({ timeout: 10000 })
 
-    // Roles → Identities → Types → Executions → Logs (top to bottom)
+    const rolesY = (await rolesButton.boundingBox())?.y ?? 0
+    const identitiesY = (await identitiesButton.boundingBox())?.y ?? 0
+    const typesY = (await typesButton.boundingBox())?.y ?? 0
+    const trailsY = (await trailsButton.boundingBox())?.y ?? 0
+
+    // Roles → Identities → Agent Management → Agent Trails (top to bottom)
     expect(rolesY).toBeLessThan(identitiesY)
     expect(identitiesY).toBeLessThan(typesY)
-    expect(typesY).toBeLessThan(executionsY)
-    expect(executionsY).toBeLessThan(logsY)
+    expect(typesY).toBeLessThan(trailsY)
   })
 })
 

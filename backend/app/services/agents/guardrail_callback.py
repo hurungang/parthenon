@@ -326,11 +326,22 @@ class GuardrailCallback(AsyncCallbackHandler):
             )
 
     def _check_delegation_depth(self) -> None:
-        """Raise GuardrailStop if delegation depth limit exceeded."""
+        """Raise GuardrailStop if the run's chain depth exceeds the configured maximum.
+
+        The maximum is the agent type's configured value (seeded from the
+        resolved policy), and the chain depth is the deepest depth this run knows
+        about: the persisted starting depth (``tree_depth``) or a depth advanced by
+        an in-run delegation (``delegation_depth``).  Both are seeded from the
+        job's recorded depth, so this check and the runtime hard-limit check
+        compare the same configured limit against the same real chain depth.
+        """
         max_depth = getattr(self.guardrail_state, "max_delegation_depth", None)
         if max_depth is None:
             return
-        current_depth = getattr(self.guardrail_state, "delegation_depth", 0)
+        current_depth = max(
+            self._as_depth(getattr(self.guardrail_state, "delegation_depth", 0)),
+            self._as_depth(getattr(self.guardrail_state, "tree_depth", 0)),
+        )
         if current_depth > max_depth:
             msg = (
                 f"Delegation depth limit reached: {current_depth}/{max_depth} "
@@ -345,3 +356,8 @@ class GuardrailCallback(AsyncCallbackHandler):
                     "session_id": self.session_id,
                 },
             )
+
+    @staticmethod
+    def _as_depth(value: Any) -> int:
+        """Return an int depth for a guardrail state attribute (0 when absent)."""
+        return value if isinstance(value, int) else 0

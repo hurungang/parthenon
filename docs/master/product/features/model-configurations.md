@@ -68,6 +68,21 @@ Each provider configuration has a "Fetch Models" capability that returns the ava
 
 This late-binding architecture means swapping a provider or rotating a credential requires updating only the Model Configuration — no agent type changes are needed.
 
+## Authoring & Optimizer Model Selection
+
+Two workspace-level choices are drawn from this catalogue, separately from any agent type's runtime model:
+
+- **Plan & workflow authoring model** — one approved model per workspace, used for Skill/SOP workflow drafting, implementation-plan generation, and optimization-plan generation.
+- **Optimizer model** — an optional per-workspace choice of which approved model powers optimization, used in place of the authoring model when set.
+
+Rules for both:
+
+- Only models enabled in the workspace's own catalogue can be chosen.
+- An agent type's runtime model is never used for plan authoring or optimization, and is never derived into these settings by default.
+- Choosing a smaller enabled model is allowed; the recommendation of a larger model is advisory.
+- If the chosen model is later disabled (at model or vendor level) or removed from the catalogue, the dependent capability becomes **not configured**: plan generation and optimization do not run, the reason is shown where the capability is used, and the administrator is asked to re-select a valid model. A stale saved choice is shown as unavailable rather than silently cleared or substituted.
+- Deleting a Model Configuration that an authoring or optimizer selection depends on is blocked like any other reference, with a clear message naming the dependency.
+
 ## Business Goals
 - Centralize LLM provider metadata so that agent types can reference models by ID alone
 - Securely manage API keys with encryption at rest and runtime-only decryption
@@ -87,6 +102,9 @@ This late-binding architecture means swapping a provider or rotating a credentia
 - Agent types reference models by ID alone; the correct provider is resolved at runtime
 - The Fetch Models capability returns available model IDs or fails gracefully
 - Disabling a vendor cascades to block all models under that vendor
+- The workspace's plan-authoring and optimizer models can only be chosen from that workspace's enabled models
+- The optimizer model is never taken from an agent type's runtime model unless explicitly chosen for optimization
+- Disabling or removing a selected authoring or optimizer model puts plan generation and optimization into a not-configured state with a clear re-select prompt — the selection is never silently substituted
 
 ## Out of Scope
 - Dynamic/provider-initiated registration of new LLM providers at runtime

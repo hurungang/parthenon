@@ -155,7 +155,7 @@ export function AgentPropertiesSection({ draftApi }: AgentPropertiesSectionProps
                   label={t('agents.types.guardrails.maxDelegationDepth')}
                   value={guardrails.maxDelegationDepth}
                   onChange={(e) => setGuardrails({ maxDelegationDepth: Number(e.target.value || 0) })}
-                  inputProps={{ min: 0, max: 32 }}
+                  inputProps={{ min: 0 }}
                   fullWidth
                 />
                 <TextField

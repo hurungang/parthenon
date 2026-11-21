@@ -40,30 +40,33 @@ const MOCK_SESSION = {
 const MOCK_EXECUTION_LOGS = [
   {
     id: 'execlog-zllm-001',
+    timestamp: '2026-01-01T10:00:01Z',
     session_id: SESSION_ID,
     event_type: 'script_run_started',
     message: "Sandboxed script started (version v3)",
     log_level: 'INFO',
     event_category: 'functional',
-    created_at: '2026-01-01T10:00:01Z',
+    data: { script_name: 'summarise_pipeline', version: 'v3' },
   },
   {
     id: 'execlog-zllm-002',
+    timestamp: '2026-01-01T10:00:02Z',
     session_id: SESSION_ID,
     event_type: 'script_step_completed',
     message: "Step 'fetch' (tool_call) completed: object with 3 key(s) [id, name, email]",
     log_level: 'INFO',
     event_category: 'functional',
-    created_at: '2026-01-01T10:00:02Z',
+    data: { step: 'fetch', step_type: 'tool_call' },
   },
   {
     id: 'execlog-zllm-003',
+    timestamp: '2026-01-01T10:00:03Z',
     session_id: SESSION_ID,
     event_type: 'script_run_completed',
     message: 'Sandboxed script completed in 120 ms: object with 1 key(s) [greeting=Hello Ada]',
     log_level: 'INFO',
     event_category: 'functional',
-    created_at: '2026-01-01T10:00:03Z',
+    data: { duration_ms: 120 },
   },
 ]
 
@@ -75,25 +78,46 @@ test.describe('Zero-LLM agent execution (LLM mock layer)', () => {
     await mockIdentityStatus(page)
     await standardSetup(page)
 
-    await page.route('**/api/v1/agent-logs/sessions/*/logs**', async (route) => {
-      await route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({ items: MOCK_EXECUTION_LOGS, total: MOCK_EXECUTION_LOGS.length }),
-      })
-    })
-    await page.route(`**/api/v1/sessions/${SESSION_ID}`, async (route) => {
-      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(MOCK_SESSION) })
-    })
+    await page.route(
+      `http://localhost:8000/api/v1/agents/sessions/${SESSION_ID}/execution-logs`,
+      async (route) => {
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify([]),
+        })
+      },
+    )
+    await page.route(
+      `http://localhost:8000/api/v1/agents/sessions/${SESSION_ID}/logs**`,
+      async (route) => {
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify(MOCK_EXECUTION_LOGS),
+        })
+      },
+    )
+    await page.route(
+      `http://localhost:8000/api/v1/agents/sessions/${SESSION_ID}`,
+      async (route) => {
+        await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(MOCK_SESSION) })
+      },
+    )
+    await page.route(
+      `http://localhost:8000/api/v1/intervene/requests**`,
+      async (route) => {
+        await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([]) })
+      },
+    )
     await page.goto('/')
-    await page.evaluate((token) => localStorage.setItem('auth_token', token), FAKE_TOKEN)
+    await page.evaluate((token) => localStorage.setItem('access_token', token), FAKE_TOKEN)
   })
 
   test('sandboxed script execution shows humanized one-line logs (no JSON blobs)', async ({ page }) => {
     // The log stream for a mock-mode run carries clean one-liners: what ran
     // and what it produced — never truncated JSON blobs (N5).
-    const logsPage = page.goto(`/sessions/${SESSION_ID}/logs`)
-    await logsPage
+    await page.goto(`/agents/sessions/${SESSION_ID}`)
     await expect(page.getByText(/Sandboxed script started/)).toBeVisible()
     await expect(
       page.getByText(/Step 'fetch' \(tool_call\) completed: object with 3 key\(s\)/)

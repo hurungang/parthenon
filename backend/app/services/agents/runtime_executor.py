@@ -44,6 +44,10 @@ from app.services.agents.guardrails import (
     GuardrailStop,
     GuardrailStopReason,
     ModelAvailabilityBlockedError,
+    PLATFORM_DEFAULT_EXECUTION_TIMEOUT_SECONDS,
+    PLATFORM_DEFAULT_MAX_DELEGATED_STEPS,
+    PLATFORM_DEFAULT_MAX_DELEGATION_DEPTH,
+    PLATFORM_DEFAULT_MAX_ITERATIONS,
     RuntimeGuardrailState,
     detect_cycle_path,
     extract_total_tokens_from_usage,
@@ -277,6 +281,31 @@ def _int_or_default(value: Any, default: int) -> int:
         return int(value)
     except Exception:
         return default
+
+
+def _resolve_starting_delegation_depth(
+    job_data: dict[str, Any] | None,
+    input_data: dict[str, Any] | None,
+) -> int:
+    """Return the run's starting chain depth.
+
+    The persisted job's recorded ``delegation_depth`` (exposed on the internal
+    session payload) is authoritative — a delegated child begins at its real
+    chain depth, not zero.  The legacy ``input_data["__delegation_depth"]`` key
+    is only a backward-compatibility fallback for in-flight/stale payloads, and
+    a payload carrying neither resolves to zero (root run, unchanged).
+    """
+    if isinstance(job_data, dict) and job_data.get("delegation_depth") is not None:
+        return max(0, _int_or_default(job_data.get("delegation_depth"), 0))
+    if isinstance(input_data, dict):
+        return max(0, _int_or_default(input_data.get("__delegation_depth"), 0))
+    return 0
+
+
+def _guardrail_mode_value(value: Any, default: str) -> str:
+    """Return the raw string value of a guardrail enum (or *default*)."""
+    candidate = getattr(value, "value", value)
+    return str(candidate) if candidate else default
 
 
 def _extract_sop_name_from_fallback_content(sop_content: str | None) -> str | None:
@@ -758,12 +787,19 @@ class AgentRuntimeExecutor:
         context: dict[str, Any],
         job_data: dict[str, Any],
     ) -> RuntimeGuardrailState:
-        """Construct runtime guardrail state from resolved context policy snapshot."""
+        """Construct runtime guardrail state from resolved context policy snapshot.
+
+        The configured ``max_delegation_depth`` is used AS-IS for every agent
+        type: there is no input-type override and no platform cap.  The run's
+        starting depth comes from the job's recorded delegation depth (legacy
+        input-key fallback only), so a delegated child evaluates nested
+        delegation from its real chain depth.
+        """
         policy = context.get("guardrail_policy") or {}
         input_data = job_data.get("input_data") if isinstance(job_data, dict) else {}
-        current_depth = 0
-        if isinstance(input_data, dict):
-            current_depth = _int_or_default(input_data.get("__delegation_depth"), 0)
+        if not isinstance(input_data, dict):
+            input_data = {}
+        current_depth = _resolve_starting_delegation_depth(job_data, input_data)
 
         # Command-driven special executions (e.g. "optimize-and-verify") legitimately
         # iterate on script authoring (execute → fix source → execute again), which
@@ -774,9 +810,7 @@ class AgentRuntimeExecutor:
             COMMAND_TOKEN_BUDGET,
         )
 
-        is_command_run = isinstance(input_data, dict) and bool(
-            input_data.get("__command")
-        )
+        is_command_run = bool(input_data.get("__command"))
 
         policy_token_budget = (
             _int_or_default(policy.get("token_budget"), 0)
@@ -795,17 +829,26 @@ class AgentRuntimeExecutor:
         else:
             token_budget = policy_token_budget
 
-        guardrail = RuntimeGuardrailState(
+        return RuntimeGuardrailState(
             max_iterations=(
                 COMMAND_MAX_ITERATIONS
                 if is_command_run
-                else _int_or_default(policy.get("max_iterations"), 10)
+                else _int_or_default(
+                    policy.get("max_iterations"), PLATFORM_DEFAULT_MAX_ITERATIONS
+                )
             ),
-            max_delegation_depth=_int_or_default(policy.get("max_delegation_depth"), 3),
-            max_delegated_steps=_int_or_default(policy.get("max_delegated_steps"), 20),
+            # Configured policy value is authoritative for conversational AND
+            # task agents; the platform default only fills an absent value.
+            max_delegation_depth=_int_or_default(
+                policy.get("max_delegation_depth"),
+                PLATFORM_DEFAULT_MAX_DELEGATION_DEPTH,
+            ),
+            max_delegated_steps=_int_or_default(
+                policy.get("max_delegated_steps"), PLATFORM_DEFAULT_MAX_DELEGATED_STEPS
+            ),
             execution_timeout_seconds=_int_or_default(
                 policy.get("execution_timeout_seconds"),
-                300,
+                PLATFORM_DEFAULT_EXECUTION_TIMEOUT_SECONDS,
             ),
             token_budget=token_budget,
             token_enforcement_mode=str(policy.get("token_enforcement_mode") or "observe"),
@@ -817,22 +860,68 @@ class AgentRuntimeExecutor:
                 policy.get("conversational_continuation_policy") or "allow"
             ),
             policy_snapshot_id=str(policy.get("policy_snapshot_id") or "unknown"),
-            delegation_depth=0,
-            tree_depth=max(0, current_depth),
+            # Both the tree depth and the delegation depth start at the
+            # persisted chain depth so every enforcement site compares the real
+            # depth (never zero) against the configured maximum.
+            delegation_depth=current_depth,
+            tree_depth=current_depth,
         )
 
-        # Phase 1.1: Override max_delegation_depth to 1 for non-conversational agents.
-        # Non-conversational (task) agents are limited to 1 level of delegation so
-        # that automated workflows cannot create unbounded delegation chains.
-        input_type = context.get("input_type")
-        if input_type is not None:
-            input_type_value = (
-                input_type.value if hasattr(input_type, "value") else str(input_type)
-            )
-            if input_type_value != "conversation":
-                guardrail.max_delegation_depth = 1
+    def _build_agent_type_guardrail_state(
+        self,
+        agent_type: Any,
+        job: AgentJob,
+    ) -> RuntimeGuardrailState:
+        """Resolve guardrail state from the agent type's configured profile.
 
-        return guardrail
+        Used by the Control Center-side task loop for both its loop context and
+        its fallback guardrail state.  The configured maximum delegation depth
+        is never reduced; the platform default only fills an absent value.
+        """
+        input_data = job.input_data if isinstance(job.input_data, dict) else {}
+        current_depth = _resolve_starting_delegation_depth(
+            {"delegation_depth": getattr(job, "delegation_depth", None)},
+            input_data,
+        )
+        agent_type_id = getattr(agent_type, "id", "unknown")
+        return RuntimeGuardrailState(
+            max_iterations=_int_or_default(
+                getattr(agent_type, "guardrail_max_iterations", None),
+                PLATFORM_DEFAULT_MAX_ITERATIONS,
+            ),
+            max_delegation_depth=_int_or_default(
+                getattr(agent_type, "guardrail_max_delegation_depth", None),
+                PLATFORM_DEFAULT_MAX_DELEGATION_DEPTH,
+            ),
+            max_delegated_steps=_int_or_default(
+                getattr(agent_type, "guardrail_max_delegated_steps", None),
+                PLATFORM_DEFAULT_MAX_DELEGATED_STEPS,
+            ),
+            execution_timeout_seconds=_int_or_default(
+                getattr(agent_type, "guardrail_execution_timeout_seconds", None),
+                PLATFORM_DEFAULT_EXECUTION_TIMEOUT_SECONDS,
+            ),
+            token_budget=getattr(agent_type, "guardrail_token_budget", None),
+            token_enforcement_mode=_guardrail_mode_value(
+                getattr(agent_type, "guardrail_token_enforcement_mode", None),
+                "observe",
+            ),
+            token_fallback_mode=_guardrail_mode_value(
+                getattr(agent_type, "guardrail_token_fallback_mode", None),
+                "observe_and_log",
+            ),
+            conversational_token_visibility_mode=_guardrail_mode_value(
+                getattr(agent_type, "guardrail_conversational_token_visibility_mode", None),
+                "enabled",
+            ),
+            conversational_continuation_policy=_guardrail_mode_value(
+                getattr(agent_type, "guardrail_conversational_continuation_policy", None),
+                "allow",
+            ),
+            policy_snapshot_id=f"agent_type:{agent_type_id}",
+            delegation_depth=current_depth,
+            tree_depth=current_depth,
+        )
 
     async def _precheck_delegation_graph(
         self,
@@ -1011,12 +1100,17 @@ class AgentRuntimeExecutor:
                 },
             )
 
-        if state.tree_depth > state.max_delegation_depth:
+        # Use the deepest chain depth this run knows about: the persisted
+        # starting depth (tree_depth) or a depth advanced by an in-run
+        # delegation (delegation_depth).  Both are seeded from the job's recorded
+        # depth — the same value the guardrail callback compares.
+        current_depth = max(state.tree_depth, state.delegation_depth)
+        if current_depth > state.max_delegation_depth:
             raise GuardrailStop(
                 reason=GuardrailStopReason.DELEGATION_DEPTH_EXCEEDED,
                 message="Delegation depth limit exceeded",
                 details={
-                    "current_value": state.delegation_depth,
+                    "current_value": current_depth,
                     "threshold_value": state.max_delegation_depth,
                 },
             )
@@ -3894,9 +3988,14 @@ class AgentRuntimeExecutor:
             attributes={"session_id": str(job.id)},
         ):
             input_data = job.input_data or {}
-            current_depth = 0
-            if isinstance(input_data, dict):
-                current_depth = _int_or_default(input_data.get("__delegation_depth"), 0)
+            if not isinstance(input_data, dict):
+                input_data = {}
+
+            # Resolve the configured guardrail profile ONCE: the loop context and
+            # its fallback guardrail state must both carry the agent type's
+            # configured maximum depth (never a one-level platform cap), and the
+            # loop's starting depth must equal the job's recorded chain depth.
+            resolved_guardrails = self._build_agent_type_guardrail_state(agent_type, job)
 
             ctx = TaskAgentLoop(
                 session_id=str(job.id),
@@ -3907,10 +4006,10 @@ class AgentRuntimeExecutor:
                 output_type=agent_type.output_type.value,
                 output_schema=agent_type.output_schema,
                 input_data=input_data,
-                # Phase 1.1: Non-conversational agents are limited to 1 level of delegation
-                max_delegation_depth=1,
-                delegation_depth=0,
-                tree_depth=max(0, current_depth),
+                max_iterations=resolved_guardrails.max_iterations,
+                max_delegation_depth=resolved_guardrails.max_delegation_depth,
+                delegation_depth=resolved_guardrails.delegation_depth,
+                tree_depth=resolved_guardrails.tree_depth,
             )
 
             # ── Load binding content (bound SOPs+skills) and append to system instruction ──
@@ -3982,7 +4081,6 @@ class AgentRuntimeExecutor:
             )
 
             # ── Observe-Reason-Act loop ────────────────────────────────────────
-            from app.services.agents.guardrails import RuntimeGuardrailState
             from app.services.agents.guardrail_callback import GuardrailCallback
             from app.services.agents.execution_logging_callback import ExecutionLoggingCallback
 
@@ -3993,18 +4091,7 @@ class AgentRuntimeExecutor:
             )
             from langchain_core.tools import StructuredTool as _StructuredTool
 
-            guardrail_state = RuntimeGuardrailState(
-                max_iterations=10,
-                max_delegation_depth=1,
-                max_delegated_steps=20,
-                execution_timeout_seconds=300,
-                token_budget=None,
-                token_enforcement_mode="observe",
-                token_fallback_mode="observe_and_log",
-                conversational_token_visibility_mode="enabled",
-                conversational_continuation_policy="allow",
-                policy_snapshot_id="unknown",
-            )
+            guardrail_state = resolved_guardrails
             _iteration_ref = [0]
             _lc_callbacks: list[Any] = [
                 ExecutionLoggingCallback(
@@ -4638,29 +4725,42 @@ class AgentRuntimeExecutor:
                     )
                 elif _extract_agent_delegation_target(tool_name) is not None:
                     if guardrail_state is None:
+                        # No supplied state: derive the fallback from the loop
+                        # context (configured maximum + real chain depth), never
+                        # from a one-level platform constant.
                         guardrail_state = RuntimeGuardrailState(
-                            max_iterations=10,
-                            max_delegation_depth=1,
-                            max_delegated_steps=20,
-                            execution_timeout_seconds=300,
-                            token_budget=None,
+                            max_iterations=ctx.max_iterations,
+                            max_delegation_depth=ctx.max_delegation_depth,
+                            max_delegated_steps=_int_or_default(
+                                getattr(ctx, "max_delegated_steps", None),
+                                PLATFORM_DEFAULT_MAX_DELEGATED_STEPS,
+                            ),
+                            execution_timeout_seconds=_int_or_default(
+                                getattr(ctx, "execution_timeout_seconds", None),
+                                PLATFORM_DEFAULT_EXECUTION_TIMEOUT_SECONDS,
+                            ),
+                            token_budget=getattr(ctx, "token_budget", None),
                             token_enforcement_mode="observe",
                             token_fallback_mode="observe_and_log",
                             conversational_token_visibility_mode="enabled",
                             conversational_continuation_policy="allow",
-                            policy_snapshot_id="unknown",
+                            policy_snapshot_id="task_loop_context",
+                            delegation_depth=ctx.delegation_depth,
+                            tree_depth=ctx.tree_depth,
                         )
                     target_slug = _extract_agent_delegation_target(tool_name)
                     next_depth = ctx.tree_depth + 1
 
-                    # Phase 1.1: Delegation depth guard for TaskAgentLoop path
+                    # Delegation depth guard for the TaskAgentLoop path: block a
+                    # hop that would take the chain beyond the CONFIGURED maximum.
                     if next_depth > ctx.max_delegation_depth:
                         await self._log_execution_event(
                             session_id=uuid.UUID(ctx.session_id),
                             event_type="delegation_depth_blocked",
                             message=(
-                                f"Delegation depth limit reached: "
-                                f"{ctx.tree_depth} >= {ctx.max_delegation_depth}"
+                                f"Delegation depth limit reached: next depth "
+                                f"{next_depth} exceeds the configured maximum "
+                                f"{ctx.max_delegation_depth}"
                             ),
                             data={
                                 "delegation_target": target_slug,
@@ -4671,11 +4771,10 @@ class AgentRuntimeExecutor:
                         result = {
                             "blocked": True,
                             "reason": (
-                                f"Delegation depth limit reached "
-                                f"({ctx.tree_depth} >= "
-                                f"{ctx.max_delegation_depth}). "
-                                f"Non-conversational agents are limited to "
-                                f"1 level of delegation."
+                                f"Delegation depth limit reached: delegating from "
+                                f"depth {ctx.tree_depth} would exceed the configured "
+                                f"maximum delegation depth of "
+                                f"{ctx.max_delegation_depth}."
                             ),
                         }
                     else:

@@ -84,7 +84,7 @@ Covers frontend UI tests for agent navigation structure, `AgentTypeDetailsDialog
 - Dialog opens when an agent type row is clicked; row action buttons (Edit, Launch, Plan Preview) do not open dialog
 - Tab state resets to Details (index 0) on every open; stale state from prior render does not carry over
 - Details tab: all configured fields displayed; role and identity names are clickable links that open view dialogs without navigating away; links are non-clickable when `role_id` or `identity_id` is null
-- Plan Preview tab: plan steps and topology rendered when plan exists; placeholder shown when `plan` is null
+- Plan Preview tab: plan steps and topology rendered when plan exists; explicit **Generate plan** empty state when no plan exists (nothing is authored by opening the tab or by saving the agent); blocked-with-reason state + System Config shortcut when the workspace authoring model is unusable; stale banner that only offers regeneration; `412` failure renders its reason while the last successful plan stays visible; conversational agents get no generate/regenerate affordance, only the explanation
 - Execution Logs tab: recent sessions fetched with a distinct React Query key (cache isolation); "View All Executions" closes dialog and navigates to `/agents/executions`
 - Dialog shows `PermissionDeniedAlert` on 403; distinct error state on 404 or network failure
 - Execution Logs tab error is isolated; Details and Plan Preview tabs unaffected
@@ -361,6 +361,7 @@ Covers frontend UI tests for agent navigation structure, `AgentTypeDetailsDialog
 | improve-role-mcp-session-assignment | Added inline MCP session assignment coverage (dynamic server detection, inline dropdowns, pre-save validation, refresh, passthrough badges) | 2026-06-20 |
 | unify-agent-topology-diagram | Added unified topology canvas in agent preview coverage (Section 13): preview renders the same `PanelTopologyCanvas` as the panel via a pure agent-type → draft mapping; zoom/fullscreen/node-click parity; conversation-topology path removed; panel regression and out-of-scope `AgentPlanContent` consumers guarded | 2026-10-27 |
 | control-center-chatbot | Agent Types list marks `is_system` types (System badge, Edit/Delete disabled) for the seeded assistant; topology pending-load states — every loading entity renders a spinner + localized "Loading…" instead of a raw id, while resolved-missing and deliberate `None`/`Auto`/conversation slots keep their existing fallbacks | 2026-11-02 |
+| separate-optimization-from-execution | Plan Preview is explicit-only: empty state + Generate plan, blocked-with-reason + System Config shortcut, stale banner (offers regeneration only), `412` reason with the last good plan kept, no plan affordances for conversational agents, gated Optimize in the footer | 2026-11 |
 
 ## control-center-chatbot Update (2026-11)
 

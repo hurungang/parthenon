@@ -109,6 +109,26 @@ The YAML config files contain **no secrets**. Sensitive values (tokens, password
 
 ---
 
+### Conversation, Pause and Optimization Settings
+
+These `Settings` fields bound conversational turns, durable pauses and optimizer live tests. All have built-in defaults, are overridable by environment variables, and — where noted — are clamped to a safe minimum at load.
+
+| Setting | Default | Purpose |
+|---------|---------|---------|
+| `conversation_llm_timeout_seconds` | 120 | Hard bound for one conversational LLM completion (applied asyncio-side and as the LangChain client request timeout) |
+| `conversation_intervention_timeout_seconds` | 240 | Conversational HITL wait; re-arms while an intervention is pending (kept below the CH turn watchdog) |
+| `conversation_sessions_default_window_days` | 7 | Default lower bound for the paginated sessions listing |
+| `conversation_turn_resume_ttl_seconds` | 900 | Platform default answerable window for a paused turn; a tenant override wins (clamped ≥ 30) |
+| `optimizer_live_test_decision_ttl_minutes` | 15 | How long a live-test approval stays answerable |
+| `optimizer_live_test_approved_cap` | 3 | Bounded number of approved live tests per conversation |
+| `optimizer_live_test_run_timeout_seconds` | 120 | Hard wall clock for one approved live script run |
+| `optimizer_live_test_operation_timeout_seconds` | 45 | Per-operation bound inside a live run |
+| `optimizer_live_test_sweep_interval_seconds` | 60 | Expiry sweep cadence |
+
+The optimizer live-test bounds are clamped to ≥ 1 at load. Tenant policy (resume TTL) is read by the conversations module; the model selections themselves are tenant settings, not `Settings` fields (see [multi-tenancy — tenant settings](../multi-tenancy/tenant-settings.md)).
+
+---
+
 ## API Endpoints
 
 The foundation module does not expose its own HTTP endpoints. It provides the shared dependencies and middleware consumed by all other routers.
@@ -140,6 +160,17 @@ The foundation module does not expose its own HTTP endpoints. It provides the sh
 | `validation_exception_handler` | function | FastAPI exception handler for `RequestValidationError`; converts Pydantic v2 `model_validator` exception objects in `ctx` to strings before JSON serialisation; required for passthrough session credential validator responses | `backend/app/main.py` |
 | `initTelemetry` | function | Initialises browser WebTracerProvider with OTLP HTTP exporter and FetchInstrumentation; triggers Web Vitals recording | `frontend/src/telemetry.ts` |
 | `_recordWebVitals` | function | Lazily imports web-vitals and records LCP, FID, FCP, CLS as OTEL histograms | `frontend/src/telemetry.ts` |
+
+### Conversation, resume and optimization settings
+
+| Symbol | Type | Description | File |
+|--------|------|-------------|------|
+| `Settings.conversation_llm_timeout_seconds` | field | Per-completion conversational LLM bound (default 120 s) | `backend/app/core/config.py` |
+| `Settings.conversation_intervention_timeout_seconds` | field | Conversational HITL wait (default 240 s) | `backend/app/core/config.py` |
+| `Settings.conversation_sessions_default_window_days` | field | Sessions listing default window (7 days) | `backend/app/core/config.py` |
+| `Settings.conversation_turn_resume_ttl_seconds` | field | Platform default resume window (900 s; tenant override wins) | `backend/app/core/config.py` |
+| `Settings.optimizer_live_test_decision_ttl_minutes` / `..._approved_cap` / `..._run_timeout_seconds` / `..._operation_timeout_seconds` / `..._sweep_interval_seconds` | fields | Optimizer live-test bounds (clamped ≥ 1) | `backend/app/core/config.py` |
+| `clamp_optimizer_live_test_settings` | validator | Enforces the ≥ 1 floor on the optimizer live-test fields | `backend/app/core/config.py` |
 
 ### API Dependencies & Permission Registry
 
@@ -173,9 +204,9 @@ Foundation gains tenancy primitives since the multi-tenant support change (full 
 |--------|------|-------------|------|
 | `TenantContext` + accessors | class (new) | Immutable per-request tenant context, `TENANT_UNSET` sentinel, `get/set/require_tenant_context`, `is_tenancy_enabled` | `backend/app/core/tenant_context.py` |
 | `tenant_address_base_domain` / `tenant_context_signing_key` | settings (new) | Tenancy resolution base domain and HMAC signing key on `Settings` | `backend/app/core/config.py` |
-| `set_tenant_span_attributes` | function (new usage) | OTEL span tenant attribution called by CC/AR/CH middlewares; `telemetry.py` itself unchanged | `backend/app/core/telemetry.py` |
+| `set_tenant_span_attributes` | function (new usage) | OTEL span tenant attribution called by CC/AR/CH middlewares from the tenant context module | `backend/app/core/tenant_context.py` |
 
-## Certificate Path Resolution & Fail-Fast Startup Validation (control-center-chatbot change)
+## Certificate Path Resolution & Fail-Fast Startup Validation
 
 Certificate paths were previously interpreted relative to the process working directory, so a service started from a different directory could not find its certificate and silently continued without mTLS — health probes stayed green while the failure only surfaced later, lazily, at the first outbound call. Both problems are fixed centrally.
 

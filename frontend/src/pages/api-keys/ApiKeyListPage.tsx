@@ -129,8 +129,9 @@ export function ApiKeyListPage() {
       {/* Filter bar */}
       <Box display="flex" gap={2} mb={3} flexWrap="wrap">
         <FormControl size="small" sx={{ minWidth: 140 }}>
-          <InputLabel>{t('app.status')}</InputLabel>
+          <InputLabel id="api-key-status-filter-label">{t('app.status')}</InputLabel>
           <Select
+            labelId="api-key-status-filter-label"
             value={statusFilter}
             label={t('app.status')}
             onChange={(e) => setStatusFilter(e.target.value)}

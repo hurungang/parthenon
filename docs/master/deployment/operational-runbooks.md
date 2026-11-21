@@ -308,7 +308,7 @@ No rollback is needed for this operation. The Group Membership mapper is additiv
 
 ## 10. Multi-Tenancy Enable / Disable and Cross-Tenant Audit Triage
 
-Use this runbook when enabling or disabling the tenancy platform switch (`multi_tenancy_enabled`), or when triaging cross-tenant audit signals. Full procedures live in [first-time-deployment.md](first-time-deployment.md) Step 13 (enable) and [rollback.md](rollback.md) Change-Specific Rollback: Multi-Tenant Support (revert); runtime triage details are owned by the operations documentation — see [../operations/runbooks/tenant-adoption-and-scope-denials.md](../operations/runbooks/tenant-adoption-and-scope-denials.md) and [../operations/runbooks/tenant-signin-failure.md](../operations/runbooks/tenant-signin-failure.md).
+Use this runbook when enabling or disabling the tenancy platform switch (`multi_tenancy_enabled`), or when triaging cross-tenant audit signals. Full procedures live in [first-time-deployment.md](first-time-deployment.md) Step 13 (enable) and [rollback-change-specific.md](rollback-change-specific.md) Change-Specific Rollback: Multi-Tenant Support (revert); runtime triage details are owned by the operations documentation — see [../operations/runbooks/tenant-adoption-and-scope-denials.md](../operations/runbooks/tenant-adoption-and-scope-denials.md) and [../operations/runbooks/tenant-signin-failure.md](../operations/runbooks/tenant-signin-failure.md).
 
 ### Enable/disable procedure (summary)
 
@@ -346,3 +346,37 @@ When multi-tenancy is enabled and headers are legitimately absent, the 401 is **
 1. Re-run the pre-flight NULL-count queries per affected table — every count must be **zero** after `b8c9d0e1f2a3`.
 2. Spot-check previously NULL-tenant rows now carry the root tenant id.
 3. Scope-miss audit events: search `control-center.log` for scope-miss/`cross_tenant_access_denied` audit entries when triaging failed lookups — a scope miss after migration means the row was not adopted (or a strict predicate regressed).
+
+---
+
+## 12. Mid-Turn Restart and Failover (Conversational Turns)
+
+Use this runbook whenever conversational work was in flight during a restart, crash, or instance replacement — a turn was "thinking", "using a tool", or waiting on a confirmation when a service stopped, an instance was replaced, or a second instance took over. Operator-facing triage lives in [../operations/runbooks/conversational-turn-recovery.md](../operations/runbooks/conversational-turn-recovery.md); this section covers the deployment-side ordering and verification.
+
+### What survives what
+
+| Event | Effect on an in-flight turn |
+|-------|-----------------------------|
+| Agent Runtime restart / instance replacement | A paused turn (confirmation pending) survives: the checkpoint payload and resume index are in PostgreSQL, so any AR instance can continue it. A turn that was actively *working* (no pause recorded) has no resumable state — it resolves terminal with "the assistant stopped unexpectedly…". |
+| Communication Hub restart | Survives. Nothing durable lives in CH; on reconnect the client re-hydrates the activity state from Control Center, and a pending confirmation is still presented as actionable. |
+| Control Center restart | Survives, and is the only case where the activity indicator depends on CC being back before the client reconnects — the reaper and the internal endpoints must be up for hydration. |
+| Redis restart / flush | Survives. The resume path does not use Redis. |
+| Database restore | Does **not** survive: pause state is only in PostgreSQL. Re-issue after a restore from a backup older than the pause. |
+
+### Ordered post-restart steps
+
+1. Confirm all three services are healthy (`/health` on 8000, 8001, 8002) and that Control Center came up first so AR/CH could bootstrap certificates.
+2. Confirm the schema is current: `python -m alembic current` must report head (`992bbc77bf6a` or later in the chain). An unapplied migration makes every pause and resume fail with a 500.
+3. Confirm the reaper is running: the Control Center startup log shows the reaper started with its interval and staleness bound. A silent reaper means stuck rows never terminalise.
+4. In `control-center.log`, confirm the reaper's startup line (`ConversationActivityReaper started (interval=…s, stale=…s)`). A sweep line (`Activity reaper resolved … stale activity row(s) and purged … checkpoint payload(s)`) appears only when a pass had work to do, so its absence on an idle system is normal; its absence while stale rows persist is the stall signal.
+5. Reconnect a client to a session that was mid-turn and verify the indicator matches reality: waiting → the confirmation is actionable; terminal → a reason-specific message and an enabled input; working → the turn is genuinely alive (heartbeat touch is refreshing it).
+6. If a pause is reported as waiting but the operator's answer does nothing, do not restart again — follow the recovery runbook: an answer outside the answerable window, a claim still held by a dead instance, or a purged payload each has a distinct resolution.
+7. Schedule the release so that no confirmation is pending in the AR-before-CH window of a full-stack restart. Turns paused in that window resolve terminally with a clear message (nothing is applied), never silently.
+
+### Readiness checks after this change
+
+- `alembic current` reports head; `conversation_activities`, `conversation_turn_resumes`, and `conversation_turn_checkpoints` exist.
+- The reaper startup line (`ConversationActivityReaper started`) is present since the last Control Center start, with no `Conversation activity reaper sweep failed` errors.
+- No sustained `Activity upsert failed`, `Activity hydration failed`, or resume-relay 401/502 lines in `communication-hub.log` (a 401 means the internal allowlist or signed tenant headers regressed).
+- `CONVERSATION_TURN_CHECKPOINT_MAX_BYTES` is the same value on Control Center and Communication Hub.
+- On a multi-instance AR fleet, scale to two instances and verify a pause created on one can be answered while the other serves the resume.

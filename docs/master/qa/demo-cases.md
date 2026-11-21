@@ -3,21 +3,8 @@
 <!-- Use with: /demo-app --cases docs/master/qa/demo-cases.md -->
 <!-- Updated automatically by /change:update-master — do not edit grep patterns manually -->
 
-> **strict-tenant-isolation (2026-10): contributed no E2E scenarios.** This was a backend-only change (signed internal tenant headers, DB tenant predicates, migrations) with no UI changes, so no Playwright specs or grep patterns were added. Isolation coverage lives in the backend integration suites — see `docs/master/qa/test-plans/multi-tenancy-test-plan.md`.
->
-> **sandboxed-scripting-and-llm-mocking (2026-10-25): no demo-cases.md merge — the change directory contains no `demo-cases.md`.** The change's coverage lives in backend suites (`backend/tests/` — sandbox engine, validator, LLM mock layer, optimized plan, dispatcher, command execution, allowlist guard) and one zero-LLM Playwright spec (`e2e/tests/agent-zero-llm-execution.spec.ts`, not a UI demo journey); see `docs/master/qa/test-plans/sandboxed-scripting-test-plan.md`. No existing patterns referenced the since-removed Scripts tab / optimize-log dialog, so no stale patterns were removed.
->
-> **software-3.0-agent-framework (2026-10-27): merged 7 demo scenarios** from the change's `demo-cases.md`. All 7 grep patterns verified against `e2e/tests/agent-type-scripts-tab.spec.ts` test titles (suite `Agent Type Scripts tab — agent-owned script governance`); no stale patterns removed. Caveat: the spec's Scripts-tab journey conflicts with the current `AgentTypeDetailsDialog` UI (Scripts tab removed in the sandboxed-scripting architecture) — see `test-plans/software-3.0-agent-framework-test-plan.md`.
->
-> **token-expiry-alerting (2026-10-27): merged 4 demo scenarios** from the change's `demo-cases.md`. All 4 grep patterns verified against `e2e/tests/token-expiry-*.spec.ts` test titles (dashboard remediation, execution preflight, topology badges); no stale patterns removed.
->
-> **system-one-decision-skills (2026-10-27): merged 4 demo scenarios** from the change's `demo-cases.md` (patterns 211–214 in the index). All 4 grep patterns verified against `e2e/tests/system-one-decision-tools.spec.ts` test titles; no stale patterns removed.
->
-> **control-center-chatbot (2026-11-02): merged 5 change scenarios + 5 curated frontend scenarios** (10 new grep patterns; rows 226–235). The 5 change patterns were verified against `e2e/tests/control-center-chatbot.spec.ts`, `control-center-chatbot.real-backend.spec.ts` and `control-center-chatbot-mcp.spec.ts`. The 5 additional patterns are Vitest suites covering shipped assistant UX that has no Playwright spec yet (entry click-through, View All Sessions ended toggle, New-Session semantics, expandable approval preview, model-unconfigured guidance). Re-verified **all 201 existing patterns** against the declared `source.tests` layers (188 E2E, 7 frontend, 5 mcp-demo-app): **1 stale pattern removed** — `Setup Wizard — full user journey > bundled Keycloak happy path completes and shows success`, whose spec (`e2e/tests/setup-wizard.spec.ts`) no longer exists in the repo (the wizard was replaced by the `setup/` CLI flow; only a stale `e2e/playwright_out.txt` run log still mentions it). The two Scenario Index rows that pointed at that deleted spec (former #15 and #179) were dropped as well.
->
-> **sandboxed-scripting-follow-ups (2026-11-03): merged 2 demo scenarios** from the change's `demo-cases.md` (rows 236–237). One new grep pattern was added — the MCP session re-auth status, verified against `e2e/tests/mcp-hub.spec.ts` (suite `MCP Session re-auth state`). The second scenario's pattern (`Agent Type Scripts tab — agent-owned script governance > operator retires a version from the Scripts tab`) already exists here from `software-3.0-agent-framework`, so it was reused rather than duplicated. Re-verified **all 210 existing patterns** against the declared `source.tests` layers (193 E2E, 12 frontend, 5 mcp-demo-app): **all matched — no stale patterns removed**. Caveat: the change's "nothing to retire" empty state is component-level only (`frontend/src/__tests__/AgentOptimizedPlanTab.test.tsx`) — there is no E2E spec for it — and the deferred semantic-error / `partial_failure` behaviour is deliberately not demoed because no test backs it.
->
-> **third-party-agent-integration (2026-11-04): merged 3 demo scenarios** from the change's `demo-cases.md` (rows 238–240). All 3 grep patterns verified against `e2e/tests/agent-clients.spec.ts` test titles (suite `Agent Clients - Mocked Management`). Re-verified all existing patterns — **no stale patterns removed**. The change also contributes a real-backend spec (`e2e/tests/agent-clients.real-backend.spec.ts`) not exposed as a demo journey.
+> **Maintenance log:** per-change pattern additions/removals and verification
+> notes live in [`docs/changes/archive/demo-cases-merge-log.md`](../../changes/archive/demo-cases-merge-log.md).
 
 ## Grep Patterns
 <!-- Matches Playwright test titles and Vitest describe > it names (same format) -->
@@ -25,13 +12,13 @@
 - Dashboard Operational Metrics > operational metric cards are visible
 - Dashboard Operational Metrics > time-sensitive metrics section is visible
 - Dashboard Operational Metrics > date range picker preset buttons are visible
-- Namespace Resource Types — Full CRUD Lifecycle > resource types endpoint returns 17 namespaced entries (real backend)
+- Namespace Resource Types — Full CRUD Lifecycle > resource types endpoint returns the full namespaced manifest (real backend)
 - Namespace Migration Visibility > dashboard remains accessible without specific permission
-- AddStatementDialog > Add Statement dialog shows Resource IDs section
-- Edit Policy Statement > Edit button opens dialog pre-filled with existing policy data
+- Add Policy Statement > Resource IDs section appears once a resource type is set
+- Edit Policy Statement > Edit button opens the card pre-filled with existing policy data
 - Namespace Validation Errors > POST policy with unknown namespaced type 'agent::nonexistent' is rejected
 - RolePolicyDialog E2E > roles page renders with mocked namespaced data
-- RolePolicyDialog E2E > batch save with wildcard module value is accepted
+- RolePolicyDialog E2E > wildcard module values are accepted by the client validation and saved
 - Login Page States > shows both when both enabled
 - OIDC Callback Flow > callback with valid code exchanges token and lands on /dashboard
 - System Config Page > system config page renders without crash
@@ -40,10 +27,10 @@
 - Agent Management > shows create agent type button and opens dialog on click
 - Chat > chat page shows agent type selector or session list
 - Conversation History > clicking a conversation expand button shows its turns
-- Conversation Delegation Visibility > shows delegating label and waiting indicator with fold-expand-collapse snippet behavior
+- Conversation Delegation Visibility > shows delegating label and waiting indicator with inline delegation snippet log
 - Conversation Delegation Visibility > shows timeout_or_failed terminal status in chat
 - Gateway Configuration > gateway page shows agent type names
-- MCP Hub > MCP Hub shows server names from API
+- MCP Hub > MCP Hub shows server slugs from API
 - MCP Hub > MCP Hub has a register/add server button
 - MCP Hub — System Entry > MCP server table shows one System entry with Built-in chip
 - MCP Hub — System Entry > server with zero sessions shows sync button disabled with tooltip
@@ -90,12 +77,12 @@
 - AccessDeniedPage > renders at /access-denied with lock icon and action buttons
 - Group-Role Assignment > ManageGroupRoles dialog opens and shows assigned roles
 - Group-Role Assignment > Admin can assign a role to a group and dialog reflects the change
-- AddStatementDialog > Add Statement dialog opens with resource type dropdown
-- JSONViewModal > View JSON button opens modal with formatted JSON
+- Add Policy Statement > Add Policy opens an editable card with resource type, effect and actions
+- Role Policy JSON View > JSON toggle shows the policy document in a monospace editor
 - CloneRoleDialog > Clone dialog pre-fills source role name with Copy prefix
 - Agent Role Management > renders agent roles page with role list
 - Agent Type Configuration > renders agent type with input_type chip
-- Agent Session Launch > opens launch dialog when launch button is clicked
+- Agent Session Launch > opens launch dialog when the Run Agent action is clicked
 - Agent Session Status > renders completed session with result
 - Agent Realm Bootstrap — Mocked > agent identities page loads when realm is initialized (mocked)
 - Agent Realm Bootstrap — Mocked > realm name column displays configured agent realm
@@ -104,22 +91,14 @@
 - Model Config CRUD > renders model configs page with config list
 - Model Config CRUD > renders provider type chip for openai config
 - Model Config CRUD > renders provider type chip for litellm_proxy config
-- Real Backend Integration - Model Configurations > GET /agents/model-configs returns all 12 provider types from the live catalogue
-- Real Backend Integration - Model Configurations > POST /agents/model-configs accepts a new-provider key (gemini)
-- Real Backend Integration - Model Configurations > Model Configurations page renders provider chips for a new-provider record
 - Agent Instance Dashboard > shows status filter dropdown
 - Conversation History Display > renders chat interface for conversational session
 - Real Backend Integration — Agent Runtime Migration > GET /agents/model-configs returns valid response (validates model_configs table with enabled_models)
-- Agent Role Identity Constraints > create role with identity type constraint — allowed_identity_types persisted
-- Agent Role Identity Constraints > assigning role with incompatible identity type shows validation error
+- Agent Role Identity Constraints > create role dialog posts name and bindings (allowed_identity_types is not exposed in the UI)
+- Agent Role Identity Constraints > assigning role with incompatible identity type shows validation warning
 - Agent Role Identity Constraints > assigning role with compatible identity type succeeds
-- Identity-First Role Selection > selecting identity filters role dropdown to compatible roles only
-- Identity-First Role Selection > changing identity selection clears previously selected role
-- Agent Plan Mode — Mocked > Create agent type with plan: modal opens with steps and diagram after save
-- Agent Plan Mode — Mocked > Dismiss plan modal: modal closes and agent type row appears in table
-- Agent Plan Mode — Mocked > Update agent type: PlanPreviewModal opens with updated plan on save
-- Agent Plan Mode — Mocked > Failed plan: modal opens with error message when generation_status is failed
-- Real Backend Integration — Agent Plan Mode > POST /api/v1/agents/types returns plan field in response
+- Identity-First Role Selection > role dropdown lists all roles regardless of the selected identity type
+- Identity-First Role Selection > changing identity selection preserves the previously selected role
 - Agent Log Viewer > Summary panel displays identity and role from system instruction
 - Agent Log Viewer > Agent Working Steps section is collapsed by default
 - Agent Log Viewer > Expand working steps section reveals step rows
@@ -131,14 +110,14 @@
 - Agents nav group > collapses and expands nav group on header click
 - Agent Executions page > selecting agent type filter refetches sessions
 - Agent Type Details Dialog > dialog Details tab shows agent metadata
-- Agent Type Details Dialog > Plan Preview tab shows plan steps when plan is populated
-- Nav menu order > Agent Roles and Agent Identities appear above Agent Types in the nav
+- Agent Type Details Dialog > Implementation Plan tab shows plan steps when plan is populated
+- Nav menu order > Agent Roles and Agent Identities appear above Agent Management in the nav
 - Agent Types table columns > Role column shows resolved role name for agent type
 - Agent Types table columns > Identity column shows resolved identity name for agent type
 - Agent Type Details Dialog > clicking identity name in Details tab opens identity view dialog
 - Agent Type Details Dialog > identity view dialog has Edit button that navigates to identities page
 - Agent Type Details Dialog > clicking role name in Details tab opens role view dialog
-- Agent Type Details Dialog > role view dialog has Edit button that opens role edit form
+- Agent Type Details Dialog > role view dialog is read-only; role edit form opens from the Agent Roles page
 - Passthrough Sessions — Mocked > passthrough session chip displayed in session table
 - Passthrough Sessions — Mocked > creating passthrough session excludes credentials from payload
 - Passthrough Sessions — Mocked > passthrough session auth_type value is correct in API response
@@ -215,13 +194,13 @@
 - System One Decision Tools (mocked) > round-2 form journey: data types → mapping properties → placeholders → AI generate → save
 - System One Decision Tools (mocked) > duplicate tool name shows a structured error and keeps the dialog open
 - System One Decision Tools (mocked) > decision results API contract: persisted result keyed to the tool
-- Agent Type Scripts tab — agent-owned script governance > Scripts tab lists the agent type script with description, lifecycle and health
-- Agent Type Scripts tab — agent-owned script governance > version lineage with repaired_from and verification evidence are visible
-- Agent Type Scripts tab — agent-owned script governance > Repairs list shows repair attempts recorded after fallback (E10)
-- Agent Type Scripts tab — agent-owned script governance > operator promotes a version from the Scripts tab (asserted payload)
-- Agent Type Scripts tab — agent-owned script governance > operator retires a version from the Scripts tab
-- Agent Type Scripts tab — agent-owned script governance > plan review shows a script link on the script-backed step and opens the Scripts tab (E4a)
-- Agent Type Scripts tab — agent-owned script governance > permission-gated promote surfaces via the dialog error pattern without crashing
+- Agent Type script governance — plan surfaces (mocked) > no Scripts tab — script visibility lives on the Implementation Plan and Optimized Plan tabs
+- Agent Type script governance — plan surfaces (mocked) > version lineage, verification, fallback and repair lists are retired — no registry API is called
+- Agent Type script governance — plan surfaces (mocked) > Implementation Plan links a script-backed step to the Optimized Plan tab (E4a)
+- Agent Type script governance — plan surfaces (mocked) > requires-fix alert surfaces in the Optimized Plan tab (auto-feedback dump retired)
+- Agent Type script governance — plan surfaces (mocked) > optimized plan lifecycle: a ready plan retires into the retired state
+- Agent Type script governance — plan surfaces (mocked) > script viewer shows the model-authored source and step description
+- Agent Type script governance — plan surfaces (mocked) > permission-gated retire surfaces via the dialog error pattern without crashing
 - Control Center Assistant (mocked) > clicking the assistant FAB opens the conversational surface
 - Control Center Assistant (mocked) > Agent Types list marks system agent types and disables edit/delete
 - Real Backend Integration - Control Center Assistant > OAuth token establishes a session and lists management tools
@@ -236,6 +215,29 @@
 - Agent Clients - Mocked Management > lists clients with agent type and credential type
 - Agent Clients - Mocked Management > shows the publishable soft warning in the create dialog
 - Agent Clients - Mocked Management > creates a client and shows the credential once
+- Control Center Assistant — agent-type update journey (mocked WS/API) > preview is presented, approval is sent, and the list reflects the update
+- Optimize gate — blocks then enables the separate Optimize action > a completed run satisfies the gate and Optimize becomes enabled without a reload
+- Optimized plan — requires-fix alert and re-optimization journey > optimize → ready plan → fallback marks requires_fix → re-optimize from the alert refreshes the tab
+- Agent Plan Mode — explicit-only generation (mocked) > explicit Generate plan authors the plan and it renders without a page reload
+- System Config — plan & workflow authoring model > unset authoring model: reminder is visible, and saving a model clears it
+- Agent Plan Mode — explicit-only generation (mocked) > conversational agent: no plan-generation affordances, only the explanation
+- Conversational optimizer — conversation journey (mocked) > typed agent: entry → scoped chat → single status indicator → plan refresh without a reload
+- Conversational optimizer — conversation journey (mocked) > conversational agent: same entry, informational empty state, no work started
+- Conversational optimizer — conversation journey (mocked) > in-chat ask/decide: the question pauses the turn and is answered once
+- Conversational optimizer — conversation journey (mocked) > an out-of-scope request is declined in the conversation with zero writes
+- Conversational optimizer — conversation journey (mocked) > a business conversation on the same agent type keeps the ordinary chat
+- Live-test approval — approve runs the approved script once > review script → approve → running → executed run record → plan ready
+- Live-test approval — approve runs the approved script once > deny runs nothing, keeps replay-only and does not retry
+- Live-test approval — approve runs the approved script once > expiry is a distinct terminal state — nothing ran and no retry
+- System Config — optimizer model (workspace-scoped) > a stale saved value stays visible, blocks Save, and can be re-selected
+- Optimizer model missing — entry annotated, chat blocked, System Config path > the Optimized Plan entry explains the reason and the chat blocks on the model
+- Conversational Activity State (Mocked) > chat surface renders status bubbles for the full activity lifecycle
+- Conversational Activity State (Mocked) > reload hydration restores the persisted waiting status
+- Resumable Paused Turn Recovery (Mocked) > pending → approve → resumed and continuing → resolved (input re-enabled)
+- Resumable Paused Turn Recovery (Mocked) > pending → deny → resolved without a terminal card
+- Resumable Paused Turn Recovery (Mocked) > no-longer-resumable turn renders one reason-specific terminal card
+- Resumable Paused Turn Recovery (Mocked) > a stale approval on a terminal turn is never sent
+- Resumable Paused Turn Recovery (Mocked) > reload hydration restores the waiting state and the terminal message
 
 ## Scenario Index
 | # | Feature | What it Shows | Change | Spec File |
@@ -277,7 +279,7 @@
 | 36 | Group-Role Assign | Admin opens Manage Roles for a group, selects a role, confirms — role appears in dialog list and groups table updates automatically without page reload | implement-global-access-control | access-control.spec.ts |
 | 37 | Group-Role Remove | Admin removes a role from a group — role absent from dialog; groups table role count updates automatically; re-assigning same role succeeds | implement-global-access-control | access-control.spec.ts |
 | 38 | Add Statement Dialog | Admin expands a role, opens the Add Statement dialog, and sees resource type, effect, and actions dropdowns populated from the resource-type manifest API | improve-role-policy-management | role-policy-management.spec.ts |
-| 39 | JSON View | Admin clicks the View JSON icon on a role row and the JSONViewModal opens showing all policy statements as formatted read-only JSON with a Copy button | improve-role-policy-management | role-policy-management.spec.ts |
+| 39 | JSON View | Admin toggles the JSON view in the role policy dialog and sees the policy document as formatted read-only JSON in a monospace editor | improve-role-policy-management | role-policy-management.spec.ts |
 | 40 | Role Clone | Admin clicks Clone on a role row — the Clone Role dialog opens pre-filled with the source role's name (including copy indicator) ready for editing before submission | improve-role-policy-management | role-policy-management.spec.ts |
 | 41 | Agent Role Management | User views list of agent roles with SOP count and Skill count chips | implement-agent-runtime-with-gateway | agent-runtime.spec.ts |
 | 42 | Agent Identity — List | User views agent identities with realm_name and status chips (active/suspended/deprovisioned) | implement-agent-runtime-with-gateway | agent-runtime.spec.ts |
@@ -308,11 +310,6 @@
 | 47 | SOP Steps — `skill_invocation` Type | SOP steps use the `skill_invocation` enum (not legacy `skill`) and expose `target_agent_type_id` and `step_config` fields | enhance-mcp-hub-skills-sops | skills-sops.spec.ts |
 | 48 | SOPs — `instructions` Field | SOPs API schema exposes the `instructions` field for workflow-level agent guidance; field is present even when `null` | enhance-mcp-hub-skills-sops | skills-sops.spec.ts |
 | 49 | SOPs — Create with `instructions` | SOP creation POST payload accepts an `instructions` field for workflow guidance | enhance-mcp-hub-skills-sops | skills-sops.spec.ts |
-| 61 | Agent Plan — Create + Modal | User creates an agent type, saves, and the PlanPreviewModal opens automatically showing all three generated plan steps | agent-plan-mode | agent-plan-mode.spec.ts |
-| 62 | Agent Plan — Table Refresh After Dismiss | User closes the plan modal and the agent type row immediately appears in the management table without a page reload | agent-plan-mode | agent-plan-mode.spec.ts |
-| 63 | Agent Plan — Edit + Regeneration | User edits an existing agent type, saves, and the PlanPreviewModal opens with an updated plan reflecting the changes | agent-plan-mode | agent-plan-mode.spec.ts |
-| 64 | Agent Plan — Failed Generation State | When the LLM is unavailable the plan modal still opens but shows the generation error message instead of plan steps | agent-plan-mode | agent-plan-mode.spec.ts |
-| 65 | Agent Plan — Real Backend + CASCADE | The real backend returns a `plan` field on POST and fully cascades the plan record when the agent type is deleted | agent-plan-mode | agent-plan-mode.spec.ts |
 | 66 | Agent Log Viewer — Summary Panel | Session page shows agent identity, role, and model parsed from the system instruction | user-friendly-agent-logs | agent-logs.spec.ts |
 | 67 | Agent Log Viewer — Working Steps | "Show N Working Steps" expands to reveal each LLM/tool call as a readable row | user-friendly-agent-logs | agent-logs.spec.ts |
 | 68 | Agent Log Viewer — Step Detail | Expanding a tool call step reveals its structured input/output detail block | user-friendly-agent-logs | agent-logs.spec.ts |
@@ -359,9 +356,6 @@
 | 109 | Working Steps Collapsed-by-Default Readability | Agent log viewer starts with Working Steps collapsed so users can expand details on demand | agent-delegation-visibility | agent-logs.spec.ts |
 | 114 | Model guardrail hierarchy (vendor → model → guardrail) | Operator opens the runtime control panel and sees a vendor row with its enabled models and per-period guardrails, replacing the previous flat list | harden-agent-guardrails-and-runtime-control-dashboard | runtime-control-dashboard.spec.ts |
 | 115 | Vendor disable cascade | Operator disables a vendor and immediately sees the cascade-source badge on every model underneath; pre-execution availability check returns `vendor_disabled` for those models | harden-agent-guardrails-and-runtime-control-dashboard | runtime-control-dashboard.spec.ts |
-| 116 | Model Configurations — Expanded 12-Provider Catalogue | Admin opens the Model Configurations page to see provider chips for all 12 supported LLM vendors (including Gemini, Mistral, Cohere, Groq, Together, Fireworks, Perplexity, DeepSeek) each with a unique colour | expand-model-config-providers | agent-runtime.spec.ts |
-| 117 | Model Configurations — Real Backend Confirms Migration | Live backend (no `page.route()` mocks) validates that the Postgres `model_provider_enum` migration was applied — the list endpoint returns configs for all 12 provider types | expand-model-config-providers | agent-runtime.spec.ts |
-| 118 | Model Configurations — Create a New Provider (Gemini) | Admin creates a `ModelConfig` for the Gemini provider through the real backend; the API key is AES-256 encrypted and never returned; the new row appears on the list page without page reload | expand-model-config-providers | agent-runtime.spec.ts |
 | 119 | Agent Type SOP/Skill Bindings — Browse | Binding list section renders below the role picker and shows all SOP/skill entries in order with type badges and order numbers | agent-type-multi-sop-binding | agent-type-bindings-mocked.spec.ts |
 | 120 | Agent Type SOP/Skill Bindings — Add | User opens the add binding dialog, selects SOP or Skill type, picks an item from the role-filtered dropdown, and saves — binding appears in the list | agent-type-multi-sop-binding | agent-type-bindings-mocked.spec.ts |
 | 121 | Agent Type SOP/Skill Bindings — Remove | User clicks the remove control on a binding row; the entry disappears from the list before save | agent-type-multi-sop-binding | agent-type-bindings-mocked.spec.ts |
@@ -414,7 +408,7 @@
 | 167 | Dashboard Operational Metrics | Section heading and all 7 snapshot stat cards render with mock data | implement-dashboard-metrics | dashboard.spec.ts |
 | 168 | Dashboard Time-Sensitive Metrics | Date-range-filtered metrics section with 3 time-sensitive cards | implement-dashboard-metrics | dashboard.spec.ts |
 | 169 | Dashboard Date Range Presets | Last Hour, Last 24h, and Last 7d preset shortcut buttons render correctly | implement-dashboard-metrics | dashboard.spec.ts |
-| 170 | Namespace Structure | Backend returns exactly 17 resource types with `::` delimiter across 3 modules, no legacy flat values remain | namespace-resource-types | namespace-resource-types.spec.ts |
+| 170 | Namespace Structure | Backend returns the full namespaced resource-type manifest (29 entries today, 17 at introduction) with `::` delimiters across the module groups; no legacy flat values remain | namespace-resource-types | namespace-resource-types.spec.ts |
 | 171 | Namespace Migration Visibility | Dashboard page loads without 403 — proves migration didn't break core pages or add unintended permission gates | namespace-resource-types | namespace-migration-visibility.spec.ts |
 | 172 | Add Policy — Resource IDs | Administrator navigates to Roles, expands a role, clicks "Add Statement", and sees the full dialog with resource type dropdown and resource ID management section | namespace-resource-types | role-policy-management.spec.ts |
 | 173 | Edit Policy — Pre-fill | Administrator expands a role, clicks Edit on an existing policy, and sees the dialog pre-filled with current data (effect, module, actions, resources) | namespace-resource-types | role-policy-management.spec.ts |
@@ -462,13 +456,13 @@
 | 212 | Decision Tool Authoring (Data Types + AI) | Guided form: select input/output Agent Data Types (with View dialogs) → state mapping properties auto-populate → auto-detect placeholders → Generate-with-AI fills questions → save as `decision____<name>` | system-one-decision-skills | system-one-decision-tools.spec.ts |
 | 213 | Tenant-Contained Naming | Defining a second tool with the same name in one tenant shows a structured conflict error and keeps the dialog open (names unique per tenant, reusable across tenants) | system-one-decision-skills | system-one-decision-tools.spec.ts |
 | 214 | Decision Results | Execution result is keyed to the decision tool with typed answers, probabilities, confidence, and gate outcome | system-one-decision-skills | system-one-decision-tools.spec.ts |
-| 215 | Scripts tab browsing | Operator opens the Agent Type detail dialog's Scripts tab and sees the agent-owned script with its description, lifecycle chip and health chip | software-3.0-agent-framework | agent-type-scripts-tab.spec.ts |
-| 216 | Version lineage & verification evidence | Version list with `repaired_from` lineage badges; Verifications sub-tab shows the promoted verdict; Fallbacks sub-tab explains the tool-schema-mismatch trigger | software-3.0-agent-framework | agent-type-scripts-tab.spec.ts |
-| 217 | Repairs history (self-improvement) | Repairs sub-tab shows repair attempts after fallback: defect diagnosis, retry outcome and the applied diff | software-3.0-agent-framework | agent-type-scripts-tab.spec.ts |
-| 218 | Lifecycle promotion | Operator promotes a version from the Scripts tab; the promote request sends `target_status: verified` | software-3.0-agent-framework | agent-type-scripts-tab.spec.ts |
-| 219 | Lifecycle retire | Operator retires a version from the Scripts tab; the version leaves active resolution | software-3.0-agent-framework | agent-type-scripts-tab.spec.ts |
-| 220 | Plan-step script link navigation | Plan review shows a Script link on the script-backed step only; clicking it lands in the Scripts tab | software-3.0-agent-framework | agent-type-scripts-tab.spec.ts |
-| 221 | Permission gating | A permission-denied promote surfaces the Permission Denied alert inside the dialog instead of crashing | software-3.0-agent-framework | agent-type-scripts-tab.spec.ts |
+| 215 | Plan-surface script visibility | Agent-owned scripts are reachable from the Agent Type detail dialog's plan surface — there is no Scripts tab; the Optimized Plan tab shows its absent/ready state | software-3.0-agent-framework | agent-type-scripts-tab.spec.ts |
+| 216 | Registry UI retired | Version lineage, verifications, fallbacks and repairs lists are retired from the UI; no registry API is called by the plan surfaces | software-3.0-agent-framework | agent-type-scripts-tab.spec.ts |
+| 217 | Requires-fix alert | Requires-fix alert surfaces in the Optimized Plan tab with the re-optimize action (the auto-feedback dump is retired) | software-3.0-agent-framework | agent-type-scripts-tab.spec.ts |
+| 218 | Plan-step script link | The Implementation Plan links the script-backed step to the Optimized Plan tab | software-3.0-agent-framework | agent-type-scripts-tab.spec.ts |
+| 219 | Optimized-plan retire | A ready optimized plan retires into the retired state and the retire action disables | software-3.0-agent-framework | agent-type-scripts-tab.spec.ts |
+| 220 | Script viewer | The script viewer shows the model-authored source and the step description for the scripted step | software-3.0-agent-framework | agent-type-scripts-tab.spec.ts |
+| 221 | Permission gating | A permission-denied retire surfaces the dialog error pattern without crashing | software-3.0-agent-framework | agent-type-scripts-tab.spec.ts |
 | 222 | Token expiry — dashboard alerts & remediation | Warnings disappear after remediation (refetch returns healthy) | token-expiry-alerting | e2e/tests/token-expiry-dashboard-remediation.spec.ts |
 | 223 | Token expiry — execution preflight | Expired token (including a subagent) BLOCKS execution with a named identity | token-expiry-alerting | e2e/tests/token-expiry-execution-preflight.spec.ts |
 | 224 | Token expiry — execution preflight | Expiring token (≤7 days) WARNS but execution PROCEEDS | token-expiry-alerting | e2e/tests/token-expiry-execution-preflight.spec.ts |
@@ -484,7 +478,30 @@
 | 234 | Expandable approval preview | The confirmation card expands into a full-width field/value preview table, and approve/deny from the expanded view run the same write path | control-center-chatbot | frontend/src/__tests__/InlineInterventionDialog.expand.test.tsx |
 | 235 | Model-unconfigured guidance | With no assistant model selected the chat shows a Configure-model banner and disables input; a configured model removes the banner | control-center-chatbot | frontend/src/__tests__/AssistantModelConfigGuidance.test.tsx |
 | 236 | MCP session re-auth state | A session whose OAuth refresh failed unrecoverably shows a "Needs re-authentication" status with the stored reason instead of silently deactivating | sandboxed-scripting-follow-ups | e2e/tests/mcp-hub.spec.ts |
-| 237 | Script retire (Optimized Plan lifecycle) | Operator retires a script version from the Scripts tab — the retire flow that now has a clear "nothing to retire" empty state | sandboxed-scripting-follow-ups | e2e/tests/agent-type-scripts-tab.spec.ts |
+| 237 | Script retire (Optimized Plan lifecycle) | Operator retires the ready optimized plan; it moves to the retired state and the retire action renders the "nothing to retire" state | sandboxed-scripting-follow-ups | e2e/tests/agent-type-scripts-tab.spec.ts |
 | 238 | Agent Clients — Client List | A tenant's clients listed with their bound agent type and credential type (secret vs publishable) | third-party-agent-integration | e2e/tests/agent-clients.spec.ts |
 | 239 | Agent Clients — Publishable Soft Warning | Creating a publishable client surfaces the "exposes this agent type publicly" warning in the create dialog | third-party-agent-integration | e2e/tests/agent-clients.spec.ts |
 | 240 | Agent Clients — Create + Credential Once | Creating a client and displaying the clear-text credential exactly once | third-party-agent-integration | e2e/tests/agent-clients.spec.ts |
+| 241 | Assistant agent-type update (confirm-before-write) | Administrator sees the canonical old→new preview in the conversation, approves it from the intervention inbox, and the Agent Types list immediately reflects the updated role/input/output configuration | cc-assistant-management-tool-coverage | e2e/tests/control-center-chatbot-agent-type-update.spec.ts |
+| 242 | Separate, gated Optimize action | Run and Optimize are distinct actions; Optimize unlocks on its own the moment a normal run completes, then launches a dedicated optimization run | separate-optimization-from-execution | e2e/tests/agent-optimize-gate.spec.ts |
+| 243 | Self-healing optimized plan (requires-fix → re-optimize) | A later failed execution flags the plan "requires a fix" with auto-recorded feedback, and Re-optimize from the alert refreshes the tab to the fixed plan without a reload | separate-optimization-from-execution | e2e/tests/agent-optimize-requires-fix.spec.ts |
+| 244 | Explicit-only implementation-plan generation | Opening Agent Preview authors nothing; Generate plan sends exactly one authoring request and renders the plan in place | separate-optimization-from-execution | e2e/tests/agent-plan-mode.spec.ts |
+| 245 | System Config — plan & workflow authoring model | An unset authoring model shows a reminder that blocks generation, and one save of an enabled model clears it | separate-optimization-from-execution | e2e/tests/agent-plan-generation.spec.ts |
+| 246 | Conversational-agent exclusion | A conversational agent exposes no Optimize action and no plan-generation affordance — only the explanation | separate-optimization-from-execution | e2e/tests/agent-plan-mode.spec.ts |
+| 247 | Conversational optimization — typed agent journey | Talk-to-optimizer entry opens a scoped chat with one processing indicator; the finished turn refreshes the plan in place without a reload | optimizer-conversational-agent | e2e/tests/agent-optimizer-conversation.spec.ts |
+| 248 | Conversational agent — informational empty state | The same entry on a conversational agent explains a missing plan and starts no session, plan generation or live request | optimizer-conversational-agent | e2e/tests/agent-optimizer-conversation.spec.ts |
+| 249 | In-chat ask/decide | The optimizer asks a choice question inline, the composer blocks, and exactly one answer frame resolves the turn | optimizer-conversational-agent | e2e/tests/agent-optimizer-conversation.spec.ts |
+| 250 | Scope containment — out-of-scope refusal | A prompt-injected request to read another agent's scripts and delete its plan is declined in-channel with zero writes | optimizer-conversational-agent | e2e/tests/agent-optimizer-conversation.spec.ts |
+| 251 | Mode containment — business conversation unaffected | A normal business chat on the same agent type keeps the ordinary composer and creates no optimization session | optimizer-conversational-agent | e2e/tests/agent-optimizer-conversation.spec.ts |
+| 252 | Live-test approval — approve runs the saved script once | Review card names the script + tool-call preview; approve moves pending → running → executed run record and the refinement lands a ready plan | optimizer-conversational-agent | e2e/tests/agent-optimizer-live-test-approval.spec.ts |
+| 253 | Live-test approval — deny | Deny runs nothing, collapses to a read-only denied summary, keeps replay-only and does not retry | optimizer-conversational-agent | e2e/tests/agent-optimizer-live-test-approval.spec.ts |
+| 254 | Live-test approval — expiry | An unanswered request closes as a distinct `expired` terminal state; nothing ran and no retry is scheduled | optimizer-conversational-agent | e2e/tests/agent-optimizer-live-test-approval.spec.ts |
+| 255 | Optimizer model — stale saved value | System Config keeps a no-longer-available saved model visible, blocks Save, and one PUT persists the re-selection | optimizer-conversational-agent | e2e/tests/agent-optimizer-model-config.spec.ts |
+| 256 | Optimizer model unavailable — fail-closed entry | The Optimized Plan entry explains the shared reason, the chat blocks on the model, and the shortcut lands on System Config | optimizer-conversational-agent | e2e/tests/agent-optimizer-model-config.spec.ts |
+| 257 | Live activity status | The processing bubble tracks using-tool → waiting-for-input → finished with no blank gap and no stuck spinner | persistent-agent-activity-state | e2e/tests/conversation-activity-state.spec.ts |
+| 258 | Resume / reconnect hydration of activity | Reloading mid-turn restores the persisted "waiting for your input" status instead of an empty window | persistent-agent-activity-state | e2e/tests/conversation-activity-state.spec.ts |
+| 259 | Paused turn — approve after a pause | Approve resumes the durable turn, keeps working through a real tool call, and resolves with input re-enabled and no misleading timeout text | resumable-agent-turn-persistence | e2e/tests/conversation-resume-recovery.spec.ts |
+| 260 | Paused turn — deny after a pause | The rejection is sent once, the turn resolves cleanly, and no terminal card is shown | resumable-agent-turn-persistence | e2e/tests/conversation-resume-recovery.spec.ts |
+| 261 | Paused turn — clear terminal outcome | A no-longer-resumable turn renders one reason-specific terminal card with what happened, what was not written, a next step and dismiss | resumable-agent-turn-persistence | e2e/tests/conversation-resume-recovery.spec.ts |
+| 262 | Paused turn — exactly-once guard on stale approval | A confirmation that expires while the dialog is open is replaced by the "pause point could not be restored" card; a late click sends nothing | resumable-agent-turn-persistence | e2e/tests/conversation-resume-recovery.spec.ts |
+| 263 | Paused turn — reload hydration | After a full reload the chat rehydrates the waiting state and preserves the terminal reason so reconnect matches the live push | resumable-agent-turn-persistence | e2e/tests/conversation-resume-recovery.spec.ts |

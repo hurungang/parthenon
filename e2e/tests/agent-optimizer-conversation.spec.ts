@@ -116,10 +116,12 @@ test.describe('Conversational optimizer — conversation journey (mocked)', () =
     const talk = details.getByTestId('talk-to-optimizer')
     await expect(talk).toBeEnabled()
     await expect(talk).toHaveText(COPY.talkToOptimizer)
-    await expect(details.getByTestId('talk-to-optimizer-identity')).toHaveText(
-      COPY.identityParity,
-    )
-    await expect(entry).toContainText(COPY.scopedTo(TYPED_AGENT_NAME))
+    // Identity parity is carried by the chat's mode chip tooltip (the old
+    // standalone identity block was removed from the entry).
+    await expect(details.getByTestId('talk-to-optimizer-identity')).toHaveCount(0)
+    // The entry names the agent in its help/scope copy only inside the chat;
+    // here it discloses the optimizer model it would run on.
+    await expect(entry).not.toContainText(COPY.scopedTo(TYPED_AGENT_NAME))
     // The workspace optimizer model it would run on is disclosed.
     await expect(entry).toContainText('gpt-4o')
     // The existing one-shot plan actions are retained beside the entry.
@@ -281,11 +283,12 @@ test.describe('Conversational optimizer — conversation journey (mocked)', () =
     await openOptimizedPlanTab(details)
 
     // The previous conversational restriction is gone: the same action exists,
-    // annotated with the same scope promise.
+    // and the entry discloses the model it inherits (the per-entry "Scoped to
+    // … only" line was removed — scope is stated inside the chat).
     const talk = details.getByTestId('talk-to-optimizer')
     await expect(talk).toBeVisible()
     await expect(talk).toBeEnabled()
-    await expect(details.getByTestId('talk-to-optimizer-entry')).toContainText(
+    await expect(details.getByTestId('talk-to-optimizer-entry')).not.toContainText(
       COPY.scopedTo(CONV_AGENT_NAME),
     )
     // Unset model inherits the plan-authoring model, and the entry says so.

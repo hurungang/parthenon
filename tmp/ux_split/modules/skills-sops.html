@@ -1,0 +1,646 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Agents — Skills & SOPs</title>
+<link rel="stylesheet" href="../shared/styles.css">
+</head>
+<body data-page="skills-sops" data-default-view="skills">
+
+<div class="app-shell">
+
+<!-- ═══════════════════════════════ SIDEBAR ═══════════════════════════════ -->
+<nav class="sidebar" aria-label="Primary navigation">
+  <div class="sidebar-logo">
+    <h1>⚡ Parthenon</h1>
+    <small>Enterprise AI Harness</small>
+  </div>
+
+  <!-- Dashboard -->
+  <a class="nav-item" data-view="dashboard" href="../index.html#view-dashboard"><span class="nav-icon">🏠</span>Dashboard</a>
+
+  <!-- Project Showcase -->
+  <a class="nav-item" data-view="project-showcase" href="../index.html#view-project-showcase"><span class="nav-icon">🌐</span>Project Showcase</a>
+
+  <div class="nav-parent-group" id="nav-agents" data-group="agents">
+    <a class="nav-parent-group-label" href="agents.html#view-agent-roles" role="button" aria-expanded="true">
+      <span>🤖 Agents</span>
+      <span class="toggle-icon" aria-hidden="true">▼</span>
+    </a>
+    <div class="nav-children">
+      <a class="nav-item sub-item" data-view="agent-roles" data-group="agents" href="agents.html#view-agent-roles"><span class="nav-icon">👤</span>Agent Roles</a>
+      <a class="nav-item sub-item" data-view="agent-identities" data-group="agents" href="agents.html#view-agent-identities"><span class="nav-icon">🆔</span>Agent Identities</a>
+      <a class="nav-item sub-item" data-view="agents" data-group="agents" href="agents.html#view-agents"><span class="nav-icon">🤖</span>Agent Types</a>
+      <a class="nav-item sub-item" data-view="agent-management-panel" data-group="agents" href="agent-panel.html#view-agent-management-panel"><span class="nav-icon">🎛️</span>Agent Management Panel</a>
+      <a class="nav-item sub-item" data-view="agent-executions" data-group="agents" href="executions.html#view-agent-executions"><span class="nav-icon">▶️</span>Agent Executions</a>
+      <a class="nav-item sub-item" data-view="runtime-monitor" data-group="agents" href="executions.html#view-runtime-monitor"><span class="nav-icon">🕸️</span>Agent Runtime Monitor</a>
+      <a class="nav-item sub-item" data-view="agent-trails" data-group="agents" href="executions.html#view-agent-trails"><span class="nav-icon">📋</span>Agent Trails</a>
+      <a class="nav-item sub-item" data-view="skills" data-group="agents" href="#view-skills"><span class="nav-icon">🔧</span>Skills</a>
+      <a class="nav-item sub-item" data-view="sops" data-group="agents" href="#view-sops"><span class="nav-icon">📋</span>SOPs</a>
+      <a class="nav-item sub-item" data-view="schedules" data-group="agents" href="schedules.html#view-schedules"><span class="nav-icon">📅</span>Schedules</a>
+      <a class="nav-item sub-item" data-view="chat" data-group="agents" href="chat.html#view-chat"><span class="nav-icon">💬</span>Chat Sessions</a>
+      <a class="nav-item sub-item" data-view="conversational-intervention" data-group="agents" href="chat.html#view-conversational-intervention"><span class="nav-icon">💬</span>Conversational Intervention</a>
+      <a class="nav-item sub-item" data-view="intervene-requests" data-group="agents" href="chat.html#view-intervene-requests"><span class="nav-icon">🛑</span>Intervene Requests</a>
+      <a class="nav-item sub-item" data-view="data-types" data-group="agents" href="data-results.html#view-data-types"><span class="nav-icon">📐</span>Data Types</a>
+      <a class="nav-item sub-item" data-view="agent-outputs" data-group="agents" href="data-results.html#view-agent-outputs"><span class="nav-icon">📤</span>Agent Outputs</a>
+      <a class="nav-item sub-item" data-view="agent-logs" data-group="agents" href="executions.html#view-agent-logs"><span class="nav-icon">🧾</span>Agent Logs</a>
+    </div>
+  </div>
+
+  <div class="nav-parent-group" id="nav-results" data-group="results">
+    <a class="nav-parent-group-label" href="data-results.html#view-results" role="button" aria-expanded="true">
+      <span>📊 Results</span>
+      <span class="toggle-icon" aria-hidden="true">▼</span>
+    </a>
+    <div class="nav-children">
+      <a class="nav-item sub-item" data-view="results" data-group="results" href="data-results.html#view-results"><span class="nav-icon">📊</span>Result Repository</a>
+    </div>
+  </div>
+
+  <div class="nav-parent-group locked-open" id="nav-integrations" data-group="integrations">
+    <a class="nav-parent-group-label" href="integrations.html#view-mcp-hub" role="button" aria-expanded="true">
+      <span>🌐 Integrations</span>
+      <span class="toggle-icon" aria-hidden="true">▼</span>
+    </a>
+    <div class="nav-children">
+      <a class="nav-item sub-item" data-view="mcp-hub" data-group="integrations" href="integrations.html#view-mcp-hub"><span class="nav-icon">🔌</span>MCP Hub</a>
+      <a class="nav-item sub-item" data-view="notifications" data-group="integrations" href="integrations.html#view-notifications"><span class="nav-icon">🔔</span>Notification Integration</a>
+      <a class="nav-item sub-item" data-view="api-keys" data-group="integrations" href="integrations.html#view-api-keys"><span class="nav-icon">🔑</span>API Keys</a>
+      <a class="nav-item sub-item" data-view="agent-clients" data-group="integrations" href="integrations.html#view-agent-clients"><span class="nav-icon">🤝</span>Agent Client</a>
+      <a class="nav-item sub-item" data-view="gateway" data-group="integrations" href="integrations.html#view-gateway"><span class="nav-icon">🛰️</span>Agent Gateway</a>
+    </div>
+  </div>
+
+  <div class="nav-parent-group" id="nav-system" data-group="system">
+    <a class="nav-parent-group-label" href="system.html#view-observability" role="button" aria-expanded="true">
+      <span>⚙️ System</span>
+      <span class="toggle-icon" aria-hidden="true">▼</span>
+    </a>
+    <div class="nav-children">
+      <a class="nav-item sub-item" data-view="observability" data-group="system" href="system.html#view-observability"><span class="nav-icon">📊</span>Observability</a>
+      <a class="nav-item sub-item" data-view="permissions" data-group="system" href="system.html#view-permissions"><span class="nav-icon">🔐</span>Permissions</a>
+      <a class="nav-item sub-item" data-view="system-config" data-group="system" href="system.html#view-system-config"><span class="nav-icon">⚙️</span>System Config</a>
+      <a class="nav-item sub-item" data-view="model-configs" data-group="system" href="system.html#view-model-configs"><span class="nav-icon">🧩</span>Model Configs</a>
+      <a class="nav-item sub-item" data-view="decision-tools" data-group="system" href="decision.html#view-decision-tools"><span class="nav-icon">⚖️</span>Decision Tools</a>
+      <a class="nav-item sub-item" data-view="sysone-providers" data-group="system" href="decision.html#view-sysone-providers"><span class="nav-icon">🧠</span>Decision Model Providers</a>
+      <a class="nav-item sub-item" data-view="security-audit" data-group="system" href="system.html#view-security-audit"><span class="nav-icon">🛡️</span>Security Audit</a>
+    </div>
+  </div>
+
+  <div class="nav-parent-group" id="nav-tenant-admin" data-group="tenant-admin">
+    <a class="nav-parent-group-label" href="tenancy.html#view-tenant-settings" role="button" aria-expanded="true">
+      <span>🏢 Tenant Admin</span>
+      <span class="toggle-icon" aria-hidden="true">▼</span>
+    </a>
+    <div class="nav-children">
+      <a class="nav-item sub-item" data-view="tenant-settings" data-group="tenant-admin" href="tenancy.html#view-tenant-settings"><span class="nav-icon">⚙️</span>Tenant Settings</a>
+      <a class="nav-item sub-item" data-view="tenant-members" data-group="tenant-admin" href="tenancy.html#view-tenant-members"><span class="nav-icon">👥</span>Members</a>
+      <a class="nav-item sub-item" data-view="tenant-identity-providers" data-group="tenant-admin" href="tenancy.html#view-tenant-identity-providers"><span class="nav-icon">🔑</span>Identity Providers</a>
+    </div>
+  </div>
+
+  <div class="nav-parent-group" id="nav-platform" data-group="platform" style="display:none">
+    <a class="nav-parent-group-label" href="tenancy.html#view-platform-settings" role="button" aria-expanded="true">
+      <span>🛡️ Platform</span>
+      <span class="toggle-icon" aria-hidden="true">▼</span>
+    </a>
+    <div class="nav-children">
+      <a class="nav-item sub-item" data-view="platform-settings" data-group="platform" href="tenancy.html#view-platform-settings"><span class="nav-icon">⚙️</span>Platform Settings</a>
+      <a class="nav-item sub-item" data-view="platform-tenants" data-group="platform" href="tenancy.html#view-platform-tenants"><span class="nav-icon">🏢</span>Tenants</a>
+      <a class="nav-item sub-item" data-view="platform-audit" data-group="platform" href="tenancy.html#view-platform-audit"><span class="nav-icon">🛡️</span>Platform Security Audit</a>
+    </div>
+  </div>
+
+</nav>
+<!-- ═══════════════════════════════ MAIN WRAPPER ═══════════════════════════════ -->
+<div class="main-wrapper">
+  <!-- TOP BAR -->
+  <div class="topbar">
+    <div class="topbar-title" id="topbar-title">Agents</div>
+    <div class="topbar-actions">
+      <span class="chip chip-yellow" id="oidc-sa-indicator" style="display:none">🔑 Super Admin</span>
+      <span class="chip chip-blue" id="tenant-ctx-chip" style="display:none">🏢 <span id="tenant-ctx-name"></span></span>
+      <button class="btn-icon" title="Notifications">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg>
+        <span class="badge">3</span>
+      </button>
+      <div class="avatar" title="Alex Harper — Admin">AH</div>
+    </div>
+  </div>
+
+  <!-- MAIN CONTENT -->
+  <div class="main-content">
+
+<!-- ═══════════════════════════════ VIEW: SKILLS ═══════════════════════════════ -->
+<div id="view-skills" class="view">
+  <div id="skills-list-panel">
+    <div class="view-header">
+      <div><h2>Skills</h2><div class="view-desc">Named units that wrap MCP tool bindings. A skill with no bound tools is inert.</div></div>
+      <button class="btn btn-primary" onclick="showSkillEditor(null)">+ Create Skill</button>
+    </div>
+
+    <div style="display:flex;align-items:center;gap:16px;margin-bottom:14px;flex-wrap:wrap">
+      <div class="search-input" style="max-width:320px">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+        <input placeholder="Search skills..." oninput="skillFilter(this.value)">
+      </div>
+      <label class="toggle"><input type="checkbox" id="skill-show-system" onchange="skillRenderTable()"><span class="toggle-slider"></span><span style="font-size:12px">Show system</span></label>
+      <label class="toggle"><input type="checkbox" id="skill-simulate-cc" onchange="skillSetCcMode(this.checked)"><span class="toggle-slider"></span><span style="font-size:12px">Simulate missing Control Center permission</span></label>
+    </div>
+
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Name</th><th>Tools</th><th>Status</th><th>Actions</th></tr></thead>
+        <tbody id="skills-tbody"></tbody>
+      </table>
+    </div>
+    <div class="text-sm text-secondary" style="margin-top:10px">
+      The Tools column shows a count (<span class="mono">“N tools”</span>) with the bound tool names in the native tooltip; a skill with zero bindings renders the muted <b>No tools bound</b> chip.
+    </div>
+  </div>
+
+  <!-- ── Skill editor: ONE surface for tool display + editing ── -->
+  <div id="skill-editor-panel" style="display:none">
+    <div class="view-header">
+      <div><h2 id="skill-editor-title">Create Skill</h2><div class="view-desc" id="skill-editor-sub">Basic info, workflow and bound tools in one surface</div></div>
+      <div style="display:flex;gap:10px">
+        <button class="btn btn-secondary" onclick="hideSkillEditor()">← Cancel</button>
+        <button class="btn btn-primary" id="skill-save-btn" onclick="skillSave()">💾 Save Skill</button>
+      </div>
+    </div>
+
+    <div id="skill-system-note" class="alert alert-info" style="display:none">
+      <div><strong style="display:block;margin-bottom:2px">This is a system skill and cannot be modified.</strong>
+      Tools are shown read-only; the assistant's management capability set stays pinned.</div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 320px;gap:20px;align-items:start">
+      <div>
+        <div class="card" style="margin-bottom:16px">
+          <div class="card-header"><h3>Basic Info</h3></div>
+          <div class="card-body">
+            <div class="form-group">
+              <label>Name</label>
+              <input class="form-control" id="skill-name-input" placeholder="e.g. read-analyze-file" oninput="skillOnName(this.value)">
+              <div class="form-hint">Lowercase letters, digits and hyphens only.</div>
+            </div>
+            <div class="form-group">
+              <label>Description</label>
+              <input class="form-control" id="skill-desc-input" placeholder="What this skill does">
+            </div>
+            <div class="form-group" style="margin-bottom:0">
+              <label>Workflow</label>
+              <textarea class="form-control" id="skill-workflow-input" rows="7" placeholder="Describe how this skill should execute using the selected tools"></textarea>
+              <div class="form-hint">Auto-generated from the selected tools at runtime — read-only in the generated reference below.</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <h3>Bound Tools</h3>
+            <span class="text-sm text-secondary">The grouped list is both the display and the editor</span>
+          </div>
+          <div class="card-body">
+            <div id="skill-editor-actions" style="display:flex;gap:8px;flex-wrap:wrap">
+              <button class="btn btn-secondary btn-sm" onclick="mcFlashToast('Workflow generated from the selected tools.')">✨ Generate Workflow with AI</button>
+              <button class="btn btn-secondary btn-sm" onclick="mcFlashToast('Workflow preview opened.')">Preview Workflow</button>
+              <button class="btn btn-secondary btn-sm" onclick="skillOpenToolPicker()">🧰 Select Tools</button>
+            </div>
+            <div id="skill-bound-tools" style="margin-top:12px"></div>
+            <div id="skill-cc-note" class="form-hint" style="display:none;margin-top:10px">
+              Access to this tool requires the Control Center integration permission — shown read-only because this skill uses it.
+            </div>
+            <details style="margin-top:14px">
+              <summary style="cursor:pointer;font-size:12px;font-weight:600;color:var(--text-secondary)">Generated Tool Reference</summary>
+              <pre id="skill-tool-ref" style="margin-top:8px;padding:12px;background:#F1F5F9;border-radius:6px;font-size:11.5px;white-space:pre-wrap;max-height:200px;overflow:auto">—</pre>
+              <div class="form-hint">Auto-generated from selected tools — read-only. Appended to the workflow file at runtime.</div>
+            </details>
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <div class="card">
+          <div class="card-header"><h3>Assign to Roles</h3></div>
+          <div class="card-body" id="skill-roles"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════ VIEW: SOPs ═══════════════════════════════ -->
+<div id="view-sops" class="view">
+  <div id="sops-list-panel">
+    <div class="view-header">
+      <div><h2>Standard Operating Procedures</h2><div class="view-desc">Multi-step agent workflows</div></div>
+      <button class="btn btn-primary" onclick="showSopEditor(null)">+ Create SOP</button>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Name</th><th>Description</th><th>Steps</th><th>Last Modified</th><th>Status</th><th>Actions</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><strong>pr-review-workflow</strong></td>
+            <td>Full PR review with analysis and Slack notification</td>
+            <td><span class="chip chip-blue">4 steps</span></td>
+            <td class="text-secondary">2 days ago</td>
+            <td><span class="chip chip-green">Active</span></td>
+            <td class="actions-cell"><button class="btn-icon-sm" onclick="showSopEditor('pr-review-workflow')">✏️</button><button class="btn-icon-sm">🗑️</button></td>
+          </tr>
+          <tr>
+            <td><strong>daily-report-gen</strong></td>
+            <td>Generate and distribute daily performance reports</td>
+            <td><span class="chip chip-blue">3 steps</span></td>
+            <td class="text-secondary">1 week ago</td>
+            <td><span class="chip chip-green">Active</span></td>
+            <td class="actions-cell"><button class="btn-icon-sm">✏️</button><button class="btn-icon-sm">🗑️</button></td>
+          </tr>
+          <tr>
+            <td><strong>incident-response</strong></td>
+            <td>Detect, analyze, and escalate infrastructure incidents</td>
+            <td><span class="chip chip-blue">5 steps</span></td>
+            <td class="text-secondary">3 days ago</td>
+            <td><span class="chip chip-yellow">Draft</span></td>
+            <td class="actions-cell"><button class="btn-icon-sm">✏️</button><button class="btn-icon-sm">🗑️</button></td>
+          </tr>
+          <tr>
+            <td><strong>data-pipeline-audit</strong></td>
+            <td>Audit data pipeline integrity and save results</td>
+            <td><span class="chip chip-blue">3 steps</span></td>
+            <td class="text-secondary">5 days ago</td>
+            <td><span class="chip chip-green">Active</span></td>
+            <td class="actions-cell"><button class="btn-icon-sm">✏️</button><button class="btn-icon-sm">🗑️</button></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- SOP Editor Panel -->
+  <div id="sop-editor-panel" style="display:none">
+    <div class="view-header">
+      <div><h2 id="sop-editor-title">Create SOP</h2></div>
+      <div style="display:flex;gap:10px">
+        <button class="btn btn-secondary" onclick="hideSopEditor()">← Cancel</button>
+        <button class="btn btn-primary">💾 Save SOP</button>
+      </div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 280px;gap:20px">
+      <div>
+        <div class="card mb-4">
+          <div class="card-header"><h3>Basic Info</h3></div>
+          <div class="card-body">
+            <div class="form-group">
+              <label>Name</label>
+              <input class="form-control" id="sop-name-input" placeholder="e.g. pr-review-workflow">
+            </div>
+            <div class="form-group">
+              <label>Description</label>
+              <textarea class="form-control" rows="2" placeholder="Describe what this SOP does..."></textarea>
+            </div>
+            <div class="form-group" style="margin-bottom:0">
+              <label>Instructions</label>
+              <textarea class="form-control" rows="4" placeholder="Explain how to execute the SOP using all associated skills... (e.g. 1. Run skill A and map output to B...)"></textarea>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header"><h3>Steps</h3><span class="text-secondary text-sm">Define the execution flow</span></div>
+          <div class="card-body" id="sop-steps-container">
+            <!-- Step 1 -->
+            <div class="step-card">
+              <div class="step-card-header">
+                <div class="drag-handle" title="Drag to reorder">☰</div>
+                <div class="step-card-num">1</div>
+                <select class="form-control" style="width:180px;padding:5px 10px;font-size:13px">
+                  <option selected>Skill Invocation</option><option>Agent Delegation</option>
+                </select>
+                <div style="flex:1"></div>
+                <button class="btn-icon-sm">🗑️</button>
+              </div>
+              <div class="form-group" style="margin-bottom:0">
+                <label style="font-size:12px">Skill</label>
+                <select class="form-control" style="font-size:13px">
+                  <option selected>read-analyze-file</option>
+                  <option>github-pr-workflow</option><option>slack-notify</option><option>db-report</option>
+                </select>
+              </div>
+              <div class="form-group" style="margin-bottom:0;margin-top:8px">
+                <label style="font-size:12px">Name</label>
+                <input class="form-control" value="Collect repository context" style="font-size:13px">
+              </div>
+            </div>
+            <div class="step-arrow">↓</div>
+            <!-- Step 2 -->
+            <div class="step-card">
+              <div class="step-card-header">
+                <div class="drag-handle" title="Drag to reorder">☰</div>
+                <div class="step-card-num">2</div>
+                <select class="form-control" style="width:180px;padding:5px 10px;font-size:13px">
+                  <option selected>Skill Invocation</option><option>Agent Delegation</option>
+                </select>
+                <div style="flex:1"></div>
+                <button class="btn-icon-sm">🗑️</button>
+              </div>
+              <div class="form-group" style="margin-bottom:0">
+                <label style="font-size:12px">Skill</label>
+                <select class="form-control" style="font-size:13px">
+                  <option>read-analyze-file</option>
+                  <option selected>github-pr-workflow</option><option>slack-notify</option><option>db-report</option>
+                </select>
+              </div>
+              <div class="form-group" style="margin-bottom:0;margin-top:8px">
+                <label style="font-size:12px">Name</label>
+                <input class="form-control" value="Analyze pull request" style="font-size:13px">
+              </div>
+            </div>
+            <div class="step-arrow">↓</div>
+            <!-- Step 3 -->
+            <div class="step-card">
+              <div class="step-card-header">
+                <div class="drag-handle" title="Drag to reorder">☰</div>
+                <div class="step-card-num">3</div>
+                <select class="form-control" style="width:180px;padding:5px 10px;font-size:13px">
+                  <option>Skill Invocation</option><option selected>Agent Delegation</option>
+                </select>
+                <div style="flex:1"></div>
+                <button class="btn-icon-sm">🗑️</button>
+              </div>
+              <div class="form-row" style="margin-bottom:8px">
+                <div>
+                  <label style="font-size:12px">Agent Type</label>
+                  <select class="form-control" style="font-size:13px">
+                    <option selected>agent-sop</option><option>agent-skillful</option>
+                  </select>
+                </div>
+              </div>
+              <div class="form-group" style="margin-bottom:8px">
+                <label style="font-size:12px">Name</label>
+                <input class="form-control" value="Delegate PR risk analysis" style="font-size:13px">
+              </div>
+              <div class="form-group" style="margin-bottom:0">
+                <label style="font-size:12px">Instruction</label>
+                <textarea class="form-control" rows="2" style="font-size:13px">Analyze the PR changes and post Slack summary</textarea>
+              </div>
+            </div>
+            <div style="margin-top:12px">
+              <button class="btn btn-secondary" onclick="addSopStep()">+ Add Step</button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div>
+        <div class="card">
+          <div class="card-header"><h3>SOP Details</h3></div>
+          <div class="card-body">
+            <div class="form-group">
+              <label>Status</label>
+              <select class="form-control" style="font-size:13px"><option>Draft</option><option>Active</option></select>
+            </div>
+            <div class="form-group">
+              <label>Assigned Agent Type</label>
+              <select class="form-control" style="font-size:13px">
+                <option>pr-reviewer</option><option>report-generator</option><option>incident-bot</option>
+              </select>
+            </div>
+            <div class="section-title" style="margin-top:0">Derived Delegations</div>
+            <div class="text-secondary text-sm" style="margin-bottom:8px">Generated from Agent Delegation steps on save.</div>
+            <span class="chip chip-gray">pr-review-workflow -> agent-sop</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+  </div><!-- /main-content -->
+</div><!-- /main-wrapper -->
+</div><!-- /app-shell -->
+
+<!-- ── Skill tool selector: browsable catalogue + pinned "Referenced (read-only)" group ── -->
+<div class="modal-overlay" id="skill-tool-modal">
+  <div class="modal modal-lg">
+    <div class="modal-header">
+      <h3>Select Tools</h3>
+      <button class="modal-close" onclick="skillCloseToolPicker()">×</button>
+    </div>
+    <div class="modal-body" id="skill-tool-picker-body"></div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary btn-sm" onclick="skillCloseToolPicker()">Cancel</button>
+      <button class="btn btn-primary btn-sm" onclick="skillConfirmPicker()">Confirm Selection</button>
+    </div>
+  </div>
+</div>
+
+<!-- WORKFLOW: SKILL EDITOR MODAL -->
+<div id="modal-wf-skill-editor" class="modal-overlay">
+  <div class="modal modal-lg">
+    <div class="modal-header">
+      <h3>Skill Editor</h3>
+      <button class="modal-close" onclick="closeModal('modal-wf-skill-editor')">×</button>
+    </div>
+    <div class="modal-body">
+      <div id="wf-skill-error" class="alert alert-warning" style="display:none"></div>
+      <div class="form-group">
+        <label>Name</label>
+        <input id="wf-skill-name" class="form-control" value="vendor-risk-summary-skill">
+      </div>
+      <div class="form-group">
+        <label>Description</label>
+        <textarea id="wf-skill-description" class="form-control" rows="2">Summarize vendor risk posture from approved evidence sources.</textarea>
+      </div>
+      <div class="form-group">
+        <label>Workflow</label>
+        <textarea id="wf-skill-workflow" class="form-control" rows="7">1. Query approved risk registry sources.
+2. Normalize findings by severity and date.
+3. Produce concise risk summary with traceable evidence citations.</textarea>
+        <div class="form-hint">Describe how this skill should execute using the selected tools.</div>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">
+        <button class="btn btn-secondary btn-sm" onclick="wfGenerate('skill')">Generate Workflow with AI</button>
+        <button class="btn btn-secondary btn-sm" onclick="wfPreview('skill')">Preview Workflow</button>
+      </div>
+      <div class="inline-form">
+        <div style="font-size:13px;font-weight:600;margin-bottom:8px">Select MCP Tools</div>
+        <label class="checkbox-item"><input type="checkbox" class="wf-skill-tool" value="risk_registry.search" checked>risk_registry.search</label>
+        <label class="checkbox-item"><input type="checkbox" class="wf-skill-tool" value="policy_docs.fetch" checked>policy_docs.fetch</label>
+        <label class="checkbox-item"><input type="checkbox" class="wf-skill-tool" value="incident_feed.lookup">incident_feed.lookup</label>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-wf-skill-editor')">Close</button>
+      <button class="btn btn-primary" onclick="closeModal('modal-wf-skill-editor')">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- WORKFLOW: SOP EDITOR MODAL -->
+<div id="modal-wf-sop-editor" class="modal-overlay">
+  <div class="modal modal-lg">
+    <div class="modal-header">
+      <h3>SOP Editor</h3>
+      <button class="modal-close" onclick="closeModal('modal-wf-sop-editor')">×</button>
+    </div>
+    <div class="modal-body">
+      <div id="wf-sop-error" class="alert alert-warning" style="display:none"></div>
+      <div class="form-group">
+        <label>Name</label>
+        <input id="wf-sop-name" class="form-control" value="quarterly-access-recertification">
+      </div>
+      <div class="form-group">
+        <label>Description</label>
+        <textarea id="wf-sop-description" class="form-control" rows="2">Coordinate access review, delegate approvals, and persist audit evidence.</textarea>
+      </div>
+      <div class="form-group">
+        <label>Workflow</label>
+        <textarea id="wf-sop-workflow" class="form-control" rows="7">1. Validate request scope and review period.
+2. Route reviews by ownership domain.
+3. Delegate unresolved approvals to designated team leads.
+4. Persist audit summary and close procedure.</textarea>
+        <div class="form-hint">Describe the end-to-end SOP workflow and intent.</div>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">
+        <button class="btn btn-secondary btn-sm" onclick="wfGenerate('sop')">Generate Workflow with AI</button>
+        <button class="btn btn-secondary btn-sm" onclick="wfPreview('sop')">Preview Workflow</button>
+      </div>
+      <div class="inline-form">
+        <div style="font-size:13px;font-weight:600;margin-bottom:8px">Ordered Steps</div>
+        <label class="checkbox-item"><input type="checkbox" class="wf-sop-step" value="Collect access inventory" checked>Skill Invocation: Collect access inventory</label>
+        <label class="checkbox-item"><input type="checkbox" class="wf-sop-step" value="Delegate ownership review" checked>Agent Delegation: Delegate ownership review</label>
+        <label class="checkbox-item"><input type="checkbox" class="wf-sop-step" value="Publish compliance report" checked>Skill Invocation: Publish compliance report</label>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-wf-sop-editor')">Close</button>
+      <button class="btn btn-primary" onclick="closeModal('modal-wf-sop-editor')">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- WORKFLOW PREVIEW MODAL -->
+<div id="modal-wf-preview" class="modal-overlay">
+  <div class="modal modal-lg">
+    <div class="modal-header">
+      <h3 id="wf-preview-title">Workflow Preview (Model: -)</h3>
+      <button class="modal-close" onclick="closeModal('modal-wf-preview')">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-hint" style="margin-bottom:8px">Single formatted instruction file preview.</div>
+      <pre id="wf-preview-content" style="margin:0;padding:12px;border:1px solid var(--border);border-radius:6px;background:#F8FAFC;white-space:pre-wrap;font-size:12px;line-height:1.6"></pre>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-primary" onclick="closeModal('modal-wf-preview')">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ CONTROL CENTER ASSISTANT (global floating launcher) ═══ -->
+<button class="asst-fab" id="asst-fab" onclick="asstOpen()" title="Control Center Assistant" aria-label="Control Center Assistant">🤖</button>
+<div class="asst-overlay" id="asst-overlay" onclick="if(event.target===this)asstClose()">
+  <div class="asst-dialog" id="asst-dialog" role="dialog" aria-label="Control Center Assistant conversation">
+    <div class="asst-head">
+      <span style="font-size:20px">🤖</span>
+      <h3 id="asst-title">Control Center Assistant</h3>
+      <span class="chip chip-green" id="asst-conn-chip">Connected</span>
+      <div class="asst-head-right">
+        <button class="btn-icon" id="asst-fs-btn" onclick="asstToggleFullscreen()" title="Toggle fullscreen">⛶</button>
+        <button class="btn-icon" onclick="asstClose()" title="Close">✕</button>
+      </div>
+    </div>
+
+    <div class="asst-body">
+      <div class="asst-alert" id="asst-model-alert" style="display:none">
+        <span>⚠️</span>
+        <div style="flex:1">
+          <b>The assistant needs a model configured for this workspace</b>
+          No model is configured for this workspace yet. An administrator can select one under System Config → Assistant model.
+          <div style="margin-top:8px"><button class="btn btn-secondary btn-sm" onclick="asstGoConfigure()">Configure model</button></div>
+        </div>
+      </div>
+
+      <div class="asst-paper-wrap">
+        <div class="asst-paper" id="asst-messages"></div>
+      </div>
+    </div>
+
+    <div class="asst-input-row">
+      <textarea class="chat-input" id="asst-input" rows="1" placeholder="Type a message… (Enter to send)" onkeydown="asstOnKey(event)" oninput="asstAutoGrow(this)"></textarea>
+      <button class="btn btn-primary" id="asst-send" onclick="asstSend()">Send</button>
+    </div>
+
+    <div class="asst-foot">
+      <button class="btn btn-secondary btn-sm" id="asst-btn-sessions" onclick="asstOpenSessions()">🗂 View All Sessions</button>
+      <button class="btn btn-secondary btn-sm" id="asst-btn-new" onclick="asstNewSession()">＋ New Session</button>
+      <span class="spacer"></span>
+      <button class="btn btn-sm" id="asst-btn-end" style="background:#fff;border:1px solid #FECACA;color:#B91C1C" onclick="asstOpenEnd()">⏹ End Session</button>
+      <button class="btn btn-secondary btn-sm" onclick="asstClose()">Exit</button>
+    </div>
+  </div>
+</div>
+<div class="asst-overlay" id="asst-sessions-overlay" onclick="if(event.target===this)asstCloseSessions()">
+  <div class="asst-dialog" style="width:min(620px,100%);height:auto;max-height:85vh" role="dialog" aria-label="All sessions for this agent">
+    <div class="asst-head">
+      <h3>All sessions for this agent</h3>
+      <div class="asst-head-right"><button class="btn-icon" onclick="asstCloseSessions()" title="Close">✕</button></div>
+    </div>
+    <div class="asst-body" style="overflow-y:auto;padding-bottom:14px">
+      <div class="asst-sess-filters">
+        <label class="toggle"><input type="checkbox" id="asst-show-ended" onchange="asstShowEnded(this.checked)"><span class="toggle-slider"></span><span style="font-size:12px">Show ended sessions</span></label>
+        <label style="display:inline-flex;align-items:center;gap:6px">From <input type="date" class="form-control" id="asst-sess-from" style="width:150px;padding:5px 8px;font-size:12px" onchange="asstDateChange()"></label>
+        <label style="display:inline-flex;align-items:center;gap:6px">To <input type="date" class="form-control" id="asst-sess-to" style="width:150px;padding:5px 8px;font-size:12px" onchange="asstDateChange()"></label>
+      </div>
+      <div id="asst-sessions-list"></div>
+      <div class="asst-pager" style="justify-content:center">
+        <span class="asst-pager-btns" id="asst-sessions-pager"></span>
+      </div>
+    </div>
+    <div class="asst-foot">
+      <span class="spacer"></span>
+      <button class="btn btn-secondary btn-sm" onclick="asstCloseSessions()">Cancel</button>
+    </div>
+  </div>
+</div>
+<div class="asst-overlay" id="asst-preview-overlay" onclick="if(event.target===this)asstClosePreview()">
+  <div class="asst-dialog" style="width:90vw;height:80vh" role="dialog" aria-label="Approval Preview">
+    <div class="asst-head">
+      <h3>Approval Preview</h3>
+      <div class="asst-head-right"><button class="btn-icon" onclick="asstClosePreview()" title="Collapse">⤡</button></div>
+    </div>
+    <div class="asst-body" id="asst-preview-body" style="overflow-y:auto;padding-bottom:14px;display:block;font-size:13px;line-height:1.6"></div>
+    <div class="asst-foot">
+      <button class="btn btn-secondary btn-sm" onclick="asstClosePreview()">Collapse</button>
+      <span class="spacer"></span>
+      <button class="btn btn-sm" style="background:#fff;border:1px solid #FECACA;color:#B91C1C" onclick="asstResolve(false)">✕ Deny</button>
+      <button class="btn btn-sm" style="background:#16A34A;color:#fff" onclick="asstResolve(true)">✓ Approve</button>
+    </div>
+  </div>
+</div>
+<div class="asst-overlay" id="asst-end-overlay" onclick="if(event.target===this)asstCloseEnd()">
+  <div class="asst-dialog" style="width:min(560px,100%);height:auto" role="dialog" aria-label="End Conversation Session">
+    <div class="asst-head">
+      <h3>End Conversation Session</h3>
+      <div class="asst-head-right"><button class="btn-icon" onclick="asstCloseEnd()" title="Close">✕</button></div>
+    </div>
+    <div class="asst-body" style="padding-bottom:16px">
+      <p style="font-size:13px;line-height:1.6">This will close the session. You can still view its history but cannot resume it.</p>
+      <p class="text-sm text-secondary" style="line-height:1.6;margin-top:8px">Any in-flight execution for this session is terminated. The next time you open the assistant it starts a <b>new</b> session instead of resuming this one.</p>
+    </div>
+    <div class="asst-foot">
+      <span class="spacer"></span>
+      <button class="btn btn-secondary btn-sm" onclick="asstCloseEnd()">Cancel</button>
+      <button class="btn btn-sm" style="background:#C62828;color:#fff" onclick="asstConfirmEnd()">End Session</button>
+    </div>
+  </div>
+</div>
+
+<script src="../shared/app.js"></script>
+<script src="../shared/assistant.js"></script>
+<script src="../shared/max-dialog.js"></script>
+<script src="../shared/workflow.js"></script>
+<script src="../shared/page-init.js"></script>
+</body>
+</html>

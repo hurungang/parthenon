@@ -51,6 +51,10 @@ import app.db.models  # noqa: F401,E402 — import ALL models so the registry is
 from app.db.models.access_request import AccessRequest  # noqa: E402
 from app.db.models.access_request_batch import AccessRequestBatch  # noqa: E402
 from app.db.models.agent_api_key import AgentApiKey  # noqa: E402
+from app.db.models.agent_client import (  # noqa: E402
+    AgentClient,
+    AgentClientKeyType,
+)
 from app.db.models.agent_data import AgentData  # noqa: E402
 from app.db.models.agent_data_type import AgentDataType  # noqa: E402
 from app.db.models.agent_output import AgentOutput  # noqa: E402
@@ -68,6 +72,7 @@ from app.db.models.agents import (  # noqa: E402
 )
 from app.db.models.command_prompt import CommandPrompt  # noqa: E402
 from app.db.models.conversations import ConversationSession  # noqa: E402
+from app.db.models.conversation_turn_resume import ConversationTurnResume  # noqa: E402
 from app.db.models.decision_model_availability import DecisionModelAvailability  # noqa: E402
 from app.db.models.group import Group  # noqa: E402
 from app.db.models.guardrail_threshold_event import GuardrailThresholdEvent  # noqa: E402
@@ -219,6 +224,17 @@ TENANT_AGNOSTIC_REGISTRY: dict[str, str] = {
         "join/child table — inherits scope via decision_tools (decision_tool_id); "
         "questions are always loaded/validated through their tenant-scoped parent tool"
     ),
+    "conversation_activities": (
+        "join/child table — inherits scope via conversation_sessions "
+        "(conversation_session_id); written only by Control Center"
+    ),
+    "conversation_turn_checkpoints": (
+        "join/child table — inherits scope via conversation_sessions "
+        "(conversation_session_id); opaque payload store, never queried across tenants"
+    ),
+    "agent_client_usage_logs": (
+        "join/child table — inherits scope via agent_clients (client_id)"
+    ),
 }
 
 
@@ -365,6 +381,17 @@ _OWN_KWARGS = {
         "key_hash": "a" * 64,
         "key_prefix": f"pk_{s}",
     },
+    AgentClient: lambda t, s: {
+        "name": f"client-{s}",
+        "slug": f"client-{s}",
+        "key_type": AgentClientKeyType.secret,
+        "key_hash": "a" * 64,
+        "key_prefix": f"phn_cl_sk_{s}",
+    },
+    ConversationTurnResume: lambda t, s: {
+        "resume_key": f"resume-{s}",
+        "idempotency_key": f"idem-{s}",
+    },
     AgentInstance: lambda t, s: {},
     AgentJob: lambda t, s: {},
     AgentOutput: lambda t, s: {"validation_status": "valid"},
@@ -445,6 +472,10 @@ async def _parent_fks(db, ctx, cls, tenant_id, suffix) -> dict:
             "agent_identity_id": (await parent(AgentIdentity)).id,
             "agent_role_id": (await parent(AgentRole)).id,
         }
+    if cls is AgentClient:
+        return {"agent_type_id": (await parent(AgentType)).id}
+    if cls is ConversationTurnResume:
+        return {"conversation_session_id": (await parent(ConversationSession)).id}
     if cls in (AgentInstance, AgentJob):
         return {"agent_type_id": (await parent(AgentType)).id}
     if cls is AgentOutput:

@@ -25,6 +25,7 @@ import { useTranslation } from 'react-i18next'
 import apiClient from '../../api/apiClient'
 import { useSessionExecutionLogStream } from '../../hooks/useSessionExecutionLogStream'
 import { isWorkingStepSpan } from '../../services/LogPresenter'
+import { filterDirectChildPeekEntries } from '../../services/delegationPeek'
 import type { AgentJob, AgentJobStatus, ExecutionLogEntry, InterveneRequest, WorkingStep, WorkingStepSpan, WorkingStepIconType } from '../../types'
 
 interface Props {
@@ -575,11 +576,11 @@ function StepRow({ step, onViewSubAgentExecution, pendingInterventionsByChildSes
               </Box>
             )}
 
-            {/* Sub-agent streaming entries — always visible, last 5 (uses SSE stream when active, REST when completed) */}
+            {/* Sub-agent streaming entries — always visible, last 5 (uses SSE stream when active, REST when completed).
+                The peek is DIRECT-CHILD scoped: the child's own delegation activity is filtered out and reached via drill-in. */}
             {!subAgentEntriesLoading && allSubAgentEntries.length > 0 && (
               <Box sx={{ mt: 1, pl: 0.5 }}>
-                {allSubAgentEntries
-                  .filter(e => ['agent_initialized', 'tool_call', 'tool_response', 'llm_request', 'llm_response', 'observe', 'session_completed'].includes(e.event_type))
+                {filterDirectChildPeekEntries(allSubAgentEntries)
                   .slice(-5)
                   .map((entry) => {
                     const entryTime = new Date(entry.timestamp).toLocaleTimeString('en-US', {

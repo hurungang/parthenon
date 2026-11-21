@@ -20,6 +20,8 @@ The Communication Hub provides centralized, reliable message routing between the
 - Resolves API key authentication to the bound agent identity, role, and permissions via Control Center's internal API
 - Provides the `load_skills` system tool for agents to discover all accessible skills and SOPs with full tool definitions, input/output schemas, and `updated_at` timestamps
 - Retains the existing REST `/mcp/tools/load_skills` skill-discovery endpoint for backward compatibility
+- Relays an intervention response and the follow-on resume to the turn that is waiting for it, including a turn that was paused by a different instance — so approvals are not lost when services restart or traffic moves between instances — without granting the hub or the execution service any new data access
+- Delivers the assistant's persisted activity status to the chat surface whoever is serving the conversation, so a reconnecting user sees the real current state rather than a stale or empty view
 - Appears as a **full-height fixture on the Agent Runtime Monitor**: the hub spans the full canvas height with its MCP servers attached and the tools they expose shown as chips, and each agent's tool calls are drawn as routes from the agent, through the hub, to the MCP server that served the call (agent → Communication Hub → MCP server)
 - Appears as a connected node in agent topology graphs — both the Agent Types preview topology and the Agent Management Panel topology — showing the agent's connection to the platform broker/gateway
 
@@ -56,6 +58,8 @@ This design centralizes routing, ensures consistent authorization, and allows ne
 - UI clearly distinguishes passthrough session type from traditional session selection
 - Real-time messaging is available via WebSocket
 - The Communication Hub relays intervene response control messages from Web UI to Control Center and resume signals from Control Center to Agent Runtime
+- A pending intervention response is relayed successfully even when the turn was paused by a different instance, and the relay carries only the operator's decision — no new data access is granted to the hub or the runtime
+- The chat surface receives the persisted activity status regardless of which instance serves the conversation, so status and turn validity always agree
 - Agent-to-agent communication is supported and auditable
 - Guardrail stop outcomes are visible in communication-related operational views for fast incident classification
 - All message flows are accessible for monitoring and troubleshooting

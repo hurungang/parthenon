@@ -48,7 +48,6 @@ from app.db.models.termination_request import (
 _MIN_MAX_ITERATIONS = 1
 _MAX_MAX_ITERATIONS = 1000
 _MIN_MAX_DELEGATION_DEPTH = 0
-_MAX_MAX_DELEGATION_DEPTH = 32
 _MIN_MAX_DELEGATED_STEPS = 0
 _MAX_MAX_DELEGATED_STEPS = 5000
 _MIN_EXECUTION_TIMEOUT_SECONDS = 1
@@ -71,13 +70,11 @@ def _validate_guardrail_contract(
         raise ValueError(
             f"guardrail_max_iterations must be between {_MIN_MAX_ITERATIONS} and {_MAX_MAX_ITERATIONS}"
         )
-    if not (
-        _MIN_MAX_DELEGATION_DEPTH
-        <= guardrail_max_delegation_depth
-        <= _MAX_MAX_DELEGATION_DEPTH
-    ):
+    # Max Delegation Depth has NO platform upper bound — any non-negative
+    # integer is accepted.  The configured value is the sole depth limit.
+    if guardrail_max_delegation_depth < _MIN_MAX_DELEGATION_DEPTH:
         raise ValueError(
-            f"guardrail_max_delegation_depth must be between {_MIN_MAX_DELEGATION_DEPTH} and {_MAX_MAX_DELEGATION_DEPTH}"
+            f"guardrail_max_delegation_depth must be >= {_MIN_MAX_DELEGATION_DEPTH}"
         )
     if not (
         _MIN_MAX_DELEGATED_STEPS
@@ -991,6 +988,25 @@ class AgentTypeUpdate(BaseModel):
     guardrail_token_fallback_mode: GuardrailTokenFallbackMode | None = None
     guardrail_conversational_token_visibility_mode: GuardrailConversationalTokenVisibilityMode | None = None
     guardrail_conversational_continuation_policy: GuardrailConversationalContinuationPolicy | None = None
+
+    @model_validator(mode="after")
+    def _validate_guardrail_delegation_depth(self) -> "AgentTypeUpdate":
+        """Enforce the delegation-depth floor on the update path too.
+
+        Max Delegation Depth has no platform upper bound, but the non-negative
+        floor still applies — and the update path is the operator's main editing
+        entry point, so it must not accept a value the create path rejects.
+        Only the depth field is checked here; the remaining optional guardrail
+        bounds are validated by the create contract and left unchanged.
+        """
+        if (
+            self.guardrail_max_delegation_depth is not None
+            and self.guardrail_max_delegation_depth < _MIN_MAX_DELEGATION_DEPTH
+        ):
+            raise ValueError(
+                f"guardrail_max_delegation_depth must be >= {_MIN_MAX_DELEGATION_DEPTH}"
+            )
+        return self
 
     @model_validator(mode="after")
     def _validate_output_data_type(self) -> "AgentTypeUpdate":

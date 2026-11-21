@@ -11,6 +11,7 @@ Schedule Management enables platform administrators to automate recurring Agent 
 - Provide full visibility into scheduled job execution history for audit, compliance, and troubleshooting
 - Ensure reliability through automatic schedule recovery after service restarts and configurable polling intervals
 - Allow administrators to pause, resume, and edit schedules without losing existing configuration
+- Cover the same create/read/update capability set conversationally through the [Control Center Assistant](control-center-assistant.md) — name, description, cron expression, and input parameters, with the target agent fixed after creation as it is in the UI — under the same permission, preview-and-approve, and no-deletion rules
 
 ## Users & Personas
 

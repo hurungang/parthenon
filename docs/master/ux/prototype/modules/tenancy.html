@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tenancy — Tenant Admin & Platform</title>
+<link rel="stylesheet" href="../shared/styles.css">
+</head>
+<body data-page="tenancy" data-default-view="tenant-settings">
+
+<div class="app-shell">
+
+<!-- ═══════════════════════════════ SIDEBAR ═══════════════════════════════ -->
+<nav class="sidebar" aria-label="Primary navigation">
+  <div class="sidebar-logo">
+    <h1>⚡ Parthenon</h1>
+    <small>Enterprise AI Harness</small>
+  </div>
+
+  <!-- Dashboard -->
+  <a class="nav-item" data-view="dashboard" href="../index.html#view-dashboard"><span class="nav-icon">🏠</span>Dashboard</a>
+
+  <!-- Project Showcase -->
+  <a class="nav-item" data-view="project-showcase" href="../index.html#view-project-showcase"><span class="nav-icon">🌐</span>Project Showcase</a>
+
+  <div class="nav-parent-group" id="nav-agents" data-group="agents">
+    <a class="nav-parent-group-label" href="agents.html#view-agent-roles" role="button" aria-expanded="true">
+      <span>🤖 Agents</span>
+      <span class="toggle-icon" aria-hidden="true">▼</span>
+    </a>
+    <div class="nav-children">
+      <a class="nav-item sub-item" data-view="agent-roles" data-group="agents" href="agents.html#view-agent-roles"><span class="nav-icon">👤</span>Agent Roles</a>
+      <a class="nav-item sub-item" data-view="agent-identities" data-group="agents" href="agents.html#view-agent-identities"><span class="nav-icon">🆔</span>Agent Identities</a>
+      <a class="nav-item sub-item" data-view="agents" data-group="agents" href="agents.html#view-agents"><span class="nav-icon">🤖</span>Agent Types</a>
+      <a class="nav-item sub-item" data-view="agent-management-panel" data-group="agents" href="agent-panel.html#view-agent-management-panel"><span class="nav-icon">🎛️</span>Agent Management Panel</a>
+      <a class="nav-item sub-item" data-view="agent-executions" data-group="agents" href="executions.html#view-agent-executions"><span class="nav-icon">▶️</span>Agent Executions</a>
+      <a class="nav-item sub-item" data-view="runtime-monitor" data-group="agents" href="executions.html#view-runtime-monitor"><span class="nav-icon">🕸️</span>Agent Runtime Monitor</a>
+      <a class="nav-item sub-item" data-view="agent-trails" data-group="agents" href="executions.html#view-agent-trails"><span class="nav-icon">📋</span>Agent Trails</a>
+      <a class="nav-item sub-item" data-view="skills" data-group="agents" href="skills-sops.html#view-skills"><span class="nav-icon">🔧</span>Skills</a>
+      <a class="nav-item sub-item" data-view="sops" data-group="agents" href="skills-sops.html#view-sops"><span class="nav-icon">📋</span>SOPs</a>
+      <a class="nav-item sub-item" data-view="schedules" data-group="agents" href="schedules.html#view-schedules"><span class="nav-icon">📅</span>Schedules</a>
+      <a class="nav-item sub-item" data-view="chat" data-group="agents" href="chat.html#view-chat"><span class="nav-icon">💬</span>Chat Sessions</a>
+      <a class="nav-item sub-item" data-view="conversational-intervention" data-group="agents" href="chat.html#view-conversational-intervention"><span class="nav-icon">💬</span>Conversational Intervention</a>
+      <a class="nav-item sub-item" data-view="intervene-requests" data-group="agents" href="chat.html#view-intervene-requests"><span class="nav-icon">🛑</span>Intervene Requests</a>
+      <a class="nav-item sub-item" data-view="data-types" data-group="agents" href="data-results.html#view-data-types"><span class="nav-icon">📐</span>Data Types</a>
+      <a class="nav-item sub-item" data-view="agent-outputs" data-group="agents" href="data-results.html#view-agent-outputs"><span class="nav-icon">📤</span>Agent Outputs</a>
+      <a class="nav-item sub-item" data-view="agent-logs" data-group="agents" href="executions.html#view-agent-logs"><span class="nav-icon">🧾</span>Agent Logs</a>
+    </div>
+  </div>
+
+  <div class="nav-parent-group" id="nav-results" data-group="results">
+    <a class="nav-parent-group-label" href="data-results.html#view-results" role="button" aria-expanded="true">
+      <span>📊 Results</span>
+      <span class="toggle-icon" aria-hidden="true">▼</span>
+    </a>
+    <div class="nav-children">
+      <a class="nav-item sub-item" data-view="results" data-group="results" href="data-results.html#view-results"><span class="nav-icon">📊</span>Result Repository</a>
+    </div>
+  </div>
+
+  <div class="nav-parent-group locked-open" id="nav-integrations" data-group="integrations">
+    <a class="nav-parent-group-label" href="integrations.html#view-mcp-hub" role="button" aria-expanded="true">
+      <span>🌐 Integrations</span>
+      <span class="toggle-icon" aria-hidden="true">▼</span>
+    </a>
+    <div class="nav-children">
+      <a class="nav-item sub-item" data-view="mcp-hub" data-group="integrations" href="integrations.html#view-mcp-hub"><span class="nav-icon">🔌</span>MCP Hub</a>
+      <a class="nav-item sub-item" data-view="notifications" data-group="integrations" href="integrations.html#view-notifications"><span class="nav-icon">🔔</span>Notification Integration</a>
+      <a class="nav-item sub-item" data-view="api-keys" data-group="integrations" href="integrations.html#view-api-keys"><span class="nav-icon">🔑</span>API Keys</a>
+      <a class="nav-item sub-item" data-view="agent-clients" data-group="integrations" href="integrations.html#view-agent-clients"><span class="nav-icon">🤝</span>Agent Client</a>
+      <a class="nav-item sub-item" data-view="gateway" data-group="integrations" href="integrations.html#view-gateway"><span class="nav-icon">🛰️</span>Agent Gateway</a>
+    </div>
+  </div>
+
+  <div class="nav-parent-group" id="nav-system" data-group="system">
+    <a class="nav-parent-group-label" href="system.html#view-observability" role="button" aria-expanded="true">
+      <span>⚙️ System</span>
+      <span class="toggle-icon" aria-hidden="true">▼</span>
+    </a>
+    <div class="nav-children">
+      <a class="nav-item sub-item" data-view="observability" data-group="system" href="system.html#view-observability"><span class="nav-icon">📊</span>Observability</a>
+      <a class="nav-item sub-item" data-view="permissions" data-group="system" href="system.html#view-permissions"><span class="nav-icon">🔐</span>Permissions</a>
+      <a class="nav-item sub-item" data-view="system-config" data-group="system" href="system.html#view-system-config"><span class="nav-icon">⚙️</span>System Config</a>
+      <a class="nav-item sub-item" data-view="model-configs" data-group="system" href="system.html#view-model-configs"><span class="nav-icon">🧩</span>Model Configs</a>
+      <a class="nav-item sub-item" data-view="decision-tools" data-group="system" href="decision.html#view-decision-tools"><span class="nav-icon">⚖️</span>Decision Tools</a>
+      <a class="nav-item sub-item" data-view="sysone-providers" data-group="system" href="decision.html#view-sysone-providers"><span class="nav-icon">🧠</span>Decision Model Providers</a>
+      <a class="nav-item sub-item" data-view="security-audit" data-group="system" href="system.html#view-security-audit"><span class="nav-icon">🛡️</span>Security Audit</a>
+    </div>
+  </div>
+
+  <div class="nav-parent-group" id="nav-tenant-admin" data-group="tenant-admin">
+    <a class="nav-parent-group-label" href="#view-tenant-settings" role="button" aria-expanded="true">
+      <span>🏢 Tenant Admin</span>
+      <span class="toggle-icon" aria-hidden="true">▼</span>
+    </a>
+    <div class="nav-children">
+      <a class="nav-item sub-item" data-view="tenant-settings" data-group="tenant-admin" href="#view-tenant-settings"><span class="nav-icon">⚙️</span>Tenant Settings</a>
+      <a class="nav-item sub-item" data-view="tenant-members" data-group="tenant-admin" href="#view-tenant-members"><span class="nav-icon">👥</span>Members</a>
+      <a class="nav-item sub-item" data-view="tenant-identity-providers" data-group="tenant-admin" href="#view-tenant-identity-providers"><span class="nav-icon">🔑</span>Identity Providers</a>
+    </div>
+  </div>
+
+  <div class="nav-parent-group" id="nav-platform" data-group="platform" style="display:none">
+    <a class="nav-parent-group-label" href="#view-platform-settings" role="button" aria-expanded="true">
+      <span>🛡️ Platform</span>
+      <span class="toggle-icon" aria-hidden="true">▼</span>
+    </a>
+    <div class="nav-children">
+      <a class="nav-item sub-item" data-view="platform-settings" data-group="platform" href="#view-platform-settings"><span class="nav-icon">⚙️</span>Platform Settings</a>
+      <a class="nav-item sub-item" data-view="platform-tenants" data-group="platform" href="#view-platform-tenants"><span class="nav-icon">🏢</span>Tenants</a>
+      <a class="nav-item sub-item" data-view="platform-audit" data-group="platform" href="#view-platform-audit"><span class="nav-icon">🛡️</span>Platform Security Audit</a>
+    </div>
+  </div>
+
+</nav>
+<!-- ═══════════════════════════════ MAIN WRAPPER ═══════════════════════════════ -->
+<div class="main-wrapper">
+  <!-- TOP BAR -->
+  <div class="topbar">
+    <div class="topbar-title" id="topbar-title">Tenant Admin</div>
+    <div class="topbar-actions">
+      <span class="chip chip-yellow" id="oidc-sa-indicator" style="display:none">🔑 Super Admin</span>
+      <span class="chip chip-blue" id="tenant-ctx-chip" style="display:none">🏢 <span id="tenant-ctx-name"></span></span>
+      <button class="btn-icon" title="Notifications">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg>
+        <span class="badge">3</span>
+      </button>
+      <div class="avatar" title="Alex Harper — Admin">AH</div>
+    </div>
+  </div>
+
+  <!-- MAIN CONTENT -->
+  <div class="main-content">
+
+<!-- VIEW: Tenant Settings -->
+<div id="view-tenant-settings" class="view">
+  <div class="view-header">
+    <div><h2>Tenant Settings</h2><div class="view-desc">Workspace profile, fixed address, and JIT default role for this tenant.</div></div>
+  </div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;align-items:start">
+    <div class="card">
+      <div class="card-header"><h3>Tenant profile</h3><span class="chip chip-gray">Alias editing</span></div>
+      <div class="card-body">
+        <div class="form-group"><label>Tenant alias (display name)</label>
+          <div style="display:flex;gap:8px"><input class="form-control" id="mt-alias-input" value="Acme Corp" style="flex:1"><button class="btn btn-primary btn-sm" onclick="mtSaveAlias()">Save alias</button></div>
+          <div class="text-secondary" style="font-size:11px;margin-top:4px">Only the <strong>tenant root</strong> can rename the workspace. The address never changes.</div>
+        </div>
+        <div class="form-group" style="margin-bottom:0"><label>Tenant address (fixed)</label>
+          <div style="display:flex;align-items:stretch">
+            <span style="padding:8px 10px;background:#F1F5F9;border:1px solid var(--border);border-right:none;border-radius:var(--radius-sm) 0 0 var(--radius-sm);font-family:monospace;font-size:13px;color:var(--text-secondary)">https://</span>
+            <input class="form-control" id="mt-addr-fixed" value="acme" disabled style="border-radius:0;font-family:monospace">
+            <span style="padding:8px 10px;background:#F1F5F9;border:1px solid var(--border);border-left:none;border-radius:0 var(--radius-sm) var(--radius-sm) 0;font-family:monospace;font-size:13px;color:var(--text-secondary)">.parthenon.app</span>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-header"><h3>Just-in-time provisioning</h3><span class="chip chip-green">OIDC</span></div>
+      <div class="card-body">
+        <div class="form-group" style="margin-bottom:0"><label>Default role for new OIDC users (JIT)</label>
+          <select class="form-control" id="mt-jit-role" style="max-width:240px"><option selected>Member</option><option>Tenant Admin</option></select>
+          <div class="text-secondary" style="font-size:11px;margin-top:4px">First-time OIDC sign-ins are provisioned into this workspace automatically with this role. With no default configured, JIT sign-ins are denied.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- VIEW: Tenant Members -->
+<div id="view-tenant-members" class="view">
+  <div class="view-header">
+    <div><h2>Members</h2><div class="view-desc">Members of your organization. Roles apply within this tenant only.</div></div>
+    <div style="display:flex;gap:8px;align-items:center">
+      <span class="chip chip-red" id="mt-quota-chip">10/10 users · Free tier</span>
+      <button class="btn btn-primary" onclick="mtInvite()">+ Invite user</button>
+    </div>
+  </div>
+  <div class="alert alert-danger" id="mt-quota-blocked" style="display:none"><div><strong style="display:block;margin-bottom:2px">⛔ User limit reached</strong>Invitation blocked by your tenant's quota (Free tier — 10 users). Contact your platform admin to change the license tier.</div></div>
+  <div class="card" style="margin-bottom:16px">
+    <div class="card-header"><h3>Members</h3><span class="chip chip-gray" id="mt-members-ws">Acme Corp</span></div>
+    <div class="card-body" style="padding:0">
+      <div class="table-wrap" style="border:none;border-radius:0;box-shadow:none">
+        <table>
+          <thead><tr><th>User</th><th>Email</th><th>Role</th><th>Status</th><th style="text-align:right">Actions</th></tr></thead>
+          <tbody id="mt-member-rows"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+  <div class="alert alert-info"><div><strong style="display:block;margin-bottom:2px">🌱 Tenant root is permanent</strong>The tenant root cannot be demoted or removed — not by tenant admins, not by the platform operator. Role names may repeat across tenants without collision.</div></div>
+</div>
+
+<!-- VIEW: Tenant Identity Providers -->
+<div id="view-tenant-identity-providers" class="view">
+  <div class="view-header">
+    <div><h2>Identity Providers</h2><div class="view-desc">Per-workspace OIDC binding. The sign-in SSO button renders only while a provider is configured here.</div></div>
+    <button class="btn btn-primary" onclick="toast('Add provider form (demo)','info')">+ Add provider</button>
+  </div>
+  <div class="card">
+    <div class="card-header"><h3>Configured providers</h3><span class="chip chip-gray" id="mt-idp-ws">Acme Corp</span></div>
+    <div class="card-body" style="padding:0">
+      <div class="table-wrap" style="border:none;border-radius:0;box-shadow:none">
+        <table>
+          <thead><tr><th>Provider</th><th>Issuer URL</th><th>Scope</th><th>Status</th><th style="text-align:right">Actions</th></tr></thead>
+          <tbody>
+            <tr><td><strong>Keycloak</strong></td><td class="font-mono" style="font-size:12px">https://id.acme.example/realms/acme</td><td><span class="chip chip-blue">user</span></td><td><span class="chip chip-green">Enabled</span></td>
+              <td><div style="display:flex;gap:4px;justify-content:flex-end"><button class="btn btn-sm btn-secondary" onclick="toast('Edit provider (demo)','info')">Edit</button><button class="btn btn-sm btn-secondary" style="color:var(--error)" onclick="toast('Provider removed — the workspace SSO button disappears from the sign-in page (demo)','info')">Remove</button></div></td></tr>
+            <tr><td colspan="5" class="text-secondary" style="font-size:12px">No provider configured → the SSO button is simply absent from the workspace sign-in card; no setup-wizard entry appears on any pre-auth surface.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- VIEW: Platform Settings (root workspace only) -->
+<div id="view-platform-settings" class="view">
+  <div class="view-header">
+    <div><h2>Platform Settings</h2><div class="view-desc">Deployment-wide configuration — managed from the <strong>root</strong> workspace by platform-role members.</div></div>
+  </div>
+  <div class="card" style="max-width:680px">
+    <div class="card-header"><h3>Multi-Tenancy</h3><span class="chip chip-green" id="mt-tenancy-chip">Enabled · Multi-Tenant</span></div>
+    <div class="card-body">
+      <div class="alert alert-warning"><div><strong style="display:block;margin-bottom:2px">⚠️ Tenant adoption is irreversible</strong>Enabling adopts the existing organization as a tenant. Disabling hides tenant features and restores single-tenant behavior without data loss — but the adoption itself cannot be undone.</div></div>
+      <ul style="margin:0 0 12px 18px;font-size:13px;line-height:1.9">
+        <li>The platform itself lives in the <strong>root</strong> workspace — platform modules are visible there only to members holding a platform role.</li>
+        <li>Tenant features: tenant registry, self-serve organization creation, per-workspace sign-in addresses.</li>
+        <li>Wildcard DNS (<span class="font-mono">*.parthenon.app</span>) and certificates back the per-workspace addresses.</li>
+      </ul>
+      <div class="alert alert-info" style="margin-bottom:0"><div><strong style="display:block;margin-bottom:2px">Adoption</strong>"Parthenon Demo Org" was adopted as a customer tenant — its configuration and data remain intact, with no reconfiguration of its identity provider.</div></div>
+    </div>
+  </div>
+</div>
+
+<!-- VIEW: Platform Tenants (root workspace only) -->
+<div id="view-platform-tenants" class="view">
+  <div class="view-header">
+    <div><h2>Tenants</h2><div class="view-desc">Registry of all organizations on this deployment — metadata, license tier, and usage only. Business data is never browsable from here.</div></div>
+    <button class="btn btn-primary" onclick="toast('Create Tenant dialog (demo)','info')">+ Create Tenant</button>
+  </div>
+  <div class="card">
+    <div class="card-header"><h3>Tenant registry</h3></div>
+    <div class="card-body" style="padding:0">
+      <div class="table-wrap" style="border:none;border-radius:0;box-shadow:none">
+        <table>
+          <thead><tr><th>Tenant</th><th>Address</th><th>Tier</th><th>Status</th><th>Users</th><th>Execs / Month</th><th style="text-align:right">Actions</th></tr></thead>
+          <tbody id="mt-tenant-rows"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+  <div class="alert alert-info" style="margin-top:16px"><div><strong style="display:block;margin-bottom:2px">📜 Licenses</strong>Assign a license (free / team / enterprise) per tenant — tenants without one run on Free tier defaults. Usage columns update immediately after every license change.</div></div>
+</div>
+
+<!-- VIEW: Platform Security Audit (root workspace only) -->
+<div id="view-platform-audit" class="view">
+  <div class="view-header">
+    <div><h2>Tenant Security Audit</h2><div class="view-desc">Cross-tenant access attempts. Directly addressed requests for another tenant's identifiers return no data — and are recorded here.</div></div>
+  </div>
+  <div class="card">
+    <div class="card-header"><h3>Security-relevant events</h3></div>
+    <div class="card-body" style="padding:0">
+      <div class="table-wrap" style="border:none;border-radius:0;box-shadow:none">
+        <table>
+          <thead><tr><th>Time</th><th>Actor</th><th>Source Tenant</th><th>Attempted Target</th><th>Resource</th><th>Result</th></tr></thead>
+          <tbody>
+            <tr><td class="text-secondary" style="font-size:12px">Sep 20 · 14:02</td><td class="font-mono" style="font-size:12px">user sam@example.com</td><td><span class="chip chip-blue">acme</span></td><td><span class="chip chip-purple">globex</span></td><td class="font-mono" style="font-size:12px">agent agt-7731</td><td><span class="chip chip-red">Blocked · 404</span></td></tr>
+            <tr><td class="text-secondary" style="font-size:12px">Sep 20 · 11:47</td><td class="font-mono" style="font-size:12px">api-key ak_9f2c…</td><td><span class="chip chip-blue">globex</span></td><td><span class="chip chip-purple">acme</span></td><td class="font-mono" style="font-size:12px">GET /api/v1/conversations</td><td><span class="chip chip-red">Blocked · 403</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+  </div><!-- /main-content -->
+</div><!-- /main-wrapper -->
+</div><!-- /app-shell -->
+
+<!-- ═══ CONTROL CENTER ASSISTANT (global floating launcher) ═══ -->
+<button class="asst-fab" id="asst-fab" onclick="asstOpen()" title="Control Center Assistant" aria-label="Control Center Assistant">🤖</button>
+<div class="asst-overlay" id="asst-overlay" onclick="if(event.target===this)asstClose()">
+  <div class="asst-dialog" id="asst-dialog" role="dialog" aria-label="Control Center Assistant conversation">
+    <div class="asst-head">
+      <span style="font-size:20px">🤖</span>
+      <h3 id="asst-title">Control Center Assistant</h3>
+      <span class="chip chip-green" id="asst-conn-chip">Connected</span>
+      <div class="asst-head-right">
+        <button class="btn-icon" id="asst-fs-btn" onclick="asstToggleFullscreen()" title="Toggle fullscreen">⛶</button>
+        <button class="btn-icon" onclick="asstClose()" title="Close">✕</button>
+      </div>
+    </div>
+
+    <div class="asst-body">
+      <div class="asst-alert" id="asst-model-alert" style="display:none">
+        <span>⚠️</span>
+        <div style="flex:1">
+          <b>The assistant needs a model configured for this workspace</b>
+          No model is configured for this workspace yet. An administrator can select one under System Config → Assistant model.
+          <div style="margin-top:8px"><button class="btn btn-secondary btn-sm" onclick="asstGoConfigure()">Configure model</button></div>
+        </div>
+      </div>
+
+      <div class="asst-paper-wrap">
+        <div class="asst-paper" id="asst-messages"></div>
+      </div>
+    </div>
+
+    <div class="asst-input-row">
+      <textarea class="chat-input" id="asst-input" rows="1" placeholder="Type a message… (Enter to send)" onkeydown="asstOnKey(event)" oninput="asstAutoGrow(this)"></textarea>
+      <button class="btn btn-primary" id="asst-send" onclick="asstSend()">Send</button>
+    </div>
+
+    <div class="asst-foot">
+      <button class="btn btn-secondary btn-sm" id="asst-btn-sessions" onclick="asstOpenSessions()">🗂 View All Sessions</button>
+      <button class="btn btn-secondary btn-sm" id="asst-btn-new" onclick="asstNewSession()">＋ New Session</button>
+      <span class="spacer"></span>
+      <button class="btn btn-sm" id="asst-btn-end" style="background:#fff;border:1px solid #FECACA;color:#B91C1C" onclick="asstOpenEnd()">⏹ End Session</button>
+      <button class="btn btn-secondary btn-sm" onclick="asstClose()">Exit</button>
+    </div>
+  </div>
+</div>
+<div class="asst-overlay" id="asst-sessions-overlay" onclick="if(event.target===this)asstCloseSessions()">
+  <div class="asst-dialog" style="width:min(620px,100%);height:auto;max-height:85vh" role="dialog" aria-label="All sessions for this agent">
+    <div class="asst-head">
+      <h3>All sessions for this agent</h3>
+      <div class="asst-head-right"><button class="btn-icon" onclick="asstCloseSessions()" title="Close">✕</button></div>
+    </div>
+    <div class="asst-body" style="overflow-y:auto;padding-bottom:14px">
+      <div class="asst-sess-filters">
+        <label class="toggle"><input type="checkbox" id="asst-show-ended" onchange="asstShowEnded(this.checked)"><span class="toggle-slider"></span><span style="font-size:12px">Show ended sessions</span></label>
+        <label style="display:inline-flex;align-items:center;gap:6px">From <input type="date" class="form-control" id="asst-sess-from" style="width:150px;padding:5px 8px;font-size:12px" onchange="asstDateChange()"></label>
+        <label style="display:inline-flex;align-items:center;gap:6px">To <input type="date" class="form-control" id="asst-sess-to" style="width:150px;padding:5px 8px;font-size:12px" onchange="asstDateChange()"></label>
+      </div>
+      <div id="asst-sessions-list"></div>
+      <div class="asst-pager" style="justify-content:center">
+        <span class="asst-pager-btns" id="asst-sessions-pager"></span>
+      </div>
+    </div>
+    <div class="asst-foot">
+      <span class="spacer"></span>
+      <button class="btn btn-secondary btn-sm" onclick="asstCloseSessions()">Cancel</button>
+    </div>
+  </div>
+</div>
+<div class="asst-overlay" id="asst-preview-overlay" onclick="if(event.target===this)asstClosePreview()">
+  <div class="asst-dialog" style="width:90vw;height:80vh" role="dialog" aria-label="Approval Preview">
+    <div class="asst-head">
+      <h3>Approval Preview</h3>
+      <div class="asst-head-right"><button class="btn-icon" onclick="asstClosePreview()" title="Collapse">⤡</button></div>
+    </div>
+    <div class="asst-body" id="asst-preview-body" style="overflow-y:auto;padding-bottom:14px;display:block;font-size:13px;line-height:1.6"></div>
+    <div class="asst-foot">
+      <button class="btn btn-secondary btn-sm" onclick="asstClosePreview()">Collapse</button>
+      <span class="spacer"></span>
+      <button class="btn btn-sm" style="background:#fff;border:1px solid #FECACA;color:#B91C1C" onclick="asstResolve(false)">✕ Deny</button>
+      <button class="btn btn-sm" style="background:#16A34A;color:#fff" onclick="asstResolve(true)">✓ Approve</button>
+    </div>
+  </div>
+</div>
+<div class="asst-overlay" id="asst-end-overlay" onclick="if(event.target===this)asstCloseEnd()">
+  <div class="asst-dialog" style="width:min(560px,100%);height:auto" role="dialog" aria-label="End Conversation Session">
+    <div class="asst-head">
+      <h3>End Conversation Session</h3>
+      <div class="asst-head-right"><button class="btn-icon" onclick="asstCloseEnd()" title="Close">✕</button></div>
+    </div>
+    <div class="asst-body" style="padding-bottom:16px">
+      <p style="font-size:13px;line-height:1.6">This will close the session. You can still view its history but cannot resume it.</p>
+      <p class="text-sm text-secondary" style="line-height:1.6;margin-top:8px">Any in-flight execution for this session is terminated. The next time you open the assistant it starts a <b>new</b> session instead of resuming this one.</p>
+    </div>
+    <div class="asst-foot">
+      <span class="spacer"></span>
+      <button class="btn btn-secondary btn-sm" onclick="asstCloseEnd()">Cancel</button>
+      <button class="btn btn-sm" style="background:#C62828;color:#fff" onclick="asstConfirmEnd()">End Session</button>
+    </div>
+  </div>
+</div>
+
+<script src="../shared/app.js"></script>
+<script src="../shared/assistant.js"></script>
+<script src="../shared/max-dialog.js"></script>
+<script src="../shared/page-init.js"></script>
+</body>
+</html>

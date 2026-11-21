@@ -925,6 +925,35 @@ test.describe('Decision Model Providers (mocked)', () => {
         body: JSON.stringify(HIERARCHY),
       }),
     )
+    // Opening the edit dialog auto-discovers the vendor model catalogue.
+    // The response must contain a `models` array (a catch-all `{}` crashes).
+    await page.route(
+      /\/api\/v1\/system-one\/providers\/[^/]+\/vendor-models$/,
+      (route) =>
+        route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({ models: ['jev-latest', 'jev-mini'] }),
+        }),
+    )
+    // The embedded decision-guardrail panel loads on mount; the API returns a
+    // LIST, so a catch-all `{}` payload would crash the panel.
+    await page.route(/\/api\/v1\/system-one\/providers\/[^/]+\/guardrails$/, (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify([]),
+      }),
+    )
+    await page.route(
+      /\/api\/v1\/system-one\/providers\/[^/]+\/guardrails\/posture/,
+      (route) =>
+        route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({}),
+        }),
+    )
 
     let updatePayload: Record<string, unknown> | null = null
     await page.route(/\/api\/v1\/system-one\/providers\/[^/]+$/, async (route) => {
@@ -944,9 +973,13 @@ test.describe('Decision Model Providers (mocked)', () => {
     await page.goto('/system/system-one')
     await expect(page.getByText('E2E Primary Vendor')).toBeVisible()
 
-    // Open the edit dialog.
-    await page.getByRole('button', { name: 'Edit' }).first().click()
-    const dialog = page.getByRole('dialog')
+    // Open the edit dialog from the provider's own row (other Edit buttons on
+    // the page belong to the guardrail sections and do not open this dialog).
+    await page
+      .getByRole('row', { name: /E2E Primary Vendor/ })
+      .getByRole('button', { name: 'Edit' })
+      .click()
+    const dialog = page.getByRole('dialog', { name: 'Edit Provider' })
     await expect(dialog).toBeVisible()
 
     // Pre-populated with current values; API key is write-only and NEVER prefilled.

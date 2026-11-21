@@ -33,7 +33,10 @@ const MOCK_AGENT_TYPES = [
 test.describe('Agent Management', () => {
   test.beforeEach(async ({ page }) => {
     await standardSetup(page)
-    await page.route('**/api/v1/agents/types', (route) => {
+    // The list endpoint is paginated (`?limit=&offset=`), so the collection
+    // glob must not end at the path. The item route below is registered later
+    // and therefore wins for `/agents/types/{id}` (last-registered-first).
+    await page.route('**/api/v1/agents/types**', (route) => {
       if (route.request().method() === 'GET') {
         route.fulfill({ status: 200, body: JSON.stringify(MOCK_AGENT_TYPES) })
       } else {
@@ -113,6 +116,10 @@ test.describe('Agent Management', () => {
     if (await createBtn.count() > 0) {
       await createBtn.click()
       const dialog = page.locator('[class*="MuiDialog-root"]').first()
+      // The guardrail fields live in a collapsed accordion — expand it first.
+      await dialog
+        .getByRole('button', { name: /Execution Guardrails/i })
+        .click()
       await expect(dialog.getByLabel(/Max Iterations/i)).toBeVisible()
       await expect(dialog.locator('label').filter({ hasText: 'Token Enforcement Mode' }).first()).toBeVisible()
       await expect(dialog.getByLabel(/Execution Timeout/i)).toBeVisible()

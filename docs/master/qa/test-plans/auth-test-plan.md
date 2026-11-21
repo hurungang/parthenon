@@ -79,7 +79,7 @@
 ### Backend Integration Tests
 | File | Purpose |
 |---|---|
-| `backend/tests/integration/test_identity_setup_flow.py` | Integration tests for identity setup flow against real database: setup wizard → realm/client creation → state persistence |
+| `backend/tests/api/v1/test_setup_identity.py` | Integration-style API tests for identity setup: realm/client provisioning flow → state persistence |
 
 ### E2E Tests
 | File | Purpose |

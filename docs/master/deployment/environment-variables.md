@@ -41,6 +41,27 @@ Update this file whenever a new service is added or a variable is changed or rem
 
 ---
 
+## Conversational Turn Supervision and Resume
+
+Settings for the persisted conversation activity state and durably resumable paused conversational turns. All values are **optional** — the defaults below are the shipped behaviour; none is a secret. They are consumed by Control Center only, except `CONVERSATION_TURN_CHECKPOINT_MAX_BYTES`, which Communication Hub also reads for its checkpoint-relay size guard (set the **same value** on both services).
+
+| Variable | Service | Default | Description |
+|----------|---------|---------|-------------|
+| `CONVERSATION_ACTIVITY_STALE_SECONDS` | CC | `180` (min `30`) | How old a non-terminal activity row must be before the reaper treats the turn as dead. Live turns stay fresh through the Communication Hub heartbeat touch (~15 s); a paused (`waiting_for_human`) row is never resolved by this bound — its durable resume record decides. Invalid or absent → default (a WARN line is logged for an invalid value). |
+| `CONVERSATION_TURN_RESUME_TTL_SECONDS` | CC | `900` (clamp ≥ `30`) | Answerable window for a paused turn. **Platform default only** — a tenant override in the tenant settings store (`conversation_turn_resume_ttl_seconds`, settable via `PATCH /api/v1/tenant/settings`) takes precedence. CC is authoritative: AR-supplied `expires_at` values are ignored on the wire, and the stored checkpoint payload uses the same window, so a payload can never expire before the answer window closes. |
+| `CONVERSATION_TURN_CLAIM_TTL_SECONDS` | CC | `45` (clamp ≥ `1`) | Single-active-resumer claim lease, and therefore the **failover bound**: after an AR instance dies mid-resume the turn becomes claimable again after this interval. Keep it comfortably above one resume's setup time (checkpoint load + agent rebuild) and well below the turn watchdog. |
+| `CONVERSATION_TURN_CHECKPOINT_MAX_BYTES` | CC **and** CH | `2097152` (~2 MB; clamp ≥ `1024`) | Hard cap on a stored checkpoint payload. Oversize payloads are rejected at write time (the pause reports "could not be persisted" rather than truncating). CH reads the same setting for its relay guard — keep both services equal, and note the cap also bounds `conversation_turn_checkpoints` storage growth. |
+| `CONVERSATION_TURN_CHECKPOINT_PURGE_AFTER_SECONDS` | CC | `3600` (clamp ≥ `60`) | Retention horizon for checkpoint **payloads** after resolution. The payload is deleted; the resume index row, the outcome turn, and the applied marker survive for audit. Keep it above `CONVERSATION_TURN_RESUME_TTL_SECONDS`. |
+
+Notes:
+
+- **Related existing variable (unchanged):** `conversation_intervention_timeout_seconds` (config default `240`) governs the legacy in-process pause/resume fallback only. On the durable path the answerable window is the resume TTL above; do not size the pause by the intervention timeout.
+- **Precedence (answerable window):** per-tenant override in the tenant settings store → `CONVERSATION_TURN_RESUME_TTL_SECONDS` on Control Center → built-in default. Agent Runtime may also read the same variable name (it stamps a proposed expiry on the wire), but Control Center recomputes and stores the authoritative window, so an AR value cannot widen or narrow a tenant's pause.
+- **Internal allowlist:** under `INTERNAL_API_POLICY_MODE=enforce`, the activity `PUT`/`GET`/`touch` routes and the resume read/write, checkpoint, claim, release, and complete routes must be allowlisted for the `communication_hub` caller type. They are shipped in the Communication Hub allowlist; verify after any allowlist change, because a fail-closed 401 breaks the processing indicator and every resume.
+- **No new credentials or datastore endpoints.** AR and CH gain no database access; the pause state travels over the existing mTLS internal data plane.
+
+---
+
 ## Agent Runtime
 
 Variables that control the Agent Runtime subsystem. Session-level variables (`AGENT_RUNTIME_MAX_CONCURRENT_SESSIONS`, `AGENT_RUNTIME_SESSION_TIMEOUT_SECONDS`, `AGENT_RUNTIME_OIDC_TOKEN_ENDPOINT`) apply to the `control-center` container. Certificate identity variables (`AGENT_CERT_PATH`, `AGENT_KEY_PATH`, `CA_CERT_PATH`, `CONTROL_CENTER_URL`) apply to each isolated agent runtime instance (`agent-session-worker` or a dedicated agent container).
@@ -116,8 +137,6 @@ Per-client origins, rate limits, and white-label theming are database-backed (se
 | `INTEGRATION_GATEWAY_ENABLED` | CH | Enables the `/integrate/*` public gateway (chat, submit, widget, SDK) | | `false` |
 | `INTEGRATION_PUBLIC_BASE_URL` | CH | Public base URL used in embed snippets, origin checks, and SDK references | | _(none — required when enabled)_ |
 | `INTEGRATION_CORS_ORIGINS` | CH | Deployment-level origin allowlist (defense in depth, on top of per-client origins) | | _(empty = reject all)_ |
-| `INTEGRATION_RATE_LIMIT_REDIS_HOST` / `_PORT` / `_PASSWORD` / `_DB` | CH | Redis connection for per-client rate-limit counters | `_PASSWORD` ✓ | per-component Redis defaults |
-| `INTEGRATION_SDK_CDN_BASE` | CH | Base URL advertised for SDK distribution (CDN/npm/pip) | | `INTEGRATION_PUBLIC_BASE_URL` |
 
 ---
 

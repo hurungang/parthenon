@@ -95,6 +95,9 @@ def _make_session(server_id=None, session_id=None):
     m.created_at = now
     m.updated_at = now
     m.connection_test = None
+    # OAuth re-auth state added to the model — a real row defaults to unset.
+    m.requires_reauth = False
+    m.last_refresh_error = None
     # encrypted_credentials is present on the model but must not appear in responses
     m.encrypted_credentials = "ENCRYPTED:xyz"
     return m

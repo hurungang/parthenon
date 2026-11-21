@@ -28,3 +28,14 @@
 - After the hub recovers, active agent instances from before the disconnect may still be running in the Agent Engine — their sessions are still valid and will resume delivering messages once the client reconnects
 - If the hub is experiencing repeated OOM kills, increase the memory limit for the `communication-hub` container and review the active connection count at the time of the kill to determine whether the limit needs to be raised permanently
 - Redis pub/sub failure is silent from the client's perspective — always check Redis connectivity as part of any hub disconnect investigation
+
+## Conversational Turns Across a Hub Restart
+
+The hub persists nothing about an in-flight conversational turn, so a restart is safe for durability but not for delivery:
+
+- **A paused turn survives.** The pause checkpoint and resume index live in Control Center; on reconnect the client re-hydrates the persisted activity and the confirmation is still actionable. Answering dispatches exactly one resume from whichever hub replica receives it — no hub affinity is required, and a duplicate answer is absorbed by the in-flight guard and the AR turn claim.
+- **A working turn does not resume.** The AR turn was tied to the hub's request stream; when the hub dies the turn has no durable in-flight state and resolves terminally as "the assistant stopped unexpectedly…". Nothing is applied; the user re-sends.
+- **Reconnect hydration is the recovery signal.** Check `Activity hydration failed for conversation …` (a blank indicator after reconnect) and `Activity upsert failed …` (persisted state lagging the live socket) in `communication-hub.log`. Sustained failures point at the internal allowlist, signed tenant headers, or an unapplied migration rather than at the hub.
+- Checkpoint relay lines (`Turn resume relay upstream rejection … HTTP 401/502`) mean AR cannot persist a pause while this hub is serving — restart order matters: Control Center, then Communication Hub, then Agent Runtime.
+
+Full procedure: [conversational-turn-recovery.md](conversational-turn-recovery.md).

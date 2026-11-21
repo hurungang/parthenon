@@ -217,7 +217,7 @@
 - Tool list entries contain only `mcp_slug/tool_name` identifiers; no `description` or `schema` fields
 - Agent call to unlisted tool returns permission denied (not 500)
 
-### AgentRuntimeLoader — Plan Injection (agent-plan-mode change)
+### AgentRuntimeLoader — Plan Injection
 - When an agent session is started for an agent type with `generation_status = success`, the plan is loaded from `agent_plans` and injected into the agent's system context (LLM system prompt) as a structured text block
 - The injected plan includes instructions directing the agent to follow the pre-approved steps
 - When no `AgentPlan` row exists for the agent type, the session starts without plan injection (graceful degradation; no errors)
@@ -381,8 +381,8 @@ This module has `has_db_changes: true`. Before running any tests:
 - `backend/tests/integration/test_agent_session_lifecycle.py`
 - `backend/tests/integration/test_agent_execution_with_logs.py`
 - `backend/tests/integration/test_agent_role_constraints.py`
-- `backend/tests/integration/test_realm_bootstrap.py`
-- `backend/tests/integration/test_identity_setup_flow.py`
+- `backend/tests/unit/test_realm_manager.py`
+- `backend/tests/api/v1/test_setup_identity.py`
 - `backend/tests/integration/test_communication_hub.py`
 - `backend/tests/integration/test_websocket_communication_hub.py`
 - `backend/tests/integration/test_internal_allowlist_partitioning.py`
@@ -425,6 +425,24 @@ This module has `has_db_changes: true`. Before running any tests:
 
 ---
 
+## Durable Conversational Pause & Resume (resumable-agent-turn-persistence, 2026-11)
+
+Agent Runtime no longer holds a paused conversational turn in process memory alone: the LangGraph checkpointer is durable (per-conversation), so a turn paused on one AR instance can be claimed and continued on another, including after an AR restart.
+
+**What to test:**
+- Pause ordering: the checkpoint + resume index are flushed **before** the turn reports `waiting_for_human`; a flush failure terminates the turn and persists no waiting state.
+- Resume from checkpoint: a second AR instance claims the turn, loads the checkpoint and continues; contention returns `already-held` with no lifecycle change; a claim whose lease expired is re-acquirable; a claim lost mid-run aborts without completing.
+- Missing/consumed/incompatible checkpoint → typed unavailable → the turn resolves `unresumable` / `resume_failed` (never a silent retry).
+- Re-pause during a resumed turn persists the new pause point and emits a `paused` stream end; the in-process registry is no longer consulted and its absence changes nothing.
+- Transport: all checkpoint/resume calls target CH URLs through the shared egress client (signed tenant headers, never minted locally); idempotency headers travel only inside a paused turn; typed relay errors on 4xx/5xx.
+- Segregation: the AR tree imports no DB session/model, holds no connection string or datastore endpoint and uses no raw httpx client; status events carry no secrets.
+- Activity emission: `thinking` / `using_tool` / `delegating` / `waiting` / `waiting_for_human` / `delegation_resumed` / terminal transitions are emitted in order with state-specific context and AR never writes the DB.
+- Command/authored scripts still execute only in AR; the authoring/optimizer model identifiers arrive from the internal context endpoint (see `optimizer-test-plan.md`).
+
+**Test files:** `backend/tests/agent_runtime/test_durable_checkpointer.py`, `test_conversational_resume_from_checkpoint.py`, `test_checkpoint_transport.py`, `test_resume_registry_miss_orphan.py`, `test_turn_idempotency_propagation.py`, `test_ar_activity_persistence_boundaries.py`, `backend/tests/unit/test_agent_runtime_activity_emission.py`.
+
+---
+
 ## strict-tenant-isolation Update (2026-10)
 
 Agent Runtime is virtual-tenant aware: the run tenant is resolved once from the signed internal context (fail-closed) and stamped on every downstream internal call; A2A delegation resolves strictly by `(tenant, name)`; scheduler jobs dispatch only under their owning tenant.
@@ -433,6 +451,7 @@ Test files added (verified present):
 
 - `backend/tests/agent_runtime/test_ar_virtual_tenant_run.py` — forwarded-header binding, no contextvar bleed between concurrent runs, `CommHubToolClient.call_tool` stamps forwarded `X-Internal-Tenant-*` verbatim, scheduler NULL-tenant hard skip / owning-tenant dispatch / missing-tenant-row skip
 - `backend/tests/integration/test_a2a_tenant_delegation.py` — `agent____<slug>` (tenant, name) resolution, cross-tenant name-collision containment, delegated-job tenant stamping, fail-closed 404 miss
-- `backend/tests/integration/test_internal_http_egress.py` — internal HTTP egress carries signed tenant headers
+- `backend/tests/communication_hub/test_internal_http_egress.py` — internal HTTP egress carries signed tenant headers
+- `backend/tests/integration/test_multitenant_auth_chain.py` — end-to-end auth chain with signed tenant headers
 
 E2E: N/A — backend-only change.
